@@ -1,0 +1,16 @@
+apiVersion: v2
+name: sample-otel-app
+description: Epic 1 reference implementation — sample HTTP service with OTel SDK + Prometheus exporter + structured logs (Story 1.4).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.29.0-0"
+
+keywords:
+  - he-api
+  - sample
+  - otel
+  - story-1.4
+
+maintainers:
+  - name: He-API platform team

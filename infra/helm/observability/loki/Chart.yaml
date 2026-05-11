@@ -1,0 +1,22 @@
+apiVersion: v2
+name: loki-wrapper
+description: He-API wrapper for the upstream grafana/loki chart (Story 1.4).
+type: application
+version: 0.1.0
+appVersion: "3.2.0"
+kubeVersion: ">=1.29.0-0"
+
+dependencies:
+  - name: loki
+    version: "5.47.2"
+    repository: "https://grafana.github.io/helm-charts"
+
+keywords:
+  - he-api
+  - observability
+  - loki
+  - logs
+  - story-1.4
+
+maintainers:
+  - name: He-API platform team

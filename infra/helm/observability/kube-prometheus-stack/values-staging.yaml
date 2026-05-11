@@ -1,0 +1,98 @@
+# Staging overrides for kube-prometheus-stack (umbrella chart) — Story 1.4.
+#
+# Architect Round 1 rulings encoded here:
+#   * Q1 — hybrid distribution (this chart is the umbrella, 4 sibling charts live
+#     alongside in infra/helm/observability/<name>/).
+#   * Q4 — staging full emptyDir; Prometheus retention 24h; no PVC anywhere.
+#   * Q5 — port-forward only; NO ingress block anywhere in this file.
+#   * Q6 — Grafana admin password auto-generated into K8s Secret
+#     `kube-prometheus-stack-grafana` (operator extracts via kubectl get secret).
+#   * M-3 — nodeExporter.enabled: false (hostNetwork/hostPID/hostPath violates
+#     `monitoring` namespace baseline PSA enforce label).
+#
+# CI lint (.github/workflows/infra-lint.yml `helm-lint-observability` matrix=6)
+# fails if any of these fields drift; static parsers in
+# packages/shared-types/__tests__/1.4-otel-prometheus-loki-grafana.test.ts
+# (1.4-UNIT-010 … -023) also catch regressions on PR.
+
+prometheus:
+  prometheusSpec:
+    retention: 24h
+    # emptyDir — Q4 ruling staging full emptyDir.
+    storageSpec: {}
+    # Allow Prometheus to discover ServiceMonitors in ANY namespace.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+
+grafana:
+  # Chart auto-generates a strong random admin password into K8s Secret
+  # `kube-prometheus-stack-grafana` when adminPassword is empty.
+  # Operator extracts via:
+  #   kubectl get secret -n monitoring kube-prometheus-stack-grafana \
+  #     -o jsonpath='{.data.admin-password}' | base64 -d
+  adminPassword: ""
+
+  persistence:
+    enabled: false
+
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+      folder: /tmp/dashboards
+    datasources:
+      enabled: true
+      label: grafana_datasource
+      labelValue: "1"
+      searchNamespace: ALL
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    storage: {}
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+
+# M-3 ruling option (a): node-exporter requires hostNetwork/hostPID/hostPath,
+# which the `monitoring` namespace's `pod-security.kubernetes.io/enforce: baseline`
+# label rejects at admission. Disable in staging; node-level CPU/mem/disk
+# already arrives at pod/container granularity via kube-state-metrics + cAdvisor.
+# Prod node-exporter evaluation is Story 1.7+.
+nodeExporter:
+  enabled: false
+
+# kube-state-metrics reads only the Kubernetes API server — no host filesystem,
+# no host network. PSA baseline compatible.
+kube-state-metrics:
+  enabled: true
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi

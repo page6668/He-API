@@ -1,0 +1,41 @@
+# Default values for sample-otel-app.
+#
+# Architect Round 1 Q3 ruling: sample-otel-app is a separate chart from
+# api-gateway (single-responsibility). Round 1 M-4: image.tag defaults to
+# `latest`; scripts/observability/install.sh overrides via `--set
+# image.tag=$(git rev-parse --short HEAD)` at install time.
+
+image:
+  repository: he-api/sample-otel-app
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+env:
+  OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector.monitoring.svc.cluster.local:4317
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+serviceMonitor:
+  enabled: true
+  interval: 15s
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

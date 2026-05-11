@@ -1,0 +1,11 @@
+{
+  "name": "@he-api/sample-otel-app",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Epic 1 reference implementation — OTel SDK + Prometheus exporter + structured JSON logs (Story 1.4).",
+  "scripts": {
+    "build": "echo \"go build is run via go workspace, not Turborepo\" && exit 0",
+    "lint": "echo \"go lint is handled by golangci-lint outside Turborepo\" && exit 0",
+    "test": "echo \"go test is handled outside Turborepo\" && exit 0"
+  }
+}

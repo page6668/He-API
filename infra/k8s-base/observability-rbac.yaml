@@ -1,0 +1,98 @@
+# Cluster-scoped RBAC required by the Story 1.4 observability stack.
+#
+# Two ClusterRoles + ClusterRoleBindings:
+#   1. prometheus-scraper  — list/watch services, endpoints, pods, nodes
+#      cross-namespace (kube-prometheus-stack Prometheus discovers
+#      ServiceMonitors via this).
+#   2. otel-collector-k8sattrs — list/watch pods, namespaces, nodes for the
+#      OTel Collector `k8sattributes` processor to enrich every trace/metric
+#      with `k8s.pod.name` / `k8s.namespace.name` / `k8s.node.name` resource
+#      attributes (so sample-otel-app does not hardcode them — see Round 1
+#      contract 1.4-UNIT-208).
+#
+# Bound to the chart-default ServiceAccounts:
+#   * kube-prometheus-stack-prometheus (created by kube-prometheus-stack
+#     chart in `monitoring` namespace).
+#   * otel-collector (created by infra/helm/observability/otel-collector/
+#     values-staging.yaml serviceAccount.create=true).
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus-scraper
+  labels:
+    app.kubernetes.io/part-of: he-api
+    app.kubernetes.io/managed-by: kustomize-story-1.4
+rules:
+  - apiGroups: [""]
+    resources:
+      - services
+      - endpoints
+      - pods
+      - nodes
+      - nodes/metrics
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources:
+      - endpointslices
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["extensions", "networking.k8s.io"]
+    resources:
+      - ingresses
+    verbs: ["get", "list", "watch"]
+  - nonResourceURLs: ["/metrics", "/metrics/cadvisor"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-scraper
+  labels:
+    app.kubernetes.io/part-of: he-api
+    app.kubernetes.io/managed-by: kustomize-story-1.4
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus-scraper
+subjects:
+  - kind: ServiceAccount
+    name: kube-prometheus-stack-prometheus
+    namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-collector-k8sattrs
+  labels:
+    app.kubernetes.io/part-of: he-api
+    app.kubernetes.io/managed-by: kustomize-story-1.4
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - namespaces
+      - nodes
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources:
+      - replicasets
+      - deployments
+      - daemonsets
+      - statefulsets
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-collector-k8sattrs
+  labels:
+    app.kubernetes.io/part-of: he-api
+    app.kubernetes.io/managed-by: kustomize-story-1.4
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: otel-collector-k8sattrs
+subjects:
+  - kind: ServiceAccount
+    name: otel-collector
+    namespace: monitoring

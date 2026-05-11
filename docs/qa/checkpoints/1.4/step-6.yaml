@@ -1,0 +1,15 @@
+step: 6
+evidence:
+  directory: "docs/qa/checkpoints/1.4/"
+  files_collected: 9
+  files:
+    - step-1.yaml         # risk_assessment (MEDIUM / automated_plus_spot_check)
+    - step-2.yaml         # project_type_detection (fullstack turborepo + go workspace)
+    - step-4.yaml         # independent_automated_tests (vitest 240/240 active + go 4/4 + bash -n)
+    - step-4.5.yaml       # task_checkbox_verification (1/15 checked, but artifacts present — MEDIUM bookkeeping nit)
+    - step-4.6.yaml       # ac_coverage_verification (AC1 VERIFIED 100% + static spot-checks per ruling)
+    - step-4.7.yaml       # regression_test_execution (1.2 + 1.3 specs re-ran green)
+    - step-5.yaml         # e2e_testing (deferred to operator per Architect ruling)
+    - step-5.5.yaml       # blind_spot_verification (12/16 static covered + 4 runtime deferred)
+    - step-6.yaml         # this file
+  issues_with_evidence: []          # no blocking issues; checkpoints serve as positive evidence

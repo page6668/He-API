@@ -1,0 +1,47 @@
+# Promtail staging overrides — Story 1.4 (Round 1 M-2: Promtail is its own release).
+#
+# Architect Round 1 rulings:
+#   * Q1 hybrid + M-2 — Promtail explicitly its own chart (not merged into Loki).
+#     Promtail in Loki 3.x is in maintenance mode upstream; Alloy migration is
+#     deferred to an Epic 9 ADR (per architecture/tech-stack.md L36 contract).
+#   * Q4 — DaemonSet kind preserved (chart default); node-level log collection.
+#
+# Static-test contract: values-staging.yaml is loaded by
+# packages/shared-types/__tests__/1.4-otel-prometheus-loki-grafana.test.ts
+# (1.4-UNIT-040 … -042).
+
+config:
+  clients:
+    - url: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
+  snippets:
+    pipelineStages:
+      # JSON stage extracts structured fields from sample-otel-app's slog output
+      # (per Round 1 M-1 — trace_id / span_id stamped via SpanFromContext).
+      - json:
+          expressions:
+            trace_id: trace_id
+            span_id: span_id
+            level: level
+            msg: msg
+      # Promote `trace_id` to a label so Grafana Loki → Jaeger derived field
+      # (kube-prometheus-stack-wrapper templates/grafana-datasources.yaml) can
+      # cross-link a log line to its trace.
+      - labels:
+          trace_id:
+          level:
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+serviceMonitor:
+  enabled: true
+  labels:
+    grafana_dashboard: "0"
+
+# Promtail chart's default `kind` is DaemonSet. We deliberately do NOT override
+# to Deployment (Round 1 M-2 contract; statically asserted by 1.4-UNIT-042).

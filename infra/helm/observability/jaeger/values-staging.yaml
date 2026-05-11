@@ -1,0 +1,48 @@
+# Jaeger staging overrides — Story 1.4.
+#
+# Architect Round 1 rulings:
+#   * Q2 — Jaeger preserved per architecture §11.1 (sole trace backend).
+#   * Q4 — in-memory storage; ~2h natural eviction (query.maxTraces default).
+#   * Q5 — query service ClusterIP (no public exposure, port-forward only).
+#
+# Static-test contract: values-staging.yaml is loaded by
+# packages/shared-types/__tests__/1.4-otel-prometheus-loki-grafana.test.ts
+# (1.4-UNIT-070 … -075).
+
+provisionDataStore:
+  cassandra: false
+  elasticsearch: false
+
+storage:
+  type: memory
+
+# All-in-one image runs collector + query + in-memory store in one pod.
+allInOne:
+  enabled: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+agent:
+  enabled: false
+
+collector:
+  enabled: false
+  service:
+    otlp:
+      grpc:
+        port: 4317
+        name: otlp-grpc
+      http:
+        port: 4318
+        name: otlp-http
+
+query:
+  enabled: false
+  service:
+    type: ClusterIP
+    port: 16686

@@ -1,0 +1,93 @@
+# OpenTelemetry Collector staging overrides — Story 1.4.
+#
+# Architect Round 1 rulings:
+#   * Q1 — gateway-form Collector (deployment mode), single replica for staging.
+#   * Q2 + M-5 — exports traces ONLY to jaeger-collector (architecture §11.1).
+#   * M-1 — metrics flow OTLP → Prometheus exporter scraped by kube-prometheus-stack.
+#
+# Static-test contract: values-staging.yaml is loaded by
+# packages/shared-types/__tests__/1.4-otel-prometheus-loki-grafana.test.ts
+# (1.4-UNIT-050 … -059).
+
+mode: deployment
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+config:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+  processors:
+    batch:
+      timeout: 5s
+      send_batch_size: 1024
+    k8sattributes:
+      auth_type: serviceAccount
+      passthrough: false
+      extract:
+        metadata:
+          - k8s.pod.name
+          - k8s.namespace.name
+          - k8s.node.name
+          - k8s.pod.uid
+      pod_association:
+        - sources:
+            - from: resource_attribute
+              name: k8s.pod.ip
+        - sources:
+            - from: connection
+
+  exporters:
+    otlp:
+      # Trace backend is Jaeger only (architecture §11.1; Q2 ruling).
+      endpoint: jaeger-collector.monitoring.svc.cluster.local:4317
+      tls:
+        insecure: true
+    prometheus:
+      # Scraped by the kube-prometheus-stack Prometheus via the
+      # ServiceMonitor declared in templates/servicemonitor.yaml.
+      endpoint: 0.0.0.0:8889
+
+  service:
+    pipelines:
+      traces:
+        receivers: [otlp]
+        processors: [batch]
+        exporters: [otlp]
+      metrics:
+        receivers: [otlp]
+        processors: [batch]
+        exporters: [prometheus]
+
+ports:
+  otlp:
+    enabled: true
+    containerPort: 4317
+    servicePort: 4317
+    protocol: TCP
+  otlp-http:
+    enabled: true
+    containerPort: 4318
+    servicePort: 4318
+    protocol: TCP
+  metrics:
+    enabled: true
+    containerPort: 8889
+    servicePort: 8889
+    protocol: TCP
+
+serviceAccount:
+  create: true
+  name: otel-collector

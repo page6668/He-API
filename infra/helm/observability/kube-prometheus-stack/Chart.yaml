@@ -1,0 +1,22 @@
+apiVersion: v2
+name: kube-prometheus-stack-wrapper
+description: He-API wrapper for the upstream prometheus-community/kube-prometheus-stack chart (Story 1.4).
+type: application
+version: 0.1.0
+appVersion: "56.21.0"
+kubeVersion: ">=1.29.0-0"
+
+dependencies:
+  - name: kube-prometheus-stack
+    version: "56.21.0"
+    repository: "https://prometheus-community.github.io/helm-charts"
+
+keywords:
+  - he-api
+  - observability
+  - prometheus
+  - grafana
+  - story-1.4
+
+maintainers:
+  - name: He-API platform team

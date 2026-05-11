@@ -22,6 +22,7 @@ he-api/                                  (Monorepo, Turborepo)
 │   ├── analytics-svc/
 │   ├── audit-svc/
 │   ├── notification-svc/
+│   ├── sample-otel-app/                Epic 1 reference impl (OTel SDK / Prom exporter / 结构化 JSON 日志 教科书示例) [非生产服务]
 │   ├── adapters/
 │   │   ├── qwen/
 │   │   ├── deepseek/
@@ -101,5 +102,7 @@ he-api/                                  (Monorepo, Turborepo)
 ├── go.work                              Go workspace
 └── README.md
 ```
+
+> **注**: `apps/sample-otel-app/` 是 **Epic 1 reference impl**（非生产服务）— 由 Story 1.4 引入，作为 Epic 2-10 业务服务集成 OTel SDK + Prometheus exporter + 结构化 JSON 日志的"教科书示例"。其 `/hello` 与 `/metrics` 端点不进 API registry。条目添加来源：Story 1.4 Architect Round 1 minor m-1，2026-05-11。
 
 ---

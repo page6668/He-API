@@ -1,0 +1,22 @@
+apiVersion: v2
+name: otel-collector-wrapper
+description: He-API wrapper for the upstream open-telemetry/opentelemetry-collector chart (Story 1.4).
+type: application
+version: 0.1.0
+appVersion: "0.96.0"
+kubeVersion: ">=1.29.0-0"
+
+dependencies:
+  - name: opentelemetry-collector
+    version: "0.90.4"
+    repository: "https://open-telemetry.github.io/opentelemetry-helm-charts"
+
+keywords:
+  - he-api
+  - observability
+  - opentelemetry
+  - otel-collector
+  - story-1.4
+
+maintainers:
+  - name: He-API platform team

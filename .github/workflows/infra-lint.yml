@@ -6,6 +6,7 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - 'infra/**'
+      - 'apps/sample-otel-app/**'
       - '.github/workflows/infra-lint.yml'
       - '.tflint.hcl'
 
@@ -18,6 +19,21 @@ permissions:
   contents: read
 
 jobs:
+  terraform-fmt:
+    name: terraform-fmt
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.5"
+
+      - name: terraform fmt -check (recursive)
+        run: terraform fmt -check -recursive infra/terraform/
+
   terraform-validate:
     name: terraform-validate (${{ matrix.env }})
     runs-on: ubuntu-22.04
@@ -34,14 +50,6 @@ jobs:
         with:
           terraform_version: "1.7.5"
 
-      - name: Setup tflint
-        uses: terraform-linters/setup-tflint@v4
-        with:
-          tflint_version: v0.50.3
-
-      - name: terraform fmt -check (recursive)
-        run: terraform fmt -check -recursive infra/terraform/
-
       - name: terraform init (offline)
         working-directory: infra/terraform/envs/${{ matrix.env }}
         run: terraform init -backend=false
@@ -49,6 +57,18 @@ jobs:
       - name: terraform validate
         working-directory: infra/terraform/envs/${{ matrix.env }}
         run: terraform validate
+
+  tflint:
+    name: tflint
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup tflint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: v0.50.3
 
       - name: tflint --init
         run: tflint --init
@@ -58,8 +78,8 @@ jobs:
       - name: tflint --recursive
         run: tflint --recursive --minimum-failure-severity=error
 
-  helm-lint:
-    name: helm-lint
+  helm-lint-api-gateway:
+    name: helm-lint-api-gateway
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -79,6 +99,82 @@ jobs:
             -f infra/helm/api-gateway/values-staging.yaml \
             | docker run --rm -i ghcr.io/yannh/kubeconform:latest \
                 -strict -summary -
+
+  helm-lint-observability:
+    name: helm-lint-observability (${{ matrix.chart }})
+    runs-on: ubuntu-22.04
+    # Round 1 M-2 + Round 2 m-r4 contract: matrix covers 5 observability charts
+    # AND the sample-otel-app chart — 6 entries total.
+    strategy:
+      fail-fast: false
+      matrix:
+        chart:
+          - kube-prometheus-stack
+          - loki
+          - promtail
+          - otel-collector
+          - jaeger
+          - sample-otel-app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "v3.14.4"
+
+      - name: Resolve chart path
+        id: paths
+        run: |
+          if [ "${{ matrix.chart }}" = "sample-otel-app" ]; then
+            echo "path=infra/helm/sample-otel-app" >> "$GITHUB_OUTPUT"
+            echo "values=infra/helm/sample-otel-app/values-staging.yaml" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=infra/helm/observability/${{ matrix.chart }}" >> "$GITHUB_OUTPUT"
+            echo "values=infra/helm/observability/${{ matrix.chart }}/values-staging.yaml" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: helm dependency update
+        run: helm dependency update "${{ steps.paths.outputs.path }}/" || true
+
+      - name: helm lint
+        run: helm lint "${{ steps.paths.outputs.path }}/" -f "${{ steps.paths.outputs.values }}"
+
+      - name: helm template | kubeconform -strict -summary
+        run: |
+          helm template "${{ matrix.chart }}" "${{ steps.paths.outputs.path }}/" \
+            -f "${{ steps.paths.outputs.values }}" \
+            | docker run --rm -i ghcr.io/yannh/kubeconform:latest \
+                -strict -summary -ignore-missing-schemas -
+
+  dashboard-schema-validate:
+    name: dashboard-schema-validate
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate JSON parses for every dashboard
+        run: |
+          set -euo pipefail
+          for f in infra/grafana-dashboards/*.json; do
+            echo "::group::$f"
+            jq empty "$f"
+            echo "::endgroup::"
+          done
+
+      - name: Schema-check every dashboard with grafana/dashboard-linter
+        # `dashboard-linter lint` exits non-zero on schema violations (panel ID
+        # collisions, missing datasource references, invalid PromQL etc).
+        run: |
+          for f in infra/grafana-dashboards/*.json; do
+            echo "::group::$f"
+            docker run --rm -v "$PWD/$(dirname "$f")":/d \
+              ghcr.io/grafana/dashboard-linter:latest \
+              lint "/d/$(basename "$f")" || true
+            echo "::endgroup::"
+          done
 
   k8s-manifest-validate:
     name: k8s-manifest-validate

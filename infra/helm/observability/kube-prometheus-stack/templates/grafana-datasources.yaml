@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: {{ .Release.Namespace }}
+  labels:
+    # Grafana sidecar (`grafana.sidecar.datasources.enabled: true`) auto-discovers
+    # any ConfigMap carrying this label and loads its `datasources.yaml` payload.
+    grafana_datasource: "1"
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
+        isDefault: true
+        editable: false
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://loki.monitoring.svc.cluster.local:3100
+        editable: false
+        jsonData:
+          # Loki → Jaeger derived field for the trace_id stamped on every JSON log line
+          # by sample-otel-app via slog handler + SpanFromContext.
+          derivedFields:
+            - matcherRegex: '"trace_id":"(\w+)"'
+              name: trace_id
+              datasourceUid: jaeger
+              url: "$${__value.raw}"
+      - name: Jaeger
+        type: jaeger
+        access: proxy
+        url: http://jaeger-query.monitoring.svc.cluster.local:16686
+        uid: jaeger
+        editable: false

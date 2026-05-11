@@ -1,0 +1,16 @@
+step: 1
+risk_level: MEDIUM
+review_mode: automated_plus_spot_check
+skip_e2e: false_in_design_but_environment_unavailable
+review_round: 1
+rationale: |
+  complexity_count = 3 (new_patterns + cross_service + core_docs), security_sensitive = false,
+  has_ui_changes = false, has_api_changes = false (sample-otel-app /hello is example, not registered API),
+  has_user_facing_deliverable = false, test_coverage_level = comprehensive (143 scenarios).
+  Cross-service infrastructure with high traceability impact (5 obs charts + 5 dashboards + sample app),
+  but no production user-facing surface. Risk = MEDIUM.
+
+  Runtime E2E is explicitly deferred by Dev to operator hand-off (see story Open Issues §7);
+  no staging ACK cluster + no kubectl access in this review session. Spot E2E scope therefore
+  collapses to static verification (helm lint / kubeconform / dashboard JSON parse / shell parse / Go static)
+  and unit-level vitest + Go tests.

@@ -1,0 +1,29 @@
+# sample-otel-app staging overrides — Story 1.4.
+#
+# Round 1 M-4 contract: image.tag is `latest` by default; install.sh injects
+# the current git SHA at install time via `--set image.tag=$(git rev-parse
+# --short HEAD)`. Story 1.2's deploy-staging.yml hard-codes the api-gateway
+# chart path and is NOT touched by this story (multi-chart rollout = Story 1.5).
+image:
+  repository: ${ACR_REGISTRY}/he-api/sample-otel-app
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 8080
+
+env:
+  # Wire the SDK to the OTel Collector deployed in the `monitoring` namespace
+  # (see infra/helm/observability/otel-collector/values-staging.yaml).
+  OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector.monitoring.svc.cluster.local:4317
+
+serviceAccount:
+  create: true
+  name: ""
+
+serviceMonitor:
+  enabled: true
+  interval: 15s

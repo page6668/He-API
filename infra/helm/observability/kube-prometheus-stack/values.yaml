@@ -1,0 +1,7 @@
+# Default values for the kube-prometheus-stack wrapper.
+#
+# Per-env overrides live in values-staging.yaml. Architect Round 1 Q1 ruling:
+# hybrid distribution — this chart is the umbrella (Prometheus + Grafana +
+# Alertmanager + Operator + kube-state-metrics).
+kube-prometheus-stack:
+  fullnameOverride: kube-prometheus-stack

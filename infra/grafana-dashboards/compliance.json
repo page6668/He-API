@@ -1,0 +1,37 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": false,
+  "panels": [
+    {
+      "datasource": null,
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "content": "# 合规大盘 — Pending Epic 2-8 数据接入\n\nReserved for compliance / safety telemetry per `docs/architecture/11-可观测性observability.md` §11.2 — moderation decisions, audit-trail completeness, regional routing compliance.",
+        "mode": "markdown"
+      },
+      "title": "Pending Epic 2-8 data integration",
+      "type": "text"
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 39,
+  "tags": ["he-api", "epic-9", "compliance", "story-1.4", "placeholder"],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "title": "合规大盘",
+  "uid": "he-api-compliance",
+  "version": 1
+}

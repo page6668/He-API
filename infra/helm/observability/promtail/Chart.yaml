@@ -1,0 +1,22 @@
+apiVersion: v2
+name: promtail-wrapper
+description: He-API wrapper for the upstream grafana/promtail chart (Story 1.4, Round 1 M-2).
+type: application
+version: 0.1.0
+appVersion: "3.0.0"
+kubeVersion: ">=1.29.0-0"
+
+dependencies:
+  - name: promtail
+    version: "6.16.4"
+    repository: "https://grafana.github.io/helm-charts"
+
+keywords:
+  - he-api
+  - observability
+  - promtail
+  - logs
+  - story-1.4
+
+maintainers:
+  - name: He-API platform team

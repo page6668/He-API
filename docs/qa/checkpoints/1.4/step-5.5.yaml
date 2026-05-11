@@ -1,0 +1,26 @@
+step: 5.5
+blind_spot_verification:
+  total_scenarios: 16
+  covered_static: 12         # static asserts in the 1.4 vitest spec + the Go unit tests
+  covered_runtime: 0
+  deferred_to_operator: 4    # FLOW-001 idempotent re-run / ERROR-001 SDK exporter downtime / RESOURCE-002 PSA events / RESOURCE-005 leak
+  missing_code: 0
+  missing_test: 0
+  missing_both: 0
+  coverage_rate: 75          # static-covered / total
+  notes: |
+    Spot-check map (test_design § Blind-Spot ↔ 1.4 spec scenario / Go test):
+    - BLIND-BOUNDARY-001 (empty name input)     → Go TestHelloEmptyName + 1.4-UNIT-210
+    - BLIND-ERROR-003 (CRD wait ordering)       → 1.4-UNIT-104 / -105 / install.sh inspected
+    - BLIND-ERROR-005 (empty OTLP endpoint)     → Go TestTraceIDLogField + 1.4-UNIT-210
+    - BLIND-RESOURCE-001 (Loki ephemeral cap)   → 1.4-UNIT-032 (ephemeral-storage 2Gi)
+    - BLIND-RESOURCE-003 (Jaeger memory cap)    → 1.4-UNIT-071 storage.type: memory
+    - BLIND-FLOW-002..-006 (config drift)       → static UNIT asserts in spec
+    - BLIND-CONCURRENCY-* (chart parallel)      → static install.sh order asserts
+
+    Runtime-only blind spots (operator deferred, not gating Review→Done):
+    - BLIND-FLOW-001 idempotent install.sh re-run
+    - BLIND-ERROR-001 OTel collector unreachable degraded mode (real network)
+    - BLIND-RESOURCE-002 kubectl get events FailedCreate empty
+    - BLIND-RESOURCE-005 promtail node-level FD leak
+  issues: []

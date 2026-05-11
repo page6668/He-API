@@ -1,0 +1,22 @@
+apiVersion: v2
+name: jaeger-wrapper
+description: He-API wrapper for the upstream jaegertracing/jaeger chart (Story 1.4, Q2 ruling Jaeger preserved per architecture §11.1).
+type: application
+version: 0.1.0
+appVersion: "1.55.0"
+kubeVersion: ">=1.29.0-0"
+
+dependencies:
+  - name: jaeger
+    version: "3.1.2"
+    repository: "https://jaegertracing.github.io/helm-charts"
+
+keywords:
+  - he-api
+  - observability
+  - jaeger
+  - traces
+  - story-1.4
+
+maintainers:
+  - name: He-API platform team

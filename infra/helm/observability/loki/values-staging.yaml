@@ -1,0 +1,64 @@
+# Loki staging overrides — Story 1.4.
+#
+# Architect Round 1 rulings:
+#   * Q4 — filesystem storage in emptyDir; 48h retention to cover a weekend;
+#     ephemeral-storage capped at 2Gi to prevent runaway emptyDir growth.
+#   * Q1 hybrid — Loki is its own release (paired with Promtail DaemonSet in
+#     infra/helm/observability/promtail/).
+#
+# Static-test contract: values-staging.yaml is loaded by
+# packages/shared-types/__tests__/1.4-otel-prometheus-loki-grafana.test.ts
+# (1.4-UNIT-030 … -033).
+
+deploymentMode: SingleBinary
+
+loki:
+  storage:
+    type: filesystem
+  commonConfig:
+    replication_factor: 1
+  limits_config:
+    # Q4 — 48h retention spans a weekend incident window. Prod retention will
+    # be re-evaluated against OSS / ESSD pricing in Story 1.7+ ADR.
+    retention_period: 48h
+  auth_enabled: false
+  schemaConfig:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+      ephemeral-storage: 2Gi
+
+# Disable subsystems that SingleBinary does not run.
+read:
+  replicas: 0
+write:
+  replicas: 0
+backend:
+  replicas: 0
+gateway:
+  enabled: false
+test:
+  enabled: false
+lokiCanary:
+  enabled: false
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false

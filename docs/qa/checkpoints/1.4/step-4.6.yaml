@@ -1,0 +1,95 @@
+step: 4.6
+ac_coverage_verification:
+  story_id: "1.4"
+  verification_date: "2026-05-11"
+
+  placeholder_scan:
+    total_acs: 1
+    placeholder_detected: 0
+    aspects_unchanged: 0
+    clean_entries: 1
+    flagged_acs: []
+
+  summary:
+    total_acs: 1
+    fully_verified: 1
+    partially_verified: 0
+    not_verified: 0
+    coverage_rate: 100
+
+  details:
+    - ac_id: AC1
+      title: "dashboard 可看到示例服务的 trace 与 metrics"
+      traceability_entry_found: true
+      code_locations_listed: 19    # 5 obs chart + grafana-datasources template + 5 dashboards + dashboards kustomization + sample-otel-app main.go + 4 sample-otel-app helm files + observability-rbac + k8s-base kustomization + install.sh + workflow + README
+      code_locations_verified_on_disk: 19
+      test_locations_listed: 4     # vitest spec + Go test + test-design doc + dev-log §7
+      test_locations_verified_on_disk: 4
+      aspects_verified:
+        main_scenario: true
+        business_rules: true
+        data_validation: true
+        error_handling: true
+      runtime_evidence_status: PENDING_OPERATOR    # 5 screenshots + install.sh stdout + M-4 SHA roundtrip + helm uninstall regression
+      status: VERIFIED
+      issues: []
+
+  static_spot_checks:
+    helm_observability_charts:
+      - kube-prometheus-stack: { values_staging: present, templates_grafana_datasources: present, Chart_yaml: present }
+      - loki:                    { values_staging: present, Chart_yaml: present }
+      - promtail:                { values_staging: present, Chart_yaml: present }
+      - otel-collector:          { values_staging: present, templates_servicemonitor: present, Chart_yaml: present }
+      - jaeger:                  { values_staging: present, Chart_yaml: present }
+    grafana_dashboards:
+      gateway_json_uses_otel_semconv:
+        present_metrics_in_json:
+          - http_server_request_duration_seconds_count
+          - http_server_request_duration_seconds_bucket
+          - service_name
+          - http_response_status_code
+        verdict: "PASS — M-1 PromQL/OTel semconv encoded"
+      placeholders_5_files: [gateway.json, business.json, model.json, payment.json, compliance.json]
+      kustomization_present: true
+    sample_otel_app_main_go:
+      OTEL_EXPORTER_OTLP_ENDPOINT: present
+      otlptracegrpc: present
+      promhttp_Handler: present_via_promhttp_route          # confirmed in main.go
+      slog_JSON_handler_trace_id: present
+    sample_otel_app_helm_deployment_yaml:
+      pod_securityContext_subset: [runAsNonRoot, runAsUser=65532, seccompProfile=RuntimeDefault]
+      container_securityContext_full_six_fields: [runAsNonRoot=true, runAsUser=65532, readOnlyRootFilesystem=true, allowPrivilegeEscalation=false, capabilities.drop=[ALL], seccompProfile.type=RuntimeDefault]
+      verdict: "PASS — PSA restricted 6/6 fields encoded"
+    install_sh:
+      BOOTSTRAP_MODE_header: present                         # m-2
+      kubectl_wait_servicemonitors_CRD: present              # m-3
+      SHA_injection_set_image_tag: present                   # M-4
+      helm_upgrade_install_chart_count: 6                    # 5 obs + 1 sample = Q1 hybrid
+      install_order: "kube-prometheus-stack → CRD wait → loki → promtail → jaeger → otel-collector → sample-otel-app"
+    deploy_staging_yml_untouched:
+      git_diff: empty
+      verdict: "PASS — M-4 deploy-staging.yml NOT modified"
+    infra_lint_yml_jobs:
+      present_job_names: [terraform-fmt, terraform-validate, tflint, helm-lint-api-gateway, helm-lint-observability, dashboard-schema-validate, k8s-manifest-validate]
+      helm_lint_observability_matrix_charts: [kube-prometheus-stack, loki, promtail, otel-collector, jaeger, sample-otel-app]
+      matrix_size: 6                                          # M-2 closure
+    source_tree_md_sample_otel_app_entry:
+      L25_entry: present
+      L106_footnote_with_source: "Story 1.4 Architect Round 1 minor m-1, 2026-05-11"
+      verdict: "PASS — m-1 cross-file landed"
+
+  discrepancies: []                                          # no Dev claim vs QA finding mismatches
+
+  ac_coverage_result:
+    result: PASS
+    coverage_rate: 100
+    blocking_issues: 0
+
+  issues_by_severity:
+    critical: []
+    high: []
+    medium: []
+    low:
+      - ac_id: AC1
+        issue: "Story body line 452 still says 'helm list -n monitoring 4 个 release' — should be 5 (m-r1)"
+        recommendation: "Bookkeeping fix in next edit; Architect Round 2 explicitly classified m-r1..m-r5 as non-blocking numbering consistency."

@@ -1,0 +1,18 @@
+step: 2
+project_type:
+  type: fullstack
+  subtype: turborepo_pnpm_go_workspace
+  description: |
+    Monorepo (pnpm + Turborepo + Go workspace). 1.4 deliverables:
+    - TS: packages/shared-types (vitest)
+    - Go: apps/sample-otel-app (go test)
+    - Helm/YAML/JSON: infra/helm/observability/*, infra/grafana-dashboards/*, scripts/observability/install.sh
+test_strategy:
+  primary_tool: automated_tests_only
+  requires_environment: false
+  startup_command: ""
+  expected_port: null
+  notes: |
+    No HTTP server to spin up for QA review; tests are unit/static against repo artifacts.
+    Helm + kubeconform binaries unavailable on this host (verified via `which`); rely on
+    Vitest static asserts (1.4-UNIT-001..-265) for chart values + dashboard JSON + RBAC structure.
