@@ -23,6 +23,15 @@ resources:
 env:
   OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector.monitoring.svc.cluster.local:4317
 
+# Story 2.2 P5c (T4.5) — Kafka audit publisher.
+# Comma-separated broker host:port list; empty value falls back to
+# audit.NoOpPublisher (dev / non-staging environments). Production +
+# staging values files override this.
+audit:
+  kafkaBrokers: ""
+  notificationSvcURL: "http://notification-svc:8080"
+  consoleBaseURL: "https://console.he-api.com"
+
 # Story 2.2 — JWT signing key Secret (mounted as files); auth-svc reads
 # /etc/auth-svc/keys/private_key.pem at startup (TS-CONS-003).
 jwt:
@@ -44,6 +53,28 @@ serviceAccount:
 serviceMonitor:
   enabled: true
   interval: 15s
+
+# Story 2.2 P5d (T4.7) — Alertmanager rules per BR-4.9.
+prometheusRule:
+  enabled: true
+  # 5-min sums above these thresholds trigger the BR-4.9 alerts.
+  signinFailureThreshold: 100
+  accountLockedThreshold: 10
+
+# Story 2.2 P5d (INT-067) — NetworkPolicy.
+# Default-deny ingress+egress; explicit allow lists below.
+# In production, populate the *CIDRs lists with the managed-service VPC
+# CIDR blocks (RDS / Tair / Kafka). Empty CIDRs default to 0.0.0.0/0
+# which is permissive — operator MUST tighten before prod cutover.
+networkPolicy:
+  enabled: true
+  monitoringNamespace: monitoring
+  postgresCIDRs: []
+  postgresPort: 5432
+  redisCIDRs: []
+  redisPort: 6379
+  kafkaCIDRs: []
+  kafkaPort: 9092
 
 nodeSelector: {}
 tolerations: []

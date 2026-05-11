@@ -1,0 +1,138 @@
+{{- if .Values.networkPolicy.enabled }}
+# Story 2.2 INT-067 — auth-svc NetworkPolicy.
+#
+# Ingress (default-deny + explicit allows):
+#   - api-gateway pods (port 8080)  — the only client of auth-svc gRPC
+#   - monitoring namespace (port 8080) — Prometheus + ServiceMonitor scrape /metrics
+#
+# Egress: PG (RDS, off-cluster) + Redis (Tair, off-cluster) +
+# notification-svc (in-cluster, port 8080) + audit-kafka (managed Kafka,
+# off-cluster) + DNS + OTel collector. Off-cluster destinations are
+# allowed by port; operators tighten with ipBlock via values when the
+# managed-service CIDRs are known.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "auth-svc.fullname" . }}-default-deny
+  labels:
+    {{- include "auth-svc.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "auth-svc.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "auth-svc.fullname" . }}-allow-ingress
+  labels:
+    {{- include "auth-svc.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "auth-svc.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    # api-gateway pods — the only caller of auth-svc gRPC (Wright Round 1 Q1).
+    - from:
+        - podSelector:
+            matchLabels:
+              app: api-gateway
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Prometheus scrape from the monitoring namespace (ServiceMonitor).
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.monitoringNamespace | default "monitoring" }}
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "auth-svc.fullname" . }}-allow-egress
+  labels:
+    {{- include "auth-svc.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "auth-svc.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Egress
+  egress:
+    # DNS — kube-dns / CoreDNS in kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # notification-svc — in-cluster sync gRPC for SendVerificationEmail.
+    - to:
+        - podSelector:
+            matchLabels:
+              app: notification-svc
+      ports:
+        - protocol: TCP
+          port: 8080
+    # OTel collector — telemetry uplink (traces + Prometheus push if used).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.monitoringNamespace | default "monitoring" }}
+      ports:
+        - protocol: TCP
+          port: 4317
+    # PostgreSQL (RDS managed) — off-cluster, port-only allow.
+    - to:
+        {{- with .Values.networkPolicy.postgresCIDRs }}
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+        {{- else }}
+        - ipBlock:
+            cidr: 0.0.0.0/0
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.postgresPort | default 5432 }}
+    # Redis (Tair managed) — off-cluster, port-only allow.
+    - to:
+        {{- with .Values.networkPolicy.redisCIDRs }}
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+        {{- else }}
+        - ipBlock:
+            cidr: 0.0.0.0/0
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.redisPort | default 6379 }}
+    # audit-kafka — managed Kafka, off-cluster, port-only allow.
+    - to:
+        {{- with .Values.networkPolicy.kafkaCIDRs }}
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+        {{- else }}
+        - ipBlock:
+            cidr: 0.0.0.0/0
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.kafkaPort | default 9092 }}
+{{- end }}

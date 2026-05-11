@@ -82,6 +82,24 @@ func main() {
 		_ = tp.Shutdown(sctx)
 	}()
 
+	// === OTel meter provider (Story 2.2 T4.7 — Prometheus exporter) =========
+	// Installs a MeterProvider whose Prometheus exporter registers
+	// on prometheus.DefaultRegisterer; obs.WrapHTTPHandler already
+	// serves /metrics via promhttp.Handler() so OTel counters surface
+	// in the scrape automatically. MUST be installed BEFORE metrics.New()
+	// — instruments registered against the no-op provider don't switch.
+	mp, err := obs.NewMeterProvider(ctx, serviceName, serviceNS, serviceVersion)
+	if err != nil {
+		logger.Error("meter provider init failed", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	otel.SetMeterProvider(mp)
+	defer func() {
+		sctx, scancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer scancel()
+		_ = mp.Shutdown(sctx)
+	}()
+
 	// === PG pool ============================================================
 	pgURI := os.Getenv("HE_API_DB_POSTGRES_URI")
 	if pgURI == "" {

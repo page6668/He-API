@@ -1,0 +1,69 @@
+{{- if .Values.prometheusRule.enabled }}
+# Story 2.2 BR-4.9 — Alertmanager rules.
+#
+# Two alerts (per Story spec, line 468):
+#
+#   1. AuthSigninFailureRateHigh — 5min `auth_signin_total{result="failure"}`
+#      > 100. Severity warning → routed to 飞书 (Feishu) channel by
+#      Alertmanager. Indicates credential-stuffing / brute-force pressure.
+#
+#   2. AuthAccountLockedSpike — 5min `auth_account_locked_total` > 10.
+#      Severity critical → routed to PagerDuty. The threshold reflects
+#      that a single locked account is rare under normal user error
+#      patterns; a spike signals coordinated probing.
+#
+# Severity labels MUST match the Alertmanager route config (already
+# provisioned per Story 1.5 observability stack). `team: auth` lets
+# the on-call rotation filter to platform-auth.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "auth-svc.fullname" . }}
+  labels:
+    {{- include "auth-svc.labels" . | nindent 4 }}
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: auth-svc.br-4.9
+      interval: 30s
+      rules:
+        - alert: AuthSigninFailureRateHigh
+          expr: |
+            sum(increase(auth_signin_total{result="failure"}[5m])) > {{ .Values.prometheusRule.signinFailureThreshold | default 100 }}
+          for: 1m
+          labels:
+            severity: warning
+            team: auth
+            service: auth-svc
+            channel: feishu
+          annotations:
+            summary: "auth-svc signin failure rate elevated"
+            description: |
+              auth_signin_total{result="failure"} increased by more than
+              {{ .Values.prometheusRule.signinFailureThreshold | default 100 }}
+              in the last 5 minutes. Could indicate credential-stuffing
+              activity. Inspect `auth_signin_total` by `error_code` to
+              identify the dominant failure mode.
+            runbook_url: "https://runbooks.he-api.com/auth/signin-failure-spike"
+
+        - alert: AuthAccountLockedSpike
+          expr: |
+            sum(increase(auth_account_locked_total[5m])) > {{ .Values.prometheusRule.accountLockedThreshold | default 10 }}
+          for: 1m
+          labels:
+            severity: critical
+            team: auth
+            service: auth-svc
+            channel: pagerduty
+          annotations:
+            summary: "auth-svc account-lock activations spike — suspected brute-force"
+            description: |
+              auth_account_locked_total increased by more than
+              {{ .Values.prometheusRule.accountLockedThreshold | default 10 }}
+              accounts in the last 5 minutes. Soft-lock fires after 5
+              wrong-password attempts within 1 hour (BR-3.3 / BR-4.4), so
+              this rate implies coordinated probing. Verify with the
+              Grafana dashboard rate-limit panel + the audit-event stream
+              for the affected user IDs.
+            runbook_url: "https://runbooks.he-api.com/auth/account-lock-spike"
+{{- end }}

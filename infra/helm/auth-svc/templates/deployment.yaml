@@ -34,6 +34,14 @@ spec:
           env:
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: {{ .Values.env.OTEL_EXPORTER_OTLP_ENDPOINT | quote }}
+            # Story 2.2 P5c — audit Kafka publisher. Empty string falls
+            # back to audit.NoOpPublisher (handled in cmd/server).
+            - name: HE_API_AUDIT_KAFKA_BROKERS
+              value: {{ .Values.audit.kafkaBrokers | quote }}
+            - name: HE_API_NOTIFICATION_SVC_URL
+              value: {{ .Values.audit.notificationSvcURL | quote }}
+            - name: HE_API_CONSOLE_BASE_URL
+              value: {{ .Values.audit.consoleBaseURL | quote }}
           envFrom:
             # Story 1.6 — PostgreSQL + Redis URIs (HE_API_DB_POSTGRES_URI,
             # HE_API_DB_REDIS_URI) are mounted from the shared Secret.
