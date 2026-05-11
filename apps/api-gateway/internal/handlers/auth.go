@@ -83,15 +83,85 @@ func (p *AuthProxy) Signup(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, signupResponseBody{Message: signupSuccessMessage})
 }
 
-// --- stubs for the four RPCs that land in P3+P4 --------------------------
+// --- GET /v1/auth/verify-email?token=… -----------------------------------
 
-func (p *AuthProxy) VerifyEmail(w http.ResponseWriter, _ *http.Request) {
-	writeError(w, http.StatusNotImplemented, "501_not_implemented", "pending P3 (Story 2.2 T2, AC2)")
+// verifyEmailResponseBody is the JSON shape the gateway emits on a successful
+// verification call. Mirrors the relevant fields of authv1.VerifyEmailResponse
+// with snake_case wire keys (TS-CONS-014).
+type verifyEmailResponseBody struct {
+	UserID          string `json:"user_id"`
+	EmailVerifiedAt string `json:"email_verified_at"`
+	Status          string `json:"status"`
 }
 
-func (p *AuthProxy) ResendVerification(w http.ResponseWriter, _ *http.Request) {
-	writeError(w, http.StatusNotImplemented, "501_not_implemented", "pending P3 (Story 2.2 T2, AC2)")
+// VerifyEmail reads the `token` query parameter (so the user's email-link
+// click resolves even with JS disabled — the console verify-email route is
+// a Server Component that awaits this endpoint) and proxies the call.
+// auth-svc surfaces 400_invalid_token / 410_token_expired / 410_token_used
+// distinctively; translateConnectError preserves the canonical code in the
+// HTTP envelope.
+func (p *AuthProxy) VerifyEmail(w http.ResponseWriter, r *http.Request) {
+	tok := r.URL.Query().Get("token")
+	if tok == "" {
+		writeError(w, http.StatusBadRequest, "400_invalid_token", "token query parameter is required")
+		return
+	}
+	resp, err := p.Upstream.VerifyEmail(r.Context(), connect.NewRequest(&authv1.VerifyEmailRequest{
+		Token:     tok,
+		ClientIp:  clientIP(r),
+		UserAgent: r.UserAgent(),
+	}))
+	if err != nil {
+		translateConnectError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, verifyEmailResponseBody{
+		UserID:          resp.Msg.GetUserId(),
+		EmailVerifiedAt: resp.Msg.GetEmailVerifiedAt(),
+		Status:          resp.Msg.GetStatus(),
+	})
 }
+
+// --- POST /v1/auth/resend-verification -----------------------------------
+
+// resendRequestBody mirrors the console Server Action's POST body.
+type resendRequestBody struct {
+	Email string `json:"email"`
+}
+
+// resendResponseBody is the canonical anti-enumeration response. Per the
+// Wright Round 1 m-5 ruling, ResendVerification always emits {status:"ok"}
+// on the 2xx path regardless of which auth-svc branch fired (sent /
+// unknown_email / already_verified). 429 is the only distinguishing
+// response shape the caller can observe.
+type resendResponseBody struct {
+	Status string `json:"status"`
+}
+
+// ResendVerification proxies the JSON body. auth-svc rolls malformed-email
+// + unknown-email + already-verified into the same {status:"ok"} response;
+// the only failure path is 429 with Retry-After (preserved via Connect
+// metadata).
+func (p *AuthProxy) ResendVerification(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
+	var body resendRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "400_invalid_email", "request body must be JSON with email")
+		return
+	}
+	_, err := p.Upstream.ResendVerification(r.Context(), connect.NewRequest(&authv1.ResendVerificationRequest{
+		Email:     body.Email,
+		ClientIp:  clientIP(r),
+		UserAgent: r.UserAgent(),
+	}))
+	if err != nil {
+		translateConnectError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resendResponseBody{Status: "ok"})
+}
+
+// --- stubs for the two RPCs that land in P4 ------------------------------
 
 func (p *AuthProxy) Signin(w http.ResponseWriter, _ *http.Request) {
 	writeError(w, http.StatusNotImplemented, "501_not_implemented", "pending P4 (Story 2.2 T3, AC3)")

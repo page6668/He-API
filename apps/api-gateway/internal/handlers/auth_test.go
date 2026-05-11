@@ -26,8 +26,16 @@ import (
 type fakeAuthClient struct {
 	registerResp *authv1.RegisterUserResponse
 	registerErr  error
+	// VerifyEmail
+	verifyResp *authv1.VerifyEmailResponse
+	verifyErr  error
+	// ResendVerification
+	resendResp *authv1.ResendVerificationResponse
+	resendErr  error
 	// captured inputs for assertions
-	lastReq *authv1.RegisterUserRequest
+	lastReq        *authv1.RegisterUserRequest
+	lastVerifyReq  *authv1.VerifyEmailRequest
+	lastResendReq  *authv1.ResendVerificationRequest
 }
 
 var errFakeUnimplemented = errors.New("fakeAuthClient: method not stubbed")
@@ -45,11 +53,29 @@ func (f *fakeAuthClient) RegisterUser(
 	}
 	return connect.NewResponse(f.registerResp), nil
 }
-func (f *fakeAuthClient) VerifyEmail(_ context.Context, _ *connect.Request[authv1.VerifyEmailRequest]) (*connect.Response[authv1.VerifyEmailResponse], error) {
-	return nil, errFakeUnimplemented
+func (f *fakeAuthClient) VerifyEmail(_ context.Context, r *connect.Request[authv1.VerifyEmailRequest]) (*connect.Response[authv1.VerifyEmailResponse], error) {
+	f.lastVerifyReq = r.Msg
+	if f.verifyErr != nil {
+		return nil, f.verifyErr
+	}
+	if f.verifyResp == nil {
+		f.verifyResp = &authv1.VerifyEmailResponse{
+			UserId:          "11111111-1111-1111-1111-111111111111",
+			EmailVerifiedAt: "2026-05-12T12:00:00Z",
+			Status:          "email_verified",
+		}
+	}
+	return connect.NewResponse(f.verifyResp), nil
 }
-func (f *fakeAuthClient) ResendVerification(_ context.Context, _ *connect.Request[authv1.ResendVerificationRequest]) (*connect.Response[authv1.ResendVerificationResponse], error) {
-	return nil, errFakeUnimplemented
+func (f *fakeAuthClient) ResendVerification(_ context.Context, r *connect.Request[authv1.ResendVerificationRequest]) (*connect.Response[authv1.ResendVerificationResponse], error) {
+	f.lastResendReq = r.Msg
+	if f.resendErr != nil {
+		return nil, f.resendErr
+	}
+	if f.resendResp == nil {
+		f.resendResp = &authv1.ResendVerificationResponse{Status: "ok"}
+	}
+	return connect.NewResponse(f.resendResp), nil
 }
 func (f *fakeAuthClient) LoginUser(_ context.Context, _ *connect.Request[authv1.LoginUserRequest]) (*connect.Response[authv1.LoginUserResponse], error) {
 	return nil, errFakeUnimplemented
@@ -293,11 +319,12 @@ func TestSignup_ErrorMessageWithColonDetail(t *testing.T) {
 	}
 }
 
-// Stubs for the four other endpoints still return 501.
+// Signin + Refresh remain 501 stubs until P4 (Story 2.2 T3, AC3).
+// VerifyEmail + ResendVerification become real handlers in P3c.
 func TestStubHandlers_Return501(t *testing.T) {
 	t.Parallel()
 	p := handlers.NewAuthProxy(&fakeAuthClient{})
-	for _, h := range []http.HandlerFunc{p.VerifyEmail, p.ResendVerification, p.Signin, p.Refresh} {
+	for _, h := range []http.HandlerFunc{p.Signin, p.Refresh} {
 		rr := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/x", strings.NewReader(""))
 		h(rr, req)
@@ -308,5 +335,175 @@ func TestStubHandlers_Return501(t *testing.T) {
 		if got["error"].(map[string]any)["code"] != "501_not_implemented" {
 			t.Errorf("stub error.code = %v, want 501_not_implemented", got["error"])
 		}
+	}
+}
+
+// --- VerifyEmail tests (P3c) ---------------------------------------------
+
+// VerifyEmail happy path: token from query string → upstream call →
+// response body carries {user_id, email_verified_at, status}.
+func TestVerifyEmail_HappyPath(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAuthClient{}
+	p := handlers.NewAuthProxy(fake)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/verify-email?token=ABCDEF", nil)
+	req.Header.Set("X-Forwarded-For", "5.6.7.8")
+	rr := httptest.NewRecorder()
+	p.VerifyEmail(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	got := decodeEnvelope(t, rr)
+	if got["status"] != "email_verified" {
+		t.Errorf("body.status = %v, want email_verified", got["status"])
+	}
+	if got["user_id"] == nil || got["user_id"] == "" {
+		t.Errorf("body.user_id missing")
+	}
+	if got["email_verified_at"] == nil || got["email_verified_at"] == "" {
+		t.Errorf("body.email_verified_at missing")
+	}
+	if fake.lastVerifyReq.GetToken() != "ABCDEF" {
+		t.Errorf("upstream token = %q, want ABCDEF", fake.lastVerifyReq.GetToken())
+	}
+	if fake.lastVerifyReq.GetClientIp() != "5.6.7.8" {
+		t.Errorf("upstream client_ip = %q, want 5.6.7.8", fake.lastVerifyReq.GetClientIp())
+	}
+}
+
+// VerifyEmail without ?token=... query → 400_invalid_token, no upstream call.
+func TestVerifyEmail_MissingTokenQuery(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAuthClient{}
+	p := handlers.NewAuthProxy(fake)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/verify-email", nil)
+	rr := httptest.NewRecorder()
+	p.VerifyEmail(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rr.Code)
+	}
+	got := decodeEnvelope(t, rr)
+	if got["error"].(map[string]any)["code"] != "400_invalid_token" {
+		t.Errorf("error.code = %v, want 400_invalid_token", got["error"])
+	}
+	if fake.lastVerifyReq != nil {
+		t.Errorf("upstream called despite missing token; should short-circuit")
+	}
+}
+
+// auth-svc 410_token_expired → gateway HTTP 410 with envelope.
+func TestVerifyEmail_410TokenExpired(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAuthClient{
+		verifyErr: connect.NewError(connect.CodeFailedPrecondition, errors.New("410_token_expired")),
+	}
+	p := handlers.NewAuthProxy(fake)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/verify-email?token=ABCDEF", nil)
+	rr := httptest.NewRecorder()
+	p.VerifyEmail(rr, req)
+
+	if rr.Code != http.StatusGone {
+		t.Fatalf("status = %d, want 410", rr.Code)
+	}
+	got := decodeEnvelope(t, rr)
+	if got["error"].(map[string]any)["code"] != "410_token_expired" {
+		t.Errorf("error.code = %v, want 410_token_expired", got["error"])
+	}
+}
+
+// auth-svc 410_token_used (brute-force lockout) → gateway HTTP 410.
+func TestVerifyEmail_410TokenUsedBruteForce(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAuthClient{
+		verifyErr: connect.NewError(connect.CodeFailedPrecondition, errors.New("410_token_used")),
+	}
+	p := handlers.NewAuthProxy(fake)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/verify-email?token=ABCDEF", nil)
+	rr := httptest.NewRecorder()
+	p.VerifyEmail(rr, req)
+
+	if rr.Code != http.StatusGone {
+		t.Fatalf("status = %d, want 410", rr.Code)
+	}
+	got := decodeEnvelope(t, rr)
+	if got["error"].(map[string]any)["code"] != "410_token_used" {
+		t.Errorf("error.code = %v, want 410_token_used", got["error"])
+	}
+}
+
+// --- ResendVerification tests (P3c) --------------------------------------
+
+// Happy path: 200 + {status:"ok"} regardless of which auth-svc branch ran
+// (caller cannot tell from the response).
+func TestResendVerification_HappyPath(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAuthClient{}
+	p := handlers.NewAuthProxy(fake)
+
+	rr := postJSON(t, p.ResendVerification, map[string]string{"email": "user@example.com"}, map[string]string{
+		"X-Forwarded-For": "9.9.9.9",
+	})
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	got := decodeEnvelope(t, rr)
+	if got["status"] != "ok" {
+		t.Errorf("body.status = %v, want ok", got["status"])
+	}
+	if fake.lastResendReq.GetEmail() != "user@example.com" {
+		t.Errorf("upstream email = %q, want user@example.com", fake.lastResendReq.GetEmail())
+	}
+	if fake.lastResendReq.GetClientIp() != "9.9.9.9" {
+		t.Errorf("upstream client_ip = %q, want 9.9.9.9", fake.lastResendReq.GetClientIp())
+	}
+}
+
+// Malformed JSON body → 400_invalid_email, no upstream call.
+func TestResendVerification_MalformedJSON(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAuthClient{}
+	p := handlers.NewAuthProxy(fake)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/resend-verification", strings.NewReader("not json"))
+	rr := httptest.NewRecorder()
+	p.ResendVerification(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rr.Code)
+	}
+	got := decodeEnvelope(t, rr)
+	if got["error"].(map[string]any)["code"] != "400_invalid_email" {
+		t.Errorf("error.code = %v, want 400_invalid_email", got["error"])
+	}
+	if fake.lastResendReq != nil {
+		t.Errorf("upstream called despite malformed body")
+	}
+}
+
+// auth-svc 429_rate_limit_resend_ip with Retry-After Connect metadata →
+// HTTP 429 + Retry-After response header.
+func TestResendVerification_429RateLimitEmitsRetryAfter(t *testing.T) {
+	t.Parallel()
+	connectErr := connect.NewError(connect.CodeResourceExhausted, errors.New("429_rate_limit_resend_ip"))
+	connectErr.Meta().Set("Retry-After", "300")
+	fake := &fakeAuthClient{resendErr: connectErr}
+	p := handlers.NewAuthProxy(fake)
+
+	rr := postJSON(t, p.ResendVerification, map[string]string{"email": "user@example.com"}, nil)
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want 429", rr.Code)
+	}
+	if got := rr.Header().Get("Retry-After"); got != "300" {
+		t.Errorf("Retry-After header = %q, want 300", got)
+	}
+	got := decodeEnvelope(t, rr)
+	if got["error"].(map[string]any)["code"] != "429_rate_limit_resend_ip" {
+		t.Errorf("error.code = %v, want 429_rate_limit_resend_ip", got["error"])
 	}
 }
