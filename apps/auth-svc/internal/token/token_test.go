@@ -250,6 +250,188 @@ func TestStore_OverwritesExistingKey(t *testing.T) {
 	}
 }
 
+// Scenario: P3a / Store reverse-index addition
+// Store MUST write BOTH the primary hash key AND the reverse index
+// `auth:email_verify:user:{user_id}` → token_hash with the SAME TTL.
+// The reverse index is how ResendVerification looks up the user's
+// currently-active token to invalidate it (BR-1.6).
+func TestStore_WritesReverseIndex(t *testing.T) {
+	t.Parallel()
+	rdb, mr := newRedis(t)
+	ctx := context.Background()
+
+	tok, _ := token.Generate()
+	userID := uuid.New()
+	if err := token.Store(ctx, rdb, tok, userID); err != nil {
+		t.Fatalf("Store: %v", err)
+	}
+
+	primaryKey := "auth:email_verify:" + token.Hash(tok)
+	reverseKey := "auth:email_verify:user:" + userID.String()
+
+	if !mr.Exists(primaryKey) {
+		t.Fatalf("primary key %q missing", primaryKey)
+	}
+	if !mr.Exists(reverseKey) {
+		t.Fatalf("reverse-index key %q missing", reverseKey)
+	}
+	// Reverse-index value = token hash (so ResendVerification can DEL the primary).
+	revVal, _ := mr.Get(reverseKey)
+	if revVal != token.Hash(tok) {
+		t.Errorf("reverse[%s] = %q, want token hash %q", reverseKey, revVal, token.Hash(tok))
+	}
+	// Both keys MUST share the same TTL.
+	pTTL := mr.TTL(primaryKey)
+	rTTL := mr.TTL(reverseKey)
+	if pTTL == 0 || rTTL == 0 {
+		t.Fatalf("TTLs not set: primary=%v reverse=%v", pTTL, rTTL)
+	}
+	if diff := pTTL - rTTL; diff < -2*time.Second || diff > 2*time.Second {
+		t.Errorf("TTL drift between primary (%v) and reverse (%v) — must be equal within 2s", pTTL, rTTL)
+	}
+}
+
+// Scenario: 2.2-UNIT-075
+// Consume retrieves the payload + DEL's the primary key on success.
+// Returns (Payload, nil) with the original user_id.
+func TestConsume_HappyPathDelsPrimaryAndReverse(t *testing.T) {
+	t.Parallel()
+	rdb, mr := newRedis(t)
+	ctx := context.Background()
+
+	tok, _ := token.Generate()
+	userID := uuid.New()
+	_ = token.Store(ctx, rdb, tok, userID)
+	primaryKey := "auth:email_verify:" + token.Hash(tok)
+	reverseKey := "auth:email_verify:user:" + userID.String()
+
+	payload, err := token.Consume(ctx, rdb, tok)
+	if err != nil {
+		t.Fatalf("Consume: %v", err)
+	}
+	if payload.UserID != userID {
+		t.Errorf("Consume payload.UserID = %s, want %s", payload.UserID, userID)
+	}
+	if mr.Exists(primaryKey) {
+		t.Errorf("primary key still exists after Consume — one-shot consumption violated")
+	}
+	if mr.Exists(reverseKey) {
+		t.Errorf("reverse index still exists after Consume — should be DEL'd too")
+	}
+}
+
+// Scenario: 2.2-UNIT-076
+// Consume on a missing key (TTL elapsed or never issued) returns
+// ErrTokenNotFound.
+func TestConsume_NotFoundOnMissingKey(t *testing.T) {
+	t.Parallel()
+	rdb, _ := newRedis(t)
+	ctx := context.Background()
+	tok, _ := token.Generate()
+	_, err := token.Consume(ctx, rdb, tok)
+	if !errors.Is(err, token.ErrTokenNotFound) {
+		t.Fatalf("Consume(missing) = %v, want ErrTokenNotFound", err)
+	}
+}
+
+// One-shot guarantee: second Consume against the same plaintext token
+// returns ErrTokenNotFound because the first call DEL'd the primary.
+// (BR-2.1)
+func TestConsume_SecondCallReturnsNotFound(t *testing.T) {
+	t.Parallel()
+	rdb, _ := newRedis(t)
+	ctx := context.Background()
+	tok, _ := token.Generate()
+	userID := uuid.New()
+	_ = token.Store(ctx, rdb, tok, userID)
+
+	if _, err := token.Consume(ctx, rdb, tok); err != nil {
+		t.Fatalf("first Consume: %v", err)
+	}
+	_, err := token.Consume(ctx, rdb, tok)
+	if !errors.Is(err, token.ErrTokenNotFound) {
+		t.Fatalf("second Consume = %v, want ErrTokenNotFound (one-shot)", err)
+	}
+}
+
+// Scenario: 2.2-UNIT-077
+// When the stored attempts counter has reached MaxConsumeAttempts-1 the
+// next Consume bumps it to the cap, DEL's both keys, and returns
+// ErrTokenAttemptsExceeded. Subsequent calls return ErrTokenNotFound.
+//
+// Simulated by manually pre-writing the payload via mr.Set with
+// attempts:4. The Lua eval reads, increments to 5, hits the cap, DEL's.
+func TestConsume_AttemptsExceededTriggersLockoutAndDel(t *testing.T) {
+	t.Parallel()
+	rdb, mr := newRedis(t)
+	ctx := context.Background()
+
+	tok, _ := token.Generate()
+	userID := uuid.New()
+	primaryKey := "auth:email_verify:" + token.Hash(tok)
+	reverseKey := "auth:email_verify:user:" + userID.String()
+	// Pre-populate the primary with attempts=4 (one increment away from the cap).
+	rawPayload, _ := json.Marshal(token.Payload{
+		UserID:    userID,
+		ExpiresAt: time.Now().Add(time.Hour),
+		Attempts:  4,
+	})
+	mr.Set(primaryKey, string(rawPayload))
+	mr.Set(reverseKey, token.Hash(tok))
+
+	_, err := token.Consume(ctx, rdb, tok)
+	if !errors.Is(err, token.ErrTokenAttemptsExceeded) {
+		t.Fatalf("Consume(attempts=4→5) = %v, want ErrTokenAttemptsExceeded", err)
+	}
+	if mr.Exists(primaryKey) {
+		t.Errorf("primary key still exists after attempts-exceeded DEL")
+	}
+	if mr.Exists(reverseKey) {
+		t.Errorf("reverse index still exists after attempts-exceeded DEL")
+	}
+}
+
+// Scenario: P3a / 1 — DeleteForUser uses the reverse index to DEL both keys.
+func TestDeleteForUser_RemovesPrimaryAndReverse(t *testing.T) {
+	t.Parallel()
+	rdb, mr := newRedis(t)
+	ctx := context.Background()
+
+	tok, _ := token.Generate()
+	userID := uuid.New()
+	_ = token.Store(ctx, rdb, tok, userID)
+
+	deleted, err := token.DeleteForUser(ctx, rdb, userID)
+	if err != nil {
+		t.Fatalf("DeleteForUser: %v", err)
+	}
+	if !deleted {
+		t.Errorf("DeleteForUser returned false, want true (token was active)")
+	}
+	if mr.Exists("auth:email_verify:" + token.Hash(tok)) {
+		t.Errorf("primary key still exists after DeleteForUser")
+	}
+	if mr.Exists("auth:email_verify:user:" + userID.String()) {
+		t.Errorf("reverse index still exists after DeleteForUser")
+	}
+}
+
+// DeleteForUser on a user with no active token returns (false, nil) — used
+// by ResendVerification to know whether anything was invalidated.
+func TestDeleteForUser_NoActiveTokenReturnsFalse(t *testing.T) {
+	t.Parallel()
+	rdb, _ := newRedis(t)
+	ctx := context.Background()
+	userID := uuid.New()
+	deleted, err := token.DeleteForUser(ctx, rdb, userID)
+	if err != nil {
+		t.Fatalf("DeleteForUser: %v", err)
+	}
+	if deleted {
+		t.Errorf("DeleteForUser returned true on no-active-token user")
+	}
+}
+
 // Helper — read all non-test .go files in this test's package directory.
 func readPackageSource(t *testing.T) string {
 	t.Helper()
