@@ -17,11 +17,25 @@ terraform {
       source  = "aliyun/alicloud"
       version = ">= 1.220.0"
     }
+    # Story 1.6 — Kubernetes provider drives admin Secret + namespace + RBAC.
+    # Configuration is wired against the ACK cluster created by module.ack.
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = ">= 2.27.0"
+    }
   }
 }
 
 provider "alicloud" {
   region = var.region
+}
+
+# Kubernetes provider configured against the ACK kubeconfig that module.ack
+# materializes. The kubeconfig path is exposed via module.ack.kubeconfig_path
+# (provided in 1.3); operator must run `terraform apply` after the cluster is
+# reachable. The provider is consumed only by Story 1.6 resources below.
+provider "kubernetes" {
+  config_path = var.kubeconfig_path
 }
 
 # Common tags applied to every resource for cost-attribution + GitOps audit.
@@ -33,6 +47,9 @@ locals {
     epic        = "epic-1"
     story       = "1.3"
   }
+  db_tags = merge(local.common_tags, {
+    story = "1.6"
+  })
 }
 
 # -----------------------------------------------------------------------------
@@ -105,4 +122,115 @@ output "api_server_endpoint_intranet" {
 output "api_server_endpoint_internet" {
   description = "Public ACK API server endpoint (ACL-gated)."
   value       = module.ack.api_server_endpoint_internet
+}
+
+# -----------------------------------------------------------------------------
+# 4. Story 1.6 — RDS PostgreSQL (Q4: three independent modules)
+# -----------------------------------------------------------------------------
+module "rds_postgres" {
+  source = "../../modules/rds-postgres"
+
+  vpc_id         = module.vpc.vpc_id
+  vswitch_ids    = module.vpc.vswitch_ids
+  kms_key_id     = var.kms_key_id
+  admin_password = var.postgres_admin_password
+
+  tags = local.db_tags
+}
+
+# -----------------------------------------------------------------------------
+# 5. Story 1.6 — Aliyun Tair (Redis 7.2 compat)
+# -----------------------------------------------------------------------------
+module "redis_tair" {
+  source = "../../modules/redis-tair"
+
+  vpc_id     = module.vpc.vpc_id
+  vswitch_id = module.vpc.vswitch_ids[0]
+  kms_key_id = var.kms_key_id
+
+  tags = local.db_tags
+}
+
+# -----------------------------------------------------------------------------
+# 6. Story 1.6 — Aliyun ClickHouse 24+
+# -----------------------------------------------------------------------------
+module "clickhouse" {
+  source = "../../modules/clickhouse"
+
+  vpc_id     = module.vpc.vpc_id
+  vswitch_id = module.vpc.vswitch_ids[0]
+  kms_key_id = var.kms_key_id
+
+  tags = local.db_tags
+}
+
+# -----------------------------------------------------------------------------
+# 7. Story 1.6 — K8s namespaces + admin Secret (M-1 ruling: Vault deferred).
+#    Two namespaces, separated by RBAC; both Secrets ACK-KMS envelope-encrypted.
+# -----------------------------------------------------------------------------
+
+resource "kubernetes_namespace" "he_api_ops" {
+  metadata {
+    name = "he-api-ops"
+    labels = {
+      "he-api/role"  = "ops"
+      "he-api/story" = "1.6"
+    }
+  }
+}
+
+resource "kubernetes_namespace" "he_api_staging" {
+  metadata {
+    name = "he-api-staging"
+    labels = {
+      "he-api/role"  = "app"
+      "he-api/story" = "1.6"
+    }
+  }
+}
+
+# ClusterRoleBinding granting ops-cluster-admin to operators only.
+# The 'ops-cluster-admin' ClusterRole MUST be pre-created out-of-band by the
+# cluster admin (binding to it is in-scope; ClusterRole authoring is not).
+resource "kubernetes_cluster_role_binding" "he_api_ops_admin" {
+  metadata {
+    name = "he-api-ops-cluster-admin"
+  }
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "ClusterRole"
+    name      = "ops-cluster-admin"
+  }
+  subject {
+    kind      = "Group"
+    name      = var.ops_admin_group
+    api_group = "rbac.authorization.k8s.io"
+  }
+}
+
+# Admin Secret: he-api-db-admin-creds in he-api-ops namespace.
+# M-1.1 — namespace + RBAC separation (NOT tool separation).
+# M-1.3 — ACK KMS envelope encryption annotation.
+# BR-2.3 — passwords NEVER written to git; Terraform variables (sensitive=true)
+# sourced from a tfvars file gitignored under infra/terraform/**/*.tfvars (see
+# .gitignore). The K8s Secret is the operator-visible storage; Terraform state
+# is OSS-backed + KMS-encrypted per 1.3.
+resource "kubernetes_secret" "he_api_db_admin_creds" {
+  metadata {
+    name      = "he-api-db-admin-creds"
+    namespace = "he-api-ops" # ops-only RBAC; matches kubernetes_namespace.he_api_ops
+    annotations = {
+      "cloud.alibaba.com/kms-encrypted" = "true"
+    }
+    labels = {
+      "he-api/story" = "1.6"
+    }
+  }
+  depends_on = [kubernetes_namespace.he_api_ops]
+  type = "Opaque"
+  data = {
+    postgres_admin_password   = var.postgres_admin_password
+    redis_admin_password      = var.redis_admin_password
+    clickhouse_admin_password = var.clickhouse_admin_password
+  }
 }

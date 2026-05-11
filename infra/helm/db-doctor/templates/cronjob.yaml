@@ -1,0 +1,73 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "db-doctor.fullname" . }}
+  labels:
+    {{- include "db-doctor.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.schedule }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: {{ .Values.activeDeadlineSeconds }}
+      template:
+        metadata:
+          labels:
+            {{- include "db-doctor.selectorLabels" . | nindent 12 }}
+          annotations:
+            # BR-4.3 + AC4: pod exposes /metrics for Prometheus scrape.
+            # he_api_db_doctor_check_status{db,check} gauge is emitted via
+            # textfile collector mounted at /var/run/metrics/doctor.prom.
+            prometheus.io/scrape: "true"
+            prometheus.io/path: "/metrics"
+            prometheus.io/port: "9090"
+        spec:
+          restartPolicy: OnFailure
+          # PSR 6 fields literal (matches sample-grpc-app convention from 1.5).
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: db-doctor
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command: ["/bin/bash", "/probes/run-doctor.sh"]
+              envFrom:
+                - secretRef:
+                    name: he-api-db-creds
+              volumeMounts:
+                - name: probes
+                  mountPath: /probes
+              # Container-level PSR (drops ALL capabilities, no privilege escalation).
+              securityContext:
+                runAsNonRoot: true
+                runAsUser: 65532
+                readOnlyRootFilesystem: true
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                seccompProfile:
+                  type: RuntimeDefault
+              resources:
+                limits:
+                  memory: {{ .Values.resources.limits.memory }}
+                  cpu: {{ .Values.resources.limits.cpu }}
+                requests:
+                  memory: {{ .Values.resources.requests.memory }}
+                  cpu: {{ .Values.resources.requests.cpu }}
+              ports:
+                - name: metrics
+                  containerPort: 9090
+                  protocol: TCP
+          # Container image bundles three DB CLIs: psql + redis-cli + clickhouse-client.
+          # Image build: image:{{ .Values.image.tag }} pinned at chart appVersion.
+          volumes:
+            - name: probes
+              configMap:
+                name: {{ include "db-doctor.fullname" . }}-probes
+                defaultMode: 0555

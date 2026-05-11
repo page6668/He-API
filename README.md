@@ -544,6 +544,40 @@ Story 1.5 dogfooded the scaffold against `apps/sample-grpc-app/` (domain
 
 ---
 
+## DB Doctor 自检
+
+Story 1.6 delivers the database foundation (PostgreSQL 16 + Redis 7.2 + ClickHouse 24) plus two operator utilities:
+
+- `scripts/db-doctor.sh` — local 5-minute self-check (Q5 ruling, bash + native CLIs); reads `~/.he-api/staging.env`; emits `[PASS]` / `[FAIL]` lines per BR-4.1/4.2; exit 0/1/2 semantics.
+- `scripts/db-migrate.sh` — unified migration entrypoint (`up` / `down` / `status` / `diff`) delegating to Atlas (PG, versioned mode) + golang-migrate (CH). Credentials sourced from `HE_API_DB_*_URI` env or the K8s Secret `he-api-db-creds`.
+
+Prereqs (local): `psql` 16 + `redis-cli` 7.x + `clickhouse-client` 24 + `atlas` + `migrate` (golang-migrate). macOS one-time install:
+
+```bash
+brew install postgresql@16 redis clickhouse atlas
+brew install golang-migrate
+```
+
+Populate `~/.he-api/staging.env` from the K8s Secret:
+
+```bash
+mkdir -p ~/.he-api
+kubectl -n he-api-staging get secret he-api-db-creds -o jsonpath='{.data}' \
+  | jq -r 'to_entries[] | "\(.key)=\(.value | @base64d)"' \
+  > ~/.he-api/staging.env
+```
+
+Run the doctor:
+
+```bash
+scripts/db-doctor.sh
+# All checks passed (5/5)
+```
+
+Operator guide: `docs/architecture/database-bootstrap.md` (6 sections — topology / migration workflow / credentials & Vault migration path / capacity / runbook / decision lineage).
+
+---
+
 ## 文档
 
 - [PRD](docs/prd.md)

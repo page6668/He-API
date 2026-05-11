@@ -1,0 +1,16 @@
+apiVersion: v2
+name: db-doctor
+description: Story 1.6 — DB Doctor CronJob (Q5 cluster path). Probes PostgreSQL + Redis + ClickHouse every 30 minutes and exposes he_api_db_doctor_check_status gauge to Prometheus via 1.4 ServiceMonitor.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.29.0-0"
+
+keywords:
+  - he-api
+  - db-doctor
+  - story-1.6
+  - cronjob
+
+maintainers:
+  - name: He-API platform team

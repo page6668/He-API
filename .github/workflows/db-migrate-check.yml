@@ -1,0 +1,97 @@
+name: db-migrate-check
+
+# Story 1.6 — PR-driven drift gate for the PostgreSQL Atlas baseline.
+#
+# Spins up an ephemeral postgres:16 service container, applies the baseline
+# via `scripts/db-migrate.sh up`, then runs `scripts/db-migrate.sh diff` to
+# catch schema drift (BR-3.5 + MIG-DB-003). Additionally enforces the BR-3.6
+# "zero business tables in baseline" boundary — any non-baseline `.sql` file
+# under `migrations/postgres/` fails the job with MIG-DB-001 (cross-listed
+# with 0001_baseline.sql so test 1.6-BLIND-DATA-001 can grep this workflow).
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'migrations/**'
+      - 'scripts/db-migrate.sh'
+      - '.github/workflows/db-migrate-check.yml'
+
+# Convention matches 1.5: group per ref; cancel only on PR pushes.
+concurrency:
+  group: db-migrate-check-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  ATLAS_VERSION: "v0.27.0"
+  MIGRATE_VERSION: "v4.17.0"
+
+jobs:
+  drift-gate:
+    name: drift-gate (atlas + golang-migrate)
+    runs-on: ubuntu-22.04
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: he_admin
+          POSTGRES_PASSWORD: dev_only_password
+          POSTGRES_DB: he_api
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U he_admin -d he_api"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      HE_API_DB_POSTGRES_URI: "postgres://he_admin:dev_only_password@localhost:5432/he_api?sslmode=disable"
+      HE_API_DB_CLICKHOUSE_URI: "clickhouse://localhost:9000"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Atlas (versioned-mode CLI per Q1 / m-1)
+        uses: ariga/setup-atlas@v0
+        with:
+          version: ${{ env.ATLAS_VERSION }}
+
+      - name: Install golang-migrate
+        run: |
+          curl -fsSL "https://github.com/golang-migrate/migrate/releases/download/${MIGRATE_VERSION}/migrate.linux-amd64.tar.gz" \
+            | tar -xz -C /tmp
+          sudo mv /tmp/migrate /usr/local/bin/migrate
+          migrate -version
+
+      # BR-3.6 / MIG-DB-001 boundary — the baseline directory MUST only contain
+      # the canonical 0001_baseline.sql + atlas.sum. Any other .sql file fails
+      # the PR. Cross-listed for 1.6-BLIND-DATA-001 grep.
+      - name: BR-3.6 zero-business-tables boundary check (MIG-DB-001)
+        run: |
+          set -euo pipefail
+          extras=$(find migrations/postgres -type f -name '*.sql' \
+            ! -name '0001_baseline.sql' || true)
+          if [ -n "${extras}" ]; then
+            echo "::error::MIG-DB-001: non-baseline .sql files in migrations/postgres/ violate BR-3.6:"
+            echo "${extras}"
+            exit 1
+          fi
+
+      - name: bash scripts/db-migrate.sh up (apply Atlas baseline)
+        run: bash scripts/db-migrate.sh up
+
+      - name: bash scripts/db-migrate.sh diff (drift gate)
+        run: bash scripts/db-migrate.sh diff
+
+      - name: shellcheck scripts/db-migrate.sh + scripts/db-doctor.sh
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y shellcheck
+          shellcheck scripts/db-migrate.sh scripts/db-doctor.sh

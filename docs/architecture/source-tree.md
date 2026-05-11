@@ -115,4 +115,18 @@ he-api/                                  (Monorepo, Turborepo)
 
 > **注**: `packages/go-observability/` 是 Story 1.5 引入的 Go observability 共享包（OTel TracerProvider + slog JSON handler + otelhttp wrap），统一 Epic 2-10 全部 14 个 Go 服务的 OTel/Prom/log 接入。`apps/sample-otel-app/cmd/server/main.go` 重构以消费此包列为 post-1.5 followup（Epic 2 Story 2.1 auth-svc 落地时同期完成）。条目添加来源：Story 1.5 Architect Round 1 Q5 ruling，2026-05-11。
 
+> **注**: Story 1.6 — 数据库基础新增条目：
+> - `infra/terraform/modules/rds-postgres/` — Aliyun RDS PostgreSQL 16 Terraform 模块（Q4 ruling：三独立 modules）。
+> - `infra/terraform/modules/redis-tair/` — Aliyun Tair (Redis 7.2 兼容) Terraform 模块（Q4 ruling）。
+> - `infra/terraform/modules/clickhouse/` — Aliyun ClickHouse 24+ Terraform 模块（Q4 ruling）。
+> - `migrations/postgres/` — Atlas versioned-mode migration directory（Q1 ruling）；包含 `atlas.hcl` + `0001_baseline.sql` + `atlas.sum`。
+> - `migrations/clickhouse/` — golang-migrate paired up/down migration directory（Q2 ruling）；包含 `001_baseline.up.sql` + `001_baseline.down.sql`（m-2 空 stub）。
+> - `scripts/db-doctor/probes/` — SQL/shell probe 单一可信源（Q5 ruling），由 `scripts/db-doctor.sh` 与 `infra/helm/db-doctor/templates/configmap.yaml` 共享引用，零查询重复。
+> - `infra/helm/db-doctor/` — DB Doctor Helm CronJob chart（Q5 ruling cluster path + M-2 ruling: direct helm install, NOT ArgoCD）。
+> - `scripts/db-migrate.sh` — 统一 migration 入口（up/down/status/diff）；委托 Atlas + golang-migrate 二进制。
+> - `scripts/db-doctor.sh` — 本地 DB 自检脚本；5 分钟 SLO；exit 0/1/2 per BR-4.1。
+> - `docs/architecture/database-bootstrap.md` — 6-section operator 指南（m-4 ruling: Topology / Migration Workflow / Credentials & Vault Migration Path / Capacity / Operator Runbook / Decision Lineage）。
+>
+> 条目添加来源：Story 1.6 Architect Round 1 (Q1-Q5 + M-1/M-2 + m-1..m-5)，2026-05-11。
+
 ---

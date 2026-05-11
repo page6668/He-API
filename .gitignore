@@ -50,3 +50,11 @@ infra/terraform/**/terraform.tfvars
 infra/terraform/**/.terraform/
 infra/terraform/**/*.tfstate
 infra/terraform/**/*.tfstate.*
+
+# Story 1.6 — DB credentials leakage guards.
+# *.tfvars catches any per-env vars file Dev may stage locally.
+# .he-api/staging.env is the DB doctor's local credential file (BR-2.3 + BLIND-DATA-003).
+*.tfvars
+secrets.tfvars
+secrets.yaml
+.he-api/staging.env

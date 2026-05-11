@@ -1,0 +1,43 @@
+# Story 1.6 — db-doctor chart defaults.
+
+# CronJob cadence + wall-clock cap. activeDeadlineSeconds=300 enforces the
+# AC4 5-minute SLO (BR-4.1 + BLIND-RESOURCE-001).
+schedule: "*/30 * * * *"
+activeDeadlineSeconds: 300
+
+# Container image — bundles psql + redis-cli + clickhouse-client.
+# The repository points to ACR (Story 1.3 ACR EE Basic) and is populated by
+# a separate image build pipeline (.github/workflows/build-images.yml entry
+# `db-doctor` — added as a follow-up matrix row in T11 verification).
+image:
+  repository: he-api-registry.cn-shanghai.cr.aliyuncs.com/he-api/db-doctor
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+# Credential Secret name — populated by Terraform via plain Helm template
+# (see templates/secret.yaml). M-1 ruling: NOT ExternalSecret / SealedSecret.
+credentialsSecretName: he-api-db-creds
+
+# Three DB URIs (Terraform-injected values, BR-2.5 naming).
+# Defaults are placeholder; operator supplies real values via -f values-staging.yaml.
+postgres:
+  uri: "postgres://he_api:CHANGE_ME@localhost:5432/he_api?sslmode=require"
+redis:
+  uri: "rediss://he-api:CHANGE_ME@localhost:6379/0"
+clickhouse:
+  uri: "https://he_api:CHANGE_ME@localhost:8443/he_api?secure=true"
+
+# Pod resource constraints (BLIND-RESOURCE-002).
+resources:
+  limits:
+    memory: 256Mi
+    cpu: 200m
+  requests:
+    memory: 128Mi
+    cpu: 50m
+
+# Prometheus ServiceMonitor wiring (BR-4.3, picks up the 1.4 kube-prometheus-stack release).
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  release: kube-prometheus-stack

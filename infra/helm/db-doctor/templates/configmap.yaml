@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "db-doctor.fullname" . }}-probes
+  labels:
+    {{- include "db-doctor.labels" . | nindent 4 }}
+# Q5 ruling — SQL/shell probes loaded from scripts/db-doctor/probes/ via Helm
+# .Files.Get so the local and cluster paths share a single source of truth
+# (zero query duplication). Operators rendering this chart must invoke
+# `helm install` / `helm template` from the repository root so that
+# `helm chart-relative` `.Files.Get "probes/..."` paths resolve correctly to
+# `infra/helm/db-doctor/probes/` (copied at chart-package time by the
+# pre-publish step in CI; see .github/workflows/db-migrate-check.yml).
+data:
+  postgres.sql: |
+{{ .Files.Get "probes/postgres.sql" | indent 4 }}
+  clickhouse.sql: |
+{{ .Files.Get "probes/clickhouse.sql" | indent 4 }}
+  redis-ping.sh: |
+{{ .Files.Get "probes/redis-ping.sh" | indent 4 }}
