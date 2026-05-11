@@ -625,15 +625,56 @@ describe('AC4 — Console-observable cross-cutting concerns', () => {
   // Note: most AC4 scenarios are Go-side (auth-svc/internal/ratelimit + api-gateway middleware).
   // Console only verifies the consumer-side error code mapping for 429 / 403_csrf_check_failed.
 
-  test('2.2-UNIT-198 [BLIND-SPOT FLOW-002]: registerUser surfaces 429 → tooManyAttempts with countdown seconds parsed from Retry-After / body', () => {
-    // Priority: P1 | Level: unit | BR-1.7 / BR-3.8 / BR-2.4 — 5-key matrix surfaced via single i18n family
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-198');
+  test('2.2-UNIT-198 [BLIND-SPOT FLOW-002]: registerUser surfaces 429 → tooManyAttempts with countdown from Retry-After', async () => {
+    // Scenario: 2.2-UNIT-198 — BR-1.7 / BR-3.8 / BR-2.4
+    // 429 with Retry-After=180 must surface as auth.errors.tooManyAttempts +
+    // retryAfterSeconds=180 so the form can render the countdown.
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: '429_rate_limit_signup' } }), {
+        status: 429,
+        headers: { 'Retry-After': '180' },
+      }),
+    );
+    try {
+      const { registerUser } = await import('../app/[locale]/_actions/auth');
+      const result = await registerUser({
+        email: 'u@example.com',
+        password: '0123456789',
+        locale: 'en',
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.code).toBe('auth.errors.tooManyAttempts');
+        expect(result.retryAfterSeconds).toBe(180);
+      }
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
-  test('2.2-UNIT-199: console NEVER renders a user-readable message for 403 CSRF violations (opaque to attacker)', () => {
-    // Priority: P0 | Level: unit | AC4 Error Handling — Origin/CSRF rejection returns generic page, NO debug
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-199');
+  test('2.2-UNIT-199: console NEVER renders a user-readable message for 403 CSRF violations', () => {
+    // Scenario: 2.2-UNIT-199 — AC4 Error Handling (BR-4.6 opaque rejection)
+    //
+    // CSRF rejection is enforced by the api-gateway middleware (not the
+    // console). The console MUST NOT carry any source-level mapping
+    // 403_csrf_check_failed → user-facing i18n message — the user should
+    // see only the generic "something went wrong" surface (the platform's
+    // generic error boundary, NOT an auth-specific message).
+    //
+    // Static source scan: the Server Action's status-code → i18n key
+    // mapper MUST NOT have a case for 403_csrf_check_failed.
+    const actionPath = join(repoRoot, 'apps/console/app/[locale]/_actions/auth.ts');
+    const src = readFileSync(actionPath, 'utf8');
+    expect(src).not.toMatch(/403_csrf_check_failed/);
+    expect(src).not.toMatch(/csrfCheckFailed/i);
+
+    // Same check for the locale-tuple-aware mapper: no auth.errors.* key
+    // dedicated to CSRF (a key would imply a user-facing surface).
+    const enAuth = JSON.parse(readFileSync(enAuthJsonPath, 'utf8'));
+    const errors = (enAuth as { errors?: Record<string, unknown> }).errors ?? {};
+    for (const key of Object.keys(errors)) {
+      expect(key.toLowerCase()).not.toMatch(/csrf/);
+      expect(key.toLowerCase()).not.toMatch(/origin/);
+    }
   });
 });

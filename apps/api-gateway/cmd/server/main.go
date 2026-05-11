@@ -110,10 +110,15 @@ func main() {
 	mux.HandleFunc("POST /v1/auth/refresh", auth.Refresh)
 	mux.HandleFunc("GET /.well-known/jwks.json", jwks.Serve)
 
-	// Middleware chain: security_headers (always on) → csrf (state-mutating
-	// POSTs only — chained inside handlers per Q1 ruling) → jwt_verify (only
-	// on /v1/protected/* routes, materializes Story 2.5+; P1 holds the stub).
-	handler := middleware.SecurityHeaders(mux)
+	// Middleware chain (outer → inner): SecurityHeaders → CSRF → mux.
+	// SecurityHeaders writes the BR-4.7 response headers on every response.
+	// CSRF rejects state-mutating POSTs without a matching Origin header
+	// (BR-4.6); GET / HEAD / OPTIONS flow through. JWT-verify on protected
+	// routes lands in Story 2.5+.
+	csrfAllowed := csrfAllowlistFor(deployEnv)
+	handler := middleware.SecurityHeaders(middleware.CSRF(middleware.CSRFConfig{
+		AllowedOrigins: csrfAllowed,
+	}, mux))
 
 	srv := &http.Server{
 		Addr:              listenAddr,
@@ -143,6 +148,25 @@ func main() {
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("http shutdown failed", slog.String("error", err.Error()))
+	}
+}
+
+// csrfAllowlistFor returns the Origin allowlist for the current deploy
+// env. Production accepts any *.he-api.com origin; staging restricts to
+// *.staging.he-api.com; development allows localhost on common dev
+// ports.
+func csrfAllowlistFor(env handlers.DeployEnv) []string {
+	switch env {
+	case handlers.EnvProduction:
+		return []string{".he-api.com"}
+	case handlers.EnvStaging:
+		return []string{".staging.he-api.com"}
+	default:
+		return []string{
+			"http://localhost:3000",
+			"http://127.0.0.1:3000",
+			"http://localhost:8080",
+		}
 	}
 }
 
