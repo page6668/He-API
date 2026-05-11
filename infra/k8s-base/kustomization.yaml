@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Order MATTERS — namespaces must exist before namespaced resources are applied.
+resources:
+  - namespace.yaml
+  - rbac.yaml
+  - network-policy.yaml
+  - resource-quota.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: he-api
+  app.kubernetes.io/managed-by: kustomize-story-1.3

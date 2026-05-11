@@ -1,0 +1,33 @@
+# Staging tfvars EXAMPLE — copy to terraform.tfvars (gitignored) and fill.
+#
+# This file holds NO real credentials and is safe to commit. The actual
+# terraform.tfvars in the env directory MUST be created by ops with real
+# values and is excluded by .gitignore at the repo root.
+
+# Region / network
+region              = "cn-shanghai"
+vpc_cidr            = "10.20.0.0/16"
+vswitch_cidrs       = ["10.20.1.0/24", "10.20.2.0/24", "10.20.3.0/24"]
+availability_zones  = ["cn-shanghai-f", "cn-shanghai-g", "cn-shanghai-h"]
+
+# ACK worker pool — staging baseline.
+worker_count         = 3
+worker_instance_type = "ecs.c7.large"
+k8s_version          = "1.29.1-aliyun.1"
+
+# -----------------------------------------------------------------------------
+# ACK Path A2 ACL — MUST be non-empty when api_server_public_access_enabled = true
+# (module precondition rejects empty lists at `terraform plan`).
+#
+# Refresh cadence: GitHub Actions hosted runner egress CIDRs are dynamic. Pull
+# them weekly from `curl https://api.github.com/meta | jq .actions` and re-apply.
+# After Story 1.7+ self-hosted runners land, the GHA entry can be removed.
+# -----------------------------------------------------------------------------
+api_server_public_access_allowed_cidrs = [
+  "140.82.112.0/20",   # GitHub Actions hosted runner; weekly refresh from api.github.com/meta
+  "203.0.113.42/32",   # operator workstation (example — REPLACE with the real /32 IP)
+  # "198.51.100.0/24", # company office NAT egress (optional)
+]
+
+# ACR EE instance name — composes the endpoint <name>-registry.<region>.cr.aliyuncs.com
+acr_instance_name = "he-api"

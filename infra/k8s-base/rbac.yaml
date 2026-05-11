@@ -1,0 +1,86 @@
+# Baseline RBAC for he-api-* namespaces.
+#
+# Contract (per Architect Round 1 + docs/architecture/security.md §8.1):
+#   * `default` ServiceAccount in he-api-* CAN read ConfigMaps and read its
+#     own Pod (for self-introspection).
+#   * `default` ServiceAccount CANNOT read Secrets — Secret access goes
+#     through Workload Identity or an explicit per-workload RoleBinding.
+#   * monitoring / cert-manager / ingress-nginx / argocd RBAC is owned by
+#     Story 1.4 (NOT this Story).
+---
+# ============================================================================
+# he-api-staging
+# ============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: default
+  namespace: he-api-staging
+  annotations:
+    managed-by: story-1.3
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: api-gateway-runtime
+  namespace: he-api-staging
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+    # Self-introspection only — NO `secrets` resource here by design.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: api-gateway-runtime
+  namespace: he-api-staging
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: he-api-staging
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: api-gateway-runtime
+---
+# ============================================================================
+# he-api-prod
+# ============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: default
+  namespace: he-api-prod
+  annotations:
+    managed-by: story-1.3
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: api-gateway-runtime
+  namespace: he-api-prod
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: api-gateway-runtime
+  namespace: he-api-prod
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: he-api-prod
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: api-gateway-runtime

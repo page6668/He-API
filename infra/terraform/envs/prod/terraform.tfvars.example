@@ -1,0 +1,20 @@
+# Production tfvars EXAMPLE — copy to terraform.tfvars (gitignored) and fill.
+#
+# Production is NOT applied during Story 1.3. This file exists so reviewers
+# can verify CIDR / ACL placeholders are distinct from staging.
+
+region              = "cn-shanghai"
+vpc_cidr            = "10.30.0.0/16"
+vswitch_cidrs       = ["10.30.1.0/24", "10.30.2.0/24", "10.30.3.0/24"]
+availability_zones  = ["cn-shanghai-f", "cn-shanghai-g", "cn-shanghai-h"]
+k8s_version         = "1.29.1-aliyun.1"
+
+# Path A2 ACL — production-grade. Ops + Tech Lead joint approval to populate.
+# Refresh weekly from api.github.com/meta when self-hosted runners are not yet in place.
+api_server_public_access_allowed_cidrs = [
+  "140.82.112.0/20",   # GitHub Actions hosted runner; weekly refresh from api.github.com/meta
+  "203.0.113.42/32",   # operator workstation (REPLACE with real /32)
+  # "198.51.100.0/24", # company office NAT egress (optional)
+]
+
+acr_instance_name = "he-api-prod"

@@ -1,0 +1,24 @@
+# Staging-specific overrides — MINIMAL whitelist per Architect Round 1 Q1.
+#
+# Allowed top-level keys: image / service / networkPolicy / serviceAccount.
+# FORBIDDEN (any depth):
+#   * ingress.*           — Story 1.4 adds ingress-nginx + Ingress resources
+#   * autoscaling.*       — Story 1.4 brings metrics-server online
+#   * resources.requests / resources.limits — fall back to values.yaml; Story 1.5 retunes
+#   * env / envFrom containing plaintext creds — forever banned; use Vault from Story 1.7+
+#
+# This file MUST exist non-empty — Story 1.2's `deploy-staging.yml` probe_helm
+# step closes its fallback branch by detecting it; deleting this file silently
+# re-opens the fallback (no real ACR push).
+image:
+  repository: ${ACR_REGISTRY}/he-api/api-gateway
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  port: 8080
+networkPolicy:
+  enabled: true
+serviceAccount:
+  create: true
+  name: ""

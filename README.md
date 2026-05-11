@@ -99,18 +99,22 @@ bash scripts/go-build-all.sh
 GitHub Actions 提供 PR 检查与 merge 触发的 staging 部署链路。Story 1.2 落地基线工作流，
 Story 1.3/1.4 接入真实 ACR / ArgoCD 后即可端到端运行。
 
-### PR 必需 status checks（6 个）
+### PR 必需 status checks（10 个）
 
-合并到 `main` 的 PR 必须等待以下 6 个 check 全部绿色：
+合并到 `main` 的 PR 必须等待以下 10 个 check 全部绿色（6 个由 Story 1.2 提供，4 个由 Story 1.3 新增）：
 
-| Check 名称         | Workflow                          | 含义 |
-|--------------------|-----------------------------------|------|
-| `lint-ts`          | `.github/workflows/lint.yml`      | TS 端 `pnpm lint`（Turborepo 编排） |
-| `lint-go`          | `.github/workflows/lint.yml`      | `golangci-lint` + `gofumpt`（作用域 `./apps/...`） |
-| `unit-ts`          | `.github/workflows/test.yml`      | `pnpm test`（Vitest） |
-| `unit-go`          | `.github/workflows/test.yml`      | `go test -race`（`CGO_ENABLED=1`） |
-| `integration`      | `.github/workflows/test.yml`      | 占位（Story 1.5/1.6 接入真实场景） |
-| `build-image-pr`   | `.github/workflows/build-images.yml` | `docker build` 验证（无 push） |
+| Check 名称                       | Workflow                              | 含义 |
+|----------------------------------|---------------------------------------|------|
+| `lint-ts`                        | `.github/workflows/lint.yml`          | TS 端 `pnpm lint`（Turborepo 编排） |
+| `lint-go`                        | `.github/workflows/lint.yml`          | `golangci-lint` + `gofumpt`（作用域 `./apps/...`） |
+| `unit-ts`                        | `.github/workflows/test.yml`          | `pnpm test`（Vitest） |
+| `unit-go`                        | `.github/workflows/test.yml`          | `go test -race`（`CGO_ENABLED=1`） |
+| `integration`                    | `.github/workflows/test.yml`          | 占位（Story 1.5/1.6 接入真实场景） |
+| `build-image-pr`                 | `.github/workflows/build-images.yml`  | `docker build` 验证（无 push） |
+| `terraform-validate (staging)`   | `.github/workflows/infra-lint.yml`    | `terraform fmt -check` + `init -backend=false` + `validate` + `tflint --recursive`（staging matrix） |
+| `terraform-validate (prod)`      | `.github/workflows/infra-lint.yml`    | 同上（prod matrix） |
+| `helm-lint`                      | `.github/workflows/infra-lint.yml`    | `helm lint` + `helm template \| kubeconform -strict -summary` |
+| `k8s-manifest-validate`          | `.github/workflows/infra-lint.yml`    | `kubeconform -strict -summary` 校验 `infra/k8s-base/` |
 
 ### 本地复现 CI
 
@@ -146,7 +150,9 @@ CGO_ENABLED=1 go test ./apps/api-gateway/... -count=1 -race
 
 ### Branch protection 推荐配置（仓库 admin 手工）
 
-- **Require status checks before merging**：勾选上方 6 个 check 全部为必需。
+- **Require status checks before merging**：勾选上方 **10 个 check** 全部为必需。
+  Story 1.3 新增的 4 个 check 名称：`terraform-validate (staging)` /
+  `terraform-validate (prod)` / `helm-lint` / `k8s-manifest-validate`。
 - **禁止 admin 强推**（Include administrators in restrictions）。
 - **`github-actions[bot]` 加入 Bypass list**：在 `main` 分支保护规则的
   *Bypass list* 中添加 `github-actions[bot]`（或在 "Require a pull request
@@ -205,6 +211,136 @@ CGO_ENABLED=1 go test ./apps/api-gateway/... -count=1 -race
 仅 push immutable `:${git_sha}` tag。**不**使用 `:staging-latest` 等可变 tag——
 ArgoCD 通过 Helm values 中的 `image.tag = ${git_sha}` 拉取唯一镜像，保证 GitOps
 镜像不可变原则。
+
+---
+
+## Infrastructure
+
+Story 1.3 交付的阿里云基础设施 IaC（Terraform + Helm + Kustomize）。本节是
+运维与 Dev 的 onboarding 入口；详细模块说明见
+`docs/architecture/infrastructure-deployment.md`。
+
+### Bootstrap Sequence（运维一次性执行）
+
+> **必须** 由运维使用阿里云管理员凭证执行 **一次**；CI / Dev / `tfstate-operator`
+> 子账号 **均无权限** 执行此步骤。脚本本身具备幂等性，重跑安全。
+
+```bash
+# Required env:
+#   ALICLOUD_ACCESS_KEY  (admin, one-shot)
+#   ALICLOUD_SECRET_KEY  (admin, one-shot)
+#   ALICLOUD_REGION      (default cn-shanghai)
+bash scripts/infra/bootstrap-state-backend.sh staging
+```
+
+脚本创建 Terraform state 后端的三件套：
+- OSS bucket `he-api-tfstate-staging-sh`（versioning + SSE-KMS + bucket policy）
+- KMS CMK `alias/he-api-tfstate-staging`（ENCRYPT_DECRYPT + 365d 轮换）
+- TableStore 实例 + `terraform-lock` 表（PK = `LockID:string`）
+
+### Apply 顺序（4 步）
+
+1. **`bash scripts/infra/bootstrap-state-backend.sh staging`** — 运维一次性
+   bootstrap state 后端（见上节，**仅运维**）。
+2. **`cd infra/terraform/envs/staging && terraform init && terraform plan && terraform apply`** —
+   Dev / 运维（持有 `tfstate-operator` 凭证）创建 VPC / ACK / ACR 真实资源。
+   本 Story 阶段仅在 staging 执行；prod 留 Story 1.7+ 上线评审后执行。
+3. **`kubectl apply -k infra/k8s-base/`** — 应用 6 个 namespace + RBAC +
+   NetworkPolicy + ResourceQuota（顺序由 kustomization.yaml 保证）。
+4. **`helm install api-gateway infra/helm/api-gateway/ -n he-api-staging -f infra/helm/api-gateway/values-staging.yaml`** —
+   首次部署 api-gateway chart。预期 Pod 进入 `ImagePullBackOff`（真实 image
+   在 Story 1.5 之后才有），用 `helm uninstall` 清理即可。
+
+### 必备阿里云 RAM 权限
+
+`tfstate-operator` RAM 子账号所需的 **6 条 policy**（最小权限原则；
+**严禁** 使用 `AdministratorAccess` 或 root 账号执行 `terraform apply`）：
+
+| Policy                       | 用途 |
+|------------------------------|------|
+| `AliyunECSFullAccess`        | ACK worker node ECS 实例生命周期 |
+| `AliyunVPCFullAccess`        | VPC + vSwitch + NAT + EIP |
+| `AliyunCSFullAccess`         | ACK 托管集群 |
+| `AliyunCRFullAccess`         | ACR Enterprise Edition 实例 + namespace + repo |
+| `AliyunOSSFullAccess`        | state bucket 读写（被 bucket policy 二次收紧到 `tfstate-operator`） |
+| `custom: kms+ots`            | 自定义 policy: `kms:Encrypt/Decrypt` on `alias/he-api-tfstate-*` + `ots:*` on `he-api-tfstate-*/terraform-lock` |
+
+> **No Admin policy** — 任何带 `AdministratorAccess` 或 `*:*` 的策略都被禁止；
+> 一旦 Terraform state 被泄漏，攻击面以最小权限收敛。
+
+### Cost estimate
+
+| 资源                            | 月度估算（按量计费） |
+|---------------------------------|----------------------|
+| ACK 控制面                       | 免费 |
+| 3× `ecs.c7.large` worker        | ~¥600 |
+| NAT Gateway + EIP 流量          | ~¥100 |
+| ACR Enterprise Basic（预付费）  | ~¥100 |
+| OSS state bucket                | ~¥1 |
+| KMS CMK                         | ~¥10 |
+| TableStore（按量）              | ~¥1 |
+| **staging 月度合计**            | **约 ¥800/月** |
+
+**触达 ¥1500/月** 须 **运维 + Tech Lead 联合审批**；超过 ¥2000/月触发自动停机
+评审（Story 1.7+ 落地）。
+
+### Story 1.2 dependency 闭环对照表
+
+Story 1.3 落地后会关闭 Story 1.2 deploy-staging.yml 的 fallback 路径。
+GitHub Secrets / Variables 由运维在 `terraform apply` 完成后人工填入：
+
+| Story 1.2 引用                              | Story 1.3 交付                          | 操作 |
+|---------------------------------------------|-----------------------------------------|------|
+| `secrets.ACR_REGISTRY`                      | `module.acr.acr_endpoint` 的 `terraform output` | 运维填入 GitHub Secrets |
+| `secrets.ACR_USERNAME`                      | T3 README "Secrets Bootstrap"（`cr-pusher` 子账号） | 运维填入 GitHub Secrets |
+| `secrets.ACR_PASSWORD`                      | T3 README "Secrets Bootstrap"（90 天临时 token，60 天前轮换） | 运维填入 GitHub Secrets |
+| `infra/helm/api-gateway/values-staging.yaml`| T8 真实文件，关闭 `probe_helm` fallback | 自动随仓库 PR 落地 |
+| K8s namespace `he-api-staging`              | T7 `namespace.yaml`                     | `kubectl apply -k infra/k8s-base/` |
+
+### 集群生命周期 + 回滚预案（Rollback predicate）
+
+**staging 集群默认保留至 Story 1.4 启动** — Story 1.4 ArgoCD / 可观测紧随 1.3，
+需要 K8s 集群与 ACR 已就位。本 Story 完成后立即 `terraform destroy` 会导致
+1.4 启动时重复成本、重复风险，且 Cluster ID 变化会让下游 ArgoCD endpoint /
+ACR push 凭证全部失效。
+
+- **不主动 destroy 条件**：Story 1.4 启动 ≤ 2 周内。
+- **运维评估 destroy 条件**：Story 1.4 启动延期 > 2 周。
+- **执行顺序**（当且仅当满足上一条）：
+
+  ```bash
+  # 1. 卸载 Helm release (如有残留)
+  helm uninstall api-gateway -n he-api-staging
+
+  # 2. 卸载 K8s base 资源
+  kubectl delete -k infra/k8s-base/
+
+  # 3. 销毁 Terraform 管理的资源（ACK → VPC，NAT/EIP 在 VPC 前 detach）
+  cd infra/terraform/envs/staging
+  terraform destroy
+  ```
+
+- **必保留资源（Epic 级共享 — 严禁进入 `terraform destroy` 范围）**：
+
+  | 资源                          | 后果（若被删除） |
+  |-------------------------------|------------------|
+  | **ACR Enterprise Basic 实例** | 已推镜像全部丢失；Story 1.5+ build 链路断裂 |
+  | **OSS state bucket**          | 所有环境的 Terraform state 文件丢失 → Epic 整体重建 |
+  | **KMS CMK**                   | state 文件解密能力丢失 → 同上 |
+  | **TableStore `terraform-lock` 表** | 并发 apply 安全失效 → 状态文件腐败风险 |
+
+- prod 因 `terraform_data.{vpc,ack}_destroy_guard` 上的
+  `lifecycle.prevent_destroy = true` 不可 destroy；如需销毁需人工去除 guard
+  + Tech Lead 显式 sign-off。
+
+### 未交付项（等待 Story 1.4 / 1.6）
+
+| 内容                                  | 交付 Story |
+|---------------------------------------|------------|
+| ArgoCD 安装                            | Story 1.4  |
+| OpenTelemetry / Prometheus / Loki / Grafana | Story 1.4  |
+| RDS / Redis / ClickHouse / Kafka       | Story 1.6  |
+| `vars.ARGOCD_ENDPOINT` / `vars.STAGING_NAMESPACE` 填值 | Story 1.4 |
 
 ---
 

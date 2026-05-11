@@ -1,0 +1,94 @@
+name: infra-lint
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'infra/**'
+      - '.github/workflows/infra-lint.yml'
+      - '.tflint.hcl'
+
+# Match the convention set by Story 1.2 (m-new-1) — group per ref; cancel only on PR pushes.
+concurrency:
+  group: infra-lint-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  terraform-validate:
+    name: terraform-validate (${{ matrix.env }})
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [staging, prod]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.5"
+
+      - name: Setup tflint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: v0.50.3
+
+      - name: terraform fmt -check (recursive)
+        run: terraform fmt -check -recursive infra/terraform/
+
+      - name: terraform init (offline)
+        working-directory: infra/terraform/envs/${{ matrix.env }}
+        run: terraform init -backend=false
+
+      - name: terraform validate
+        working-directory: infra/terraform/envs/${{ matrix.env }}
+        run: terraform validate
+
+      - name: tflint --init
+        run: tflint --init
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: tflint --recursive
+        run: tflint --recursive --minimum-failure-severity=error
+
+  helm-lint:
+    name: helm-lint
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "v3.14.4"
+
+      - name: helm lint
+        run: helm lint infra/helm/api-gateway/
+
+      - name: helm template | kubeconform -strict -summary
+        run: |
+          helm template api-gateway infra/helm/api-gateway/ \
+            -f infra/helm/api-gateway/values-staging.yaml \
+            | docker run --rm -i ghcr.io/yannh/kubeconform:latest \
+                -strict -summary -
+
+  k8s-manifest-validate:
+    name: k8s-manifest-validate
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: kubeconform -strict -summary on infra/k8s-base/
+        run: |
+          docker run --rm -v "${PWD}/infra/k8s-base:/manifests" \
+            ghcr.io/yannh/kubeconform:latest \
+            -strict -summary /manifests

@@ -1,0 +1,16 @@
+api-gateway has been deployed to namespace {{ .Release.Namespace }}.
+
+Verify rollout:
+  kubectl rollout status deploy/{{ include "api-gateway.fullname" . }} -n {{ .Release.Namespace }} --timeout=60s
+
+Expected behaviour at Story 1.3 stage:
+  The Pod will enter ImagePullBackOff because the placeholder image
+  ({{ .Values.image.repository }}:{{ .Values.image.tag }}) does NOT exist in
+  ACR yet. Story 1.5 will deliver the first real api-gateway image; Story 1.2
+  deploy-staging.yml will push it to ACR and rewrite image.tag to the git SHA.
+
+Check that the pull-back is the expected one (image not found, NOT RBAC/NetworkPolicy):
+  kubectl describe pod -l app.kubernetes.io/name={{ include "api-gateway.name" . }} -n {{ .Release.Namespace }}
+
+Clean up after smoke test:
+  helm uninstall {{ .Release.Name }} -n {{ .Release.Namespace }}

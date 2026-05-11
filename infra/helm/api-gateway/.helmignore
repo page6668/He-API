@@ -1,0 +1,16 @@
+# Helm chart packaging exclusions.
+.DS_Store
+.git/
+.gitignore
+.bzr/
+.hg/
+.svn/
+*.swp
+*.bak
+*.tmp
+*.orig
+*~
+*.tmproj
+.project
+.idea/
+.vscode/

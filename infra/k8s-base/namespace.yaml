@@ -1,0 +1,73 @@
+# He-API base namespaces.
+#
+# Six namespaces total — two are owned by this Story (he-api-staging,
+# he-api-prod); four are placeholders annotated `managed-by: story-1.4`
+# so that Story 1.4 has empty soil to plant ArgoCD / Prometheus / Grafana /
+# ingress-nginx / cert-manager into, without retrofitting namespace
+# creation into 1.4 (M-1 ruling — option a).
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: he-api-staging
+  labels:
+    project: he-api
+    environment: staging
+    managed-by: story-1.3
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: he-api-prod
+  labels:
+    project: he-api
+    environment: prod
+    managed-by: story-1.3
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  annotations:
+    managed-by: story-1.4
+  labels:
+    project: he-api
+    managed-by: story-1.3-placeholder
+    pod-security.kubernetes.io/enforce: baseline
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cert-manager
+  annotations:
+    managed-by: story-1.4
+  labels:
+    project: he-api
+    managed-by: story-1.3-placeholder
+    pod-security.kubernetes.io/enforce: baseline
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ingress-nginx
+  annotations:
+    managed-by: story-1.4
+  labels:
+    project: he-api
+    managed-by: story-1.3-placeholder
+    pod-security.kubernetes.io/enforce: privileged
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+  annotations:
+    managed-by: story-1.4
+  labels:
+    project: he-api
+    managed-by: story-1.3-placeholder
+    pod-security.kubernetes.io/enforce: baseline

@@ -1,0 +1,108 @@
+# api-gateway default values.
+#
+# Per-env overrides (e.g., values-staging.yaml) MUST be minimal — only override
+# fields whose default would silently regress a security baseline if changed
+# (e.g., networkPolicy.enabled). See Architect Round 1 Q1 ruling.
+
+# -----------------------------------------------------------------------------
+# Container image
+# -----------------------------------------------------------------------------
+image:
+  repository: he-api/api-gateway
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+# -----------------------------------------------------------------------------
+# Replica count — Deployment.spec.replicas
+# -----------------------------------------------------------------------------
+replicaCount: 1
+
+# -----------------------------------------------------------------------------
+# Service — ClusterIP by default; Story 1.4 ingress-nginx fronts public traffic
+# -----------------------------------------------------------------------------
+service:
+  type: ClusterIP
+  port: 8080
+
+# -----------------------------------------------------------------------------
+# Resource requests / limits — tuned for the staging 3× ecs.c7.large pool
+# -----------------------------------------------------------------------------
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+# -----------------------------------------------------------------------------
+# Probes — Story 1.5 will expose /healthz on port 8080
+# -----------------------------------------------------------------------------
+probes:
+  readiness:
+    httpGet:
+      path: /healthz
+      port: 8080
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  liveness:
+    httpGet:
+      path: /healthz
+      port: 8080
+    initialDelaySeconds: 15
+    periodSeconds: 20
+
+# -----------------------------------------------------------------------------
+# Ingress — disabled by default; enabled per env in Story 1.4
+# -----------------------------------------------------------------------------
+ingress:
+  enabled: false
+  className: ""
+  hosts: []
+  tls: []
+
+# -----------------------------------------------------------------------------
+# NetworkPolicy — DEFAULT-DENY ingress + allow-from ingress-nginx ns
+# (env overrides MUST keep this `true` to preserve the staging security baseline)
+# -----------------------------------------------------------------------------
+networkPolicy:
+  enabled: true
+
+# -----------------------------------------------------------------------------
+# ServiceAccount — created per release; empty `name` triggers the default
+# `_helpers.tpl` naming (chart fullname)
+# -----------------------------------------------------------------------------
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# -----------------------------------------------------------------------------
+# Pod scheduling (placeholders — Story 1.5+ refines)
+# -----------------------------------------------------------------------------
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# -----------------------------------------------------------------------------
+# Autoscaling (HPA) — disabled until Story 1.4 brings metrics-server online
+# -----------------------------------------------------------------------------
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+
+# -----------------------------------------------------------------------------
+# Pod Security — K8s 1.29 Pod Security "Restricted" profile baseline.
+# Every field below MUST be present for ACK PSA enforcement to accept the pod.
+# -----------------------------------------------------------------------------
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+  seccompProfile:
+    type: RuntimeDefault
