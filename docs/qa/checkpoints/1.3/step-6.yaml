@@ -1,0 +1,13 @@
+step: 6
+name: evidence_collection
+evidence:
+  directory: docs/qa/checkpoints/1.3/
+  files_collected: 9   # step-1..step-6 yaml checkpoints + this one
+  issues_with_evidence: []
+  notes: >
+    No CRITICAL/HIGH issues found in Steps 4, 4.5, 4.6, 4.7, 5, 5.5 →
+    no per-issue screenshot/log evidence required. Checkpoints
+    themselves serve as positive evidence of the QA review trail.
+    Single MEDIUM (unchecked task boxes) and single MEDIUM (runtime
+    operator hand-off pending) are documented in their respective
+    step checkpoints with concrete remediation pointers.

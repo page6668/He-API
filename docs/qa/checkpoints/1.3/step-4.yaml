@@ -1,0 +1,48 @@
+step: 4
+name: independent_automated_test_execution
+automated_tests:
+  verification_method: independent_execution
+  test_command: pnpm --filter @he-api/shared-types test
+  exit_code: 0
+  passed: true
+  total: 189
+  passed_count: 138
+  failed_count: 0
+  skipped_count: 51
+  pass_rate: 100.0     # of executed (non-skipped) tests
+  execution_time_seconds: 0.314
+  per_file:
+    - file: __tests__/empty.test.ts
+      tests: 1
+      passed: 1
+      skipped: 0
+    - file: __tests__/1.2-ci-cd-pipeline-github-actions.test.ts
+      tests: 56
+      passed: 39
+      skipped: 17
+      note: prior story baseline — unchanged
+    - file: __tests__/1.3-aliyun-vpc-k8s-cluster-terraform.test.ts
+      tests: 132
+      passed: 98
+      skipped: 34
+      note: >
+        story 1.3 vitest; 34 skipped are runtime tests
+        (Integration / E2E / runtime Blind-Spot) deferred to
+        operator hand-off per dev-log §6
+  integrity_check:
+    dev_evidence_found: true
+    dev_claimed_pass: true
+    dev_claimed_numbers: "138/138 PASS + 51 SKIPPED"
+    qa_observed_numbers: "138 passed / 51 skipped / 0 failed (189 total)"
+    discrepancy: false
+  additional_runs:
+    - command: pnpm test (turbo root)
+      exit_code: 0
+      result: PASS (cached)
+    - command: cd apps/api-gateway && go test ./...
+      exit_code: 0
+      result: "ok ./cmd/server (3.196s)"
+    - command: pnpm lint
+      exit_code: 0
+      result: PASS (tsc --noEmit clean)
+  issues: []

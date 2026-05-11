@@ -1,0 +1,23 @@
+step: 1
+name: risk_assessment
+risk_level: HIGH
+review_mode: full_testing
+skip_e2e: false
+review_round: 1
+inputs:
+  complexity_count: 3
+  security_sensitive: true
+  dev_gate_score: 95
+  has_ui_changes: false
+  has_api_changes: false
+  has_user_facing_deliverable: false
+  test_coverage_level: medium
+reasoning: >
+  security_sensitive=true with complexity_count>=3 forces HIGH risk.
+  E2E execution is Architect-approved as operator hand-off
+  (dev-log §6) because Dev/QA env has no Aliyun credentials.
+  QA will execute: independent vitest run, AC coverage verification,
+  task-checkbox consistency, blind-spot static coverage. Runtime
+  E2E (terraform apply / kubectl / helm install) is documented as
+  PENDING-OPERATOR; gate decision must record this deferral
+  prominently and not falsely claim runtime verification.

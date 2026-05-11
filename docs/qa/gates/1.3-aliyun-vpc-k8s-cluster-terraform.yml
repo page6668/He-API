@@ -1,0 +1,202 @@
+schema: 1
+story: "1.3"
+story_title: "阿里云 VPC + K8s 集群 + 基础网络（Terraform）"
+gate: PASS
+status_reason: "All 23/23 File-List deliverables present; 138/138 active vitest assertions pass (51 documented test.skip for runtime operator hand-off); Go test apps/api-gateway/cmd/server PASS; pnpm lint clean; AC1 + AC2 both VERIFIED at 100% with all Architect Round 1/2 rulings (Q1/Q2/Q3/Q4 + H-1/H-3 + M-1..M-5 + L-2..L-5) semantically encoded at the cited code locations. Runtime E2E + Integration + 14 runtime blind-spots are by-design deferred to operator hand-off per Architect Round 1 Q4 ruling (dev-log §6); same gate=PASS pattern as Story 1.2."
+reviewer: "Turing (QA / Test Architect)"
+updated: "2026-05-11T14:10:00Z"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "HIGH"
+  cached_review_mode: "full_testing"
+  cached_project_type: "iac_monorepo"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues:
+    - checkbox_text: "all 13 top-level Tasks T0-T12 and 56 sub-task bullets in '任务 / 子任务' section"
+      issue_type: "unticked_despite_completion"
+      severity: MEDIUM
+      blocking: false
+      note: "Dev forgot to tick boxes; deliverables verified on disk + tests pass; recommend Dev tick T0-T10 + sub-bullets in follow-up edit; T11/T12 legitimately stay unticked until operator §6 hand-off complete"
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+top_issues: []                           # zero blocking issues
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 189
+    passed_count: 138
+    failed_count: 0
+    skipped_count: 51                    # 34 from 1.3 file (runtime operator hand-off) + 17 from 1.2 file (prior baseline)
+    pass_rate: 100
+    coverage_percentage: 0               # IaC artifacts — static parsing; no business code to cover
+    failed_tests: []
+    per_file:
+      - file: __tests__/empty.test.ts
+        tests: 1
+        passed: 1
+        skipped: 0
+      - file: __tests__/1.2-ci-cd-pipeline-github-actions.test.ts
+        tests: 56
+        passed: 39
+        skipped: 17
+        note: "prior-story baseline; unchanged → effective regression coverage"
+      - file: __tests__/1.3-aliyun-vpc-k8s-cluster-terraform.test.ts
+        tests: 132
+        passed: 98
+        skipped: 34
+        note: "34 skipped runtime tests (Integration / E2E / runtime Blind-Spot) deferred to operator §6 hand-off per Architect Round 1 Q4 ruling"
+  e2e:
+    executed: false
+    passed: true
+    skipped: true
+    skip_reason: "review_mode=full_testing was assigned by risk-decision (HIGH risk, security_sensitive), but Story 1.3's runtime scenarios (E2E-001..013, INT-001..006, 14 runtime BLIND-*) require Aliyun admin one-shot creds + tfstate-operator RAM creds + reachability from a whitelisted CIDR + real ACK cluster — Architect Round 1 Q4 explicitly approved operator hand-off for this. 34 test.skip with skip-reasons pointing to dev-log §6.1-6.6."
+    scenarios_tested: 0
+    scenarios_passed: 0
+    scenarios_failed: 0
+    scenarios_deferred_to_operator: 34
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: "docs/qa/checkpoints/1.3/"
+  issues: []                             # no blocking issues; checkpoints serve as positive evidence
+  files:
+    - step-1.yaml      # risk_assessment
+    - step-2.yaml      # project_type_detection
+    - step-4.yaml      # independent_automated_test_execution
+    - step-4.5.yaml    # task_checkbox_verification
+    - step-4.6.yaml    # ac_coverage_verification
+    - step-4.7.yaml    # regression_test_execution (no persisted E2E files)
+    - step-5.yaml      # e2e_testing (deferred-to-operator)
+    - step-5.5.yaml    # blind_spot_verification
+    - step-6.yaml      # evidence_collection
+    - step-7.yaml      # gate_decision
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 3                    # new_patterns + cross_service + security
+  security_sensitive: true
+  dev_gate_score: 95                     # self-review claim PASS; QA cross-verified
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 2, low: 1 }
+  recommendations:
+    must_fix: []                         # none — no blocking issues
+    monitor:
+      - "Dev to tick T0-T10 (and sub-task bullets where deliverable exists) in story file in a follow-up edit; leave T11.runtime / T12.operator-evidence unticked until §6 hand-off complete — bookkeeping nit, non-blocking"
+      - "Operator: complete dev-log §6.1 bootstrap-state-backend.sh (admin one-shot creds), §6.2 terraform apply staging + terraform output + Aliyun console screenshot"
+      - "Operator: complete dev-log §6.3 kubectl evidence (3 Ready × 3 AZs, 6 ns, auth can-i no, NetworkPolicy default-deny + allow-from-ingress-nginx, nmap timeout from non-whitelisted IP)"
+      - "Operator: complete dev-log §6.4 helm lint / kubeconform / --dry-run=server / real install / ImagePullBackOff describe / helm uninstall"
+      - "Operator: complete dev-log §6.5 L-5 deploy-staging 5-min single-run gate (timestamped Actions tab screenshot); SECOND deploy-staging run within 5 min → ESCALATE Architect Round 3"
+      - "Operator: complete dev-log §6.6 GitHub Secrets bootstrap (ACR_REGISTRY / ACR_USERNAME / ACR_PASSWORD)"
+      - "Architect: re-verify alicloud provider v1.220+ field names cluster_endpoint_public_access / _acl_cidrs at operator terraform plan time (O-4 in Dev's outstanding-questions list)"
+      - "Optional cleanup: refresh AC1 traceability matrix line ranges (bootstrap script claimed 1-210 vs 218 actual; vpc/main.tf 1-110 vs 115; envs/prod/main.tf 1-105 vs 124) — non-blocking"
+
+# AC coverage summary (consolidated from step-4.6.yaml)
+ac_coverage_summary:
+  AC1:
+    title: "K8s 集群可访问"
+    status: VERIFIED
+    code_locations_verified: "14/14 (file:line) + 1 section-reference (README)"
+    test_locations_verified: "2/2"
+    aspects: { main_scenario: true, business_rules: true, data_validation: true, error_handling: true }
+    note: "Architect rulings Q3 Path A2 (precondition enforced), H-1 ACR EE Basic, Q2 OSS+TableStore+encrypt=true, Q4+H-3 cluster retention all verified at cited code locations. Runtime portions (kubectl get nodes, get ns, auth can-i, nmap) are operator §6.3 hand-off per Q4 ruling."
+  AC2:
+    title: "Helm chart 可部署"
+    status: VERIFIED
+    code_locations_verified: "9/9 (file:line)"
+    test_locations_verified: "2/2"
+    aspects: { main_scenario: true, business_rules: true, data_validation: true, error_handling: true }
+    note: "Q1 values-staging.yaml whitelist (4 keys: image/service/networkPolicy/serviceAccount; forbidden 4 absent) and M-5 Pod Security Restricted (6/6 fields in values.yaml + consumed in deployment.yaml templates) both verified. Runtime portions (helm lint / kubeconform / dry-run / real install / ImagePullBackOff) are operator §6.4 hand-off per Q4 ruling."
+
+# QA-independent test executions (Step 4 evidence)
+qa_independent_executions:
+  - command: "pnpm --filter @he-api/shared-types test"
+    exit_code: 0
+    outcome: "138 passed, 51 skipped (documented), 0 failed (189 total)"
+    duration_seconds: 0.314
+  - command: "pnpm test (turbo root)"
+    exit_code: 0
+    outcome: "2 packages successful (FULL TURBO cached after first run)"
+  - command: "cd apps/api-gateway && go test ./..."
+    exit_code: 0
+    outcome: "ok github.com/he-api/he-api/apps/api-gateway/cmd/server (3.196s)"
+  - command: "pnpm lint"
+    exit_code: 0
+    outcome: "tsc --noEmit clean (turbo cached)"
+  - command: "grep -nE access_key|secret_key|password infra/"
+    exit_code: 0
+    outcome: "0 plaintext secrets in infra/ (security door)"
+
+# Dev/QA consistency (Step 4.4)
+dev_qa_consistency_check:
+  status: PASS
+  dev_claim: "Self-Review = PASS Round 1; static_tests: 138/138 PASS; runtime_tests: 51/51 SKIPPED (operator handoff)"
+  qa_independent_result: "Reproduced exactly: 138 passed / 51 skipped / 0 failed in independent vitest run; plus Go + lint green"
+  discrepancy: false
+
+# Architect ruling encoding spot-check (independent grep verification)
+architect_ruling_spot_check:
+  Q1_values_staging_whitelist:
+    location: "infra/helm/api-gateway/values-staging.yaml"
+    result: PASS
+    detail: "Only {image, service, networkPolicy, serviceAccount} top-level keys; forbidden {ingress, autoscaling, resources, env/envFrom} absent"
+  Q2_state_backend:
+    location: "infra/terraform/backend.tf:30-37"
+    result: PASS
+    detail: "backend \"oss\" { bucket, region, tablestore_endpoint, tablestore_table, encrypt=true }"
+  Q3_path_A2_with_precondition:
+    location: "infra/terraform/modules/ack/{variables.tf:42-56, main.tf:42-87}"
+    result: PASS
+    detail: "Both vars (default true / default []) + lifecycle.precondition enforcing length(allowed_cidrs)>0 when enabled with explicit error_message"
+  Q4_H3_cluster_retention:
+    location: "README.md (Infrastructure section ~L302-343)"
+    result: PASS
+    detail: "'staging 集群默认保留至 Story 1.4' + 14-day review window + Epic-shared resources (ACR EE / OSS / KMS / TableStore) explicitly excluded from destroy scope"
+  H1_ACR_EE_Basic:
+    location: "infra/terraform/modules/acr/main.tf:23-29"
+    result: PASS
+    detail: "alicloud_cr_ee_instance instance_type=Basic payment_type=Subscription period=1 renew_period=1; acr_endpoint = \"${instance.name}-registry.${region}.cr.aliyuncs.com\" (EE Basic independent endpoint)"
+  M3_tflint_pin:
+    location: ".tflint.hcl"
+    result: PASS
+    detail: "plugin \"alicloud\" version=\"0.20.0\" source=\"github.com/terraform-linters/tflint-ruleset-alicloud\""
+  M5_Pod_Security_Restricted:
+    location: "infra/helm/api-gateway/{values.yaml:101-108, templates/deployment.yaml:19-54}"
+    result: PASS
+    detail: "6/6 fields in values.yaml (runAsNonRoot, runAsUser=65532, readOnlyRootFilesystem, allowPrivilegeEscalation, capabilities.drop=[ALL], seccompProfile.type=RuntimeDefault); all 6 consumed by deployment.yaml templates"
+  L4_tfvars_placeholders:
+    location: "infra/terraform/envs/{staging,prod}/terraform.tfvars.example"
+    result: PASS
+    detail: "Both env example files carry api_server_public_access_allowed_cidrs placeholders with GHA-runner / operator-workstation / office-NAT examples"
+
+# Operator hand-off tracker (non-blocking for Done status)
+operator_handoff:
+  status: PENDING
+  items:
+    - id: O-1, ref: "dev-log §6.1", task: "bootstrap-state-backend.sh stdout (admin one-shot creds)"
+    - id: O-2, ref: "dev-log §6.2", task: "terraform apply staging + terraform output -json + Aliyun console screenshot"
+    - id: O-3, ref: "dev-log §6.3", task: "kubectl evidence (3 Ready × 3 AZ, 6 ns, auth can-i no, NetworkPolicy, nmap timeout)"
+    - id: O-4, ref: "dev-log §6.4", task: "helm lint / kubeconform / --dry-run=server / real install / ImagePullBackOff describe / helm uninstall"
+    - id: O-5, ref: "dev-log §6.5", task: "L-5 deploy-staging 5-min single-run gate (timestamped screenshot); second run → ESCALATE Architect Round 3"
+    - id: O-6, ref: "dev-log §6.6", task: "GitHub Secrets bootstrap (ACR_REGISTRY / ACR_USERNAME / ACR_PASSWORD)"
+
+history:
+  - at: "2026-05-11T14:10:00Z"
+    gate: PASS
+    note: "Round 1 — gate PASS. Static work: 23/23 deliverables present, 138/138 vitest pass + 51 documented test.skip, Go + lint green, AC1/AC2 both VERIFIED at 100% with all Architect rulings semantically encoded. 2 medium (unchecked task boxes / operator-pending runtime) + 1 low (line-range drift) — all non-blocking. Same gate=PASS pattern as Story 1.2 with operator hand-off as monitor items."

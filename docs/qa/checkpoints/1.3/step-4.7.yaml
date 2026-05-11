@@ -1,0 +1,18 @@
+step: 4.7
+name: regression_test_execution
+regression:
+  executed: false
+  passed: true
+  tests_total: 0
+  tests_failed: 0
+  reason: no_persisted_e2e_files
+  note: >
+    No tests/e2e/story-*.spec.ts files exist (project does not yet
+    persist E2E tests; same convention as Story 1.2). However, the
+    sibling unit-test file for Story 1.2
+    (packages/shared-types/__tests__/1.2-ci-cd-pipeline-github-actions.test.ts)
+    runs as part of Step 4 vitest invocation and remains green
+    (56 tests, 39 passed, 17 skipped, 0 failed — unchanged baseline).
+    Go test for apps/api-gateway also remains green.
+    Effective regression coverage achieved via Step 4.
+  issues: []

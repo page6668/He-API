@@ -22,6 +22,9 @@ bin/
 *.test
 *.out
 vendor/
+# Go binaries produced by `go build` at workspace roots (Story 1.2 follow-up #4)
+/server
+apps/*/server
 
 # Env / secrets
 .env

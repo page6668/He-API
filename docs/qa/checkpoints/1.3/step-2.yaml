@@ -1,0 +1,19 @@
+step: 2
+name: project_type_detection
+project_type:
+  type: iac_monorepo
+  subtype: terraform_helm_k8s_in_turborepo
+  test_runner: vitest
+  test_runner_loc: packages/shared-types
+test_strategy:
+  primary_tool: pnpm_turbo_vitest
+  requires_environment: false
+  startup_command: ''
+  expected_port: null
+notes: >
+  Story 1.3 is an IaC story whose verifiable artifacts are HCL/YAML/Helm
+  templates. Tests are real vitest assertions in
+  packages/shared-types/__tests__/1.3-aliyun-vpc-k8s-cluster-terraform.test.ts
+  that parse the on-disk artifacts. No app server to boot; no port to bind.
+  Runtime IaC verification (`terraform apply`, `kubectl`, `helm install`) is
+  Architect-approved operator hand-off per dev-log §6.
