@@ -23,11 +23,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+	"github.com/segmentio/kafka-go"
 	"go.opentelemetry.io/otel"
 
 	obs "github.com/he-api/he-api/packages/go-observability"
@@ -49,6 +51,16 @@ const (
 
 	defaultNotificationSvcURL = "http://notification-svc:8080"
 	defaultConsoleBaseURL     = "http://localhost:3000"
+
+	// auditTopicName is fixed per TS-CONS-015 (sharing the existing
+	// `audit.event` topic with 30-day retention; no new topic this Story).
+	auditTopicName = "audit.event"
+
+	// auditKafkaWriteTimeout caps how long a single WriteMessages
+	// queue-attempt can block. Under Async=true this is the enqueue
+	// timeout, not the broker round-trip — the latter is bounded by
+	// the writer's BatchTimeout / WriteTimeout below.
+	auditKafkaWriteTimeout = 5 * time.Second
 )
 
 func main() {
@@ -120,8 +132,58 @@ func main() {
 	notifURL := envOr("HE_API_NOTIFICATION_SVC_URL", defaultNotificationSvcURL)
 	notifClient := notification.NewClient(http.DefaultClient, notifURL)
 
-	// === audit publisher (NoOpPublisher until P5/T4 swaps in Kafka) =========
-	auditPub := audit.NewNoOpPublisher(logger)
+	// === audit publisher (Kafka if HE_API_AUDIT_KAFKA_BROKERS set; NoOp else) ===
+	// Production runs against a managed Kafka broker per Story 1.6
+	// data-models.md §4.4 (topic `audit.event`, 30-day retention,
+	// TS-CONS-015). Dev / unit-test environments leave the env var
+	// unset and the NoOpPublisher path keeps the audit shape observable
+	// via structured logs without a broker dependency.
+	var (
+		auditPub     audit.Publisher
+		kafkaWriter  *kafka.Writer
+	)
+	if rawBrokers := strings.TrimSpace(os.Getenv("HE_API_AUDIT_KAFKA_BROKERS")); rawBrokers != "" {
+		brokers := splitAndTrim(rawBrokers, ",")
+		kafkaWriter = &kafka.Writer{
+			Addr:                   kafka.TCP(brokers...),
+			Topic:                  auditTopicName,
+			Balancer:               &kafka.Hash{}, // hash(EmailHash) — per-account partition stability (BR-4.5)
+			RequiredAcks:           kafka.RequireOne, // TS-CONS-009: acks=1
+			Async:                  true,             // TS-CONS-009: non-blocking — errors surface via Completion
+			AllowAutoTopicCreation: false,            // topic is pre-provisioned by infra
+			WriteTimeout:           auditKafkaWriteTimeout,
+			Completion: func(messages []kafka.Message, err error) {
+				if err != nil {
+					// Per UNIT-181: broker outage MUST NOT block business —
+					// warn-log only. The handler call path used
+					// PublishBestEffort which already returned nil to the
+					// caller; this is the async-publish failure backchannel.
+					logger.Warn("audit kafka publish failed (async)",
+						slog.String("topic", auditTopicName),
+						slog.Int("msg_count", len(messages)),
+						slog.String("error", err.Error()),
+					)
+				}
+			},
+		}
+		auditPub = audit.NewKafkaPublisher(kafkaWriter, logger)
+		logger.Info("audit publisher: kafka",
+			slog.String("topic", auditTopicName),
+			slog.Int("broker_count", len(brokers)),
+		)
+		defer func() {
+			cctx, ccancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer ccancel()
+			// Close drains the async queue before returning.
+			if err := kafkaWriter.Close(); err != nil {
+				logger.Warn("audit kafka close failed", slog.String("error", err.Error()))
+			}
+			_ = cctx
+		}()
+	} else {
+		logger.Warn("HE_API_AUDIT_KAFKA_BROKERS unset — audit using NoOpPublisher (dev mode)")
+		auditPub = audit.NewNoOpPublisher(logger)
+	}
 
 	// === JWT signer (Story 2.2 T0.5 K8s Secret he-api-auth-jwt-keys) ========
 	// The private + public PEMs are mounted as files under
@@ -228,4 +290,18 @@ func envOr(name, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// splitAndTrim splits s by sep and trims whitespace from each element,
+// dropping any empty entries. Used to parse comma-separated broker lists
+// from env vars where stray whitespace around commas is common.
+func splitAndTrim(s, sep string) []string {
+	parts := strings.Split(s, sep)
+	out := parts[:0]
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
