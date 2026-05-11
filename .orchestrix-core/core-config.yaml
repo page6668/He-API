@@ -15,11 +15,11 @@ project:
     assigned_stories: []
 prd:
   prdFile: docs/prd.md
-  prdSharded: false
+  prdSharded: true
   prdShardedLocation: docs/prd
 architecture:
   architectureFile: docs/architecture.md
-  architectureSharded: false
+  architectureSharded: true
   architectureShardedLocation: docs/architecture
   storyReviewsLocation: docs/architecture/story-reviews
 customTechnicalDocuments: null

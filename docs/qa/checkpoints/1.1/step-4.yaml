@@ -1,0 +1,67 @@
+# Step 4: Independent Automated Test Execution
+automated_tests:
+  verification_method: independent_execution
+  test_command: "pnpm build + pnpm lint + scripts/go-build-all.sh + go vet + go test"
+  exit_code: 0
+  passed: true
+  pass_rate: 100
+
+executions:
+  - name: "pnpm build (cache cleared, fresh)"
+    command: "rm -rf .turbo packages/shared-types/.turbo apps/api-gateway/.turbo packages/shared-types/dist && pnpm build"
+    exit_code: 0
+    tasks_total: 2
+    tasks_successful: 2
+    tasks_cached: 0
+    time_ms: 486
+    artifacts_verified: ["packages/shared-types/dist/index.js", "index.d.ts", "index.js.map", "index.d.ts.map"]
+
+  - name: "pnpm build (cache hit verification)"
+    command: "pnpm build"
+    exit_code: 0
+    tasks_total: 2
+    tasks_successful: 2
+    tasks_cached: 2
+    time_ms: 18
+    full_turbo: true
+
+  - name: "pnpm lint"
+    command: "pnpm lint"
+    exit_code: 0
+    tasks_total: 2
+    tasks_successful: 2
+    tasks_cached: 0
+    time_ms: 455
+
+  - name: "go workspace build (scripts/go-build-all.sh)"
+    command: "PATH=/opt/homebrew/opt/go@1.22/bin:$PATH bash scripts/go-build-all.sh"
+    exit_code: 0
+    modules_built: 1
+    output: "OK: built 1 Go module(s)"
+
+  - name: "go vet (workspace)"
+    command: "PATH=/opt/homebrew/opt/go@1.22/bin:$PATH go vet ./..."
+    exit_code: 0
+
+  - name: "go test (api-gateway)"
+    command: "cd apps/api-gateway && PATH=/opt/homebrew/opt/go@1.22/bin:$PATH go test ./..."
+    exit_code: 0
+    note: "no test files - 占位 main.go,Story Simple tier 不要求单元测试"
+
+  - name: "pnpm test (Turborepo)"
+    command: "pnpm test"
+    exit_code: 0
+    note: "shared-types 无 test 脚本; api-gateway echo placeholder; 与 SM 'Simple tier, test_design_required: false' 一致"
+
+integrity_check:
+  dev_evidence_found: true
+  dev_claimed_pass: true
+  discrepancy: false
+  details: |
+    Dev 自检数据 vs QA 独立执行:
+      pnpm build cached:  Dev 22ms FULL TURBO  | QA 18ms FULL TURBO   ✓ 一致
+      pnpm build fresh:   Dev 479ms 2/2        | QA 486ms 2/2          ✓ 一致(噪声)
+      pnpm lint:          Dev 517ms 2/2 0 err  | QA 455ms 2/2 0 err    ✓ 一致
+      go workspace:       Dev 1/1 module       | QA 1/1 module         ✓ 一致
+
+issues: []

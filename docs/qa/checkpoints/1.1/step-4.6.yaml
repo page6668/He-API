@@ -1,0 +1,54 @@
+# Step 4.6: AC Coverage Verification
+ac_coverage:
+  verification_method: traceability_verification
+  coverage_rate: 100
+  passed: true
+  blocking_issues_count: 0
+
+placeholder_scan:
+  total_acs: 2
+  placeholder_detected: 0
+  aspects_unchanged: 0    # 两条 AC 的 main_scenario+business_rules 均 true
+  clean_entries: 2
+  flagged_acs: []
+
+details:
+  - ac_id: AC1
+    title: 仓库可 clone 并具备完整骨架
+    traceability_entry_found: true
+    code_locations_total: 17
+    code_locations_verified: 17     # 已抽样 ls 全部 17 项 (8 根级 + 4 infra .gitkeep + scripts/.gitkeep + .github/workflows/.gitkeep + 占位包目录 + main.go)
+    test_locations_verified: "1/1 (docs/dev/logs/1.1-dev-log.md)"
+    aspects_verified:
+      main_scenario: true       # 根目录 17 文件全在
+      business_rules: true      # README 含 Node/pnpm/Go 版本 + pnpm i / pnpm build 命令
+      data_validation: N_A      # 工程骨架,非数据流
+      error_handling: N_A       # 工程骨架,非业务错误路径
+    status: VERIFIED
+    issues: []
+
+  - ac_id: AC2
+    title: pnpm i && pnpm build 全绿
+    traceability_entry_found: true
+    code_locations_total: 12
+    code_locations_verified: 12     # 抽样 9/12 + 余下 ls 验证存在
+    test_locations_verified: "1/1 (docs/dev/logs/1.1-dev-log.md T4 段)"
+    aspects_verified:
+      main_scenario: true       # pnpm build PASS + cache hit + go build PASS
+      business_rules: true      # FULL TURBO 二次 18ms; go workspace 1/1 module
+      data_validation: N_A      # 非数据流
+      error_handling: N_A       # 构建失败由 turbo/go 退出码报告
+    status: VERIFIED
+    issues: []
+
+discrepancies: []   # Dev 自检与 QA 独立执行无差异 (见 step-4.yaml integrity_check)
+
+issues_by_severity:
+  critical: []
+  high: []
+  medium: []
+  low:
+    - ac_id: AC1+AC2
+      issue: "AC traceability matrix 含轻微行号偏移"
+      detail: "AC2 'package.json:11' 应为 12; 'packages/shared-types/package.json:13' 应为 12 (build script 行); '.editorconfig:1-19' 文件实际 18 行。符号/文件均存在,仅坐标 ±1 漂移。"
+      recommendation: "下一 Story 时由 Dev 在 self-review 重新对齐;本轮非阻塞。"

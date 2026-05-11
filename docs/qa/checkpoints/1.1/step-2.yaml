@@ -1,0 +1,14 @@
+# Step 2: Project Type Detection
+project_type:
+  type: library            # Monorepo skeleton (workspace + 占位包,无运行时服务)
+  subtype: turborepo_monorepo
+test_strategy:
+  primary_tool: bash
+  requires_environment: false   # 无服务进程; 验证靠 build/lint/go-build
+  startup_command: null
+  expected_port: null
+notes: |
+  Story 1.1 是工程地基,不部署任何服务。验证策略 = 构建链路自动化:
+    - pnpm i / pnpm build / pnpm lint  (Turborepo)
+    - scripts/go-build-all.sh           (Go workspace)
+  跳过 Step 3 (Environment Setup) 与 Step 5 (E2E Testing)。

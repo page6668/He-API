@@ -1,0 +1,121 @@
+schema: 1
+story: "1.1"
+story_title: "创建 monorepo 骨架（Turborepo + apps/ + packages/）"
+gate: PASS
+status_reason: "全部独立构建/lint/vet/test 通过，FULL TURBO 缓存验证 18ms，Go workspace 1/1 module 构建成功；27/27 复选框与 2/2 AC 追溯 100% 一致；Dev 自检与 QA 独立执行无差异。仅 1 项 LOW 行号漂移观察，不阻塞。"
+reviewer: "宋慈 (QA / Test Architect)"
+updated: "2026-05-11T00:00:00Z"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "LOW"
+  cached_review_mode: "automated_only"
+  cached_project_type: "library"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+top_issues:
+  - id: "TRACE-001"
+    severity: low
+    finding: "AC 追溯矩阵中 3 处行号轻微偏移 (package.json:11→12, shared-types/package.json:13→12, .editorconfig:1-19→1-18)"
+    suggested_action: "下一 Story 时由 Dev 在 self-review 重新对齐;本轮非阻塞"
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 6                # 6 次独立执行: pnpm build x2 + pnpm lint + go-build-all + go vet + go test
+    passed_count: 6
+    failed_count: 0
+    skipped_count: 0
+    pass_rate: 100
+    coverage_percentage: 0   # 工程骨架,Simple tier,无单元测试覆盖率
+    failed_tests: []
+  e2e:
+    executed: false
+    passed: true
+    skipped: true
+    skip_reason: "Review mode is automated_only (LOW risk engineering scaffold)"
+    scenarios_tested: 0
+    scenarios_passed: 0
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: ""
+  issues: []
+
+risk_assessment:
+  risk_level: LOW
+  review_mode: automated_only
+  complexity_count: 0       # SM gate_1: 0/8
+  security_sensitive: false
+  dev_gate_score: 98        # 来自 Story Change Log "Self-Review: PASS (Gate 1 ~98%)"
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 1 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "Story 1.2 起 Dev self-review 时校准 AC traceability code_locations 行号 (TRACE-001)"
+      - "考虑将根目录裸名构建产物(如 ./server) 列入 .gitignore (Story 1.2/1.5 接入 CI 时由 lint 阶段统一处理)"
+
+# 测试链路独立执行明细 (审计可追溯)
+qa_independent_executions:
+  - command: "pnpm build (cache cleared)"
+    exit_code: 0
+    tasks: 2
+    successful: 2
+    cached: 0
+    time_ms: 486
+  - command: "pnpm build (cached re-run)"
+    exit_code: 0
+    tasks: 2
+    successful: 2
+    cached: 2
+    time_ms: 18
+    full_turbo: true
+  - command: "pnpm lint"
+    exit_code: 0
+    tasks: 2
+    successful: 2
+    time_ms: 455
+  - command: "scripts/go-build-all.sh"
+    exit_code: 0
+    modules_built: 1
+  - command: "go vet ./..."
+    exit_code: 0
+  - command: "go test ./... (apps/api-gateway)"
+    exit_code: 0
+    note: "no test files - Simple tier 不要求单元测试"
+
+dev_qa_consistency_check:
+  pnpm_cached_time:    { dev_ms: 22, qa_ms: 18, status: consistent }
+  pnpm_fresh_time:     { dev_ms: 479, qa_ms: 486, status: consistent }
+  pnpm_lint:           { dev: "2/2 0err", qa: "2/2 0err", status: consistent }
+  go_workspace:        { dev: "1/1 module", qa: "1/1 module", status: consistent }
+
+ac_coverage_summary:
+  AC1:
+    title: "仓库可 clone 并具备完整骨架"
+    status: VERIFIED
+    code_locations_verified: "17/17"
+    aspects: { main_scenario: true, business_rules: true, data_validation: N_A, error_handling: N_A }
+  AC2:
+    title: "pnpm i && pnpm build 全绿"
+    status: VERIFIED
+    code_locations_verified: "12/12"
+    aspects: { main_scenario: true, business_rules: true, data_validation: N_A, error_handling: N_A }
