@@ -137,6 +137,26 @@ func main() {
 		logger.Error("parse JWT private key", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
+	// Verifier from the matching public-key PEM (mounted alongside the
+	// private key from the same K8s Secret per Helm chart).
+	jwtPubPath := envOr("HE_API_JWT_PUBLIC_KEY_PATH", "/etc/auth-svc/keys/public_key.pem")
+	jwtPubPEM, err := os.ReadFile(jwtPubPath)
+	if err != nil {
+		logger.Error("read JWT public key", slog.String("path", jwtPubPath), slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	jwtVerifier, err := authjwt.NewVerifier(jwtPubPEM)
+	if err != nil {
+		logger.Error("parse JWT public key", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	if jwtSigner.KeyID() != jwtVerifier.KeyID() {
+		logger.Error("JWT key mismatch — Signer kid ≠ Verifier kid (keypair drift)",
+			slog.String("signer_kid", jwtSigner.KeyID()),
+			slog.String("verifier_kid", jwtVerifier.KeyID()),
+		)
+		os.Exit(1)
+	}
 
 	// === AuthServer =========================================================
 	authServer := handlers.NewAuthServer(handlers.AuthServer{
@@ -146,6 +166,7 @@ func main() {
 		Notification:   notifClient,
 		Audit:          auditPub,
 		JWT:            jwtSigner,
+		JWTVerify:      jwtVerifier,
 		Clock:          time.Now,
 		ConsoleBaseURL: envOr("HE_API_CONSOLE_BASE_URL", defaultConsoleBaseURL),
 		Logger:         logger,

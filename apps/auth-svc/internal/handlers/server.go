@@ -26,6 +26,7 @@ import (
 	authv1 "github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1"
 
 	"github.com/he-api/he-api/apps/auth-svc/internal/audit"
+	authjwt "github.com/he-api/he-api/apps/auth-svc/internal/jwt"
 	"github.com/he-api/he-api/apps/auth-svc/internal/notification"
 	"github.com/he-api/he-api/apps/auth-svc/internal/password"
 	"github.com/he-api/he-api/apps/auth-svc/internal/ratelimit"
@@ -44,6 +45,12 @@ type HIBPChecker interface {
 type JWTSigner interface {
 	SignAccessToken(userID uuid.UUID, now time.Time) (string, error)
 	SignRefreshToken(userID uuid.UUID, familyID uuid.UUID, now time.Time) (string, error)
+}
+
+// JWTVerifier is the narrow surface RefreshToken uses to parse the
+// incoming refresh token. *jwt.Verifier satisfies it.
+type JWTVerifier interface {
+	Verify(token string) (*authjwt.Claims, error)
 }
 
 // AuthServer satisfies authv1connect.AuthServiceHandler. P2f wires only
@@ -67,6 +74,8 @@ type AuthServer struct {
 	// Nil during P2f-P3 when only RegisterUser / VerifyEmail land. Required
 	// by P4b LoginUser onward.
 	JWT JWTSigner
+	// JWTVerify parses incoming refresh tokens for RefreshToken (P4c).
+	JWTVerify JWTVerifier
 	// Clock returns the current time; tests override for deterministic
 	// audit timestamps and token expiry calculations.
 	Clock func() time.Time
@@ -966,12 +975,162 @@ func jsonUnmarshal(data []byte, v any) error {
 	return json.Unmarshal(data, v)
 }
 
+// RefreshToken implements the BR-3.9 refresh-token rotation + reuse-
+// detection flow (UNIT-118 + UNIT-119).
+//
+// Wire input: a signed refresh token (the JWT itself — no separate
+// access token is needed). Handler responsibility:
+//
+//   1. Verify the JWT (signature, exp, alg=RS256, aud=he-api).
+//   2. Extract sub (user_id) + jti + fam (family_id) from claims.
+//   3. Run the atomic Lua family-rotation script:
+//        GET auth:refresh:{family_id}
+//        if missing                                   → "not_found"
+//        if stored != presented_jti  → DEL + return "compromised"
+//        else                        → DEL + SET new_jti + return "ok"
+//   4. On "ok": sign a new access + refresh pair with the SAME
+//      family_id but new jtis; the Lua script already wrote the new
+//      refresh jti to Redis. Return tokens.
+//   5. On "not_found" / "compromised": return 401_invalid_credentials
+//      so the client re-runs the full signin. Audit signin_failure
+//      with the discriminating ErrorCode.
+//
+// Note on response code: 401_invalid_credentials is intentional —
+// neither "your refresh is expired" nor "we detected reuse and revoked
+// everyone" surfaces a distinguishing signal to the client. The
+// observable behavior is: "your session is dead, sign in again."
 func (s *AuthServer) RefreshToken(
-	_ context.Context,
-	_ *connect.Request[authv1.RefreshTokenRequest],
+	ctx context.Context,
+	req *connect.Request[authv1.RefreshTokenRequest],
 ) (*connect.Response[authv1.RefreshTokenResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("RefreshToken: pending P4 (T3, AC3)"))
+	in := req.Msg
+	now := s.Clock()
+
+	if in.GetRefreshToken() == "" {
+		return nil, statusError(connect.CodeUnauthenticated, StatusInvalidCredentials)
+	}
+
+	// === 1. Verify the JWT ===
+	claims, err := s.JWTVerify.Verify(in.GetRefreshToken())
+	if err != nil {
+		s.auditSigninFailure(ctx, "", "", in.GetClientIp(), in.GetUserAgent(), now, StatusInvalidCredentials)
+		return nil, statusError(connect.CodeUnauthenticated, StatusInvalidCredentials)
+	}
+	if claims.FamilyID == "" {
+		// Access token presented as refresh — reject. Refresh tokens are
+		// the ONLY shape carrying `fam`; defensive against caller bugs.
+		s.auditSigninFailure(ctx, claims.Subject, "", in.GetClientIp(), in.GetUserAgent(), now, StatusInvalidCredentials)
+		return nil, statusError(connect.CodeUnauthenticated, StatusInvalidCredentials)
+	}
+	userID, err := uuid.Parse(claims.Subject)
+	if err != nil {
+		return nil, statusError(connect.CodeUnauthenticated, StatusInvalidCredentials)
+	}
+	familyID, err := uuid.Parse(claims.FamilyID)
+	if err != nil {
+		return nil, statusError(connect.CodeUnauthenticated, StatusInvalidCredentials)
+	}
+
+	// === 2. Pre-sign the new refresh token so we can hand its jti to the
+	//        Lua script as the SET argument. If the script returns
+	//        compromised / not_found we discard the freshly signed token.
+	newRefreshToken, err := s.JWT.SignRefreshToken(userID, familyID, now)
+	if err != nil {
+		return nil, internalErr(err, "sign_refresh")
+	}
+	newRefreshJTI, err := jtiFromToken(newRefreshToken)
+	if err != nil {
+		return nil, internalErr(err, "decode_refresh_jti")
+	}
+
+	// === 3. Atomic Lua rotation ===
+	familyKey := refreshFamilyKeyPrefix + familyID.String()
+	raw, err := s.Redis.Eval(ctx, luaRotateRefreshFamily, []string{familyKey},
+		claims.JTI,
+		newRefreshJTI,
+		int64(refreshTokenTTLSeconds()/time.Second),
+	).Result()
+	if err != nil {
+		return nil, internalErr(err, "redis_rotate")
+	}
+	status, _ := raw.(string)
+	switch status {
+	case "ok":
+		// fall through to signing path below
+	case "compromised":
+		s.auditBestEffort(ctx, audit.Event{
+			EventType: audit.EventSigninFailure,
+			UserID:    userID.String(),
+			IP:        in.GetClientIp(),
+			UserAgent: in.GetUserAgent(),
+			Timestamp: now,
+			Success:   false,
+			ErrorCode: "refresh.reuse_detected",
+		})
+		return nil, statusError(connect.CodeUnauthenticated, StatusInvalidCredentials)
+	case "not_found":
+		s.auditBestEffort(ctx, audit.Event{
+			EventType: audit.EventSigninFailure,
+			UserID:    userID.String(),
+			IP:        in.GetClientIp(),
+			UserAgent: in.GetUserAgent(),
+			Timestamp: now,
+			Success:   false,
+			ErrorCode: "refresh.family_revoked",
+		})
+		return nil, statusError(connect.CodeUnauthenticated, StatusInvalidCredentials)
+	default:
+		return nil, internalErr(fmt.Errorf("unknown rotate status %q", status), "redis_rotate")
+	}
+
+	// === 4. Sign a fresh access token. The refresh token was pre-signed
+	//        + stashed in Redis above; we still need a NEW access token.
+	accessToken, err := s.JWT.SignAccessToken(userID, now)
+	if err != nil {
+		return nil, internalErr(err, "sign_access")
+	}
+
+	s.auditBestEffort(ctx, audit.Event{
+		EventType: audit.EventSigninSuccess,
+		UserID:    userID.String(),
+		IP:        in.GetClientIp(),
+		UserAgent: in.GetUserAgent(),
+		Timestamp: now,
+		Success:   true,
+		ErrorCode: "refresh.rotated",
+	})
+
+	return connect.NewResponse(&authv1.RefreshTokenResponse{
+		AccessToken:                  accessToken,
+		RefreshToken:                 newRefreshToken,
+		AccessTokenExpiresInSeconds:  int32(accessTokenTTLSeconds().Seconds()),
+		RefreshTokenExpiresInSeconds: int32(refreshTokenTTLSeconds().Seconds()),
+	}), nil
 }
+
+// luaRotateRefreshFamily atomically checks + rotates the per-family jti
+// tracker. The script is the canonical implementation of BR-3.9 — it
+// either rotates (success) or revokes (compromised / not_found) in a
+// single Redis round-trip with no race between GET and DEL.
+//
+// KEYS[1] = auth:refresh:{family_id}
+// ARGV[1] = presented jti
+// ARGV[2] = new jti (when rotation succeeds)
+// ARGV[3] = TTL seconds
+//
+// Returns: "ok" | "compromised" | "not_found".
+const luaRotateRefreshFamily = `
+local stored = redis.call("GET", KEYS[1])
+if not stored then
+  return "not_found"
+end
+if stored ~= ARGV[1] then
+  redis.call("DEL", KEYS[1])
+  return "compromised"
+end
+redis.call("SET", KEYS[1], ARGV[2], "EX", ARGV[3])
+return "ok"
+`
 
 // Compile-time: ensure unused imports (uuid) compile cleanly even if a future
 // edit removes the last usage — gofmt/imports would catch it but a static
