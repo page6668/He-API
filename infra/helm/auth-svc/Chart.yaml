@@ -1,0 +1,15 @@
+apiVersion: v2
+name: auth-svc
+description: He-API authentication service (Story 2.2). gRPC service consumed only by api-gateway (Wright Round 1 Q1 ruling).
+type: application
+version: 0.1.0
+appVersion: "0.0.1"
+kubeVersion: ">=1.29.0-0"
+
+keywords:
+  - he-api
+  - grpc
+  - auth
+
+maintainers:
+  - name: He-API platform team

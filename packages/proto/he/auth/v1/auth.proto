@@ -1,0 +1,114 @@
+// auth.proto — He-API authentication service contract (Story 2.2).
+// Generated Go code is vendored at packages/proto/gen/go/he/auth/v1/.
+//
+// Wright Round 1 Q1 ruling: console BFF → api-gateway REST → auth-svc gRPC.
+// auth-svc is internal-only (ClusterIP, NetworkPolicy ingress=api-gateway).
+//
+// LoginUserResponse.status is a forward-compat enum: `STATUS_OK` returns
+// access+refresh tokens directly; `STATUS_REQUIRES_2FA` (Story 2.4 hook)
+// returns mfa_token instead, no session yet.
+syntax = "proto3";
+
+package he.auth.v1;
+
+option go_package = "github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1;authv1";
+
+service AuthService {
+  rpc RegisterUser(RegisterUserRequest) returns (RegisterUserResponse);
+  rpc VerifyEmail(VerifyEmailRequest) returns (VerifyEmailResponse);
+  rpc ResendVerification(ResendVerificationRequest) returns (ResendVerificationResponse);
+  rpc LoginUser(LoginUserRequest) returns (LoginUserResponse);
+  rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse);
+}
+
+// --- RegisterUser --------------------------------------------------------
+
+message RegisterUserRequest {
+  string email = 1;
+  string password = 2;
+  string locale = 3;
+  // Client-attribution metadata. Caller (api-gateway) MUST populate from
+  // request headers; auth-svc uses these for ratelimit + audit only.
+  string client_ip = 4;
+  string user_agent = 5;
+}
+
+message RegisterUserResponse {
+  // Anti-enumeration: response shape is identical for new vs duplicate email.
+  // user_id is intentionally omitted; api-gateway translates to a generic
+  // {message:"verification_email_sent"} HTTP body.
+  string status = 1; // always "pending_verification"
+}
+
+// --- VerifyEmail ---------------------------------------------------------
+
+message VerifyEmailRequest {
+  string token = 1; // base64url 32-byte CSPRNG; SHA-256 hashed before Redis lookup
+  string client_ip = 2;
+  string user_agent = 3;
+}
+
+message VerifyEmailResponse {
+  string user_id = 1;
+  // ISO-8601 timestamp; populated when newly verified OR already verified
+  // (idempotent — BR-2.3).
+  string email_verified_at = 2;
+  // "email_verified" for fresh consume; "already_verified" for idempotent path.
+  string status = 3;
+}
+
+// --- ResendVerification --------------------------------------------------
+
+message ResendVerificationRequest {
+  string email = 1;
+  string client_ip = 2;
+  string user_agent = 3;
+}
+
+message ResendVerificationResponse {
+  // Anti-enumeration (Wright Round 1 m-5 ruling): identical shape across
+  // {sent, already_verified, unknown_email}; api-gateway returns generic
+  // {status:"ok"} 200.
+  string status = 1; // always "ok"
+}
+
+// --- LoginUser -----------------------------------------------------------
+
+message LoginUserRequest {
+  string email = 1;
+  string password = 2;
+  string client_ip = 3;
+  string user_agent = 4;
+}
+
+enum LoginStatus {
+  LOGIN_STATUS_UNSPECIFIED = 0;
+  LOGIN_STATUS_OK = 1;            // tokens issued; api-gateway sets cookies
+  LOGIN_STATUS_REQUIRES_2FA = 2;  // Story 2.4 hook — returns mfa_token only
+}
+
+message LoginUserResponse {
+  LoginStatus status = 1;
+  // Populated when status == LOGIN_STATUS_OK.
+  string access_token = 2;
+  string refresh_token = 3;
+  int32 access_token_expires_in_seconds = 4; // 900
+  int32 refresh_token_expires_in_seconds = 5; // 2592000
+  // Populated when status == LOGIN_STATUS_REQUIRES_2FA (Story 2.4 hook).
+  string mfa_token = 6;
+}
+
+// --- RefreshToken --------------------------------------------------------
+
+message RefreshTokenRequest {
+  string refresh_token = 1;
+  string client_ip = 2;
+  string user_agent = 3;
+}
+
+message RefreshTokenResponse {
+  string access_token = 1;
+  string refresh_token = 2; // rotated jti; old jti DEL'd in Redis
+  int32 access_token_expires_in_seconds = 3;
+  int32 refresh_token_expires_in_seconds = 4;
+}

@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "auth-svc.fullname" . }}
+  labels:
+    {{- include "auth-svc.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "auth-svc.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "auth-svc.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "auth-svc.serviceAccountName" . }}
+      # Pod Security Restricted profile — 6 fields literal so static regex
+      # checks can verify without expanding Helm expressions (matches the
+      # sample-grpc-app pattern from Story 1.5 Q7 ruling).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: auth-svc
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.env.OTEL_EXPORTER_OTLP_ENDPOINT | quote }}
+          envFrom:
+            # Story 1.6 — PostgreSQL + Redis URIs (HE_API_DB_POSTGRES_URI,
+            # HE_API_DB_REDIS_URI) are mounted from the shared Secret.
+            - secretRef:
+                name: {{ .Values.db.credsSecretName }}
+          volumeMounts:
+            # Story 2.2 — JWT signing key (TS-CONS-003). The Secret carries
+            # the private + public PEMs; mount read-only.
+            - name: jwt-keys
+              mountPath: {{ .Values.jwt.mountPath }}
+              readOnly: true
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+      volumes:
+        - name: jwt-keys
+          secret:
+            secretName: {{ .Values.jwt.secretName }}
+            items:
+              - key: private_key.pem
+                path: {{ .Values.jwt.privateKeyFile }}
+              - key: public_key.pem
+                path: {{ .Values.jwt.publicKeyFile }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

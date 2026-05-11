@@ -1,0 +1,39 @@
+// notification.proto — He-API notification service contract (Story 2.2).
+// Generated Go code is vendored at packages/proto/gen/go/he/notification/v1/.
+//
+// Wright Round 1 Q4 ruling APPROVED-WITH-CAVEAT (option c): auth-svc calls
+// notification-svc via synchronous gRPC SendEmail (<1s SLO). Async Kafka
+// migration is a documented Epic-9 follow-up; this Story ships the sync
+// bootstrap.
+syntax = "proto3";
+
+package he.notification.v1;
+
+option go_package = "github.com/he-api/he-api/packages/proto/gen/go/he/notification/v1;notificationv1";
+
+service NotificationService {
+  rpc SendEmail(SendEmailRequest) returns (SendEmailResponse);
+}
+
+enum EmailTemplate {
+  EMAIL_TEMPLATE_UNSPECIFIED = 0;
+  // Story 2.2 — the only template this Story ships. Additional templates
+  // (password_reset, oauth_link_notice, etc.) land in subsequent stories.
+  EMAIL_TEMPLATE_EMAIL_VERIFICATION = 1;
+}
+
+message SendEmailRequest {
+  EmailTemplate template = 1;
+  string to_email = 2;
+  string locale = 3; // matches one of apps/console/i18n locales; falls back to 'en'
+  // Free-form template variables. For EMAIL_VERIFICATION the caller MUST
+  // populate keys: {"token", "verification_link"}.
+  map<string, string> variables = 4;
+  // Caller-correlated request id (he_request_id) for audit join.
+  string request_id = 5;
+}
+
+message SendEmailResponse {
+  // SendGrid message id (or stub id in dev). Useful for support tracing.
+  string provider_message_id = 1;
+}

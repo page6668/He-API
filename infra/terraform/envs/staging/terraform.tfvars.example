@@ -31,3 +31,13 @@ api_server_public_access_allowed_cidrs = [
 
 # ACR EE instance name — composes the endpoint <name>-registry.<region>.cr.aliyuncs.com
 acr_instance_name = "he-api"
+
+# -----------------------------------------------------------------------------
+# Sensitive vars supplied via terraform.tfvars (gitignored) or TF_VAR_* env:
+#   postgres_admin_password    (Story 1.6)
+#   redis_admin_password       (Story 1.6)
+#   clickhouse_admin_password  (Story 1.6)
+#   sendgrid_api_key           (Story 2.2 — notification-svc SendGrid sub-account)
+#   kms_key_id                 (Story 1.6 — KMS key ID shared across DB modules)
+#   ops_admin_group            (Story 1.6 — RBAC group claim for cluster-admin)
+# -----------------------------------------------------------------------------

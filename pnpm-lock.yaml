@@ -17,6 +17,8 @@ importers:
 
   apps/api-gateway: {}
 
+  apps/auth-svc: {}
+
   apps/console:
     dependencies:
       '@he-api/i18n-keys':
@@ -52,6 +54,9 @@ importers:
       tailwind-merge:
         specifier: ^2.5.4
         version: 2.6.1
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       '@next/bundle-analyzer':
         specifier: 14.2.18
@@ -125,6 +130,8 @@ importers:
       vitest:
         specifier: ^1.6.1
         version: 1.6.1(@types/node@20.19.40)(jsdom@25.0.1)
+
+  apps/notification-svc: {}
 
   apps/sample-grpc-app: {}
 

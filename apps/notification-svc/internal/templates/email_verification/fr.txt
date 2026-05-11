@@ -1,0 +1,10 @@
+# TODO: localize for fr — async translation workstream per Story 2.1 AC4
+Verify your He-API email
+
+Welcome to He-API. Open the link below to verify your email address and
+finish creating your account:
+
+{{.VerificationLink}}
+
+This link expires in 24 hours. If you didn't sign up for He-API, you can
+safely ignore this email.

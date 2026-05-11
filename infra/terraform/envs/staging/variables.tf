@@ -99,3 +99,13 @@ variable "clickhouse_admin_password" {
   description = "Admin password for the ClickHouse cluster. Sourced from operator-controlled tfvars; never committed (BR-2.3)."
   sensitive   = true
 }
+
+# -----------------------------------------------------------------------------
+# Story 2.2 — notification-svc SendGrid credentials.
+# -----------------------------------------------------------------------------
+
+variable "sendgrid_api_key" {
+  type        = string
+  description = "SendGrid API key for the staging sub-account (TS-CONS-010). Sourced from operator-controlled tfvars; never committed."
+  sensitive   = true
+}

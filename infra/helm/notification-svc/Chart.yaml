@@ -1,0 +1,15 @@
+apiVersion: v2
+name: notification-svc
+description: He-API notification fan-out service (Story 2.2). Synchronous SendEmail gRPC consumer; SendGrid client (Wright Round 1 Q4 ruling option c).
+type: application
+version: 0.1.0
+appVersion: "0.0.1"
+kubeVersion: ">=1.29.0-0"
+
+keywords:
+  - he-api
+  - grpc
+  - notification
+
+maintainers:
+  - name: He-API platform team

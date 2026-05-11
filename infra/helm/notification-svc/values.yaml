@@ -1,0 +1,41 @@
+# Default values for notification-svc (Story 2.2). Mirrors auth-svc baseline.
+
+image:
+  repository: he-api/notification-svc
+  tag: "0.0.1"
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+env:
+  OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector.monitoring.svc.cluster.local:4317
+
+# Story 2.2 — SendGrid creds (TS-CONS-010). SENDGRID_API_KEY mounted via
+# envFrom from the Terraform-created Secret.
+sendgrid:
+  credsSecretName: he-api-notification-creds
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+serviceMonitor:
+  enabled: true
+  interval: 15s
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

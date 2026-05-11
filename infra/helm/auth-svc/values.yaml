@@ -1,0 +1,50 @@
+# Default values for auth-svc (Story 2.2). Pod Security Restricted profile
+# matches the sample-grpc-app baseline so admission stays uniform.
+
+image:
+  repository: he-api/auth-svc
+  tag: "0.0.1"
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 96Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+env:
+  OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector.monitoring.svc.cluster.local:4317
+
+# Story 2.2 — JWT signing key Secret (mounted as files); auth-svc reads
+# /etc/auth-svc/keys/private_key.pem at startup (TS-CONS-003).
+jwt:
+  secretName: he-api-auth-jwt-keys
+  mountPath: /etc/auth-svc/keys
+  privateKeyFile: private_key.pem
+  publicKeyFile: public_key.pem
+
+# Story 2.2 — DB creds reused from Story 1.6 he-api-db-creds Secret.
+# auth-svc consumes HE_API_DB_POSTGRES_URI + HE_API_DB_REDIS_URI via envFrom.
+db:
+  credsSecretName: he-api-db-creds
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+serviceMonitor:
+  enabled: true
+  interval: 15s
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

@@ -1,0 +1,11 @@
+{
+  "name": "@he-api/notification-svc",
+  "version": "0.0.0",
+  "private": true,
+  "description": "notification-svc — He-API notification fan-out service (Story 2.2). The pnpm package is a no-op shim so Turborepo can include the workspace; real build is handled by go build via the go workspace.",
+  "scripts": {
+    "build": "echo \"go build is run via go workspace, not Turborepo\" && exit 0",
+    "lint": "echo \"go lint is handled by golangci-lint outside Turborepo\" && exit 0",
+    "test": "echo \"go test is handled outside Turborepo\" && exit 0"
+  }
+}

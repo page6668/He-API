@@ -1,0 +1,24 @@
+# auth-svc staging overrides (Story 2.2). ${ACR_REGISTRY} is a deploy-time
+# substitution honoured by scripts/observability/install.sh (Story 1.4 m-4
+# pattern).
+image:
+  repository: $$ACR_REGISTRY/he-api/auth-svc
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 8080
+
+env:
+  OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector.monitoring.svc.cluster.local:4317
+
+serviceAccount:
+  create: true
+  name: ""
+
+serviceMonitor:
+  enabled: true
+  interval: 15s

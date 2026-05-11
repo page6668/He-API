@@ -23,6 +23,12 @@ terraform {
       source  = "hashicorp/kubernetes"
       version = ">= 2.27.0"
     }
+    # Story 2.2 — tls provider materializes the auth-svc JWT signing key
+    # (Wright Round 1 Q3 ruling option a: K8s-Secret-only, Vault deferred).
+    tls = {
+      source  = "hashicorp/tls"
+      version = ">= 4.0.0"
+    }
   }
 }
 
