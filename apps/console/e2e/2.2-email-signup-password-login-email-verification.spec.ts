@@ -15,33 +15,59 @@
  */
 
 import { test, expect } from '@playwright/test';
+import {
+  freshEmail,
+  expectedMaskedEmail,
+  waitForVerificationEmail,
+  countEmails,
+  extractVerifyURL,
+  resetHibpStub,
+} from './helpers';
 
 // ============================================================
 // AC1: 邮箱注册 happy path + 错误路径 + i18n + RTL
 // ============================================================
 
 test.describe('AC1 — Email signup', () => {
-  test('2.2-E2E-001: EN signup happy path → redirect to check-inbox with masked email', async ({ page }) => {
+  test('2.2-E2E-001: EN signup happy path → redirect to check-inbox with masked email', async ({ page, request }) => {
     // Priority: P0 | AC1 main scenario
-    // Steps:
-    // 1. goto /en/(auth)/signup
-    // 2. fill email + password (≥10 chars, NOT in HIBP)
-    // 3. submit
-    // 4. expect URL to match /en/\(auth\)/signup/check-inbox\?email=.*
-    // 5. expect page text to contain masked email (e.g. "t***@example.com")
-    // TODO: Implement
-    throw new Error('Test not implemented: 2.2-E2E-001');
+    await resetHibpStub(request);
+    const email = freshEmail('signup-happy');
+
+    await page.goto('/en/signup');
+    await page.fill('input[name="email"]', email);
+    await page.fill('input[name="password"]', 'correct horse battery staple');
+    await page.click('button[type="submit"]');
+
+    // Route group `(auth)` is excluded from URLs by Next.js convention
+    // — the QA spec's literal `/en/(auth)/signup/check-inbox` resolves
+    // to `/en/signup/check-inbox?email=...` at runtime (Dev Log §12.2).
+    await page.waitForURL(/\/en\/signup\/check-inbox\?email=/);
+
+    // The check-inbox page renders the masked form of the email so the
+    // URL doesn't leak the full address into browser history.
+    await expect(page.getByText(expectedMaskedEmail(email))).toBeVisible();
   });
 
   test('2.2-E2E-002: mailpit captures exactly one verification email with 64-char base64url token in link', async ({ page, request }) => {
     // Priority: P0 | AC1 Scenario + BR-2.4 + BR-2.6
-    // Steps:
-    // 1. signup as above with fresh email
-    // 2. GET MAILPIT_URL/api/v1/messages?query=to:<email>
-    // 3. parse latest message, assert subject contains 'verify' (en localized)
-    // 4. assert HTML body contains regex: https://console\..*/en/verify-email\?token=[A-Za-z0-9_-]{64}
-    // TODO: Implement
-    throw new Error('Test not implemented: 2.2-E2E-002');
+    await resetHibpStub(request);
+    const email = freshEmail('mailpit');
+
+    await page.goto('/en/signup');
+    await page.fill('input[name="email"]', email);
+    await page.fill('input[name="password"]', 'correct horse battery staple');
+    await page.click('button[type="submit"]');
+    await page.waitForURL(/\/en\/signup\/check-inbox/);
+
+    const message = await waitForVerificationEmail(request, email);
+    expect(message.Subject.toLowerCase()).toContain('verify');
+
+    const verifyURL = extractVerifyURL(message);
+    expect(verifyURL).toMatch(/\/en\/verify-email\?token=[A-Za-z0-9_-]{64}$/);
+
+    // Exactly one email — the notification service must not double-send.
+    expect(await countEmails(request, email)).toBe(1);
   });
 
   test('2.2-E2E-003: signup with already-registered email → identical redirect, mailpit captures NO new email (BR-1.4 anti-enumeration)', async ({ page, request }) => {
@@ -89,8 +115,29 @@ test.describe('AC1 — Email signup', () => {
 test.describe('AC2 — Email verification + resend', () => {
   test('2.2-E2E-010: Full flow signup → mailpit → click link → verify-email success page with Sign-in CTA pre-filled', async ({ page, request }) => {
     // Priority: P0 | AC2 main scenario + UI Interaction
-    // TODO: Implement
-    throw new Error('Test not implemented: 2.2-E2E-010');
+    await resetHibpStub(request);
+    const email = freshEmail('verify-happy');
+
+    // === signup
+    await page.goto('/en/signup');
+    await page.fill('input[name="email"]', email);
+    await page.fill('input[name="password"]', 'correct horse battery staple');
+    await page.click('button[type="submit"]');
+    await page.waitForURL(/\/en\/signup\/check-inbox/);
+
+    // === fetch verification link from mailpit + open it
+    const message = await waitForVerificationEmail(request, email);
+    const verifyURL = extractVerifyURL(message);
+    const verifyPath = new URL(verifyURL).pathname + new URL(verifyURL).search;
+    await page.goto(verifyPath);
+
+    // === verify-email success page renders + Sign-in CTA links to /en/signin?email=<email>
+    await expect(page).toHaveURL(/\/en\/verify-email\?token=[A-Za-z0-9_-]{64}/);
+    const signinCta = page.getByRole('link', { name: /sign\s*in/i });
+    await expect(signinCta).toBeVisible();
+    const href = await signinCta.getAttribute('href');
+    expect(href).toContain('/en/signin');
+    expect(href).toContain(`email=${encodeURIComponent(email)}`);
   });
 
   test('2.2-E2E-011: Click verify link twice (back-button + revisit) → 2nd renders "Already used" + resend CTA modal', async ({ page }) => {
@@ -123,21 +170,79 @@ test.describe('AC2 — Email verification + resend', () => {
 // ============================================================
 
 test.describe('AC3 — Email signin + JWT cookies', () => {
-  test('2.2-E2E-020: EN signin happy path → redirect to /en/ (Demo placeholder, TS-CONS-012)', async ({ page }) => {
-    // Priority: P0 | AC3 main scenario
-    // TODO: Implement
-    throw new Error('Test not implemented: 2.2-E2E-020');
+  test('2.2-E2E-020: EN signin happy path → redirect to /en/ (Demo placeholder, TS-CONS-012)', async ({ page, request }) => {
+    // Priority: P0 | AC3 main scenario — chains a fresh signup + verify
+    // before driving the signin so the test is self-contained.
+    await resetHibpStub(request);
+    const email = freshEmail('signin-happy');
+    const password = 'correct horse battery staple';
+
+    // Bootstrap: register + verify so a usable account exists.
+    await page.goto('/en/signup');
+    await page.fill('input[name="email"]', email);
+    await page.fill('input[name="password"]', password);
+    await page.click('button[type="submit"]');
+    await page.waitForURL(/\/en\/signup\/check-inbox/);
+
+    const message = await waitForVerificationEmail(request, email);
+    const verifyURL = new URL(extractVerifyURL(message));
+    await page.goto(verifyURL.pathname + verifyURL.search);
+    await expect(page).toHaveURL(/\/en\/verify-email/);
+
+    // === signin
+    await page.goto('/en/signin');
+    await page.fill('input[name="email"]', email);
+    await page.fill('input[name="password"]', password);
+    await page.click('button[type="submit"]');
+
+    // Post-signin redirects to /en/ (Demo placeholder per TS-CONS-012;
+    // the real dashboard lands in a later Story).
+    await page.waitForURL(/\/en\/?$/);
   });
 
-  test('2.2-E2E-021: After signin cookies set with attribute matrix; document.cookie does NOT expose (HttpOnly)', async ({ page, context }) => {
+  test('2.2-E2E-021: After signin cookies set with attribute matrix; document.cookie does NOT expose (HttpOnly)', async ({ page, request, context }) => {
     // Priority: P0 | BR-3.7 + TS-CONS-007
-    // Steps:
-    // 1. signin as verified user
-    // 2. const cookies = await context.cookies()
-    // 3. assert he_access {httpOnly:true, sameSite:'Lax'}, he_refresh {httpOnly:true, sameSite:'Strict', path:'/v1/auth/refresh'}
-    // 4. assert await page.evaluate(() => document.cookie) returns empty/no he_* tokens (HttpOnly)
-    // TODO: Implement
-    throw new Error('Test not implemented: 2.2-E2E-021');
+    await resetHibpStub(request);
+    const email = freshEmail('cookie-matrix');
+    const password = 'correct horse battery staple';
+
+    // Bootstrap: register + verify + signin.
+    await page.goto('/en/signup');
+    await page.fill('input[name="email"]', email);
+    await page.fill('input[name="password"]', password);
+    await page.click('button[type="submit"]');
+    await page.waitForURL(/\/en\/signup\/check-inbox/);
+
+    const message = await waitForVerificationEmail(request, email);
+    const verifyURL = new URL(extractVerifyURL(message));
+    await page.goto(verifyURL.pathname + verifyURL.search);
+
+    await page.goto('/en/signin');
+    await page.fill('input[name="email"]', email);
+    await page.fill('input[name="password"]', password);
+    await page.click('button[type="submit"]');
+    await page.waitForURL(/\/en\/?$/);
+
+    // === assert cookie attribute matrix ===
+    const cookies = await context.cookies();
+    const access = cookies.find((c) => c.name === 'he_access');
+    const refresh = cookies.find((c) => c.name === 'he_refresh');
+
+    expect(access, 'he_access cookie set').toBeDefined();
+    expect(access?.httpOnly).toBe(true);
+    expect(access?.sameSite).toBe('Lax');
+    expect(access?.path).toBe('/');
+
+    expect(refresh, 'he_refresh cookie set').toBeDefined();
+    expect(refresh?.httpOnly).toBe(true);
+    expect(refresh?.sameSite).toBe('Strict');
+    expect(refresh?.path).toBe('/v1/auth/refresh');
+
+    // === HttpOnly enforcement: JS-side document.cookie MUST NOT
+    // expose the auth cookies (XSS exfiltration defense per TS-CONS-007).
+    const jsVisible = await page.evaluate(() => document.cookie);
+    expect(jsVisible).not.toContain('he_access');
+    expect(jsVisible).not.toContain('he_refresh');
   });
 
   test('2.2-E2E-022: Navigating back to /(auth)/signin after signin → 302 redirect to /{locale}/', async ({ page }) => {
