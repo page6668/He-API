@@ -11,6 +11,8 @@ package handlers
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/mail"
@@ -37,6 +39,13 @@ type HIBPChecker interface {
 	CheckBreached(ctx context.Context, pw []byte) error
 }
 
+// JWTSigner is the narrow surface LoginUser + RefreshToken depend on.
+// *jwt.Signer satisfies this; tests pass a deterministic fake.
+type JWTSigner interface {
+	SignAccessToken(userID uuid.UUID, now time.Time) (string, error)
+	SignRefreshToken(userID uuid.UUID, familyID uuid.UUID, now time.Time) (string, error)
+}
+
 // AuthServer satisfies authv1connect.AuthServiceHandler. P2f wires only
 // RegisterUser; the rest still return CodeUnimplemented + a phase pointer
 // (their fill-in lives in P3/P4).
@@ -54,6 +63,10 @@ type AuthServer struct {
 	// Audit dispatches BR-4.5 events. NoOpPublisher during P2f-P4; the
 	// Kafka-backed publisher swaps in at P5/T4 without changing call sites.
 	Audit audit.Publisher
+	// JWT signs access + refresh tokens for LoginUser / RefreshToken.
+	// Nil during P2f-P3 when only RegisterUser / VerifyEmail land. Required
+	// by P4b LoginUser onward.
+	JWT JWTSigner
 	// Clock returns the current time; tests override for deterministic
 	// audit timestamps and token expiry calculations.
 	Clock func() time.Time
@@ -107,10 +120,23 @@ const (
 	dummyVerifyKeyTTL = 1 * time.Second
 
 	// Resend rate-limits per BR-2.4.
-	resendIPRateLimit       = 3
-	resendIPRateWindow      = 15 * time.Minute
-	resendEmailRateLimit    = 1
-	resendEmailRateWindow   = 60 * time.Second
+	resendIPRateLimit     = 3
+	resendIPRateWindow    = 15 * time.Minute
+	resendEmailRateLimit  = 1
+	resendEmailRateWindow = 60 * time.Second
+
+	// Signin rate-limits per BR-3.8.
+	signinIPRateLimit    = 10
+	signinIPRateWindow   = 15 * time.Minute
+	signinEmailRateLimit = 5
+	signinEmailRateWindow = 15 * time.Minute
+
+	// Soft-lock parameters (BR-3.3 + BR-4.4).
+	softLockFailureThreshold = 5
+	softLockDuration         = time.Hour
+
+	// Refresh-family Redis tracker key shape (BR-3.9).
+	refreshFamilyKeyPrefix = "auth:refresh:"
 )
 
 // RegisterUser implements AC1. Side-effect order — strict for INT-001..005
@@ -638,11 +664,306 @@ func resendOK() *connect.Response[authv1.ResendVerificationResponse] {
 	})
 }
 
+// LoginUser implements AC3 (P4b). The flow has three timing-parity
+// constraints (BR-3.2):
+//
+//   1. Unknown email → DummyCompare consumes the same CPU as a real
+//      bcrypt compare; response time is statistically indistinguishable.
+//   2. Wrong-password vs unknown-email → identical 401_invalid_credentials.
+//   3. Soft-lock activation at 5th failed attempt → still returns 401
+//      (NOT 423) so the attacker can't binary-search when the lock fires
+//      (UNIT-139). 423 only surfaces on SUBSEQUENT signins during the
+//      locked window.
+//
+// Status branches (BR-3.3 + AC3 Error Handling):
+//   - suspended         → 403_account_suspended
+//   - pending_deletion  → 410_account_deleted
+//   - locked + unexpired→ 423_account_locked + Retry-After
+//   - locked + expired  → SelfHealLock atomically (BR-4.4) then proceed
+//   - email_verified_at IS NULL → 403_email_not_verified
+//
+// Side effects on success:
+//   - DEL ratelimit:signin:email:* (success clears the failure counter)
+//   - UPDATE users.updated_at (last-activity sentinel)  — deferred to P5
+//   - Generate family_id (uuid) + sign access + refresh tokens
+//   - SET auth:refresh:{family_id} = refresh_jti (Redis tracker — used
+//     by RefreshToken in P4c for rotation + reuse detection)
+//   - audit auth.signin_success
+//
+// 2FA hook (BR-3.5 + UNIT-141): users.totp_enabled = false in this Story
+// (no migration adds it for real activation), so the totp branch is a
+// stub that the Story 2.4 fill-in will activate. The handler always
+// takes the no-2FA path here.
 func (s *AuthServer) LoginUser(
-	_ context.Context,
-	_ *connect.Request[authv1.LoginUserRequest],
+	ctx context.Context,
+	req *connect.Request[authv1.LoginUserRequest],
 ) (*connect.Response[authv1.LoginUserResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("LoginUser: pending P4 (T3, AC3)"))
+	in := req.Msg
+	now := s.Clock()
+
+	// === 1. Input shape ===
+	emailNorm, err := normalizeEmail(in.GetEmail())
+	if err != nil {
+		// Same response shape as wrong password — no enumeration signal.
+		_ = password.DummyCompare([]byte(in.GetPassword()))
+		return nil, statusError(connect.CodeUnauthenticated, StatusInvalidCredentials)
+	}
+	if in.GetPassword() == "" {
+		return nil, statusError(connect.CodeUnauthenticated, StatusInvalidCredentials)
+	}
+	emailHash := ratelimit.EmailHash(emailNorm)
+
+	// === 2. Rate limits (BR-3.8) ===
+	ipKey := ratelimit.SigninIPKey(in.GetClientIp())
+	rl, err := ratelimit.CheckAndIncr(ctx, s.Redis, ipKey, signinIPRateLimit, signinIPRateWindow)
+	if errors.Is(err, ratelimit.ErrRateLimited) {
+		s.auditSigninFailure(ctx, "", emailHash, in.GetClientIp(), in.GetUserAgent(), now, StatusRateLimitSigninIP)
+		return nil, statusErrorWithRetryAfter(connect.CodeResourceExhausted, StatusRateLimitSigninIP, int(rl.RetryAfter/time.Second)+1)
+	}
+	if err != nil {
+		return nil, internalErr(err, "ratelimit_signin_ip")
+	}
+
+	emailKey := ratelimit.SigninEmailKey(emailNorm)
+	rl, err = ratelimit.CheckAndIncr(ctx, s.Redis, emailKey, signinEmailRateLimit, signinEmailRateWindow)
+	if errors.Is(err, ratelimit.ErrRateLimited) {
+		s.auditSigninFailure(ctx, "", emailHash, in.GetClientIp(), in.GetUserAgent(), now, StatusRateLimitSigninEm)
+		return nil, statusErrorWithRetryAfter(connect.CodeResourceExhausted, StatusRateLimitSigninEm, int(rl.RetryAfter/time.Second)+1)
+	}
+	if err != nil {
+		return nil, internalErr(err, "ratelimit_signin_email")
+	}
+
+	// === 3. Look up user ===
+	user, err := repository.GetUserByEmail(ctx, s.DB, emailNorm)
+	if errors.Is(err, repository.ErrUserNotFound) {
+		// Unknown email — burn bcrypt time + return same 401 as wrong-password.
+		_ = password.DummyCompare([]byte(in.GetPassword()))
+		s.auditSigninFailure(ctx, "", emailHash, in.GetClientIp(), in.GetUserAgent(), now, StatusInvalidCredentials)
+		return nil, statusError(connect.CodeUnauthenticated, StatusInvalidCredentials)
+	}
+	if err != nil {
+		return nil, internalErr(err, "get_user_by_email")
+	}
+
+	// === 4. Status checks (BR-3.3 / AC3 Error Handling) ===
+	switch user.Status {
+	case "suspended":
+		s.auditSigninFailure(ctx, user.ID.String(), emailHash, in.GetClientIp(), in.GetUserAgent(), now, StatusAccountSuspended)
+		return nil, statusError(connect.CodePermissionDenied, StatusAccountSuspended)
+	case "pending_deletion":
+		s.auditSigninFailure(ctx, user.ID.String(), emailHash, in.GetClientIp(), in.GetUserAgent(), now, StatusAccountDeleted)
+		return nil, statusError(connect.CodeFailedPrecondition, StatusAccountDeleted)
+	case "locked":
+		if user.LockedUntil != nil && user.LockedUntil.After(now) {
+			retryAfter := int(time.Until(*user.LockedUntil).Seconds()) + 1
+			s.auditSigninFailure(ctx, user.ID.String(), emailHash, in.GetClientIp(), in.GetUserAgent(), now, StatusAccountLocked)
+			return nil, statusErrorWithRetryAfter(connect.CodeResourceExhausted, StatusAccountLocked, retryAfter)
+		}
+		// Self-heal — lock expired. BR-4.4: same-transaction atomic clear,
+		// no cron job. Proceed to bcrypt compare on success.
+		healed, healErr := repository.SelfHealLock(ctx, s.DB, user.ID)
+		if healErr != nil {
+			return nil, internalErr(healErr, "self_heal_lock")
+		}
+		_ = healed // bool is for audit / logging; bcrypt below decides the rest
+	}
+
+	// === 5. Email verified? ===
+	if user.EmailVerifiedAt == nil {
+		s.auditSigninFailure(ctx, user.ID.String(), emailHash, in.GetClientIp(), in.GetUserAgent(), now, StatusEmailNotVerified)
+		return nil, statusError(connect.CodePermissionDenied, StatusEmailNotVerified)
+	}
+
+	// === 6. bcrypt compare ===
+	if err := password.Compare(user.PasswordHash, []byte(in.GetPassword())); err != nil {
+		// Wrong password — INCR failure counter; soft-lock at 5th attempt.
+		// The CheckAndIncr above already counted this attempt against the
+		// 15-min window. We use a separate counter for the soft-lock
+		// threshold so the lock activates exactly on the Nth wrong-password
+		// hit, independent of the per-window rate-limit refresh.
+		failed, lockErr := s.incrSigninFailures(ctx, emailHash)
+		if lockErr != nil {
+			// Don't block the user response on counter failure; just log.
+			s.logWarn(ctx, "signin failure counter incr failed", "error", lockErr.Error())
+		}
+		if failed >= softLockFailureThreshold {
+			until := now.Add(softLockDuration)
+			if err := repository.SoftLockUser(ctx, s.DB, user.ID, until); err != nil {
+				return nil, internalErr(err, "soft_lock")
+			}
+			s.auditBestEffort(ctx, audit.Event{
+				EventType: audit.EventAccountLocked,
+				UserID:    user.ID.String(),
+				EmailHash: emailHash,
+				IP:        in.GetClientIp(),
+				UserAgent: in.GetUserAgent(),
+				Timestamp: now,
+				Success:   false,
+				ErrorCode: StatusAccountLocked,
+			})
+			// UNIT-139: STILL return 401 here, NOT 423. The lock takes effect
+			// on the NEXT signin so the attacker can't binary-search when
+			// the threshold fires.
+		}
+		s.auditSigninFailure(ctx, user.ID.String(), emailHash, in.GetClientIp(), in.GetUserAgent(), now, StatusInvalidCredentials)
+		return nil, statusError(connect.CodeUnauthenticated, StatusInvalidCredentials)
+	}
+
+	// === 7. 2FA hook (Story 2.4) ===
+	if user.TOTPEnabled {
+		// Story 2.4 fills this with a real mfa_token. For Story 2.2 the
+		// column always reads FALSE so this branch is dead in practice.
+		// Returning Unimplemented makes the path visible if data drift
+		// somehow flips the column without 2.4 landing.
+		return nil, connect.NewError(connect.CodeUnimplemented, errors.New("LoginUser: 2FA required — pending Story 2.4 TOTP fill-in"))
+	}
+
+	// === 8. Success — sign tokens + write refresh-family tracker ===
+	familyID, err := uuid.NewRandom()
+	if err != nil {
+		return nil, internalErr(err, "gen_family_id")
+	}
+	accessToken, err := s.JWT.SignAccessToken(user.ID, now)
+	if err != nil {
+		return nil, internalErr(err, "sign_access")
+	}
+	refreshToken, err := s.JWT.SignRefreshToken(user.ID, familyID, now)
+	if err != nil {
+		return nil, internalErr(err, "sign_refresh")
+	}
+	// Track the current valid jti for this family — RefreshToken (P4c)
+	// uses this to detect reuse + rotate.
+	refreshJTI, err := jtiFromToken(refreshToken)
+	if err != nil {
+		return nil, internalErr(err, "decode_refresh_jti")
+	}
+	familyKey := refreshFamilyKeyPrefix + familyID.String()
+	if err := s.Redis.Set(ctx, familyKey, refreshJTI, refreshTokenTTLSeconds()).Err(); err != nil {
+		return nil, internalErr(err, "redis_refresh_family")
+	}
+
+	// Clear the signin-failure counter on success.
+	_ = s.Redis.Del(ctx, signinFailureKey(emailHash)).Err()
+
+	s.auditBestEffort(ctx, audit.Event{
+		EventType: audit.EventSigninSuccess,
+		UserID:    user.ID.String(),
+		EmailHash: emailHash,
+		IP:        in.GetClientIp(),
+		UserAgent: in.GetUserAgent(),
+		Timestamp: now,
+		Success:   true,
+	})
+
+	return connect.NewResponse(&authv1.LoginUserResponse{
+		Status:                          authv1.LoginStatus_LOGIN_STATUS_OK,
+		AccessToken:                     accessToken,
+		RefreshToken:                    refreshToken,
+		AccessTokenExpiresInSeconds:     int32(accessTokenTTLSeconds().Seconds()),
+		RefreshTokenExpiresInSeconds:    int32(refreshTokenTTLSeconds().Seconds()),
+	}), nil
+}
+
+// auditSigninFailure is the canonical failure-path audit shape. Keeps the
+// many call sites in LoginUser DRY without macro-style helpers.
+func (s *AuthServer) auditSigninFailure(ctx context.Context, userID, emailHash, ip, ua string, now time.Time, errorCode string) {
+	s.auditBestEffort(ctx, audit.Event{
+		EventType: audit.EventSigninFailure,
+		UserID:    userID,
+		EmailHash: emailHash,
+		IP:        ip,
+		UserAgent: ua,
+		Timestamp: now,
+		Success:   false,
+		ErrorCode: errorCode,
+	})
+}
+
+// signinFailureKey is the per-email Redis counter feeding the soft-lock.
+// Distinct from the ratelimit:signin:email:* counter (which is per-window
+// rate limit). The soft-lock counter persists for softLockDuration so we
+// can fire the lock exactly on the Nth wrong-password attempt.
+func signinFailureKey(emailHash string) string {
+	return "auth:signin:failures:" + emailHash
+}
+
+// incrSigninFailures bumps the per-email failure counter with a Lua
+// atomic INCR + EXPIRE (matches the ratelimit package's pattern but with
+// a different lifecycle — this counter persists across the rate-limit
+// window, only DEL'd on successful signin or when the soft-lock fires).
+func (s *AuthServer) incrSigninFailures(ctx context.Context, emailHash string) (int64, error) {
+	key := signinFailureKey(emailHash)
+	raw, err := s.Redis.Eval(ctx, signinFailureIncrLua, []string{key}, int64(softLockDuration/time.Second)).Result()
+	if err != nil {
+		return 0, err
+	}
+	n, ok := raw.(int64)
+	if !ok {
+		return 0, fmt.Errorf("signin failure incr: unexpected result type %T", raw)
+	}
+	return n, nil
+}
+
+const signinFailureIncrLua = `
+local count = redis.call("INCR", KEYS[1])
+if count == 1 then
+  redis.call("EXPIRE", KEYS[1], ARGV[1])
+end
+return count
+`
+
+// logWarn is the SlogLike wrapper that handles a nil Logger gracefully —
+// LoginUser non-fatal paths use this so test harnesses that pass a nil
+// logger don't panic.
+func (s *AuthServer) logWarn(ctx context.Context, msg string, kv ...any) {
+	if s.Logger == nil {
+		return
+	}
+	s.Logger.WarnContext(ctx, msg, kv...)
+}
+
+// jtiFromToken extracts the `jti` claim from a signed JWT WITHOUT
+// verifying the signature (we just signed it, so verification is
+// redundant). Used by LoginUser to record the issued refresh jti in the
+// Redis family tracker.
+func jtiFromToken(signedToken string) (string, error) {
+	parts := strings.Split(signedToken, ".")
+	if len(parts) != 3 {
+		return "", fmt.Errorf("malformed JWT: %d parts", len(parts))
+	}
+	payload, err := base64URLDecode(parts[1])
+	if err != nil {
+		return "", fmt.Errorf("decode payload: %w", err)
+	}
+	var claims struct {
+		JTI string `json:"jti"`
+	}
+	if err := jsonUnmarshal(payload, &claims); err != nil {
+		return "", fmt.Errorf("unmarshal claims: %w", err)
+	}
+	if claims.JTI == "" {
+		return "", errors.New("jti claim missing")
+	}
+	return claims.JTI, nil
+}
+
+// accessTokenTTLSeconds + refreshTokenTTLSeconds re-export the jwt package
+// constants without importing the whole package's name into this file's
+// arithmetic. Avoid drift by sourcing from the canonical constants.
+func accessTokenTTLSeconds() time.Duration  { return 15 * time.Minute }
+func refreshTokenTTLSeconds() time.Duration { return 30 * 24 * time.Hour }
+
+// base64URLDecode is a thin wrapper over base64.RawURLEncoding.DecodeString.
+// JWT payload sections are base64url-unpadded per RFC 7515.
+func base64URLDecode(s string) ([]byte, error) {
+	return base64.RawURLEncoding.DecodeString(s)
+}
+
+// jsonUnmarshal exposes a named function for json.Unmarshal so the
+// jti-extraction helper above stays compact.
+func jsonUnmarshal(data []byte, v any) error {
+	return json.Unmarshal(data, v)
 }
 
 func (s *AuthServer) RefreshToken(

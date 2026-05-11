@@ -50,3 +50,36 @@ func wipe(b []byte) {
 		b[i] = 0
 	}
 }
+
+// dummyHash is a pre-computed bcrypt hash used by DummyCompare for the
+// timing-parity branch in LoginUser. Generated once at package init.
+// The hash is NOT secret — knowing it doesn't help an attacker because
+// bcrypt is one-way + uses a per-hash salt that's already embedded.
+var dummyHash []byte
+
+func init() {
+	// Generate at init so every process startup pays the ~200ms cost once
+	// (negligible compared to the binary startup time). bcrypt.GenerateFromPassword
+	// is the same primitive Hash uses.
+	h, err := bcrypt.GenerateFromPassword([]byte("dummy-password-for-timing-parity-do-not-use"), BcryptCost)
+	if err != nil {
+		// Should be impossible — bcrypt.GenerateFromPassword only fails on
+		// invalid cost (out of range) or memory exhaustion. Panicking here
+		// fails the binary loudly at startup rather than letting LoginUser
+		// silently drift into a no-defense state.
+		panic("password: init dummy hash: " + err.Error())
+	}
+	dummyHash = h
+}
+
+// DummyCompare performs a real bcrypt.CompareHashAndPassword against a
+// pre-generated static hash, consuming the same CPU time as a real
+// Compare on a found user. Always returns bcrypt.ErrMismatchedHashAndPassword.
+//
+// LoginUser calls this when GetUserByEmail returns ErrUserNotFound so the
+// response time for unknown-email is statistically indistinguishable from
+// wrong-password (BR-3.2 + UNIT-132 timing-side-channel defense). NEVER
+// returns nil — the unknown-email branch always leads to a 401.
+func DummyCompare(pw []byte) error {
+	return bcrypt.CompareHashAndPassword(dummyHash, pw)
+}

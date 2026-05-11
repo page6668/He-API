@@ -35,6 +35,7 @@ import (
 
 	"github.com/he-api/he-api/apps/auth-svc/internal/audit"
 	"github.com/he-api/he-api/apps/auth-svc/internal/handlers"
+	authjwt "github.com/he-api/he-api/apps/auth-svc/internal/jwt"
 	"github.com/he-api/he-api/apps/auth-svc/internal/notification"
 	"github.com/he-api/he-api/apps/auth-svc/internal/password"
 )
@@ -121,6 +122,22 @@ func main() {
 	// === audit publisher (NoOpPublisher until P5/T4 swaps in Kafka) =========
 	auditPub := audit.NewNoOpPublisher(logger)
 
+	// === JWT signer (Story 2.2 T0.5 K8s Secret he-api-auth-jwt-keys) ========
+	// The private + public PEMs are mounted as files under
+	// /etc/auth-svc/keys/{private_key.pem, public_key.pem} per the Helm
+	// chart deployment.yaml. Operator-overridable for local dev via env.
+	jwtPrivPath := envOr("HE_API_JWT_PRIVATE_KEY_PATH", "/etc/auth-svc/keys/private_key.pem")
+	jwtPrivPEM, err := os.ReadFile(jwtPrivPath)
+	if err != nil {
+		logger.Error("read JWT private key", slog.String("path", jwtPrivPath), slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	jwtSigner, err := authjwt.NewSigner(jwtPrivPEM)
+	if err != nil {
+		logger.Error("parse JWT private key", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
 	// === AuthServer =========================================================
 	authServer := handlers.NewAuthServer(handlers.AuthServer{
 		DB:             pgPool,
@@ -128,6 +145,7 @@ func main() {
 		HIBP:           hibp,
 		Notification:   notifClient,
 		Audit:          auditPub,
+		JWT:            jwtSigner,
 		Clock:          time.Now,
 		ConsoleBaseURL: envOr("HE_API_CONSOLE_BASE_URL", defaultConsoleBaseURL),
 		Logger:         logger,

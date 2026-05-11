@@ -215,3 +215,61 @@ func byteOffsetToLine(b []byte, off int) int {
 	}
 	return bytes.Count(b[:off], []byte{'\n'}) + 1
 }
+
+// Scenario: 2.2-UNIT-132
+// DummyCompare consumes the same wall-time as a real Compare (within the
+// statistical noise of bcrypt-cost=12) and ALWAYS returns mismatch. Used
+// by LoginUser to defend against timing-side-channel email enumeration
+// (BR-3.2): the response time for unknown-email matches wrong-password.
+func TestDummyCompare_AlwaysReturnsMismatch(t *testing.T) {
+	t.Parallel()
+	for _, pw := range []string{
+		"some password",
+		"another guess",
+		"correct horse battery staple",
+		"", // empty input — must still consume bcrypt time and return mismatch
+	} {
+		err := password.DummyCompare([]byte(pw))
+		if !errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
+			t.Errorf("DummyCompare(%q) = %v, want bcrypt.ErrMismatchedHashAndPassword", pw, err)
+		}
+	}
+}
+
+// Statistical: DummyCompare CPU cost is within ±50ms p99 of a real Compare
+// (the bcrypt cost-12 budget). Same threshold as 2.2-UNIT-004 timing
+// variance.
+func TestDummyCompare_TimingMatchesRealCompare(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode")
+	}
+	t.Parallel()
+	pw := []byte("correct horse battery staple")
+	realHash, err := password.Hash(append([]byte(nil), pw...))
+	if err != nil {
+		t.Fatalf("Hash: %v", err)
+	}
+	const iters = 30
+	realDurations := make([]float64, iters)
+	dummyDurations := make([]float64, iters)
+	for i := 0; i < 3; i++ {
+		_ = password.Compare(realHash, pw)
+		_ = password.DummyCompare(pw)
+	}
+	for i := 0; i < iters; i++ {
+		start := time.Now()
+		_ = password.Compare(realHash, []byte("wrong password — different bytes"))
+		realDurations[i] = float64(time.Since(start)) / float64(time.Millisecond)
+		start = time.Now()
+		_ = password.DummyCompare([]byte("wrong password — different bytes"))
+		dummyDurations[i] = float64(time.Since(start)) / float64(time.Millisecond)
+	}
+	sort.Float64s(realDurations)
+	sort.Float64s(dummyDurations)
+	p99 := func(s []float64) float64 { return s[int(math.Ceil(0.99*float64(len(s))))-1] }
+	diff := math.Abs(p99(realDurations) - p99(dummyDurations))
+	if diff > 50.0 {
+		t.Fatalf("|real p99 - dummy p99| = %.2fms (real=%.2fms dummy=%.2fms), want < 50ms — timing parity broken",
+			diff, p99(realDurations), p99(dummyDurations))
+	}
+}
