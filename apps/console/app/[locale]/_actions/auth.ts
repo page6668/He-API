@@ -230,16 +230,180 @@ function mapStatusCodeToI18n(code: string, httpStatus: number): string {
   return 'auth.errors.serverUnavailable';
 }
 
-// --- stubs for the other actions (lands in P3 / P4) ---------------------
+// --- verifyEmailAction (P3d, AC2) ----------------------------------------
 
-export async function verifyEmailAction(_input: VerifyEmailTokenInput): Promise<never> {
-  verifyEmailTokenSchema.parse(_input);
-  throw new NotYetImplemented('verifyEmailAction', 'P3 (Story 2.2 T2, AC2)');
+/**
+ * VerifyEmailResult is the typed outcome of `verifyEmailAction`. Unlike
+ * `registerUser`, this one does NOT redirect on success — the verify-email
+ * page is a Server Component that awaits the action on render and renders
+ * the success / already-verified / error UI directly. (UNIT-102 + AC2 UI
+ * Interaction — verification must work without JS.)
+ */
+export type VerifyEmailResult =
+  | { ok: true; status: 'email_verified' | 'already_verified'; userId: string; emailVerifiedAt: string }
+  | { ok: false; code: string };
+
+/**
+ * verifyEmailAction GETs the gateway's `/v1/auth/verify-email?token=…`
+ * endpoint and translates the OpenAI-compatible envelope into a typed
+ * result. The Server Component that wraps this action chooses success vs
+ * already-verified vs resend-CTA UI based on the returned shape.
+ */
+export async function verifyEmailAction(input: VerifyEmailTokenInput): Promise<VerifyEmailResult> {
+  const parsed = verifyEmailTokenSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, code: 'auth.errors.invalidToken' };
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(
+      `${gatewayURL()}/v1/auth/verify-email?token=${encodeURIComponent(parsed.data.token)}`,
+      { method: 'GET', cache: 'no-store' },
+    );
+  } catch {
+    return { ok: false, code: 'auth.errors.serverUnavailable' };
+  }
+
+  if (res.status === 200) {
+    let body: unknown;
+    try {
+      body = await res.json();
+    } catch {
+      return { ok: false, code: 'auth.errors.serverUnavailable' };
+    }
+    const userID = pickString(body, 'user_id');
+    const emailVerifiedAt = pickString(body, 'email_verified_at');
+    const status = pickString(body, 'status');
+    if (status !== 'email_verified' && status !== 'already_verified') {
+      return { ok: false, code: 'auth.errors.serverUnavailable' };
+    }
+    return { ok: true, status, userId: userID, emailVerifiedAt };
+  }
+
+  let body: unknown;
+  try {
+    body = await res.json();
+  } catch {
+    /* fall through with empty code */
+  }
+  const code = extractEnvelopeCode(body);
+  return { ok: false, code: mapVerifyCodeToI18n(code, res.status) };
 }
 
-export async function resendVerification(_input: ResendVerificationInput): Promise<never> {
-  resendVerificationSchema.parse(_input);
-  throw new NotYetImplemented('resendVerification', 'P3 (Story 2.2 T2, AC2)');
+// --- resendVerification (P3d, AC2) ---------------------------------------
+
+/**
+ * ResendVerificationResult is the typed outcome of `resendVerification`.
+ * On the 2xx path the gateway always returns `{status:"ok"}` (m-5 anti-
+ * enumeration); the only distinguishing failure is 429 with Retry-After.
+ */
+export type ResendVerificationResult =
+  | { ok: true }
+  | { ok: false; code: string; retryAfterSeconds?: number };
+
+/**
+ * resendVerification POSTs the gateway's `/v1/auth/resend-verification`
+ * endpoint with the supplied email. The action returns `{ok:true}` for
+ * every 2xx; the UI cannot distinguish between sent / unknown_email /
+ * already_verified (the Wright Round 1 m-5 ruling). 429 surfaces as
+ * `tooManyResendAttempts` (IP) or `resendTooSoon` (per-email) with the
+ * Retry-After countdown for the form to render.
+ */
+export async function resendVerification(input: ResendVerificationInput): Promise<ResendVerificationResult> {
+  const parsed = resendVerificationSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, code: 'auth.errors.invalidEmail' };
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${gatewayURL()}/v1/auth/resend-verification`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: parsed.data.email }),
+      cache: 'no-store',
+    });
+  } catch {
+    return { ok: false, code: 'auth.errors.serverUnavailable' };
+  }
+
+  if (res.status === 200) {
+    return { ok: true };
+  }
+
+  let body: unknown;
+  try {
+    body = await res.json();
+  } catch {
+    /* fall through */
+  }
+  const code = extractEnvelopeCode(body);
+  const retryAfterSeconds = parseRetryAfter(res.headers.get('Retry-After'));
+  return {
+    ok: false,
+    code: mapResendCodeToI18n(code, res.status),
+    retryAfterSeconds,
+  };
+}
+
+// --- code-mapping helpers ------------------------------------------------
+
+/** mapVerifyCodeToI18n routes the gateway's NNN_xxx code into the AC2 i18n keyset. */
+function mapVerifyCodeToI18n(code: string, httpStatus: number): string {
+  switch (code) {
+    case '400_invalid_token':
+      return 'auth.errors.invalidToken';
+    case '410_token_expired':
+      return 'auth.errors.tokenExpired';
+    case '410_token_used':
+      return 'auth.errors.tokenAlreadyUsed';
+    case '502_auth_svc_unavailable':
+      return 'auth.errors.serverUnavailable';
+  }
+  if (httpStatus >= 500) return 'auth.errors.serverUnavailable';
+  if (httpStatus === 400) return 'auth.errors.invalidToken';
+  if (httpStatus === 410) return 'auth.errors.tokenExpired';
+  return 'auth.errors.serverUnavailable';
+}
+
+/** mapResendCodeToI18n routes the resend 429 variants into the AC2 keys. */
+function mapResendCodeToI18n(code: string, httpStatus: number): string {
+  switch (code) {
+    case '429_rate_limit_resend_ip':
+      return 'auth.errors.tooManyResendAttempts';
+    case '429_rate_limit_resend_email':
+      return 'auth.errors.resendTooSoon';
+    case '400_invalid_email':
+      return 'auth.errors.invalidEmail';
+    case '502_auth_svc_unavailable':
+      return 'auth.errors.serverUnavailable';
+  }
+  if (httpStatus === 429) return 'auth.errors.tooManyResendAttempts';
+  if (httpStatus >= 500) return 'auth.errors.serverUnavailable';
+  return 'auth.errors.serverUnavailable';
+}
+
+/** pickString defensively reads a string field from an unknown record. */
+function pickString(body: unknown, key: string): string {
+  if (typeof body !== 'object' || body === null) return '';
+  const v = (body as Record<string, unknown>)[key];
+  return typeof v === 'string' ? v : '';
+}
+
+// --- resendVerificationForm (form-action wrapper) ------------------------
+
+/**
+ * Form-action wrapper used by the ResendModal client component. Same
+ * (prevState, formData) → state shape as `registerUserForm`. The form
+ * is bound from the verify-email error-state page + signup check-inbox
+ * page.
+ */
+export async function resendVerificationForm(
+  _prev: ResendVerificationResult | null,
+  formData: FormData,
+): Promise<ResendVerificationResult> {
+  return resendVerification({ email: String(formData.get('email') ?? '') });
 }
 
 export async function signinAction(_input: SigninInput): Promise<never> {

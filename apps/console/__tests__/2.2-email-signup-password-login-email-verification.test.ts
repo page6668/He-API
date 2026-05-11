@@ -312,46 +312,139 @@ describe('AC1 — Console zod schemas + Server Action + i18n', () => {
 describe('AC2 — Console verify-email + resend Server Action + zod', () => {
   // --- T2c Console/Vitest scenarios ---
 
-  test('2.2-UNIT-100: verifyEmailTokenSchema = z.string().length(64).regex(/^[A-Za-z0-9_-]+$/)', () => {
-    // Priority: P0 | Level: unit | AC2 Data Validation
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-100');
+  test('2.2-UNIT-100: verifyEmailTokenSchema = z.string().length(64).regex(/^[A-Za-z0-9_-]+$/)', async () => {
+    // Scenario: 2.2-UNIT-100 — AC2 Data Validation
+    const { verifyEmailTokenSchema } = await import('../lib/auth/schemas');
+    const good = 'a'.repeat(64);
+    expect(verifyEmailTokenSchema.safeParse({ token: good }).success).toBe(true);
+    // Length boundary
+    expect(verifyEmailTokenSchema.safeParse({ token: 'a'.repeat(63) }).success).toBe(false);
+    expect(verifyEmailTokenSchema.safeParse({ token: 'a'.repeat(65) }).success).toBe(false);
+    // Charset: base64-standard '+' / '/' / '=' must be rejected
+    expect(verifyEmailTokenSchema.safeParse({ token: 'a'.repeat(63) + '+' }).success).toBe(false);
+    expect(verifyEmailTokenSchema.safeParse({ token: 'a'.repeat(63) + '/' }).success).toBe(false);
+    expect(verifyEmailTokenSchema.safeParse({ token: 'a'.repeat(63) + '=' }).success).toBe(false);
+    // base64url charset accepted — exactly 64 chars with the full A-Za-z0-9_- range.
+    const base64url64 = ('aA0-_'.repeat(13)).slice(0, 64); // 13×5=65, slice to 64
+    expect(base64url64.length).toBe(64);
+    expect(verifyEmailTokenSchema.safeParse({ token: base64url64 }).success).toBe(true);
   });
 
-  test('2.2-UNIT-101: resendVerificationSchema = z.object({ email: string().email().max(254) })', () => {
-    // Priority: P0 | Level: unit | AC2 Data Validation
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-101');
+  test('2.2-UNIT-101: resendVerificationSchema = z.object({ email: string().email().max(254) })', async () => {
+    // Scenario: 2.2-UNIT-101 — AC2 Data Validation
+    const { resendVerificationSchema } = await import('../lib/auth/schemas');
+    expect(resendVerificationSchema.safeParse({ email: 'u@example.com' }).success).toBe(true);
+    expect(resendVerificationSchema.safeParse({ email: 'bad' }).success).toBe(false);
+    expect(resendVerificationSchema.safeParse({ email: '' }).success).toBe(false);
+    // > 254 chars rejected
+    const tooLong = 'a'.repeat(250) + '@x.io';
+    expect(resendVerificationSchema.safeParse({ email: tooLong }).success).toBe(false);
   });
 
-  test('2.2-UNIT-102: verifyEmail Server Action GETs /v1/auth/verify-email?token=', () => {
-    // Priority: P0 | Level: unit | AC2 UI Interaction (no-JS support)
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-102');
+  test('2.2-UNIT-102: verifyEmailAction GETs /v1/auth/verify-email?token=', async () => {
+    // Scenario: 2.2-UNIT-102 — AC2 UI Interaction (no-JS support)
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ user_id: 'u-1', email_verified_at: '2026-05-12T12:00:00Z', status: 'email_verified' }), { status: 200 }),
+    );
+    try {
+      const { verifyEmailAction } = await import('../app/[locale]/_actions/auth');
+      const result = await verifyEmailAction({ token: 'a'.repeat(64) });
+      expect(result.ok).toBe(true);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchSpy.mock.calls[0]!;
+      expect(String(url)).toMatch(/\/v1\/auth\/verify-email\?token=/);
+      expect(init?.method).toBe('GET');
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
-  test('2.2-UNIT-103: resendVerification Server Action POSTs /v1/auth/resend-verification', () => {
-    // Priority: P0 | Level: unit | AC2 main scenario
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-103');
+  test('2.2-UNIT-103: resendVerification Server Action POSTs /v1/auth/resend-verification', async () => {
+    // Scenario: 2.2-UNIT-103 — AC2 main scenario
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ status: 'ok' }), { status: 200 }),
+    );
+    try {
+      const { resendVerification } = await import('../app/[locale]/_actions/auth');
+      const result = await resendVerification({ email: 'user@example.com' });
+      expect(result.ok).toBe(true);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchSpy.mock.calls[0]!;
+      expect(String(url)).toMatch(/\/v1\/auth\/resend-verification$/);
+      expect(init?.method).toBe('POST');
+      const body = JSON.parse(String(init?.body));
+      expect(body.email).toBe('user@example.com');
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
-  test('2.2-UNIT-104: verifyEmail 200 + {message:"already_verified"} → distinguishable UI state', () => {
-    // Priority: P0 | Level: unit | BR-2.3 idempotent surface
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-104');
+  test('2.2-UNIT-104: verifyEmail 200 + status="already_verified" → distinguishable UI state', async () => {
+    // Scenario: 2.2-UNIT-104 — BR-2.3 idempotent surface
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ user_id: 'u-1', email_verified_at: '2026-05-01T12:00:00Z', status: 'already_verified' }), { status: 200 }),
+    );
+    try {
+      const { verifyEmailAction } = await import('../app/[locale]/_actions/auth');
+      const result = await verifyEmailAction({ token: 'a'.repeat(64) });
+      if (!result.ok) throw new Error('expected ok=true on already_verified');
+      // Status is preserved exactly — the page distinguishes the UI branch.
+      expect(result.status).toBe('already_verified');
+      // Original timestamp surfaced (NOT the request `now`).
+      expect(result.emailVerifiedAt).toBe('2026-05-01T12:00:00Z');
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
-  test('2.2-UNIT-105: verifyEmail 410 → error code mapped to auth.errors.tokenExpired / tokenAlreadyUsed', () => {
-    // Priority: P0 | Level: unit | AC2 Error Handling
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-105');
+  test('2.2-UNIT-105: verifyEmail 410 → error code mapped to auth.errors.tokenExpired / tokenAlreadyUsed', async () => {
+    // Scenario: 2.2-UNIT-105 — AC2 Error Handling
+    const cases: Array<{ serverCode: string; expectedI18n: string }> = [
+      { serverCode: '410_token_expired', expectedI18n: 'auth.errors.tokenExpired' },
+      { serverCode: '410_token_used', expectedI18n: 'auth.errors.tokenAlreadyUsed' },
+      { serverCode: '400_invalid_token', expectedI18n: 'auth.errors.invalidToken' },
+    ];
+    const { verifyEmailAction } = await import('../app/[locale]/_actions/auth');
+    for (const c of cases) {
+      const httpStatus = c.serverCode.startsWith('400') ? 400 : 410;
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(JSON.stringify({ error: { code: c.serverCode } }), { status: httpStatus }),
+      );
+      try {
+        const result = await verifyEmailAction({ token: 'a'.repeat(64) });
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+          expect(result.code).toBe(c.expectedI18n);
+        }
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    }
   });
 
-  test('2.2-UNIT-106: en/auth.json contains AC2 keys (verifyEmail.*, errors.invalidToken/tokenExpired/tokenAlreadyUsed/tooManyResendAttempts/resendTooSoon)', () => {
-    // Priority: P1 | Level: unit | BR-1.9
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-106');
+  test('2.2-UNIT-106: en/auth.json contains AC2 keys', () => {
+    // Scenario: 2.2-UNIT-106 — BR-1.9
+    const obj = JSON.parse(readFileSync(enAuthJsonPath, 'utf8'));
+    const keys = flattenKeys(obj);
+    const required = [
+      // verifyEmail.* surface keys
+      'verifyEmail.successTitle',
+      'verifyEmail.alreadyVerifiedTitle',
+      'verifyEmail.tokenExpiredTitle',
+      'verifyEmail.tokenUsedTitle',
+      'verifyEmail.resendModalTitle',
+      'verifyEmail.resendSubmit',
+      'verifyEmail.resendSentTitle',
+      // AC2 error keys
+      'errors.invalidToken',
+      'errors.tokenExpired',
+      'errors.tokenAlreadyUsed',
+      'errors.tooManyResendAttempts',
+      'errors.resendTooSoon',
+    ];
+    for (const k of required) {
+      expect(keys, `en/auth.json missing required AC2 key ${k}`).toContain(k);
+    }
   });
 });
 
