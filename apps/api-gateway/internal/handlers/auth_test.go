@@ -32,10 +32,18 @@ type fakeAuthClient struct {
 	// ResendVerification
 	resendResp *authv1.ResendVerificationResponse
 	resendErr  error
+	// LoginUser (P4d)
+	loginResp *authv1.LoginUserResponse
+	loginErr  error
+	// RefreshToken (P4d)
+	refreshResp *authv1.RefreshTokenResponse
+	refreshErr  error
 	// captured inputs for assertions
-	lastReq        *authv1.RegisterUserRequest
-	lastVerifyReq  *authv1.VerifyEmailRequest
-	lastResendReq  *authv1.ResendVerificationRequest
+	lastReq         *authv1.RegisterUserRequest
+	lastVerifyReq   *authv1.VerifyEmailRequest
+	lastResendReq   *authv1.ResendVerificationRequest
+	lastLoginReq    *authv1.LoginUserRequest
+	lastRefreshReq  *authv1.RefreshTokenRequest
 }
 
 var errFakeUnimplemented = errors.New("fakeAuthClient: method not stubbed")
@@ -77,11 +85,25 @@ func (f *fakeAuthClient) ResendVerification(_ context.Context, r *connect.Reques
 	}
 	return connect.NewResponse(f.resendResp), nil
 }
-func (f *fakeAuthClient) LoginUser(_ context.Context, _ *connect.Request[authv1.LoginUserRequest]) (*connect.Response[authv1.LoginUserResponse], error) {
-	return nil, errFakeUnimplemented
+func (f *fakeAuthClient) LoginUser(_ context.Context, r *connect.Request[authv1.LoginUserRequest]) (*connect.Response[authv1.LoginUserResponse], error) {
+	f.lastLoginReq = r.Msg
+	if f.loginErr != nil {
+		return nil, f.loginErr
+	}
+	if f.loginResp == nil {
+		return nil, errFakeUnimplemented
+	}
+	return connect.NewResponse(f.loginResp), nil
 }
-func (f *fakeAuthClient) RefreshToken(_ context.Context, _ *connect.Request[authv1.RefreshTokenRequest]) (*connect.Response[authv1.RefreshTokenResponse], error) {
-	return nil, errFakeUnimplemented
+func (f *fakeAuthClient) RefreshToken(_ context.Context, r *connect.Request[authv1.RefreshTokenRequest]) (*connect.Response[authv1.RefreshTokenResponse], error) {
+	f.lastRefreshReq = r.Msg
+	if f.refreshErr != nil {
+		return nil, f.refreshErr
+	}
+	if f.refreshResp == nil {
+		return nil, errFakeUnimplemented
+	}
+	return connect.NewResponse(f.refreshResp), nil
 }
 
 var _ authv1connect.AuthServiceClient = (*fakeAuthClient)(nil)
@@ -319,24 +341,10 @@ func TestSignup_ErrorMessageWithColonDetail(t *testing.T) {
 	}
 }
 
-// Signin + Refresh remain 501 stubs until P4 (Story 2.2 T3, AC3).
-// VerifyEmail + ResendVerification become real handlers in P3c.
-func TestStubHandlers_Return501(t *testing.T) {
-	t.Parallel()
-	p := handlers.NewAuthProxy(&fakeAuthClient{})
-	for _, h := range []http.HandlerFunc{p.Signin, p.Refresh} {
-		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/x", strings.NewReader(""))
-		h(rr, req)
-		if rr.Code != http.StatusNotImplemented {
-			t.Errorf("stub returned %d, want 501", rr.Code)
-		}
-		got := decodeEnvelope(t, rr)
-		if got["error"].(map[string]any)["code"] != "501_not_implemented" {
-			t.Errorf("stub error.code = %v, want 501_not_implemented", got["error"])
-		}
-	}
-}
+// As of P4d, no /v1/auth/* endpoints remain as 501 stubs — Signin +
+// Refresh shipped real handlers. The TestStubHandlers_Return501 test
+// from earlier phases is removed; future stubs (e.g., the Story 2.5+
+// protected-route middleware) would add their own dedicated tests.
 
 // --- VerifyEmail tests (P3c) ---------------------------------------------
 

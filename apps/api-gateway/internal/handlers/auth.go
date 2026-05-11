@@ -28,12 +28,23 @@ type AuthProxy struct {
 	// Upstream is the Connect-go client to auth-svc. Constructed at startup
 	// in cmd/server/main.go from HE_API_AUTH_SVC_URL.
 	Upstream authv1connect.AuthServiceClient
+	// Env drives the Domain + Secure attributes on issued cookies per
+	// BR-3.7. Defaults to development on the zero value.
+	Env DeployEnv
 }
 
 // NewAuthProxy wires the supplied upstream client. Tests inject a fake
-// authv1connect.AuthServiceClient.
+// authv1connect.AuthServiceClient. Env defaults to development; production
+// callers MUST set it to production / staging via NewAuthProxyWithEnv.
 func NewAuthProxy(upstream authv1connect.AuthServiceClient) *AuthProxy {
-	return &AuthProxy{Upstream: upstream}
+	return &AuthProxy{Upstream: upstream, Env: EnvDevelopment}
+}
+
+// NewAuthProxyWithEnv wires the upstream client + deploy env. The cmd/server
+// entry point uses this so cookies carry the correct Domain + Secure
+// attributes per the live environment.
+func NewAuthProxyWithEnv(upstream authv1connect.AuthServiceClient, env DeployEnv) *AuthProxy {
+	return &AuthProxy{Upstream: upstream, Env: env}
 }
 
 // --- POST /v1/auth/signup ------------------------------------------------
@@ -161,14 +172,94 @@ func (p *AuthProxy) ResendVerification(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resendResponseBody{Status: "ok"})
 }
 
-// --- stubs for the two RPCs that land in P4 ------------------------------
+// --- POST /v1/auth/signin ------------------------------------------------
 
-func (p *AuthProxy) Signin(w http.ResponseWriter, _ *http.Request) {
-	writeError(w, http.StatusNotImplemented, "501_not_implemented", "pending P4 (Story 2.2 T3, AC3)")
+// signinRequestBody is the JSON shape the console Server Action POSTs.
+type signinRequestBody struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
-func (p *AuthProxy) Refresh(w http.ResponseWriter, _ *http.Request) {
-	writeError(w, http.StatusNotImplemented, "501_not_implemented", "pending P4 (Story 2.2 T3, AC3)")
+// signinResponseBody is the canonical response on success — no token
+// material leaks to the response body. Tokens flow via Set-Cookie only.
+// `requires_2fa` is the Story 2.4 hook — pass through whatever auth-svc
+// returns so future TOTP / WebAuthn additions don't need gateway changes.
+type signinResponseBody struct {
+	Status string `json:"status"` // "ok" | "requires_2fa"
+}
+
+// Signin proxies LoginUser. On success, it translates the gRPC token
+// pair into the canonical Set-Cookie headers per BR-3.7 + TS-CONS-007.
+// The response body does NOT carry the tokens — they are exfiltration-
+// protected in HttpOnly cookies.
+func (p *AuthProxy) Signin(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
+	var body signinRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "401_invalid_credentials", "request body must be JSON")
+		return
+	}
+
+	resp, err := p.Upstream.LoginUser(r.Context(), connect.NewRequest(&authv1.LoginUserRequest{
+		Email:     body.Email,
+		Password:  body.Password,
+		ClientIp:  clientIP(r),
+		UserAgent: r.UserAgent(),
+	}))
+	if err != nil {
+		translateConnectError(w, err)
+		return
+	}
+
+	// 2FA hook: auth-svc may return LOGIN_STATUS_REQUIRES_2FA with an
+	// mfa_token instead of access/refresh tokens (Story 2.4). When that
+	// lands, the gateway threads the mfa_token through the response body
+	// for the console to render the TOTP challenge. For Story 2.2 the
+	// branch is dead (totp_enabled column is always FALSE in the schema).
+	if resp.Msg.GetStatus() == authv1.LoginStatus_LOGIN_STATUS_REQUIRES_2FA {
+		writeJSON(w, http.StatusOK, signinResponseBody{Status: "requires_2fa"})
+		return
+	}
+
+	SetAccessCookie(w, resp.Msg.GetAccessToken(), p.Env, int(resp.Msg.GetAccessTokenExpiresInSeconds()))
+	SetRefreshCookie(w, resp.Msg.GetRefreshToken(), p.Env, int(resp.Msg.GetRefreshTokenExpiresInSeconds()))
+	writeJSON(w, http.StatusOK, signinResponseBody{Status: "ok"})
+}
+
+// --- POST /v1/auth/refresh -----------------------------------------------
+
+// Refresh proxies RefreshToken. Reads the he_refresh cookie (NOT a JSON
+// body) — the refresh token is HttpOnly so the console JS can't read it
+// to put it in a body anyway. On success rotates both cookies.
+//
+// On ANY failure path, the refresh cookie is cleared along with the
+// access cookie — a failed rotation almost always means the session is
+// dead (reuse detected, refresh expired, or family revoked) and the
+// client should re-sign-in.
+func (p *AuthProxy) Refresh(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie(RefreshCookieName)
+	if err != nil || cookie.Value == "" {
+		writeError(w, http.StatusUnauthorized, "401_invalid_credentials", "refresh cookie required")
+		return
+	}
+
+	resp, err := p.Upstream.RefreshToken(r.Context(), connect.NewRequest(&authv1.RefreshTokenRequest{
+		RefreshToken: cookie.Value,
+		ClientIp:     clientIP(r),
+		UserAgent:    r.UserAgent(),
+	}))
+	if err != nil {
+		// Defensive: clear both cookies on any failure so the client
+		// doesn't keep retrying with a dead refresh token.
+		ClearAccessCookie(w, p.Env)
+		ClearRefreshCookie(w, p.Env)
+		translateConnectError(w, err)
+		return
+	}
+
+	SetAccessCookie(w, resp.Msg.GetAccessToken(), p.Env, int(resp.Msg.GetAccessTokenExpiresInSeconds()))
+	SetRefreshCookie(w, resp.Msg.GetRefreshToken(), p.Env, int(resp.Msg.GetRefreshTokenExpiresInSeconds()))
+	writeJSON(w, http.StatusOK, signinResponseBody{Status: "ok"})
 }
 
 // --- error / envelope helpers -------------------------------------------

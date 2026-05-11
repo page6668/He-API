@@ -12,8 +12,16 @@ package main
 
 import (
 	"context"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
+	"encoding/pem"
 	"errors"
+	"fmt"
 	"log/slog"
+	"math/big"
 	"net/http"
 	"os"
 	"os/signal"
@@ -72,8 +80,26 @@ func main() {
 		&http.Client{Timeout: 10 * time.Second},
 		authSvcURL,
 	)
-	auth := handlers.NewAuthProxy(authUpstream)
-	jwks := handlers.NewJWKSHandler()
+	deployEnv := handlers.ParseDeployEnv(os.Getenv("HE_API_DEPLOY_ENV"))
+	auth := handlers.NewAuthProxyWithEnv(authUpstream, deployEnv)
+
+	// JWKS — load the same public key auth-svc carries. Build the JWKS
+	// document inline (the auth-svc jwt package's internal/ scope is
+	// unreachable from this binary by Go's internal-package rule; a
+	// future refactor can extract a shared packages/auth-jwt). The
+	// construction is ~30 lines and the math is RFC-7515-canonical.
+	jwtPubPath := envOr("HE_API_JWT_PUBLIC_KEY_PATH", "/etc/api-gateway/keys/public_key.pem")
+	jwtPubPEM, err := os.ReadFile(jwtPubPath)
+	if err != nil {
+		logger.Error("read JWT public key", slog.String("path", jwtPubPath), slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	jwksBytes, err := jwksFromPublicPEM(jwtPubPEM)
+	if err != nil {
+		logger.Error("build JWKS", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	jwks := handlers.NewJWKSHandler(jwksBytes)
 
 	mux := http.NewServeMux()
 	// Story 2.2 — /v1/auth/* REST surface (Wright Round 1 Q1 ruling).
@@ -118,4 +144,42 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("http shutdown failed", slog.String("error", err.Error()))
 	}
+}
+
+// jwksFromPublicPEM builds the JWKS document from an RSA public-key PEM.
+// Mirrors apps/auth-svc/internal/jwt.Verifier.JWKS() — kept inline here
+// because Go's internal-package rule blocks the gateway from importing
+// auth-svc's jwt package directly. The math is canonical RFC 7515/7518.
+func jwksFromPublicPEM(pemBytes []byte) ([]byte, error) {
+	block, _ := pem.Decode(pemBytes)
+	if block == nil {
+		return nil, errors.New("jwks: no PEM block")
+	}
+	pubAny, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("jwks: parse public key: %w", err)
+	}
+	pub, ok := pubAny.(*rsa.PublicKey)
+	if !ok {
+		return nil, errors.New("jwks: public key is not RSA")
+	}
+	der, err := x509.MarshalPKIXPublicKey(pub)
+	if err != nil {
+		return nil, fmt.Errorf("jwks: marshal: %w", err)
+	}
+	sum := sha256.Sum256(der)
+	kid := fmt.Sprintf("%x", sum[:8])
+	doc := struct {
+		Keys []map[string]string `json:"keys"`
+	}{
+		Keys: []map[string]string{{
+			"kty": "RSA",
+			"use": "sig",
+			"alg": "RS256",
+			"kid": kid,
+			"n":   base64.RawURLEncoding.EncodeToString(pub.N.Bytes()),
+			"e":   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(pub.E)).Bytes()),
+		}},
+	}
+	return json.Marshal(doc)
 }
