@@ -36,6 +36,7 @@ import (
 	"github.com/he-api/he-api/apps/auth-svc/internal/audit"
 	"github.com/he-api/he-api/apps/auth-svc/internal/handlers"
 	authjwt "github.com/he-api/he-api/apps/auth-svc/internal/jwt"
+	"github.com/he-api/he-api/apps/auth-svc/internal/metrics"
 	"github.com/he-api/he-api/apps/auth-svc/internal/notification"
 	"github.com/he-api/he-api/apps/auth-svc/internal/password"
 )
@@ -158,6 +159,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	// === Metrics (BR-4.8) ==================================================
+	// Registers the 5 auth-svc counters on the global OTel meter provider.
+	// In production no Prometheus exporter is wired yet — the counters
+	// register on the default no-op meter and Add() calls are zero-cost.
+	// The Story 2.2 T4.7 follow-up wires the obs.NewMeterProvider +
+	// /metrics endpoint; instrumentation call sites are stable now so the
+	// later wiring is a single-PR drop-in.
+	metricsCounters, err := metrics.New()
+	if err != nil {
+		logger.Error("register OTel counters", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
 	// === AuthServer =========================================================
 	authServer := handlers.NewAuthServer(handlers.AuthServer{
 		DB:             pgPool,
@@ -167,6 +181,7 @@ func main() {
 		Audit:          auditPub,
 		JWT:            jwtSigner,
 		JWTVerify:      jwtVerifier,
+		Metrics:        metricsCounters,
 		Clock:          time.Now,
 		ConsoleBaseURL: envOr("HE_API_CONSOLE_BASE_URL", defaultConsoleBaseURL),
 		Logger:         logger,

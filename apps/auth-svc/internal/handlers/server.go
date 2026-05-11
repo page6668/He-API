@@ -27,6 +27,7 @@ import (
 
 	"github.com/he-api/he-api/apps/auth-svc/internal/audit"
 	authjwt "github.com/he-api/he-api/apps/auth-svc/internal/jwt"
+	"github.com/he-api/he-api/apps/auth-svc/internal/metrics"
 	"github.com/he-api/he-api/apps/auth-svc/internal/notification"
 	"github.com/he-api/he-api/apps/auth-svc/internal/password"
 	"github.com/he-api/he-api/apps/auth-svc/internal/ratelimit"
@@ -76,6 +77,10 @@ type AuthServer struct {
 	JWT JWTSigner
 	// JWTVerify parses incoming refresh tokens for RefreshToken (P4c).
 	JWTVerify JWTVerifier
+	// Metrics is the OTel counter bundle for BR-4.8. Nil-safe — each
+	// Inc* method short-circuits if the receiver or instrument is nil so
+	// tests that don't care about counters can pass nil.
+	Metrics *metrics.Counters
 	// Clock returns the current time; tests override for deterministic
 	// audit timestamps and token expiry calculations.
 	Clock func() time.Time
@@ -179,11 +184,13 @@ func (s *AuthServer) RegisterUser(
 	locale := resolveLocale(in.GetLocale())
 	if locale == "" {
 		// supplied non-empty but not in the 10-MVP tuple
+		s.Metrics.IncSignup(ctx, metrics.SignupResultFailure)
 		return nil, statusError(connect.CodeInvalidArgument, StatusInvalidLocale)
 	}
 
 	emailNorm, err := normalizeEmail(in.GetEmail())
 	if err != nil {
+		s.Metrics.IncSignup(ctx, metrics.SignupResultFailure)
 		return nil, statusError(connect.CodeInvalidArgument, StatusInvalidEmail)
 	}
 	emailHash := ratelimit.EmailHash(emailNorm)
@@ -201,6 +208,7 @@ func (s *AuthServer) RegisterUser(
 			Success:   false,
 			ErrorCode: StatusRateLimitSignup,
 		})
+		s.Metrics.IncRateLimitTriggered(ctx, metrics.RateLimitEndpointSignup, metrics.RateLimitKeyTypeIP)
 		return nil, statusErrorWithRetryAfter(connect.CodeResourceExhausted, StatusRateLimitSignup, int(rl.RetryAfter/time.Second)+1)
 	}
 	if err != nil {
@@ -210,9 +218,11 @@ func (s *AuthServer) RegisterUser(
 	// === 3. Password validation ===
 	pwBytes := []byte(in.GetPassword())
 	if err := password.ValidateLength(pwBytes); err != nil {
+		s.Metrics.IncSignup(ctx, metrics.SignupResultFailure)
 		return nil, statusError(connect.CodeInvalidArgument, StatusPasswordTooShort)
 	}
 	if err := s.HIBP.CheckBreached(ctx, pwBytes); err != nil {
+		s.Metrics.IncSignup(ctx, metrics.SignupResultFailure)
 		switch {
 		case errors.Is(err, password.ErrPasswordBreached):
 			return nil, statusError(connect.CodeInvalidArgument, StatusPasswordBreached)
@@ -226,6 +236,7 @@ func (s *AuthServer) RegisterUser(
 	// === 4. bcrypt hash (always runs — same work for success + duplicate) ===
 	hash, err := password.Hash(pwBytes)
 	if err != nil {
+		s.Metrics.IncSignup(ctx, metrics.SignupResultFailure)
 		return nil, internalErr(err, "bcrypt")
 	}
 
@@ -245,9 +256,11 @@ func (s *AuthServer) RegisterUser(
 			Timestamp: now,
 			Success:   false,
 		})
+		s.Metrics.IncSignup(ctx, metrics.SignupResultDuplicate)
 		return successResponse(), nil
 	}
 	if err != nil {
+		s.Metrics.IncSignup(ctx, metrics.SignupResultFailure)
 		return nil, internalErr(err, "pg_insert")
 	}
 
@@ -264,6 +277,7 @@ func (s *AuthServer) RegisterUser(
 			Success:   false,
 			ErrorCode: StatusEmailSendFailed,
 		})
+		s.Metrics.IncSignup(ctx, metrics.SignupResultFailure)
 		return nil, statusError(connect.CodeInternal, StatusEmailSendFailed)
 	}
 	if err := token.Store(ctx, s.Redis, plaintextTok, userID); err != nil {
@@ -277,6 +291,7 @@ func (s *AuthServer) RegisterUser(
 			Success:   false,
 			ErrorCode: StatusEmailSendFailed,
 		})
+		s.Metrics.IncSignup(ctx, metrics.SignupResultFailure)
 		return nil, statusError(connect.CodeInternal, StatusEmailSendFailed)
 	}
 
@@ -293,6 +308,7 @@ func (s *AuthServer) RegisterUser(
 			Success:   false,
 			ErrorCode: StatusEmailSendFailed,
 		})
+		s.Metrics.IncSignup(ctx, metrics.SignupResultFailure)
 		// Both transient and permanent map to 500_email_send_failed per AC1
 		// Error Handling row 7. The user can retry via Resend; the row
 		// persists with email_verified_at=NULL.
@@ -309,6 +325,7 @@ func (s *AuthServer) RegisterUser(
 		Timestamp: now,
 		Success:   true,
 	})
+	s.Metrics.IncSignup(ctx, metrics.SignupResultSuccess)
 
 	// === 9. Return success-shaped response (no user_id — UNIT-044) ===
 	return successResponse(), nil
@@ -436,6 +453,7 @@ func (s *AuthServer) VerifyEmail(
 
 	// === 1. Format check ===
 	if err := token.ParseFormat(in.GetToken()); err != nil {
+		s.Metrics.IncVerifyEmail(ctx, metrics.VerifyEmailResultInvalidFormat)
 		return nil, statusError(connect.CodeInvalidArgument, StatusInvalidToken)
 	}
 
@@ -444,6 +462,7 @@ func (s *AuthServer) VerifyEmail(
 	if err != nil {
 		switch {
 		case errors.Is(err, token.ErrTokenNotFound):
+			s.Metrics.IncVerifyEmail(ctx, metrics.VerifyEmailResultExpired)
 			return nil, statusError(connect.CodeFailedPrecondition, StatusTokenExpired)
 		case errors.Is(err, token.ErrTokenAttemptsExceeded):
 			s.auditBestEffort(ctx, audit.Event{
@@ -454,6 +473,7 @@ func (s *AuthServer) VerifyEmail(
 				Success:   false,
 				ErrorCode: StatusTokenUsed,
 			})
+			s.Metrics.IncVerifyEmail(ctx, metrics.VerifyEmailResultBruteForce)
 			return nil, statusError(connect.CodeFailedPrecondition, StatusTokenUsed)
 		default:
 			return nil, internalErr(err, "token_consume")
@@ -491,6 +511,9 @@ func (s *AuthServer) VerifyEmail(
 		if u, err := repository.GetUserByID(ctx, s.DB, payload.UserID); err == nil && u.EmailVerifiedAt != nil {
 			verifiedAt = *u.EmailVerifiedAt
 		}
+		s.Metrics.IncVerifyEmail(ctx, metrics.VerifyEmailResultAlreadyVerified)
+	} else {
+		s.Metrics.IncVerifyEmail(ctx, metrics.VerifyEmailResultSuccess)
 	}
 
 	return connect.NewResponse(&authv1.VerifyEmailResponse{
@@ -554,6 +577,7 @@ func (s *AuthServer) ResendVerification(
 			Success:   false,
 			ErrorCode: StatusRateLimitResendIP,
 		})
+		s.Metrics.IncRateLimitTriggered(ctx, metrics.RateLimitEndpointResend, metrics.RateLimitKeyTypeIP)
 		return nil, statusErrorWithRetryAfter(connect.CodeResourceExhausted, StatusRateLimitResendIP, int(rl.RetryAfter/time.Second)+1)
 	}
 	if err != nil {
@@ -573,6 +597,7 @@ func (s *AuthServer) ResendVerification(
 			Success:   false,
 			ErrorCode: StatusRateLimitResendEm,
 		})
+		s.Metrics.IncRateLimitTriggered(ctx, metrics.RateLimitEndpointResend, metrics.RateLimitKeyTypeEmail)
 		return nil, statusErrorWithRetryAfter(connect.CodeResourceExhausted, StatusRateLimitResendEm, int(rl.RetryAfter/time.Second)+1)
 	}
 	if err != nil {
@@ -715,9 +740,11 @@ func (s *AuthServer) LoginUser(
 	if err != nil {
 		// Same response shape as wrong password — no enumeration signal.
 		_ = password.DummyCompare([]byte(in.GetPassword()))
+		s.Metrics.IncSignin(ctx, metrics.SigninResultFailure, StatusInvalidCredentials)
 		return nil, statusError(connect.CodeUnauthenticated, StatusInvalidCredentials)
 	}
 	if in.GetPassword() == "" {
+		s.Metrics.IncSignin(ctx, metrics.SigninResultFailure, StatusInvalidCredentials)
 		return nil, statusError(connect.CodeUnauthenticated, StatusInvalidCredentials)
 	}
 	emailHash := ratelimit.EmailHash(emailNorm)
@@ -727,6 +754,7 @@ func (s *AuthServer) LoginUser(
 	rl, err := ratelimit.CheckAndIncr(ctx, s.Redis, ipKey, signinIPRateLimit, signinIPRateWindow)
 	if errors.Is(err, ratelimit.ErrRateLimited) {
 		s.auditSigninFailure(ctx, "", emailHash, in.GetClientIp(), in.GetUserAgent(), now, StatusRateLimitSigninIP)
+		s.Metrics.IncRateLimitTriggered(ctx, metrics.RateLimitEndpointSignin, metrics.RateLimitKeyTypeIP)
 		return nil, statusErrorWithRetryAfter(connect.CodeResourceExhausted, StatusRateLimitSigninIP, int(rl.RetryAfter/time.Second)+1)
 	}
 	if err != nil {
@@ -737,6 +765,7 @@ func (s *AuthServer) LoginUser(
 	rl, err = ratelimit.CheckAndIncr(ctx, s.Redis, emailKey, signinEmailRateLimit, signinEmailRateWindow)
 	if errors.Is(err, ratelimit.ErrRateLimited) {
 		s.auditSigninFailure(ctx, "", emailHash, in.GetClientIp(), in.GetUserAgent(), now, StatusRateLimitSigninEm)
+		s.Metrics.IncRateLimitTriggered(ctx, metrics.RateLimitEndpointSignin, metrics.RateLimitKeyTypeEmail)
 		return nil, statusErrorWithRetryAfter(connect.CodeResourceExhausted, StatusRateLimitSigninEm, int(rl.RetryAfter/time.Second)+1)
 	}
 	if err != nil {
@@ -749,6 +778,7 @@ func (s *AuthServer) LoginUser(
 		// Unknown email — burn bcrypt time + return same 401 as wrong-password.
 		_ = password.DummyCompare([]byte(in.GetPassword()))
 		s.auditSigninFailure(ctx, "", emailHash, in.GetClientIp(), in.GetUserAgent(), now, StatusInvalidCredentials)
+		s.Metrics.IncSignin(ctx, metrics.SigninResultFailure, StatusInvalidCredentials)
 		return nil, statusError(connect.CodeUnauthenticated, StatusInvalidCredentials)
 	}
 	if err != nil {
@@ -759,14 +789,17 @@ func (s *AuthServer) LoginUser(
 	switch user.Status {
 	case "suspended":
 		s.auditSigninFailure(ctx, user.ID.String(), emailHash, in.GetClientIp(), in.GetUserAgent(), now, StatusAccountSuspended)
+		s.Metrics.IncSignin(ctx, metrics.SigninResultFailure, StatusAccountSuspended)
 		return nil, statusError(connect.CodePermissionDenied, StatusAccountSuspended)
 	case "pending_deletion":
 		s.auditSigninFailure(ctx, user.ID.String(), emailHash, in.GetClientIp(), in.GetUserAgent(), now, StatusAccountDeleted)
+		s.Metrics.IncSignin(ctx, metrics.SigninResultFailure, StatusAccountDeleted)
 		return nil, statusError(connect.CodeFailedPrecondition, StatusAccountDeleted)
 	case "locked":
 		if user.LockedUntil != nil && user.LockedUntil.After(now) {
 			retryAfter := int(time.Until(*user.LockedUntil).Seconds()) + 1
 			s.auditSigninFailure(ctx, user.ID.String(), emailHash, in.GetClientIp(), in.GetUserAgent(), now, StatusAccountLocked)
+			s.Metrics.IncSignin(ctx, metrics.SigninResultFailure, StatusAccountLocked)
 			return nil, statusErrorWithRetryAfter(connect.CodeResourceExhausted, StatusAccountLocked, retryAfter)
 		}
 		// Self-heal — lock expired. BR-4.4: same-transaction atomic clear,
@@ -781,6 +814,7 @@ func (s *AuthServer) LoginUser(
 	// === 5. Email verified? ===
 	if user.EmailVerifiedAt == nil {
 		s.auditSigninFailure(ctx, user.ID.String(), emailHash, in.GetClientIp(), in.GetUserAgent(), now, StatusEmailNotVerified)
+		s.Metrics.IncSignin(ctx, metrics.SigninResultFailure, StatusEmailNotVerified)
 		return nil, statusError(connect.CodePermissionDenied, StatusEmailNotVerified)
 	}
 
@@ -811,11 +845,13 @@ func (s *AuthServer) LoginUser(
 				Success:   false,
 				ErrorCode: StatusAccountLocked,
 			})
+			s.Metrics.IncAccountLocked(ctx)
 			// UNIT-139: STILL return 401 here, NOT 423. The lock takes effect
 			// on the NEXT signin so the attacker can't binary-search when
 			// the threshold fires.
 		}
 		s.auditSigninFailure(ctx, user.ID.String(), emailHash, in.GetClientIp(), in.GetUserAgent(), now, StatusInvalidCredentials)
+		s.Metrics.IncSignin(ctx, metrics.SigninResultFailure, StatusInvalidCredentials)
 		return nil, statusError(connect.CodeUnauthenticated, StatusInvalidCredentials)
 	}
 
@@ -864,6 +900,7 @@ func (s *AuthServer) LoginUser(
 		Timestamp: now,
 		Success:   true,
 	})
+	s.Metrics.IncSignin(ctx, metrics.SigninResultSuccess, "")
 
 	return connect.NewResponse(&authv1.LoginUserResponse{
 		Status:                          authv1.LoginStatus_LOGIN_STATUS_OK,
