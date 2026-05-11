@@ -129,4 +129,6 @@ he-api/                                  (Monorepo, Turborepo)
 >
 > 条目添加来源：Story 1.6 Architect Round 1 (Q1-Q5 + M-1/M-2 + m-1..m-5)，2026-05-11。
 
+> **注**: Story 2.1 — `apps/console/messages/` 采用 namespace-split：`messages/{locale}/{namespace}.json`。本 Story 落地 `common.json` × 10 locale（`en/zh-CN/ja/ko/es/fr/de/pt/ru/ar` MVP set）；后续 Story 按需新增 namespace（`auth.json` / `billing.json` / `dashboard.json` / ...）。`packages/i18n-keys/src/` 通过 `scripts/gen-i18n-keys.ts` 从 `messages/en/*.json` 自动生成 union literal types（每个 namespace 一个 `{Namespace}Keys`），CI `console / i18n-keys-completeness` job 跑 `git diff --exit-code packages/i18n-keys/src/` 做 drift 检测 + `scripts/check-i18n-keys.ts` 做 key 集完整性 + ICU plural 分支检测。`apps/console/` Next.js 14 App Router 脚手架（Story 2.1 落地）暴露 `[locale]` 段路由 + `middleware.ts` next-intl cookie-first 协商 + `lib/i18n.ts` (isRtlLocale/resolveLocale/buildLocaleCookieOptions) + `components/LocaleSwitch.tsx`。条目添加来源：Story 2.1 Architect Round 1 Q2 ruling + m-1，2026-05-12。
+
 ---

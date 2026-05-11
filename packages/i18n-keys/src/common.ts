@@ -1,0 +1,26 @@
+// @generated — DO NOT EDIT — run `pnpm --filter @he-api/i18n-keys build`
+// Source: apps/console/messages/en/common.json
+export type CommonKeys
+  = 'a11y.skipToContent'
+  | 'demo.currentLocale'
+  | 'demo.keysCount'
+  | 'demo.title'
+  | 'errors.invalidLocale'
+  | 'errors.localeChangeFailed'
+  | 'errors.notFound.backHome'
+  | 'errors.notFound.description'
+  | 'errors.notFound.title'
+  | 'localeSwitch.label'
+  | 'localeSwitch.options.ar'
+  | 'localeSwitch.options.de'
+  | 'localeSwitch.options.en'
+  | 'localeSwitch.options.es'
+  | 'localeSwitch.options.fr'
+  | 'localeSwitch.options.ja'
+  | 'localeSwitch.options.ko'
+  | 'localeSwitch.options.pt'
+  | 'localeSwitch.options.ru'
+  | 'localeSwitch.options.zh-CN'
+  | 'nav.console'
+  | 'nav.docs'
+  ;

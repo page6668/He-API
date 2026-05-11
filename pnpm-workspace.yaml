@@ -1,3 +1,5 @@
 packages:
   - "apps/*"
+  - "apps/console"
   - "packages/*"
+  - "packages/i18n-keys"

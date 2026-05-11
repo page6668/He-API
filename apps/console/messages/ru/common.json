@@ -1,0 +1,38 @@
+{
+  "demo": {
+    "title": "Консоль He-API",
+    "currentLocale": "Текущая локаль: {locale}",
+    "keysCount": "{count, plural, =0 {# ключей} one {# ключ} few {# ключа} many {# ключей} other {# ключа}}"
+  },
+  "nav": {
+    "console": "Консоль",
+    "docs": "Документы"
+  },
+  "localeSwitch": {
+    "label": "Сменить язык",
+    "options": {
+      "en": "English",
+      "zh-CN": "中文",
+      "ja": "日本語",
+      "ko": "한국어",
+      "es": "Español",
+      "fr": "Français",
+      "de": "Deutsch",
+      "pt": "Português",
+      "ru": "Русский",
+      "ar": "العربية"
+    }
+  },
+  "errors": {
+    "notFound": {
+      "title": "Страница не найдена",
+      "description": "Запрошенная страница не может быть найдена.",
+      "backHome": "Вернуться на главную"
+    },
+    "invalidLocale": "Неверная локаль.",
+    "localeChangeFailed": "Не удалось сменить язык."
+  },
+  "a11y": {
+    "skipToContent": "Перейти к содержанию"
+  }
+}

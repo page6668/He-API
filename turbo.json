@@ -11,13 +11,49 @@
       "dependsOn": ["^build"],
       "outputs": []
     },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
     "test": {
       "dependsOn": ["^build"],
       "outputs": ["coverage/**"]
     },
+    "test:e2e": {
+      "dependsOn": ["^build", "build"],
+      "outputs": ["playwright-report/**"]
+    },
     "dev": {
       "cache": false,
       "persistent": true
+    },
+    "@he-api/console#build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**"]
+    },
+    "@he-api/console#dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "@he-api/console#lint": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@he-api/console#typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@he-api/console#test": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"]
+    },
+    "@he-api/console#test:e2e": {
+      "dependsOn": ["@he-api/console#build"],
+      "outputs": ["playwright-report/**"]
+    },
+    "@he-api/i18n-keys#build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", "src/common.ts", "src/index.ts"]
     }
   }
 }

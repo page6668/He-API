@@ -104,10 +104,89 @@ jobs:
             exit 1
           }
 
+  # Story 2.1 — Console e2e (Playwright × chromium/firefox/webkit). Root `unit-ts`
+  # already covers console Vitest via Turborepo dispatch (M-2 ruling — no per-app
+  # unit-tests / lint duplicate jobs).
+  console-e2e-tests:
+    name: console / e2e-tests
+    runs-on: ubuntu-22.04
+    needs: [unit-ts]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: apps/console
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
+
+      - name: Build console
+        run: pnpm --filter @he-api/console build
+
+      - name: Run Playwright tests
+        working-directory: apps/console
+        env:
+          CI: '1'
+        run: pnpm exec playwright test
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/console/playwright-report
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Story 2.1 — Architect Q5 ruling: codegen drift + messages completeness + bundle
+  # budget run sequentially in one job (4 steps per BR-4.8). Failure of any step
+  # blocks the PR.
+  console-i18n-keys-completeness:
+    name: console / i18n-keys-completeness
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: 1/4 — Build @he-api/i18n-keys (codegen + tsc)
+        run: pnpm --filter @he-api/i18n-keys build
+
+      - name: 2/4 — git diff drift detection (packages/i18n-keys/src/)
+        run: |
+          git diff --exit-code packages/i18n-keys/src/ || {
+            echo "::error::packages/i18n-keys/src drift — run 'pnpm --filter @he-api/i18n-keys build' and commit" >&2
+            exit 1
+          }
+
+      - name: 3/4 — Messages completeness check
+        run: pnpm exec tsx scripts/check-i18n-keys.ts
+
+      - name: 4/4 — Bundle size budget (size-limit)
+        run: |
+          pnpm --filter @he-api/console build
+          cd apps/console && pnpm exec size-limit
+
   integration:
     name: integration
     runs-on: ubuntu-22.04
-    needs: [unit-ts, unit-go, buf-generate-drift]
+    needs: [unit-ts, unit-go, buf-generate-drift, console-i18n-keys-completeness]
     steps:
       - uses: actions/checkout@v4
 

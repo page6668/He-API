@@ -1,0 +1,173 @@
+schema: 1
+story: "2.1"
+story_title: "Next.js 控制台骨架 + i18n 框架（next-intl）"
+story_slug: "nextjs-console-skeleton-i18n"
+gate: PASS
+status_reason: |
+  All deterministic gates green: vitest 125 pass / 33 skip (SKIP-REASON), tsc + ESLint
+  clean, codegen drift clean, check-i18n-keys passed (10 locales × common), size-limit
+  180.53 kB ≪ 250 KB budget. AC coverage 4/4 fully verified with real file:line traceability
+  (no placeholders). All 17 deliverable bindings grep-confirmed. All Architect Q1–Q5 rulings
+  + M-1/M-2/m-1 applied inline. E2E + Lighthouse intentionally deferred to CI 'console /
+  e2e-tests' job + staging per Story T6 design and Architect Recommendation 4.
+reviewer: "Turing (Test Engineer)"
+updated: "2026-05-11T17:03:16Z"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: HIGH
+  cached_review_mode: full_testing
+  cached_project_type: web_frontend
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+architecture_concern: false
+escalation_reason: ""
+
+top_issues:
+  - id: NOTE-1
+    severity: medium
+    finding: |
+      7/12 blind-spot scenarios are unit test.skip with SKIP-REASON pointing to CI E2E
+      execution. Code handling exists for all 12 (verified by grep on resolveLocale,
+      isLocale guard, length cap, useTransition pending, size-limit gate). The deferral
+      is consistent with the QA Comprehensive test design pyramid (Unit 66% / Int 13% /
+      E2E 12% / Blind 9%) where browser-runtime scenarios belong to the Playwright layer.
+    suggested_action: |
+      When 'console / e2e-tests' CI job first executes on this PR, archive the Playwright
+      HTML report into docs/qa/evidence/2.1/ to close the loop. Optionally re-export the
+      7 deferred BLIND scenarios as Playwright tests in a follow-up cleanup PR.
+  - id: NOTE-2
+    severity: low
+    finding: |
+      docs/qa/evidence/2.1-lighthouse-{en,zh-CN,ar}.json and 2.1-bundle-{date}.html are
+      not produced. Per TS-CONS-009, Lighthouse is NOT a CI gate (CI only gates bundle
+      size which already passes); per Dev Open Issues 2 and 5, both artifacts are
+      explicitly deferred. Sandbox lacks headless Chrome and Lighthouse CLI.
+    suggested_action: |
+      Capture during the next staging rollout pass, or fold into Story 2.2/2.3 QA evidence
+      collection. Not blocking for PASS — informational/observability artifact only.
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 158
+    passed_count: 125
+    failed_count: 0
+    skipped_count: 33
+    pass_rate: 100
+    coverage_percentage: null   # vitest --coverage not run in this pass; 80% threshold enforced by vitest.config.ts
+    failed_tests: []
+    notes: |
+      Independent execution from apps/console: 'vitest run' → 125 passed / 33 skipped
+      (158 total). All 33 skips have SKIP-REASON annotations pointing to E2E/CI coverage
+      (Radix portal keyboard nav, ICU plural runtime edge cases, browser-runtime scenarios).
+      Cross-reference with Dev claim (125 passed + 33 skipped): consistent.
+  e2e:
+    executed: false
+    passed: null
+    skipped: true
+    skip_reason: |
+      Playwright spec apps/console/e2e/2.1-nextjs-console-skeleton-i18n.spec.ts (15 cases)
+      is wired to chromium-only via 'test.skip(browserName !== chromium, ...)' inside each
+      case. CI 'console / e2e-tests' job (.github/workflows/test.yml:108-159) installs
+      chromium/firefox/webkit with system deps and executes the suite. Local sandbox has
+      no Playwright browser binaries (no ~/.cache/ms-playwright nor ~/Library/Caches/
+      ms-playwright). Per QA Comprehensive test design + Story T6, E2E is the CI layer.
+    scenarios_tested: 0
+    scenarios_passed: 0
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+supplementary_checks:
+  lint:
+    command: "next lint --max-warnings=0"
+    result: PASS
+    output: "No ESLint warnings or errors"
+  typecheck:
+    command: "tsc --noEmit"
+    result: PASS
+    exit_code: 0
+  codegen_drift:
+    command: "pnpm --filter @he-api/i18n-keys build && git diff --exit-code packages/i18n-keys/src/"
+    result: PASS
+    output: "[gen-i18n-keys] wrote src/common.ts (22 keys); [gen-i18n-keys] wrote src/index.ts (1 namespace); diff exit 0"
+  i18n_keys_completeness:
+    command: "apps/console/node_modules/.bin/tsx scripts/check-i18n-keys.ts"
+    result: PASS
+    output: "✅ i18n key completeness check passed (1 namespace(s) × 10 locale(s))"
+  size_limit:
+    command: "apps/console/node_modules/.bin/size-limit"
+    result: PASS
+    measurement: "180.53 kB gzipped"
+    budget: "250 kB gzip (BR-4.9)"
+    headroom: "~28% (69.47 kB under budget)"
+    loading_time_slow_3g: "3.6 s"
+
+evidence:
+  directory: "docs/qa/evidence/2.1/"
+  checkpoint_directory: "docs/qa/checkpoints/2.1/"
+  deliverable_bindings_verified: 17
+  ac_coverage:
+    total: 4
+    fully_verified: 4
+    coverage_rate: 100
+  blind_spots:
+    total: 12
+    covered_in_unit: 5
+    deferred_to_e2e: 7
+    coverage_rate_when_e2e_runs: 100
+  issues: []
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 4   # new_patterns + cross_service + performance + core_docs
+  security_sensitive: false
+  has_ui_changes: true
+  has_user_facing_deliverable: true
+  dev_gate_score: 95
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 1, low: 1 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "Watch 'console / e2e-tests' CI job results on first PR run; archive Playwright report to docs/qa/evidence/2.1/"
+      - "Capture Lighthouse {en,zh-CN,ar}.json + bundle-analyzer HTML during staging rollout or Story 2.2/2.3 evidence pass"
+
+quality_score: 95   # 100 base - 5 for medium NOTE-1 (deferred blind-spot execution)
+nfr_validation:
+  security: { status: PASS, notes: "No auth/PII/DB; XSS mitigated by next-intl default escaping + locale allow-list" }
+  performance: { status: PASS, notes: "size-limit 180.53 kB << 250 kB budget; Lighthouse evidence deferred to staging" }
+  reliability: { status: PASS, notes: "Cookie-first negotiation with deterministic fallbackMap → en; Server Action input validated" }
+  maintainability: { status: PASS, notes: "Codegen + drift gate makes i18n keys type-safe; 22-key CommonKeys union published" }
+
+architect_q1_q5_audit:
+  Q1_mixed_ssg_ssr: APPLIED   # unstable_setRequestLocale + generateStaticParams in app/[locale]/layout.tsx
+  Q2_namespace_split: APPLIED # messages/{locale}/common.json × 10 (only common namespace this Story)
+  Q3_cookie_first: APPLIED    # middleware localeDetection:true + cookie name he_locale
+  Q4_cookie_attribute_matrix: APPLIED  # lib/i18n.ts buildLocaleCookieOptions(env): prod/staging cross-subdomain, dev host-only, secure env-gated
+  Q5_codegen_drift: APPLIED   # scripts/gen-i18n-keys.ts + packages/i18n-keys/src/*.ts with @generated header + CI drift gate
+
+architect_round_1_issue_audit:
+  M_1_eslint_config_indirection: APPLIED   # .eslintrc.json extends next/core-web-vitals + next/typescript directly
+  M_2_ci_job_overlap: APPLIED              # test.yml has console-e2e-tests + console-i18n-keys-completeness; no per-app unit-tests/lint duplicates
+  m_1_source_tree_namespace_note: APPLIED  # confirmed via Dev File List
+  m_2_icon_lib_inconsistency: DEFERRED     # UX-expert housekeeping; not Story 2.1 defect (per memory project_story_2_1_housekeeping)
+  m_3_adr_7_body_missing: DEFERRED         # Architect housekeeping; not blocking (per memory project_story_2_1_housekeeping)
+
+history:
+  - at: "2026-05-11T17:03:16Z"
+    gate: PASS
+    note: "Round 1 review — clean PASS. All ACs verified; all bindings green; all Architect Q1–Q5 + M-1/M-2 applied. E2E + Lighthouse deferred to CI/staging per documented Story T6 plan."

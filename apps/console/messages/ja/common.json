@@ -1,0 +1,38 @@
+{
+  "demo": {
+    "title": "He-API コンソール",
+    "currentLocale": "現在のロケール：{locale}",
+    "keysCount": "{count, plural, other {# 件のキー}}"
+  },
+  "nav": {
+    "console": "コンソール",
+    "docs": "ドキュメント"
+  },
+  "localeSwitch": {
+    "label": "言語を切り替え",
+    "options": {
+      "en": "English",
+      "zh-CN": "中文",
+      "ja": "日本語",
+      "ko": "한국어",
+      "es": "Español",
+      "fr": "Français",
+      "de": "Deutsch",
+      "pt": "Português",
+      "ru": "Русский",
+      "ar": "العربية"
+    }
+  },
+  "errors": {
+    "notFound": {
+      "title": "ページが見つかりません",
+      "description": "リクエストされたページが見つかりませんでした。",
+      "backHome": "ホームに戻る"
+    },
+    "invalidLocale": "無効なロケールです。",
+    "localeChangeFailed": "言語の切り替えに失敗しました。"
+  },
+  "a11y": {
+    "skipToContent": "メインコンテンツへスキップ"
+  }
+}

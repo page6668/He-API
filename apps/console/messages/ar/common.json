@@ -1,0 +1,38 @@
+{
+  "demo": {
+    "title": "وحدة تحكم He-API",
+    "currentLocale": "اللغة الحالية: {locale}",
+    "keysCount": "{count, plural, zero {# مفتاحًا} one {مفتاح واحد} two {مفتاحان} few {# مفاتيح} many {# مفتاحًا} other {# مفتاح}}"
+  },
+  "nav": {
+    "console": "وحدة التحكم",
+    "docs": "الوثائق"
+  },
+  "localeSwitch": {
+    "label": "تغيير اللغة",
+    "options": {
+      "en": "English",
+      "zh-CN": "中文",
+      "ja": "日本語",
+      "ko": "한국어",
+      "es": "Español",
+      "fr": "Français",
+      "de": "Deutsch",
+      "pt": "Português",
+      "ru": "Русский",
+      "ar": "العربية"
+    }
+  },
+  "errors": {
+    "notFound": {
+      "title": "الصفحة غير موجودة",
+      "description": "تعذر تحديد موقع الصفحة المطلوبة.",
+      "backHome": "العودة إلى الصفحة الرئيسية"
+    },
+    "invalidLocale": "لغة غير صالحة.",
+    "localeChangeFailed": "فشل تغيير اللغة."
+  },
+  "a11y": {
+    "skipToContent": "تخطي إلى المحتوى"
+  }
+}

@@ -1,0 +1,15 @@
+[
+  {
+    "name": "console first-load JS (gzip, shared + [locale] page)",
+    "path": [
+      "apps/console/.next/static/chunks/[locale]/page-*.js",
+      "apps/console/.next/static/chunks/main-app-*.js",
+      "apps/console/.next/static/chunks/webpack-*.js",
+      "apps/console/.next/static/chunks/framework-*.js",
+      "apps/console/.next/static/chunks/[0-9a-f]*.js"
+    ],
+    "limit": "250 KB",
+    "gzip": true,
+    "_note": "size-limit reads this file structure; the actual runtime config (relative paths) lives in apps/console/package.json `size-limit` field. This file is the canonical contract per Story 2.1 BR-4.9."
+  }
+]

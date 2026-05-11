@@ -1,0 +1,38 @@
+{
+  "demo": {
+    "title": "Console He-API",
+    "currentLocale": "Locale atual: {locale}",
+    "keysCount": "{count, plural, =0 {# chaves} one {1 chave} other {# chaves}}"
+  },
+  "nav": {
+    "console": "Console",
+    "docs": "Documentos"
+  },
+  "localeSwitch": {
+    "label": "Alterar idioma",
+    "options": {
+      "en": "English",
+      "zh-CN": "中文",
+      "ja": "日本語",
+      "ko": "한국어",
+      "es": "Español",
+      "fr": "Français",
+      "de": "Deutsch",
+      "pt": "Português",
+      "ru": "Русский",
+      "ar": "العربية"
+    }
+  },
+  "errors": {
+    "notFound": {
+      "title": "Página não encontrada",
+      "description": "A página solicitada não pôde ser localizada.",
+      "backHome": "Voltar à página inicial"
+    },
+    "invalidLocale": "Locale inválido.",
+    "localeChangeFailed": "Falha ao alterar o idioma."
+  },
+  "a11y": {
+    "skipToContent": "Ir para o conteúdo"
+  }
+}

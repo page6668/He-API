@@ -1,0 +1,38 @@
+{
+  "demo": {
+    "title": "He-API 控制台",
+    "currentLocale": "当前语言：{locale}",
+    "keysCount": "{count, plural, other {# 个键}}"
+  },
+  "nav": {
+    "console": "控制台",
+    "docs": "文档"
+  },
+  "localeSwitch": {
+    "label": "切换语言",
+    "options": {
+      "en": "English",
+      "zh-CN": "中文",
+      "ja": "日本語",
+      "ko": "한국어",
+      "es": "Español",
+      "fr": "Français",
+      "de": "Deutsch",
+      "pt": "Português",
+      "ru": "Русский",
+      "ar": "العربية"
+    }
+  },
+  "errors": {
+    "notFound": {
+      "title": "页面未找到",
+      "description": "您请求的页面无法定位。",
+      "backHome": "返回首页"
+    },
+    "invalidLocale": "语言无效。",
+    "localeChangeFailed": "切换语言失败。"
+  },
+  "a11y": {
+    "skipToContent": "跳到主要内容"
+  }
+}
