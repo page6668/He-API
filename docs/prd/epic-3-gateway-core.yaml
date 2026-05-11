@@ -1,0 +1,44 @@
+epic_id: 3
+slug: gateway-core
+title: OpenAI 兼容 API 网关核心
+goal: 暴露符合 OpenAI 协议的 /v1/* 端点，支持流式与非流式，统一鉴权与错误码
+definition_of_done:
+  - 客户改 base_url 即可零代码迁移（验证：OpenAI Python SDK 可调通）
+  - 流式 SSE 与非流式响应均可用
+  - 错误响应符合 OpenAI 规范
+test_design_level: comprehensive
+priority: P0
+estimated_stories: 6
+prerequisite_epics: [1]
+unblocks_epics: [4, 6]
+stories:
+  - id: "3.1"
+    title: 网关 HTTP 框架（Go fiber/echo）+ 路由 + 健康检查
+    acceptance_criteria:
+      - /health 返回 200
+      - 冷启动 < 1s
+  - id: "3.2"
+    title: Bearer Token 鉴权 + Key 校验
+    acceptance_criteria:
+      - 无效 Key 返回 401
+      - 有效 Key 通过
+  - id: "3.3"
+    title: /v1/chat/completions 非流式实现（占位上游）
+    acceptance_criteria:
+      - OpenAI Python SDK 可调通
+      - 返回 mock 数据
+  - id: "3.4"
+    title: /v1/chat/completions 流式（SSE）
+    acceptance_criteria:
+      - 客户端可逐块接收 token
+      - TTFB ≤ 300ms
+  - id: "3.5"
+    title: /v1/models + /v1/embeddings 端点
+    acceptance_criteria:
+      - 返回模型列表
+      - embedding 端点占位可用
+  - id: "3.6"
+    title: 标准化错误响应 + he_request_id
+    acceptance_criteria:
+      - 错误格式与 OpenAI 一致
+      - 响应带 trace ID

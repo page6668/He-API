@@ -1,0 +1,43 @@
+epic_id: 9
+slug: observability-multimodal
+title: 监控、日志与多模态
+goal: 用户级用量大盘 + 历史日志 + Vision/ASR/TTS 多模态接入
+definition_of_done:
+  - 控制台用量大盘可用
+  - 90 天历史日志可下载
+  - 图像/语音多模态 API 可调通
+test_design_level: standard
+priority: P0
+estimated_stories: 7
+prerequisite_epics: [4]
+unblocks_epics: []
+stories:
+  - id: "9.1"
+    title: 用量大盘（实时 + 历史聚合）
+    acceptance_criteria:
+      - 控制台显示今日 / 本月 / 季度的请求数 / 成功率 / Token / 消费
+  - id: "9.2"
+    title: 实时调用日志（最近 1000 条）
+    acceptance_criteria:
+      - 控制台分页查询 + 多维过滤
+  - id: "9.3"
+    title: 历史日志下载（90 天 + JSON/CSV）
+    acceptance_criteria:
+      - 用户发起异步下载任务
+      - 邮件接收链接
+  - id: "9.4"
+    title: 全链路 trace（OpenTelemetry）
+    acceptance_criteria:
+      - Grafana 可看到完整请求链路
+  - id: "9.5"
+    title: Vision API（兼容 OpenAI）+ Qwen-VL/GLM-4V
+    acceptance_criteria:
+      - 图像理解请求可通
+  - id: "9.6"
+    title: ASR API（兼容 Whisper）+ Doubao
+    acceptance_criteria:
+      - 语音转文字可用
+  - id: "9.7"
+    title: TTS API + Doubao
+    acceptance_criteria:
+      - 文字转语音可用

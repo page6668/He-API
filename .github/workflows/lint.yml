@@ -1,0 +1,58 @@
+name: lint
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  lint-ts:
+    name: lint-ts
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        # version resolved from packageManager field
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Run TS lint (turbo)
+        run: pnpm lint
+
+  lint-go:
+    name: lint-go
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m ./apps/...
+
+      - name: Install gofumpt
+        run: go install mvdan.cc/gofumpt@latest
+
+      - name: gofumpt check (scope ./apps)
+        run: |
+          gofumpt -l -d ./apps | tee /tmp/gofumpt.diff
+          if [ -s /tmp/gofumpt.diff ]; then
+            echo "gofumpt diff detected — run 'gofumpt -w ./apps'" >&2
+            exit 1
+          fi

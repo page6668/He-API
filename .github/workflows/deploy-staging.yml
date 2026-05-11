@@ -1,0 +1,102 @@
+name: deploy-staging
+
+on:
+  workflow_run:
+    workflows: ["build-images"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  update-helm-values:
+    name: update-helm-values
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download image-sha artifact (cross-workflow)
+        uses: actions/download-artifact@v4
+        with:
+          name: image-sha
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve image SHA from artifact
+        run: |
+          if [ ! -s image-sha.txt ]; then
+            echo "image-sha.txt missing or empty" >&2
+            exit 1
+          fi
+          echo "SHA=$(cat image-sha.txt)" >> "$GITHUB_ENV"
+
+      - name: Probe helm values existence
+        id: probe_helm
+        run: |
+          if [ -f infra/helm/api-gateway/values-staging.yaml ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install yq
+        if: steps.probe_helm.outputs.exists == 'true'
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Update helm values (real)
+        if: steps.probe_helm.outputs.exists == 'true'
+        env:
+          SHA: ${{ env.SHA }}
+        run: |
+          yq eval -i '.image.tag = strenv(SHA)' infra/helm/api-gateway/values-staging.yaml
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name  "github-actions[bot]"
+          git add infra/helm/api-gateway/values-staging.yaml
+          git commit -m "chore(deploy): bump api-gateway staging to ${SHA}"
+          git push
+          {
+            echo "Updated infra/helm/api-gateway/values-staging.yaml image.tag → ${SHA}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Skip helm update (fallback)
+        if: steps.probe_helm.outputs.exists != 'true'
+        run: |
+          echo "values-staging.yaml not yet created (Story 1.3 dependency) — skipping update" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Emit image SHA to summary
+        if: always()
+        run: |
+          echo "image SHA: ${SHA:-unknown}" >> "$GITHUB_STEP_SUMMARY"
+
+  trigger-argocd-sync:
+    name: trigger-argocd-sync
+    needs: update-helm-values
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-22.04
+    env:
+      HAS_ARGOCD: ${{ vars.ARGOCD_ENDPOINT != '' && 'true' || 'false' }}
+    steps:
+      - name: Trigger ArgoCD sync (real)
+        if: env.HAS_ARGOCD == 'true'
+        run: |
+          # Story 1.4 fills this with `argocd app sync he-api-gateway --server "${{ vars.ARGOCD_ENDPOINT }}"`
+          echo "ArgoCD sync placeholder (real CLI wired in Story 1.4)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Skip ArgoCD sync (fallback)
+        if: env.HAS_ARGOCD != 'true'
+        run: |
+          echo "ArgoCD endpoint not configured (Story 1.4 dependency) — skipping sync" >> "$GITHUB_STEP_SUMMARY"

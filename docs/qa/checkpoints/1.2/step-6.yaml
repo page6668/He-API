@@ -1,0 +1,14 @@
+step: 6
+name: evidence_collection
+directory: "docs/qa/checkpoints/1.2/"          # checkpoints serve as inline evidence; no separate evidence/ files needed for this gate
+files_collected:
+  - "step-0.yaml"     # Round 1 pre-flight inventory (kept for audit trail)
+  - "step-1.yaml"     # risk_assessment (incremental skip — cached MEDIUM)
+  - "step-2.yaml"     # project_type_detection (incremental skip — cached)
+  - "step-4.yaml"     # independent test execution (vitest 40 + go test PASS)
+  - "step-4.5.yaml"   # task checkbox verification (T6/T7 partial deferral noted)
+  - "step-4.6.yaml"   # AC coverage (AC1/AC2 both VERIFIED, 100%)
+  - "step-4.7.yaml"   # regression (skipped — no prior story E2E artifacts)
+  - "step-5.yaml"     # E2E (skipped — automated_plus_spot_check + ci_cd_infrastructure)
+  - "step-5.5.yaml"   # blind-spot verification (9 covered static + 9 documented deferred)
+issues_with_evidence: []

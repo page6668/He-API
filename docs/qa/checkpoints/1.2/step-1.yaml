@@ -1,0 +1,14 @@
+step: 1
+name: risk_assessment
+mode: incremental_skip
+cached_from: "docs/qa/gates/1.2-ci-cd-pipeline-github-actions.yml (Round 1)"
+review_round: 2
+risk_level: MEDIUM
+review_mode: automated_plus_spot_check
+skip_e2e: false   # spot-check E2E permitted (manual blind-spots run by QA via static config inspection)
+complexity_count: 2
+security_sensitive: false
+dev_gate_score: 100   # per Self-Review in story (round 1 PASS)
+notes: |
+  Inherited from prior round's gate. Original SM gate_1 complexity = 2/8
+  (new_patterns + cross_service). dev_gate_score now 100 (story Self-Review = PASS 100%).

@@ -1,0 +1,64 @@
+step: 4.5
+name: task_checkbox_verification
+mode: incremental_focused   # focusing on previous Round 1 issues (all T0-T7 were "未执行")
+
+task_checkbox_verification:
+  total_top_level_checkboxes: 8         # T0..T7
+  fully_checked: 6                       # T0, T1, T2, T3, T4, T5
+  partially_checked_intentional: 2       # T6 [~], T7 [~] — explicit partial deferral
+  unchecked: 0
+
+  # All previous round's "未执行" issues are resolved
+  previous_round_resolution:
+    "T0 删除 .github/workflows/.gitkeep": RESOLVED   # git status shows " D .github/workflows/.gitkeep"
+    "T1 实现 .github/workflows/lint.yml": RESOLVED   # file present, 59 lines, on-pull_request, lint-ts/lint-go
+    "T2 实现 .github/workflows/test.yml": RESOLVED   # file present, unit-ts/unit-go/integration
+    "T3 实现 .github/workflows/build-images.yml + Dockerfile": RESOLVED
+    "T4 实现 .github/workflows/deploy-staging.yml": RESOLVED
+    "T5 README + 操作说明": RESOLVED                 # README §CI/CD present (line 97+)
+    "T6 端到端验证": PARTIAL_INTENTIONAL             # static [x]; runtime [ ] (deferred to PR open)
+    "T7 最终验证 + 状态翻 Review": PARTIAL_INTENTIONAL # status flipped, dev-log written; admin pre-flight pending
+
+  consistency_checks:
+    total_checked: 6
+    consistency_passed: 6   # every checked top-level task has corresponding files/content on disk
+    consistency_failed: 0
+    consistency_rate: 100
+
+  unchecked_subtasks_in_T6_T7:
+    - text: "Draft PR triggers 6 status checks all green"
+      severity: low
+      justification: "Runtime verification — requires open PR. Tracked test.skip 1.2-INT-001 + dev-log §5."
+    - text: "Inject lint-go failure, observe red"
+      severity: low
+      justification: "Runtime verification — test.skip 1.2-INT-002 + dev-log §5."
+    - text: "Inject unit-go failure, observe red"
+      severity: low
+      justification: "Runtime verification — test.skip 1.2-INT-003 + dev-log §5."
+    - text: "Merge PR → build-images + deploy-staging workflow_run chain"
+      severity: low
+      justification: "Runtime verification — test.skip 1.2-E2E-001..003 + dev-log §5."
+    - text: "Second PR cache hit"
+      severity: low
+      justification: "Runtime verification — test.skip 1.2-INT-005 + dev-log §5."
+    - text: "C1 GitOps-loop regression"
+      severity: low
+      justification: "Story 1.3 follow-up — needs real values-staging.yaml. Tracked in test.skip 1.2-BLIND-DATA-001 + dev-log §5/§7."
+    - text: "Admin adds github-actions[bot] to branch-protection Bypass list"
+      severity: low
+      justification: "Ops pre-flight — must be done before Story 1.3 ships values-staging.yaml. Documented in README §CI/CD + dev-log §7."
+    - text: "6 PR required status checks固化 (admin action)"
+      severity: low
+      justification: "Ops pre-flight — admin must configure on GitHub UI. Documented in README §CI/CD."
+
+  issues:
+    critical: []
+    high: []
+    medium: []
+    low:
+      - issue: "Runtime PR/merge evidence for T6 not yet appended to dev-log §5"
+        evidence: "T6 marked [~]; 4 unchecked sub-items are explicitly runtime/PR-only"
+        recommendation: "When Story 1.2 PR opens, append the 6-check Run URLs + screenshots to docs/dev/logs/1.2-dev-log.md §5"
+      - issue: "Ops pre-flight (T7) not yet confirmed by repo admin"
+        evidence: "T7 marked [~]; admin actions deferred"
+        recommendation: "Before Story 1.3 lands real infra/helm/api-gateway/values-staging.yaml, repo admin must: (1) add github-actions[bot] to main branch-protection Bypass list, (2) require the 6 PR status checks. Confirm via PR comment on Story 1.3."

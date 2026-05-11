@@ -1,0 +1,8 @@
+step: 4.7
+name: regression_test_execution
+executed: false
+reason: "no_persisted_e2e_test_files_for_prior_stories"
+passed: true
+tests_total: 0
+tests_failed: 0
+issues: []

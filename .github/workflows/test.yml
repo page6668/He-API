@@ -1,0 +1,79 @@
+name: test
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  unit-ts:
+    name: unit-ts
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        # version resolved from packageManager field in root package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests (vitest via turbo)
+        run: pnpm test
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-ts
+          path: |
+            packages/*/coverage/**
+            apps/*/coverage/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+  unit-go:
+    name: unit-go
+    runs-on: ubuntu-22.04
+    env:
+      CGO_ENABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Run go test (race + coverage)
+        run: |
+          go test ./apps/api-gateway/... -count=1 -race -coverprofile=coverage.out
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          if [ -f coverage.out ]; then
+            go tool cover -func=coverage.out | tail -1 >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "no coverage.out produced" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  integration:
+    name: integration
+    runs-on: ubuntu-22.04
+    needs: [unit-ts, unit-go]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Integration placeholder
+        run: |
+          echo "integration tests deferred to Story 1.5/1.6"
+          exit 0

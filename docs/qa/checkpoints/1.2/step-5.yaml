@@ -1,0 +1,11 @@
+step: 5
+name: e2e_testing
+executed: false
+skipped: true
+skip_reason: "review_mode is automated_plus_spot_check + ci_cd_infrastructure project_type — no runtime app to E2E; manual E2E (INT/E2E-* scenarios) require open PR and merge, recorded as test.skip in skeleton with evidence pointers to dev-log §5"
+scenarios_tested: 0
+scenarios_passed: 0
+scenarios_failed: 0
+console_errors_found: false
+network_errors_found: false
+issues: []

@@ -1,0 +1,105 @@
+step: 0
+name: pre_flight_validation
+story_id: "1.2"
+reviewer: "Turing (QA / Test Architect)"
+executed_at: "2026-05-11T00:00:00Z"
+result: FAIL_HALT
+halt_reason: "Story 状态为 AwaitingArchReview，且工作树零实现 — 不满足 QA *review 入口前置条件"
+
+story_state:
+  status_field: "AwaitingArchReview"   # 期望: Review
+  implementation_rounds: 0             # 期望: ≥ 1
+  self_review_ready_for_qa: false      # 期望: true
+  file_list_populated: false
+  dev_log_exists: false                # docs/dev/logs/1.2-dev-log.md MISSING
+
+workflow_position_mismatch:
+  expected_predecessors:
+    - "Architect *review-story 1.2 (resolve decision_8a_architect_review.staging_gating)"
+    - "QA *test-design 1.2 (Standard tier, per decision_8b)"
+    - "Dev implementation (Round 1) + self-review (ready_for_qa=true)"
+  current_predecessors_completed: []
+  reasoning: "SM 在 Story 创建时显式记录 decision_8c_story_status.next_action=handoff_to_architect。先 Architect 仲裁 AC2 staging gating，再 QA test-design，再 Dev，最后才轮到本 *review。"
+
+disk_evidence:
+  expected_deliverables_check:
+    - path: ".github/workflows/lint.yml"
+      expected: present
+      actual: MISSING
+    - path: ".github/workflows/test.yml"
+      expected: present
+      actual: MISSING
+    - path: ".github/workflows/build-images.yml"
+      expected: present
+      actual: MISSING
+    - path: ".github/workflows/deploy-staging.yml"
+      expected: present
+      actual: MISSING
+    - path: ".github/workflows/.gitkeep"
+      expected: deleted
+      actual: STILL_PRESENT     # Story T0 要求删除
+    - path: ".golangci.yml"
+      expected: present
+      actual: MISSING
+    - path: "apps/api-gateway/Dockerfile"
+      expected: present
+      actual: MISSING
+    - path: "apps/api-gateway/cmd/server/main_test.go"
+      expected: present
+      actual: MISSING
+    - path: "packages/shared-types/__tests__/empty.test.ts"
+      expected: present
+      actual: MISSING
+    - path: "packages/shared-types/vitest.config.ts"
+      expected: present
+      actual: MISSING
+    - path: "scripts/ci/setup-toolchain.sh"
+      expected: present
+      actual: MISSING_DIR       # scripts/ci/ 目录不存在
+    - path: "docs/dev/logs/1.2-dev-log.md"
+      expected: present
+      actual: MISSING
+
+  deliverables_present: 0
+  deliverables_total: 12
+  implementation_completeness_pct: 0
+
+  git_evidence:
+    branch: "main"
+    recent_commits:
+      - "0940ef4 feat(epic-1): bootstrap monorepo skeleton (Turborepo + pnpm + Go workspace)"
+      - "41e28d9 Initialize Orchestrix"
+    commits_referencing_story_1_2: 0
+    story_md_tracked: false             # docs/stories/1.2-*.md 仍为 untracked (??)
+
+  stray_artifacts_observed:
+    - path: "apps/api-gateway/server"
+      type: "compiled_go_binary"
+      status: untracked
+      action_required: ".gitignore"
+    - path: "./server"
+      type: "compiled_go_binary"
+      status: untracked
+      action_required: ".gitignore"
+
+decision:
+  action: HALT
+  next_steps_back_to_workflow:
+    - "1) HANDOFF 给 Architect 执行 *review-story 1.2，仲裁 decision_8a_architect_review 中提出的 AC2 staging gating 策略"
+    - "2) Architect 完成后，Story 状态翻 AwaitingTestDesign，QA 再执行 *test-design 1.2 (Standard tier)"
+    - "3) Test design 完成后翻 InProgress，Dev 实现 T0–T7"
+    - "4) Dev self-review (ready_for_qa=true) → Story 状态翻 Review → 此时再执行 *review 1.2"
+  steps_skipped:
+    - "Step 1 (risk_assessment) — 无代码无法评估实际复杂度，仅能 inherit SM gate_1 cached value"
+    - "Step 2 (automated_test_execution) — 0 测试脚本可跑"
+    - "Step 3 (e2e_testing) — 0 workflow 可触发"
+    - "Step 4 (evidence_collection) — 无运行产物"
+    - "Step 5 (ac_traceability) — code_locations 全部为 TODO"
+    - "Step 6 (issue_compilation) — 单一根本原因：无实现，无需展开"
+    - "Step 7 (gate_decision) — 由 Step 0 直接产出 FAIL_HALT"
+    - "Step 8 (env_cleanup) — 未启动任何环境"
+
+handoff:
+  to_agent: architect
+  command: "*review-story 1.2"
+  reasoning: "按 SM 的 decision_8c_story_status 明文要求，下一步唯一合法 handoff 是 Architect。QA 不能跨越 ArchReview 提前执行 *review。"

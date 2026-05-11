@@ -1,0 +1,52 @@
+epic_id: 10
+slug: i18n-docs-sdk-launch
+title: 多语言控制台、文档、SDK 与 Beta 上线
+goal: 完整多语言体验 + 3 个 SDK + 文档站 + 上线检查表 + Beta 切换
+definition_of_done:
+  - 控制台 10 种语言切换正常
+  - 3 个 SDK（Python / TypeScript / Go）可用
+  - docs.he-api.com 上线
+  - Beta 公测开关已配置
+test_design_level: comprehensive
+priority: P0
+estimated_stories: 8
+prerequisite_epics: [2, 7]
+unblocks_epics: []
+stories:
+  - id: "10.1"
+    title: 控制台 10 种语言翻译落地
+    acceptance_criteria:
+      - 全 UI 可切换
+      - 阿拉伯文 RTL 正确
+  - id: "10.2"
+    title: Python SDK（drop-in OpenAI 替代）
+    acceptance_criteria:
+      - pip install he-api 可用
+      - 与 OpenAI Python SDK 接口一致
+  - id: "10.3"
+    title: TypeScript SDK
+    acceptance_criteria:
+      - npm install @he-api/sdk 可用
+  - id: "10.4"
+    title: Go SDK
+    acceptance_criteria:
+      - go get github.com/he-api/sdk-go 可用
+  - id: "10.5"
+    title: 文档站（Quickstart + API Reference + Cookbook，10 种语言）
+    acceptance_criteria:
+      - docs.he-api.com 可访问
+      - 10 种语言齐全
+  - id: "10.6"
+    title: 在线 Playground + Benchmark 页
+    acceptance_criteria:
+      - 用户可在浏览器调试
+      - 看到跑分对比
+  - id: "10.7"
+    title: 上线检查表 + 监控告警 + 客服接入
+    acceptance_criteria:
+      - PagerDuty 集成
+      - Intercom 上线
+  - id: "10.8"
+    title: Beta 公测开关 + 限额免费试用配置
+    acceptance_criteria:
+      - Beta 模式开启时新注册自动获得 $5 试用额度

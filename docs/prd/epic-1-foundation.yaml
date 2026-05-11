@@ -1,0 +1,42 @@
+epic_id: 1
+slug: foundation
+title: 项目地基与云基础设施
+goal: 建立 monorepo、CI/CD、云资源、可观测性基础，为后续所有 Epic 提供可落地的工程地基
+definition_of_done:
+  - 开发者可在 5 分钟内通过 make dev 在本地启动完整栈
+  - PR 自动跑 lint + unit + 部署到 staging
+  - staging 环境可访问，含 OTel + Prometheus + Grafana
+test_design_level: standard
+priority: P0
+estimated_stories: 6
+prerequisite_epics: []
+unblocks_epics: [2, 3]
+stories:
+  - id: "1.1"
+    title: 创建 monorepo 骨架（Turborepo + apps/ + packages/）
+    acceptance_criteria:
+      - 仓库可 clone
+      - pnpm i && pnpm build 全绿
+  - id: "1.2"
+    title: 搭建 CI/CD 流水线（GitHub Actions）
+    acceptance_criteria:
+      - PR 自动跑 lint / unit / integration
+      - merge 自动部署 staging
+  - id: "1.3"
+    title: 阿里云 VPC + K8s 集群 + 基础网络（Terraform）
+    acceptance_criteria:
+      - K8s 集群可访问
+      - Helm chart 可部署
+  - id: "1.4"
+    title: OpenTelemetry + Prometheus + Loki + Grafana 部署
+    acceptance_criteria:
+      - dashboard 可看到示例服务的 trace 与 metrics
+  - id: "1.5"
+    title: 内部 gRPC 服务模板（Go）
+    acceptance_criteria:
+      - 新服务可基于模板 5 分钟内 scaffold
+  - id: "1.6"
+    title: 数据库基础（Postgres + Redis + ClickHouse）
+    acceptance_criteria:
+      - 三个 DB 可达
+      - migration 工具就绪（atlas 或 goose）

@@ -1,0 +1,49 @@
+epic_id: 4
+slug: model-adapters
+title: 6 家中国大模型适配器
+goal: 实现 6 家中国主流 LLM 的 plugin 适配器，规范化为 OpenAI 协议；并验证流式/非流式/token 用量准确透传
+definition_of_done:
+  - 6 家模型均可通过 /v1/chat/completions 以 OpenAI 协议调通
+  - Token 用量准确（与上游官方计量误差 < 1%）
+  - 能力矩阵公布
+test_design_level: comprehensive
+priority: P0
+estimated_stories: 8
+prerequisite_epics: [3]
+unblocks_epics: [6, 9]
+stories:
+  - id: "4.1"
+    title: DeepSeek 适配器（流式 + 非流式）
+    acceptance_criteria:
+      - DeepSeek-V3 可调通
+      - token 用量准确
+  - id: "4.2"
+    title: Qwen（通义千问）适配器
+    acceptance_criteria:
+      - Qwen-Max / Qwen-Plus 可调通
+  - id: "4.3"
+    title: Kimi（Moonshot）适配器
+    acceptance_criteria:
+      - Moonshot-v1-8k / 32k / 128k 可调通
+  - id: "4.4"
+    title: GLM（智谱）适配器
+    acceptance_criteria:
+      - GLM-4 可调通
+  - id: "4.5"
+    title: Doubao（豆包）适配器
+    acceptance_criteria:
+      - Doubao-pro / lite 可调通
+  - id: "4.6"
+    title: 文心（百度）适配器
+    acceptance_criteria:
+      - ERNIE-4.0 可调通
+  - id: "4.7"
+    title: 能力矩阵接口 + 公开页面
+    acceptance_criteria:
+      - /v1/models 返回完整能力标签
+      - 前端能力矩阵页可视化
+  - id: "4.8"
+    title: 适配器契约测试（防回归）
+    acceptance_criteria:
+      - CI 跑契约测试
+      - OpenAI 协议字段完整性验证

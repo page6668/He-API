@@ -1,0 +1,51 @@
+epic_id: 7
+slug: billing-payment
+title: 计费、定价与多通道支付
+goal: 实现混合定价 + 5 通道支付 + Beta 模式开关
+definition_of_done:
+  - 混合定价（markup + 订阅档）跑通
+  - 5 通道支付（Stripe / PayPal / USDC / Alipay+ / WeChat Pay HK）至少各完成一笔结算
+  - Beta 模式开关可全局生效
+test_design_level: comprehensive
+priority: P0
+estimated_stories: 8
+prerequisite_epics: [2, 5]
+unblocks_epics: []
+stories:
+  - id: "7.1"
+    title: 计费引擎（按 token / 按调用 + markup 5-15%）
+    acceptance_criteria:
+      - 每次调用消费扣减余额
+      - 账单准确
+  - id: "7.2"
+    title: 多币种 + 汇率刷新
+    acceptance_criteria:
+      - USD 默认；RMB 可切换
+      - 汇率每天 UTC 00:00 刷新
+  - id: "7.3"
+    title: Stripe + PayPal 集成
+    acceptance_criteria:
+      - 充值 + 订阅扣款均可用
+  - id: "7.4"
+    title: USDC（Coinbase Commerce）集成
+    acceptance_criteria:
+      - 用户可生成充值地址
+      - 链上确认后自动到账
+  - id: "7.5"
+    title: 支付宝 Alipay+ 国际版集成
+    acceptance_criteria:
+      - 海外用户可用 Alipay+ 充值（USD/RMB）
+  - id: "7.6"
+    title: 微信支付 WeChat Pay HK / Cross-border
+    acceptance_criteria:
+      - 港澳用户与海外华人可用微信充值
+  - id: "7.7"
+    title: 自动充值 + 余额预警 + 月度账单 PDF
+    acceptance_criteria:
+      - 余额低于阈值自动充值
+      - 月底邮件发送 PDF 账单
+  - id: "7.8"
+    title: 订阅档（Free/Pro/Team/Enterprise）+ Beta 模式开关
+    acceptance_criteria:
+      - 用户可订阅升降级
+      - Beta 模式开启时进入 Sandbox 限额

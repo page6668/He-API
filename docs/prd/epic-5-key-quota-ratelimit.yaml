@@ -1,0 +1,38 @@
+epic_id: 5
+slug: key-quota-ratelimit
+title: API Key 管理、配额与限流
+goal: 完整的 API Key 生命周期 + 多维限流 + 月度消费上限熔断
+definition_of_done:
+  - 用户可创建/吊销/配置 API Key
+  - 三维限流（QPS / RPM / TPM）有效
+  - 月度消费上限熔断 + 邮件预警
+test_design_level: comprehensive
+priority: P0
+estimated_stories: 5
+prerequisite_epics: [2, 3]
+unblocks_epics: [7]
+stories:
+  - id: "5.1"
+    title: API Key 创建 / 列表 / 吊销
+    acceptance_criteria:
+      - 创建后明文仅展示一次
+      - 吊销立即生效（Redis 缓存失效）
+  - id: "5.2"
+    title: Key 配置（范围 / IP 白名单 / 月度上限）
+    acceptance_criteria:
+      - 不在白名单 IP 调用返回 403
+      - 超月度上限返回 402
+  - id: "5.3"
+    title: 限流（QPS / RPM / TPM）
+    acceptance_criteria:
+      - 超限返回 429
+      - 含 Retry-After header
+  - id: "5.4"
+    title: 月度消费上限熔断 + 邮件预警
+    acceptance_criteria:
+      - 命中熔断后 Key 暂停
+      - 用户邮件通知
+  - id: "5.5"
+    title: 控制台 Keys 页面（CRUD + 配置 UI）
+    acceptance_criteria:
+      - UI 可完成所有 Key 操作

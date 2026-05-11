@@ -1,0 +1,47 @@
+epic_id: 2
+slug: account-i18n
+title: 账户、身份与多语言 UI 框架
+goal: 完整的用户身份系统（注册/登录/OAuth/2FA）+ 多语言 UI 基础框架 + GDPR 数据导出/删除
+definition_of_done:
+  - 海外用户可通过邮箱或 Google/GitHub OAuth 完成注册
+  - UI 默认英文，可运行时切换到其他 9 种语言
+  - 用户可在控制台导出/删除自己的数据
+test_design_level: comprehensive
+priority: P0
+estimated_stories: 7
+prerequisite_epics: [1]
+unblocks_epics: [5, 7]
+stories:
+  - id: "2.1"
+    title: Next.js 控制台骨架 + i18n 框架（next-intl）
+    acceptance_criteria:
+      - 默认英文
+      - 可切换到 zh-CN 看到全套翻译
+  - id: "2.2"
+    title: 邮箱注册 + 密码登录 + 邮件验证
+    acceptance_criteria:
+      - 收到验证码邮件后激活账号
+      - 密码 bcrypt 哈希
+  - id: "2.3"
+    title: OAuth - Google / GitHub
+    acceptance_criteria:
+      - 一键登录后自动创建 / 关联账户
+  - id: "2.4"
+    title: TOTP 2FA
+    acceptance_criteria:
+      - 用户启用后登录需输入 6 位动态码
+  - id: "2.5"
+    title: 个人资料管理（昵称 / locale / 时区）
+    acceptance_criteria:
+      - 资料修改后 UI 立即按新 locale 渲染
+  - id: "2.6"
+    title: GDPR 数据导出（JSON 包）
+    acceptance_criteria:
+      - 用户点击导出后异步生成 zip 包
+      - 通过邮件发送下载链接
+  - id: "2.7"
+    title: 账号注销与数据删除（30 天宽限期）
+    acceptance_criteria:
+      - 注销后账号锁定
+      - 30 天内可恢复
+      - 30 天后物理删除

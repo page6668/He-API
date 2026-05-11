@@ -1,0 +1,16 @@
+step: 2
+name: project_type_detection
+mode: incremental_skip
+project_type:
+  type: ci_cd_infrastructure   # specialised type; not a runtime app to launch
+  subtype: github_actions_monorepo
+  language_mix: [go, typescript, yaml]
+test_strategy:
+  primary_tool: bash            # pnpm test + go test directly
+  requires_environment: false   # no app server to start
+  startup_command: null
+  expected_port: null
+notes: |
+  This Story's "feature" is the workflow YAML itself; verification = run unit tests
+  (vitest assertions over YAML config) + run go test + static schema reads.
+  No web server / dev server to launch; Step 3 environment setup is therefore skipped.

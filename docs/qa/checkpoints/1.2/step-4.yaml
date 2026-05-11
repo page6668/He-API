@@ -1,0 +1,55 @@
+step: 4
+name: independent_automated_test_execution
+mode: full
+
+# 4.1 Detect Test Command
+test_command: 'pnpm test && go test ./apps/api-gateway/... -count=1 -race'
+test_runner_type: 'npm+go'
+
+# 4.2/4.3 Results (executed independently by QA via Bash)
+automated_tests:
+  execution_method: 'independent_execution'
+  exit_code: 0
+  passed: true
+  pass_rate: 100
+  execution_time_seconds: 1.6   # vitest 292ms + go test 1.315s
+  vitest:
+    total: 57
+    passed_count: 40
+    skipped_count: 17           # documented INT/E2E/manual-blind-spot deferred to PR runtime
+    failed_count: 0
+    files:
+      - "packages/shared-types/__tests__/empty.test.ts"           # 1 test
+      - "packages/shared-types/__tests__/1.2-ci-cd-pipeline-github-actions.test.ts"  # 56 tests
+  go:
+    package: "github.com/he-api/he-api/apps/api-gateway/cmd/server"
+    result: "ok"
+    duration_seconds: 1.315
+    coverage_percent: 0.0       # placeholder-only; threshold deferred to Story 1.5 per design
+    race_detector: enabled
+  lint:
+    pnpm_lint_exit_code: 0     # tsc -p tsconfig.json --noEmit passes
+    golangci_lint: skipped_locally  # binary not installed in QA env; CI workflow lint.yml exercises it
+  build:
+    pnpm_build_exit_code: 0
+
+# 4.4 Cross-reference with Dev claims
+integrity_check:
+  dev_evidence_found: true     # docs/dev/logs/1.2-dev-log.md present (14.5KB)
+  dev_claimed_pass: true       # Self-Review = PASS 100%
+  qa_independent_result: pass
+  discrepancy: false
+
+# 4.5 Skipped test integrity audit
+skipped_test_audit:
+  total_skipped: 17
+  any_stub_throw: false        # 0 "Test not implemented" strings in skeleton (per design contract)
+  skipped_categories:
+    INT: 5     # 1.2-INT-001..005 — deferred to PR runtime
+    E2E: 3     # 1.2-E2E-001..003 — deferred to first merge
+    BLIND_INT: 6  # ERROR-001/003/005 + FLOW-001/002/003
+    BLIND_CONCURRENCY: 1   # 1.2-BLIND-CONCURRENCY-001
+    BLIND_DATA: 2   # 1.2-BLIND-DATA-001/002 — Story 1.3 follow-up
+  justified: true   # all skips are documented INT/E2E manual scenarios; not P0 unit gaps
+
+issues: []

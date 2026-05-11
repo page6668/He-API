@@ -1,0 +1,36 @@
+epic_id: 6
+slug: smart-routing
+title: 智能路由与故障转移
+goal: 实现 3 种路由策略 + 自动 failover + A/B 模式
+definition_of_done:
+  - 用户可选 quality / cost / latency 三种策略
+  - 上游故障自动 failover
+  - A/B 模式可同时调用 2 个模型对比
+test_design_level: comprehensive
+priority: P0
+estimated_stories: 5
+prerequisite_epics: [3, 4]
+unblocks_epics: []
+stories:
+  - id: "6.1"
+    title: 路由器核心（策略接口 + 决策引擎）
+    acceptance_criteria:
+      - 单测覆盖 3 种策略边界
+  - id: "6.2"
+    title: quality / cost / latency 策略实现
+    acceptance_criteria:
+      - 决策结果可观测（X-He-Selected-Model header）
+  - id: "6.3"
+    title: 自动 failover（3 次失败 / 30s 超时）
+    acceptance_criteria:
+      - 模拟上游故障
+      - 自动切换到下一个模型
+  - id: "6.4"
+    title: A/B 模式（X-He-AB-Models）
+    acceptance_criteria:
+      - 同时调用 2 个模型
+      - 响应包含两侧结果
+  - id: "6.5"
+    title: 路由策略配置 UI（控制台）
+    acceptance_criteria:
+      - 用户可在 UI 选择默认策略

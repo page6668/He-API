@@ -1,0 +1,36 @@
+epic_id: 8
+slug: content-safety
+title: 内容安全与合规准备
+goal: 双向敏感词过滤 + 治理日志 + 备案材料归档
+definition_of_done:
+  - 入参/出参敏感词过滤上线
+  - 严格度可按 Key 配置
+  - 备案材料 PDF 模板生成
+test_design_level: comprehensive
+priority: P0
+estimated_stories: 5
+prerequisite_epics: [3]
+unblocks_epics: []
+stories:
+  - id: "8.1"
+    title: 敏感词词库（中英基础库 + 可扩展）
+    acceptance_criteria:
+      - 内置 1000+ 中文敏感词 + 500+ 英文
+  - id: "8.2"
+    title: 入参过滤（命中拦截 + 错误码）
+    acceptance_criteria:
+      - 含敏感词请求返回 400 content_filter
+  - id: "8.3"
+    title: 出参过滤（含流式响应替换）
+    acceptance_criteria:
+      - 流式中检测到敏感词立即终止流
+      - 返回脱敏内容
+  - id: "8.4"
+    title: 严格度配置（per Key）
+    acceptance_criteria:
+      - 用户可在 Key 配置严格度（strict / default / loose）
+  - id: "8.5"
+    title: 治理日志（拦截记录）+ 备案材料模板
+    acceptance_criteria:
+      - 日志保留 6 个月
+      - 备案材料 PDF 模板生成
