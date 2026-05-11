@@ -3,7 +3,9 @@ module github.com/he-api/he-api/apps/api-gateway
 go 1.22
 
 require (
+	connectrpc.com/connect v1.16.2
 	github.com/he-api/he-api/packages/go-observability v0.0.0-00010101000000-000000000000
+	github.com/he-api/he-api/packages/proto v0.0.0-00010101000000-000000000000
 	go.opentelemetry.io/otel v1.26.0
 )
 
@@ -37,3 +39,5 @@ require (
 )
 
 replace github.com/he-api/he-api/packages/go-observability => ../../packages/go-observability
+
+replace github.com/he-api/he-api/packages/proto => ../../packages/proto

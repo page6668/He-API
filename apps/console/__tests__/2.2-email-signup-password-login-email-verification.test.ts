@@ -12,7 +12,55 @@
  * E2E scenarios → apps/console/e2e/2.2-email-signup-password-login-email-verification.spec.ts
  */
 
-import { describe, test, expect } from 'vitest';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { describe, test, expect, vi } from 'vitest';
+
+// Mock `next/navigation` so Server Actions calling redirect()/notFound() in
+// tests don't try to actually navigate. The real Next.js redirect() throws
+// a sentinel to interrupt rendering — we mirror that contract by throwing
+// a tagged error our test setup can recognize.
+vi.mock('next/navigation', () => ({
+  redirect: vi.fn((url: string) => {
+    const err = new Error(`NEXT_REDIRECT:${url}`) as Error & { __nextRedirect: true };
+    err.__nextRedirect = true;
+    throw err;
+  }),
+  notFound: vi.fn(() => {
+    throw new Error('NEXT_NOT_FOUND');
+  }),
+}));
+
+// Mock next-intl/server so any imports through that path return resolved
+// translations without spinning up the next-intl runtime.
+vi.mock('next-intl/server', () => ({
+  unstable_setRequestLocale: vi.fn(),
+  getTranslations: vi.fn(async () => (key: string) => key),
+  getMessages: vi.fn(async () => ({})),
+}));
+
+import { signupSchema } from '../lib/auth/schemas';
+
+const repoRoot = resolve(__dirname, '..', '..', '..');
+const authActionPath = join(repoRoot, 'apps/console/app/[locale]/_actions/auth.ts');
+const enAuthJsonPath = join(repoRoot, 'apps/console/messages/en/auth.json');
+const localesDir = join(repoRoot, 'apps/console/messages');
+const i18nKeysAuthPath = join(repoRoot, 'packages/i18n-keys/src/auth.ts');
+
+// flatten a nested JSON object to dot-separated keys.
+function flattenKeys(obj: unknown, prefix = ''): string[] {
+  if (typeof obj !== 'object' || obj === null) return [];
+  const out: string[] = [];
+  for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+    const path = prefix ? `${prefix}.${k}` : k;
+    if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
+      out.push(...flattenKeys(v, path));
+    } else {
+      out.push(path);
+    }
+  }
+  return out;
+}
 
 // ============================================================
 // AC1: 邮箱注册（signup）+ bcrypt + users INSERT + 验证邮件
@@ -22,99 +70,238 @@ describe('AC1 — Console zod schemas + Server Action + i18n', () => {
   // --- T1d Console/Vitest scenarios ---
 
   test('2.2-UNIT-050: signupSchema = z.object({ email, password, locale? })', () => {
+    // Scenario: 2.2-UNIT-050
     // Priority: P0 | Level: unit
-    // Expected: schema exports with field constraints email().max(254), password().min(10), locale.optional()
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-050');
+    // signupSchema accepts the canonical shape with locale optional.
+    const parsed = signupSchema.parse({
+      email: 'user@example.com',
+      password: '0123456789',
+      locale: 'en',
+    });
+    expect(parsed.email).toBe('user@example.com');
+    expect(parsed.password).toBe('0123456789');
+    // locale missing is OK (optional).
+    expect(() =>
+      signupSchema.parse({ email: 'u@example.com', password: '0123456789' }),
+    ).not.toThrow();
   });
 
   test('2.2-UNIT-051: signupSchema rejects invalid email + short password together', () => {
-    // Priority: P0 | Level: unit
-    // Input: { email:"bad", password:"short" }
-    // Expected: parse throws ZodError with both email + password issues
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-051');
+    // Scenario: 2.2-UNIT-051
+    const result = signupSchema.safeParse({ email: 'bad', password: 'short' });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const paths = result.error.issues.map((i) => i.path[0]);
+      expect(paths).toContain('email');
+      expect(paths).toContain('password');
+    }
   });
 
   test('2.2-UNIT-052: signupSchema accepts password length=10 (boundary)', () => {
-    // Priority: P0 | Level: unit | BR-1.3 boundary
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-052');
+    // Scenario: 2.2-UNIT-052 — BR-1.3 boundary
+    const ok = signupSchema.safeParse({ email: 'u@example.com', password: '1234567890' });
+    expect(ok.success).toBe(true);
   });
 
   test('2.2-UNIT-053: signupSchema rejects password length=9 (just-beyond)', () => {
-    // Priority: P0 | Level: unit | BR-1.3 boundary
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-053');
+    // Scenario: 2.2-UNIT-053 — BR-1.3 boundary
+    const bad = signupSchema.safeParse({ email: 'u@example.com', password: '123456789' });
+    expect(bad.success).toBe(false);
+    if (!bad.success) {
+      expect(bad.error.issues.some((i) => i.path[0] === 'password')).toBe(true);
+    }
   });
 
   test('2.2-UNIT-054: Server Action `registerUser` has `use server` directive', () => {
-    // Priority: P0 | Level: unit | BR-1.8
-    // Verify: file starts with 'use server'; grep raw source
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-054');
+    // Scenario: 2.2-UNIT-054 — BR-1.8
+    // First non-comment, non-blank line MUST be the `'use server'` pragma.
+    const src = readFileSync(authActionPath, 'utf8');
+    const firstNonBlank = src
+      .split('\n')
+      .map((l) => l.trim())
+      .find((l) => l.length > 0);
+    expect(firstNonBlank).toBe("'use server';");
   });
 
   test('2.2-UNIT-055: Server Action imports NO gRPC client (Q1 ruling=b)', () => {
-    // Priority: P0 | Level: unit | TS-CONS-011
-    // Verify: regex scan source — no @bufbuild/connect-* / no grpc-web imports
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-055');
+    // Scenario: 2.2-UNIT-055 — TS-CONS-011
+    const src = readFileSync(authActionPath, 'utf8');
+    // No @bufbuild/connect-*, no grpc-web, no @connectrpc/* in the imports.
+    expect(src).not.toMatch(/@bufbuild\/connect-/);
+    expect(src).not.toMatch(/grpc-web/);
+    expect(src).not.toMatch(/@connectrpc\//);
   });
 
-  test('2.2-UNIT-056: registerUser validates via signupSchema BEFORE network call', () => {
-    // Priority: P0 | Level: unit | BR-1.8
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-056');
+  test('2.2-UNIT-056: registerUser validates via signupSchema BEFORE network call', async () => {
+    // Scenario: 2.2-UNIT-056 — BR-1.8
+    // Pre-validate failure (malformed email) MUST short-circuit without
+    // ever touching fetch.
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ message: 'verification_email_sent' }), { status: 200 }),
+    );
+    try {
+      const { registerUser } = await import('../app/[locale]/_actions/auth');
+      const result = await registerUser({ email: 'not-an-email', password: '0123456789', locale: 'en' });
+      // Should return a typed failure (not call fetch, not redirect).
+      expect(result.ok).toBe(false);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
-  test('2.2-UNIT-057: registerUser POSTs to api-gateway /v1/auth/signup', () => {
-    // Priority: P0 | Level: unit | Q1 ruling=b
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-057');
+  test('2.2-UNIT-057: registerUser POSTs to api-gateway /v1/auth/signup', async () => {
+    // Scenario: 2.2-UNIT-057 — Q1 ruling=b
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ message: 'verification_email_sent' }), { status: 200 }),
+    );
+    const { redirect } = await import('next/navigation');
+    const redirectSpy = vi.mocked(redirect);
+    redirectSpy.mockClear();
+    try {
+      const { registerUser } = await import('../app/[locale]/_actions/auth');
+      // redirect() throws in real Next.js — our mock throws too so we wrap.
+      try {
+        await registerUser({ email: 'user@example.com', password: '0123456789', locale: 'en' });
+      } catch {
+        /* expected redirect throw */
+      }
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchSpy.mock.calls[0]!;
+      expect(String(url)).toMatch(/\/v1\/auth\/signup$/);
+      expect(init?.method).toBe('POST');
+      const body = JSON.parse(String(init?.body));
+      expect(body.email).toBe('user@example.com');
+      expect(body.password).toBe('0123456789');
+      expect(body.locale).toBe('en');
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
-  test('2.2-UNIT-058: registerUser returns redirect to /{locale}/(auth)/signup/check-inbox?email=<masked>', () => {
-    // Priority: P0 | Level: unit | AC1 Scenario
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-058');
+  test('2.2-UNIT-058: registerUser redirects to /{locale}/signup/check-inbox?email=<masked>', async () => {
+    // Scenario: 2.2-UNIT-058 — AC1 Scenario
+    // Note: QA spec writes `/{locale}/(auth)/signup/check-inbox`; Next.js
+    // route groups `(auth)` are excluded from the URL by convention, so
+    // the URL is `/{locale}/signup/check-inbox`. Dev Log §12 documents
+    // the discrepancy.
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ message: 'verification_email_sent' }), { status: 200 }),
+    );
+    const { redirect } = await import('next/navigation');
+    const redirectSpy = vi.mocked(redirect);
+    redirectSpy.mockClear();
+    try {
+      const { registerUser } = await import('../app/[locale]/_actions/auth');
+      try {
+        await registerUser({ email: 'john@example.com', password: '0123456789', locale: 'en' });
+      } catch {
+        /* expected redirect throw */
+      }
+      expect(redirectSpy).toHaveBeenCalledTimes(1);
+      const target = String(redirectSpy.mock.calls[0]?.[0] ?? '');
+      // Locale segment + signup/check-inbox path + masked email query.
+      expect(target).toMatch(/^\/en\/signup\/check-inbox\?email=/);
+      // The email is masked (first char + asterisks + @domain). '*' encodes
+      // to %2A; we URL-decode the email param to check the human-readable
+      // mask shape.
+      const emailParam = new URLSearchParams(target.split('?')[1]).get('email') ?? '';
+      expect(emailParam).toMatch(/^j\*+@example\.com$/);
+      // Full plaintext local-part MUST NOT appear in the URL.
+      expect(emailParam).not.toContain('john');
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
-  test('2.2-UNIT-059: registerUser maps 4xx/5xx → error code matching i18n key', () => {
-    // Priority: P0 | Level: unit | BR-1.8 + AC1 Error Handling
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-059');
+  test('2.2-UNIT-059: registerUser maps 4xx/5xx → error code matching i18n key', async () => {
+    // Scenario: 2.2-UNIT-059 — BR-1.8 + AC1 Error Handling
+    const cases: Array<{ httpStatus: number; serverCode: string; expectedCode: string }> = [
+      { httpStatus: 400, serverCode: '400_password_breached', expectedCode: 'auth.errors.passwordBreached' },
+      { httpStatus: 429, serverCode: '429_rate_limit_signup', expectedCode: 'auth.errors.tooManyAttempts' },
+      { httpStatus: 503, serverCode: '503_hibp_unavailable', expectedCode: 'auth.errors.hibpUnavailable' },
+      { httpStatus: 500, serverCode: '500_email_send_failed', expectedCode: 'auth.errors.emailSendFailed' },
+    ];
+    const { registerUser } = await import('../app/[locale]/_actions/auth');
+    for (const c of cases) {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(JSON.stringify({ error: { code: c.serverCode, message: c.serverCode } }), {
+          status: c.httpStatus,
+          headers: c.httpStatus === 429 ? { 'Retry-After': '180' } : {},
+        }),
+      );
+      try {
+        const result = await registerUser({ email: 'u@example.com', password: '0123456789', locale: 'en' });
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+          expect(result.code).toBe(c.expectedCode);
+          if (c.httpStatus === 429) expect(result.retryAfterSeconds).toBe(180);
+        }
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    }
   });
 
   test('2.2-UNIT-060: messages/en/auth.json exists + valid JSON', () => {
-    // Priority: P1 | Level: unit
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-060');
+    // Scenario: 2.2-UNIT-060
+    const raw = readFileSync(enAuthJsonPath, 'utf8');
+    expect(() => JSON.parse(raw)).not.toThrow();
   });
 
   test('2.2-UNIT-061: en/auth.json contains AC1 error keys', () => {
-    // Priority: P0 | Level: unit | BR-1.9
-    // Keys: invalidEmail, passwordTooShort, passwordBreached, hibpUnavailable, tooManyAttempts, serverUnavailable, emailSendFailed, invalidLocale
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-061');
+    // Scenario: 2.2-UNIT-061 — BR-1.9
+    const obj = JSON.parse(readFileSync(enAuthJsonPath, 'utf8'));
+    const keys = flattenKeys(obj);
+    const required = [
+      'errors.invalidEmail',
+      'errors.passwordTooShort',
+      'errors.passwordBreached',
+      'errors.hibpUnavailable',
+      'errors.tooManyAttempts',
+      'errors.serverUnavailable',
+      'errors.emailSendFailed',
+      'errors.invalidLocale',
+    ];
+    for (const k of required) {
+      expect(keys, `en/auth.json missing required AC1 key ${k}`).toContain(k);
+    }
   });
 
   test('2.2-UNIT-062: All 10 messages/{locale}/auth.json files have key-set equality to en (drift gate)', () => {
-    // Priority: P0 | Level: unit | BR-1.9 + Story 2.1 i18n-keys parity
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-062');
+    // Scenario: 2.2-UNIT-062 — BR-1.9 + Story 2.1 i18n-keys parity
+    const enKeys = new Set(flattenKeys(JSON.parse(readFileSync(enAuthJsonPath, 'utf8'))));
+    const localeDirs = readdirSync(localesDir).filter((d) =>
+      ['en', 'zh-CN', 'ja', 'ko', 'es', 'fr', 'de', 'pt', 'ru', 'ar'].includes(d),
+    );
+    expect(localeDirs.length).toBe(10);
+    for (const loc of localeDirs) {
+      const path = join(localesDir, loc, 'auth.json');
+      const keys = new Set(flattenKeys(JSON.parse(readFileSync(path, 'utf8'))));
+      // Symmetric difference must be empty.
+      const missingInLocale = [...enKeys].filter((k) => !keys.has(k));
+      const extraInLocale = [...keys].filter((k) => !enKeys.has(k));
+      expect(missingInLocale, `${loc}/auth.json missing keys`).toEqual([]);
+      expect(extraInLocale, `${loc}/auth.json has extra keys vs en`).toEqual([]);
+    }
   });
 
   test('2.2-UNIT-063: packages/i18n-keys/src/auth.ts exports AuthKeys union literal with every en key', () => {
-    // Priority: P1 | Level: unit | Story 2.1 Q5 codegen drift
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-063');
+    // Scenario: 2.2-UNIT-063 — Story 2.1 Q5 codegen drift
+    const src = readFileSync(i18nKeysAuthPath, 'utf8');
+    expect(src).toMatch(/export type AuthKeys/);
+    const enKeys = flattenKeys(JSON.parse(readFileSync(enAuthJsonPath, 'utf8')));
+    for (const k of enKeys) {
+      // Each key appears as a quoted string literal in the union.
+      expect(src, `AuthKeys union missing key ${k}`).toContain(`'${k}'`);
+    }
   });
 
   test('2.2-UNIT-064: messages/ar/auth.json keys equal en (placeholders allowed per Story 2.1 AC4 strategy)', () => {
-    // Priority: P1 | Level: unit | BR-1.9
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-064');
+    // Scenario: 2.2-UNIT-064 — BR-1.9
+    const enKeys = flattenKeys(JSON.parse(readFileSync(enAuthJsonPath, 'utf8'))).sort();
+    const arKeys = flattenKeys(JSON.parse(readFileSync(join(localesDir, 'ar/auth.json'), 'utf8'))).sort();
+    expect(arKeys).toEqual(enKeys);
   });
 });
 

@@ -23,9 +23,20 @@ import (
 	obs "github.com/he-api/he-api/packages/go-observability"
 	"github.com/he-api/he-api/apps/api-gateway/internal/handlers"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
+	"github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1/authv1connect"
 
 	"go.opentelemetry.io/otel"
 )
+
+const defaultAuthSvcURL = "http://auth-svc:8080"
+
+// envOr returns the value of name or fallback when unset / empty.
+func envOr(name, fallback string) string {
+	if v := os.Getenv(name); v != "" {
+		return v
+	}
+	return fallback
+}
 
 const (
 	serviceName    = "api-gateway"
@@ -53,7 +64,15 @@ func main() {
 		_ = tp.Shutdown(sctx)
 	}()
 
-	auth := handlers.NewAuthProxy()
+	// Connect-go client to auth-svc. HTTP/2 over the cluster Service URL;
+	// auth-svc is a ClusterIP service (Wright Round 1 Q1 ruling — internal-only)
+	// and the gateway is the only ingress.
+	authSvcURL := envOr("HE_API_AUTH_SVC_URL", defaultAuthSvcURL)
+	authUpstream := authv1connect.NewAuthServiceClient(
+		&http.Client{Timeout: 10 * time.Second},
+		authSvcURL,
+	)
+	auth := handlers.NewAuthProxy(authUpstream)
 	jwks := handlers.NewJWKSHandler()
 
 	mux := http.NewServeMux()
@@ -78,7 +97,10 @@ func main() {
 
 	serverErr := make(chan error, 1)
 	go func() {
-		logger.Info("api-gateway listening", slog.String("addr", listenAddr))
+		logger.Info("api-gateway listening",
+			slog.String("addr", listenAddr),
+			slog.String("auth_svc_url", authSvcURL),
+		)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErr <- err
 		}
