@@ -455,53 +455,165 @@ describe('AC2 — Console verify-email + resend Server Action + zod', () => {
 describe('AC3 — Console signin Server Action + layout cookie detection + i18n', () => {
   // --- T3d Console/Vitest scenarios ---
 
-  test('2.2-UNIT-160: signinSchema = { email: string().email().max(254), password: string().min(1) }', () => {
-    // Priority: P0 | Level: unit | AC3 Data Validation
-    // Note: signin enforces only password length≥1 (does NOT re-enforce ≥10 — signin must work even if global policy tightens later)
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-160');
+  test('2.2-UNIT-160: signinSchema = { email: string().email().max(254), password: string().min(1) }', async () => {
+    // Scenario: 2.2-UNIT-160 — AC3 Data Validation
+    // signin enforces only password length≥1 (NOT ≥10) so signin keeps
+    // working if a future policy tightens the signup minimum.
+    const { signinSchema } = await import('../lib/auth/schemas');
+    expect(signinSchema.safeParse({ email: 'u@example.com', password: 'x' }).success).toBe(true);
+    // Empty password rejected.
+    expect(signinSchema.safeParse({ email: 'u@example.com', password: '' }).success).toBe(false);
+    // Malformed email rejected.
+    expect(signinSchema.safeParse({ email: 'bad', password: 'x' }).success).toBe(false);
+    // Over-254-char email rejected.
+    const tooLong = 'a'.repeat(250) + '@x.io';
+    expect(signinSchema.safeParse({ email: tooLong, password: 'x' }).success).toBe(false);
   });
 
-  test('2.2-UNIT-161: signin Server Action POSTs /v1/auth/signin → redirect /{locale}/ on 200', () => {
-    // Priority: P0 | Level: unit | AC3 Scenario + TS-CONS-012
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-161');
+  test('2.2-UNIT-161: signinAction POSTs /v1/auth/signin → redirect on 200', async () => {
+    // Scenario: 2.2-UNIT-161 — AC3 Scenario + TS-CONS-012
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ status: 'ok' }), { status: 200 }),
+    );
+    const { redirect } = await import('next/navigation');
+    const redirectSpy = vi.mocked(redirect);
+    redirectSpy.mockClear();
+    try {
+      const { signinAction } = await import('../app/[locale]/_actions/auth');
+      try {
+        await signinAction({ email: 'user@example.com', password: 'correct horse battery staple' });
+      } catch {
+        /* expected redirect throw */
+      }
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchSpy.mock.calls[0]!;
+      expect(String(url)).toMatch(/\/v1\/auth\/signin$/);
+      expect(init?.method).toBe('POST');
+      const body = JSON.parse(String(init?.body));
+      expect(body.email).toBe('user@example.com');
+      expect(body.password).toBe('correct horse battery staple');
+      // Redirect target — TS-CONS-012 says we land on the locale root
+      // (Demo placeholder for Story 2.2; Epic 3+ dashboard later).
+      expect(redirectSpy).toHaveBeenCalledTimes(1);
+      const target = String(redirectSpy.mock.calls[0]?.[0] ?? '');
+      expect(target).toMatch(/^\/[a-zA-Z-]+\/$/);
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
-  test('2.2-UNIT-162: signin 401 → auth.errors.invalidCredentials (NOT distinguishing unknown-email vs wrong-password)', () => {
-    // Priority: P0 | Level: unit | BR-3.2
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-162');
+  test('2.2-UNIT-162: signin 401 → auth.errors.invalidCredentials', async () => {
+    // Scenario: 2.2-UNIT-162 — BR-3.2 (NOT distinguishing unknown-email vs wrong-password)
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: '401_invalid_credentials' } }), { status: 401 }),
+    );
+    try {
+      const { signinAction } = await import('../app/[locale]/_actions/auth');
+      const result = await signinAction({ email: 'u@example.com', password: 'wrong' });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.code).toBe('auth.errors.invalidCredentials');
+      }
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
-  test('2.2-UNIT-163: signin 403_email_not_verified → resend CTA visible', () => {
-    // Priority: P0 | Level: unit | AC3 Error Handling
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-163');
+  test('2.2-UNIT-163: signin 403_email_not_verified → resend CTA flag set', async () => {
+    // Scenario: 2.2-UNIT-163 — AC3 Error Handling
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: '403_email_not_verified' } }), { status: 403 }),
+    );
+    try {
+      const { signinAction } = await import('../app/[locale]/_actions/auth');
+      const result = await signinAction({ email: 'u@example.com', password: 'p' });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.code).toBe('auth.errors.emailNotVerified');
+        // SigninForm uses this flag to render the ResendModal CTA.
+        expect(result.emailNotVerified).toBe(true);
+      }
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
-  test('2.2-UNIT-164: signin 423 → accountLocked + retry_after_seconds surfaced', () => {
-    // Priority: P0 | Level: unit | BR-3.3
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-164');
+  test('2.2-UNIT-164: signin 423 → accountLocked + retryAfterSeconds surfaced', async () => {
+    // Scenario: 2.2-UNIT-164 — BR-3.3
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: '423_account_locked' } }), {
+        status: 423,
+        headers: { 'Retry-After': '3600' },
+      }),
+    );
+    try {
+      const { signinAction } = await import('../app/[locale]/_actions/auth');
+      const result = await signinAction({ email: 'u@example.com', password: 'p' });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.code).toBe('auth.errors.accountLocked');
+        expect(result.retryAfterSeconds).toBe(3600);
+      }
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
-  test('2.2-UNIT-165: (auth)/layout.tsx detects he_access cookie presence via cookies() — does NOT parse JWT — redirects 302 when present', () => {
-    // Priority: P0 | Level: unit | TS-CONS-012 + BR-3.7 HttpOnly
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-165');
+  test('2.2-UNIT-165: (auth)/layout.tsx detects he_access cookie presence', () => {
+    // Scenario: 2.2-UNIT-165 — TS-CONS-012 + BR-3.7 HttpOnly
+    // Static source check: the layout file calls cookies().get(ACCESS_COOKIE)
+    // and redirects when present. NEVER attempts JWT parsing / Verify.
+    const layoutPath = join(repoRoot, 'apps/console/app/[locale]/(auth)/layout.tsx');
+    const src = readFileSync(layoutPath, 'utf8');
+    // Must import cookies from next/headers (presence check).
+    expect(src).toMatch(/from 'next\/headers'/);
+    expect(src).toMatch(/cookies\(\)/);
+    // Must import ACCESS_COOKIE constant from the cookies helper.
+    expect(src).toMatch(/ACCESS_COOKIE/);
+    // MUST NOT parse / verify the JWT (HttpOnly cookies aren't readable
+    // anyway, but the constraint is structural — only presence matters).
+    expect(src).not.toMatch(/jwtVerify|verifyJWT|parseJWT|jsonwebtoken|jose/);
+    // Must call redirect on the truthy branch.
+    expect(src).toMatch(/redirect\(/);
   });
 
-  test('2.2-UNIT-166: (auth)/signin/page.tsx pre-fills email when ?email= query param present', () => {
-    // Priority: P1 | Level: unit | AC3 UI Interaction
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-166');
+  test('2.2-UNIT-166: signin page pre-fills email when ?email= query param present', () => {
+    // Scenario: 2.2-UNIT-166 — AC3 UI Interaction
+    const pagePath = join(repoRoot, 'apps/console/app/[locale]/(auth)/signin/page.tsx');
+    const src = readFileSync(pagePath, 'utf8');
+    // Reads searchParams.email and threads it into the form.
+    expect(src).toMatch(/searchParams/);
+    expect(src).toMatch(/email/);
+    expect(src).toMatch(/prefillEmail/);
+    // The SigninForm reads prefillEmail prop and uses it as defaultValue.
+    const formPath = join(repoRoot, 'apps/console/app/[locale]/(auth)/signin/SigninForm.tsx');
+    const formSrc = readFileSync(formPath, 'utf8');
+    expect(formSrc).toMatch(/defaultValue=\{prefillEmail\}/);
   });
 
-  test('2.2-UNIT-167: en/auth.json contains AC3 keys (signin.* + errors.invalidCredentials/emailNotVerified/accountLocked/accountSuspended/accountDeleted/tooManyAttemptsIp/tooManyAttemptsEmail)', () => {
-    // Priority: P1 | Level: unit | BR-3.10
-    // TODO: Implement this test
-    throw new Error('Test not implemented: 2.2-UNIT-167');
+  test('2.2-UNIT-167: en/auth.json contains AC3 keys', () => {
+    // Scenario: 2.2-UNIT-167 — BR-3.10
+    const obj = JSON.parse(readFileSync(enAuthJsonPath, 'utf8'));
+    const keys = flattenKeys(obj);
+    const required = [
+      // signin.* surface
+      'signin.title',
+      'signin.emailLabel',
+      'signin.passwordLabel',
+      'signin.submit',
+      'signin.forgotPassword',
+      // AC3 error keys
+      'errors.invalidCredentials',
+      'errors.emailNotVerified',
+      'errors.accountLocked',
+      'errors.accountSuspended',
+      'errors.accountDeleted',
+      'errors.tooManyAttemptsIp',
+      'errors.tooManyAttemptsEmail',
+    ];
+    for (const k of required) {
+      expect(keys, `en/auth.json missing required AC3 key ${k}`).toContain(k);
+    }
   });
 });
 
