@@ -20,6 +20,7 @@ import (
 
 	obs "github.com/he-api/he-api/packages/go-observability"
 	"github.com/he-api/he-api/apps/notification-svc/internal/handlers"
+	"github.com/he-api/he-api/apps/notification-svc/internal/sendgrid"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/notification/v1/notificationv1connect"
 
 	"go.opentelemetry.io/otel"
@@ -51,8 +52,20 @@ func main() {
 		_ = tp.Shutdown(sctx)
 	}()
 
+	// SendGrid client wires SENDGRID_API_KEY from K8s Secret he-api-notification-creds
+	// (TS-CONS-010). The sender address defaults are pinned for the staging
+	// sub-account; future stories add env-overridable values when prod ships.
+	apiKey := os.Getenv("SENDGRID_API_KEY")
+	if apiKey == "" {
+		logger.Warn("SENDGRID_API_KEY unset — SendEmail will fail with 401 until the Secret is mounted")
+	}
+	sender := sendgrid.NewClient(apiKey, sendgrid.Address{
+		Email: "noreply@he-api.com",
+		Name:  "He-API",
+	})
+
 	mux := http.NewServeMux()
-	mux.Handle(notificationv1connect.NewNotificationServiceHandler(handlers.NewNotificationServer()))
+	mux.Handle(notificationv1connect.NewNotificationServiceHandler(handlers.NewNotificationServer(sender)))
 
 	srv := &http.Server{
 		Addr:              listenAddr,
