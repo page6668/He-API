@@ -1,0 +1,20 @@
+# Vendored Go generation for the he-api proto module (Story 1.5 Q4 ruling).
+#
+# Plugins resolved locally (no BSR fetch); semantically equivalent to the
+# canonical buf.build remote plugin specs documented below:
+#
+#   - buf.build/protocolbuffers/go  → executable `protoc-gen-go`
+#   - buf.build/connectrpc/go       → executable `protoc-gen-connect-go`
+#
+# Local invocation keeps the toolchain hermetic for CI / offline builds while
+# the comment above preserves the canonical plugin identity for auditability.
+version: v2
+inputs:
+  - directory: .
+plugins:
+  - local: protoc-gen-go
+    out: gen/go
+    opt: paths=source_relative
+  - local: protoc-gen-connect-go
+    out: gen/go
+    opt: paths=source_relative

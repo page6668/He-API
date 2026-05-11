@@ -23,6 +23,7 @@ he-api/                                  (Monorepo, Turborepo)
 │   ├── audit-svc/
 │   ├── notification-svc/
 │   ├── sample-otel-app/                Epic 1 reference impl (OTel SDK / Prom exporter / 结构化 JSON 日志 教科书示例) [非生产服务]
+│   ├── sample-grpc-app/                Epic 1 gRPC reference impl (Story 1.5 — connect-go + Buf 教科书示例) [非生产服务]
 │   ├── adapters/
 │   │   ├── qwen/
 │   │   ├── deepseek/
@@ -52,8 +53,11 @@ he-api/                                  (Monorepo, Turborepo)
 │   └── docs/                            Mintlify 或 Docusaurus
 ├── packages/
 │   ├── proto/                           protobuf definitions (用 Buf 管理)
-│   │   ├── he/api/v1/*.proto
-│   │   └── buf.yaml
+│   │   ├── he/<domain>/v1/<service>.proto    (Buf module 主路径, domain-based versioning)
+│   │   ├── gen/go/he/<domain>/v1/*.pb.go     (vendored generated Go code, Buf 生成)
+│   │   ├── buf.yaml
+│   │   └── buf.gen.yaml
+│   ├── go-observability/                Go observability 共享包 (Story 1.5 — TracerProvider / slog JSON / otelhttp wrap)
 │   ├── sdk-python/                      Python SDK
 │   │   ├── he_api/
 │   │   ├── tests/
@@ -104,5 +108,11 @@ he-api/                                  (Monorepo, Turborepo)
 ```
 
 > **注**: `apps/sample-otel-app/` 是 **Epic 1 reference impl**（非生产服务）— 由 Story 1.4 引入，作为 Epic 2-10 业务服务集成 OTel SDK + Prometheus exporter + 结构化 JSON 日志的"教科书示例"。其 `/hello` 与 `/metrics` 端点不进 API registry。条目添加来源：Story 1.4 Architect Round 1 minor m-1，2026-05-11。
+
+> **注**: `apps/sample-grpc-app/` 是 **Epic 1 gRPC reference impl**（非生产服务）— 由 Story 1.5 引入，作为 Epic 2-10 业务 gRPC 服务集成 connect-go + Buf + observability 共享包的"教科书示例"，与 `sample-otel-app` 形成 HTTP + gRPC 双 reference 对位。其 Ping RPC 不进 API registry。条目添加来源：Story 1.5 Architect Round 1 minor m-2，2026-05-11。
+
+> **注**: `packages/proto/he/<domain>/v1/<service>.proto` proto 布局（Story 1.5 Architect Q4 ruling，2026-05-11）— 由 `he/api/v1/*.proto` 占位符细化为 domain-based `he/<domain>/v1/<service>.proto`（Buf-recommended）。生成的 Go 代码 vendored 至 `packages/proto/gen/go/he/<domain>/v1/*.pb.go`（commit 入库；CI `buf generate` + `git diff --exit-code packages/proto/gen/` 检测 drift）。条目修订来源：Story 1.5 Architect Round 1 minor m-1，2026-05-11。
+
+> **注**: `packages/go-observability/` 是 Story 1.5 引入的 Go observability 共享包（OTel TracerProvider + slog JSON handler + otelhttp wrap），统一 Epic 2-10 全部 14 个 Go 服务的 OTel/Prom/log 接入。`apps/sample-otel-app/cmd/server/main.go` 重构以消费此包列为 post-1.5 followup（Epic 2 Story 2.1 auth-svc 落地时同期完成）。条目添加来源：Story 1.5 Architect Round 1 Q5 ruling，2026-05-11。
 
 ---

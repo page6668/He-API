@@ -1,0 +1,2 @@
+# Business logic goes in apps/sample-grpc-app/internal/; see apps/api-gateway/internal/
+# for the mature pattern once it ships.

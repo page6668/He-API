@@ -1,0 +1,25 @@
+# ${NAME} staging overrides (scaffolded by scripts/scaffold-svc.sh, Story 1.5).
+# Note: ${ACR_REGISTRY} below is a deploy-time substitution honoured by
+# scripts/observability/install.sh (Story 1.4 m-4 pattern); the scaffold tool
+# uses `envsubst '$NAME $DOMAIN $SVC_PASCAL'` so unknown placeholders survive.
+image:
+  repository: $$ACR_REGISTRY/he-api/${NAME}
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 8080
+
+env:
+  OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector.monitoring.svc.cluster.local:4317
+
+serviceAccount:
+  create: true
+  name: ""
+
+serviceMonitor:
+  enabled: true
+  interval: 15s

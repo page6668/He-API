@@ -100,6 +100,36 @@ jobs:
             | docker run --rm -i ghcr.io/yannh/kubeconform:latest \
                 -strict -summary -
 
+  # Story 1.5 Q7 ruling — Helm chart lint for scaffolded gRPC services. The
+  # scaffold tool atomically appends each new `<svc>` to the matrix below
+  # (Q8 auto-append for infra-lint.yml).
+  helm-lint-services:
+    name: helm-lint-services (${{ matrix.chart }})
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        chart:
+          - sample-grpc-app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "v3.14.4"
+
+      - name: helm lint
+        run: helm lint "infra/helm/${{ matrix.chart }}/" -f "infra/helm/${{ matrix.chart }}/values-staging.yaml"
+
+      - name: helm template | kubeconform -strict -summary
+        run: |
+          helm template "${{ matrix.chart }}" "infra/helm/${{ matrix.chart }}/" \
+            -f "infra/helm/${{ matrix.chart }}/values-staging.yaml" \
+            | docker run --rm -i ghcr.io/yannh/kubeconform:latest \
+                -strict -summary -ignore-missing-schemas -
+
   helm-lint-observability:
     name: helm-lint-observability (${{ matrix.chart }})
     runs-on: ubuntu-22.04

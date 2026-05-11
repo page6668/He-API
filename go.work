@@ -2,5 +2,8 @@ go 1.22
 
 use (
 	./apps/api-gateway
+	./apps/sample-grpc-app
 	./apps/sample-otel-app
+	./packages/go-observability
+	./packages/proto
 )

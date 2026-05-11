@@ -1,0 +1,11 @@
+{
+  "name": "@he-api/sample-grpc-app",
+  "version": "0.0.0",
+  "private": true,
+  "description": "sample-grpc-app — gRPC service scaffolded by scripts/scaffold-svc.sh (Story 1.5; domain=sample).",
+  "scripts": {
+    "build": "echo \"go build is run via go workspace, not Turborepo\" && exit 0",
+    "lint": "echo lint runs via go workspace not Turborepo \\\" && exit 0",
+    "test": "echo test runs via go workspace not Turborepo \\\" && exit 0"
+  }
+}

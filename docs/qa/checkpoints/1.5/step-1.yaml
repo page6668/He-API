@@ -1,0 +1,15 @@
+step: 1
+name: risk_assessment
+risk_level: MEDIUM
+review_mode: automated_plus_spot_check
+skip_e2e: true
+review_round: 1
+reasoning: |
+  complexity_count=3 (new_patterns + cross_service + core_docs), security_sensitive=false.
+  Cross-service architectural contagion (14 future Go services will inherit this template's
+  connect-go conventions, proto layout, observability wiring, and PSR baseline) elevates risk
+  above LOW despite zero auth/payment business logic. Dev gate score implied 9.5/10 (Architect
+  Round 1) + 10/10 (Round 2). Runtime cluster evidence (AC1.C wall-clock + AC1.D Grafana/Prom)
+  is explicitly deferred to operator (parallel to Story 1.3 T8 / Story 1.4 T13 pattern — Dev
+  sandbox lacks ACK staging access). E2E skipped: deliverables are templates + dogfooded
+  sample-grpc-app + CI workflows, all statically verifiable.

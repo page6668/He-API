@@ -1,0 +1,38 @@
+step: 4.5
+name: task_checkbox_verification
+total_checkboxes:
+  top_level: 11  # T0..T10
+  sub_level: 53  # cumulative across T0..T10
+checked_count:
+  top_level: 11
+  sub_level: 8   # all under T0 (SM revise)
+unchecked_count:
+  top_level: 0
+  sub_level: 45  # all under T1..T10 (Dev did not drill-down)
+completion_rate_top_level: 100  # 11 / 11
+consistency_checks:
+  total: 11
+  passed: 11
+  failed: 0
+  consistency_rate: 100
+issues:
+  critical: []
+  high: []
+  medium: []
+  low:
+    - finding: |
+        Dev marked each top-level T1..T10 as [x] but left all sub-bullets [ ].
+        This matches the established pattern of Stories 1.1-1.4 (top-level box
+        represents task completion summary; sub-bullets serve as design intent
+        not progress tracking). Not blocking.
+      checkbox_text: 'T1..T10 sub-bullets'
+      evidence: 'Top-level T0..T10 11/11 [x]; 45 sub-bullets remain [ ]'
+notes: |
+  Cross-check with Dev Agent Record Implementation Summary (Story L:801-812) and
+  the AC Traceability Matrix (L:677-773) confirms each T1..T10 has real file
+  deliverables matching the task description. Checkbox-deliverable consistency
+  verified by Dev Log §1-§5 + on-disk artifacts (scripts/scaffold-svc.sh exists
+  + scripts/scaffold-svc/templates/ has 14 .tmpl + packages/proto/{buf.yaml,buf.gen.yaml}
+  + packages/go-observability/{tracer,logger,http,*_test}.go + apps/sample-grpc-app/
+  + infra/helm/sample-grpc-app/ + .github/workflows/build-images.yml matrix +
+  .github/workflows/infra-lint.yml helm-lint-services job + README scaffolding section).

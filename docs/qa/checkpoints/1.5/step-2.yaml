@@ -1,0 +1,18 @@
+step: 2
+name: project_type_detection
+project_type:
+  type: fullstack
+  subtype: turborepo_monorepo_with_go_workspace
+test_strategy:
+  primary_tool: bash
+  primary_test_runners:
+    - vitest  # via pnpm test (shared-types white-box static checks for 1.5)
+    - go_test  # packages/go-observability + apps/sample-grpc-app + apps/sample-otel-app
+  requires_environment: false
+  startup_command: ""
+  expected_port: null
+  reasoning: |
+    Story 1.5 deliverables are templates, shared Go package, vendored proto codegen, dogfooded
+    sample app, CI workflows, and docs — all statically verifiable. No frontend/backend long-
+    running process under test. Test strategy = pnpm test (vitest 1.5 suite) + go test ./...
+    across Go modules + buf lint / buf generate drift check.

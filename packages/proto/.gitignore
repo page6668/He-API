@@ -1,0 +1,7 @@
+# Story 1.5 Q4 ruling — generated Go code under gen/ is **vendored** (committed
+# to the repo) so `go build` from a fresh clone works without the buf cli.
+# CI runs `buf generate && git diff --exit-code packages/proto/gen/` to catch
+# drift. Therefore: NO `gen/` line here.
+
+# Buf's local cache / scratch artifacts only.
+.buf-build/

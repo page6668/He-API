@@ -1,0 +1,18 @@
+module github.com/he-api/he-api/apps/${NAME}
+
+go 1.22
+
+require (
+	connectrpc.com/connect v1.16.2
+	github.com/he-api/he-api/packages/go-observability v0.0.0-00010101000000-000000000000
+	github.com/he-api/he-api/packages/proto v0.0.0-00010101000000-000000000000
+	go.opentelemetry.io/otel v1.26.0
+)
+
+// Local workspace replacements for sibling packages — needed because Go's
+// workspace mode does not auto-resolve cross-workspace `require`s that name a
+// pseudo-version (the use directive supplies the source, the replace pins
+// the version dimension).
+replace github.com/he-api/he-api/packages/go-observability => ../../packages/go-observability
+
+replace github.com/he-api/he-api/packages/proto => ../../packages/proto

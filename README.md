@@ -417,6 +417,133 @@ Net incremental: **≈ +¥0** — the stack consumes spare CPU/Mem on the 1.3 st
 
 ---
 
+## Scaffolding a new gRPC service
+
+Story 1.5 introduced `scripts/scaffold-svc.sh` — a Bash + envsubst scaffolder
+that generates a complete connect-go service skeleton (Go code + proto +
+Dockerfile + Helm chart + workspace registration) in under 5 minutes. Every
+business gRPC service in Epic 2–10 (auth-svc, billing-svc, payment-svc, the
+six model adapters, etc.) derives from this template.
+
+### Prerequisites
+
+`scripts/scaffold-svc.sh` requires Go 1.22+, buf 1.34+, helm 3.14+, kubectl
+1.29+, and envsubst (from GNU gettext — `brew install gettext` on macOS).
+Docker is optional and only needed for local image builds before pushing to
+ACR.
+
+| Tool       | Version | Purpose |
+|------------|---------|---------|
+| Go         | 1.22+   | service build + `go.work` mode |
+| buf        | 1.34+   | proto lint / vendored Go generation |
+| helm       | 3.14+   | chart lint + install to staging |
+| kubectl    | 1.29+   | apply manifests; talk to ACK staging |
+| envsubst   | gettext | scaffold-time substitution |
+| docker     | optional| local image build before push to ACR |
+
+### Five-minute flow (≤ 5 commands)
+
+```bash
+# 1. Scaffold the new service. Atomically writes 7 file groups + appends
+#    go.work and infra-lint.yml helm-lint-services matrix.
+scripts/scaffold-svc.sh --name auth-svc --domain auth
+
+# 2. Refresh the vendored proto Go code (run from packages/proto/).
+cd packages/proto && buf generate && cd -
+
+# 3. Compile + test the new service.
+go test ./apps/auth-svc/...
+
+# 4. Lint + render the chart to make sure Pod Security admission will accept it.
+helm install --dry-run --debug auth-svc infra/helm/auth-svc/ \
+  -f infra/helm/auth-svc/values-staging.yaml -n he-api-staging
+
+# 5. Deploy to staging.
+helm install auth-svc infra/helm/auth-svc/ \
+  -f infra/helm/auth-svc/values-staging.yaml -n he-api-staging
+kubectl get pod -n he-api-staging -l app=auth-svc
+```
+
+`scaffold-svc.sh` arguments:
+
+| Flag         | Regex                       | Purpose |
+|--------------|-----------------------------|---------|
+| `--name`     | `^[a-z][a-z0-9-]{1,30}$`    | service name (matches K8s label / Go module / Helm release) |
+| `--domain`   | `^[a-z][a-z0-9]{1,30}$`     | proto package segment (`he.<domain>.v1`); no hyphens |
+
+The script refuses to overwrite existing services: re-running for a name that
+already exists exits non-zero before any file mutation (idempotent guarantee
+backed by `mktemp -d` staging + atomic `mv` and `trap` cleanup on EXIT/ERR —
+Story 1.5 Q1 ruling).
+
+### connect-go three-protocol default
+
+Every scaffolded service serves all three protocols on the same HTTP/2 path
+with zero extra code (Q3 ruling):
+
+- **Connect/JSON** — `curl` debuggable; ideal for ad-hoc service-to-service
+  probing and Postman.
+- **gRPC binary** — production efficient; protobuf wire format.
+- **gRPC-Web** — browser-callable from the console BFF (Epic 9).
+
+Business logic goes in `apps/<svc>/internal/` (see `apps/api-gateway/internal/`
+once that pattern lands). The `cmd/server/main.go` stub only wires
+observability and the `Ping` handler.
+
+### Buf vendored-gen workflow
+
+The generated Go code under `packages/proto/gen/go/he/<domain>/v1/` is
+**vendored** — committed to the repo so `go build` from a fresh clone works
+without the buf cli. After editing any `.proto`, run `buf generate` under
+`packages/proto/` and commit the regenerated files. CI's
+`buf-generate-drift` job (`.github/workflows/test.yml`) runs the same
+`buf generate && git diff --exit-code packages/proto/gen/` and fails the PR
+when stale.
+
+### Manual followup: build-images.yml matrix
+
+Per Q8 ruling, scaffold-svc.sh does NOT modify
+`.github/workflows/build-images.yml` automatically — workflow YAML mutation
+hidden inside a 7-file scaffold commit is reviewer-hostile. Instead, the tool
+prints a one-line followup tip on completion:
+
+```
+📋 Followup: add '<svc>' to .github/workflows/build-images.yml matrix.svc (1 line near line N)
+```
+
+In your PR, append the new service to both `strategy.matrix.svc` lists in
+`build-images.yml` (one line per job). Example diff:
+
+```diff
+       matrix:
+         svc:
+           - api-gateway
+           - sample-otel-app
+           - sample-grpc-app
++          - auth-svc
+```
+
+This refactor (single line in one file, < 30 seconds) preserves the 5-minute
+wall-clock SLA while making the CI change auditable in PR review.
+
+### Troubleshooting
+
+| Symptom                                          | Fix |
+|--------------------------------------------------|-----|
+| `service <name> already exists in <path>`        | choose a different `--name` or remove the stale directory. The check is intentional — it prevents accidental overwrite of a delivered service. |
+| `--name 'Auth-Svc' must match ...`               | service names are lowercase + digits + hyphen, 2–31 chars (K8s label / Helm release-name rules). |
+| `OTEL_EXPORTER_OTLP_ENDPOINT not set`            | service falls back to no-export mode (Story 1.4 1.4-UNIT-210 contract); log lines still carry `trace_id`. Set the env in the chart for staging. |
+| Pod stuck in `ImagePullBackOff`                  | the image is built by `build-images.yml` on push to `main`; first scaffold + PR + merge cycle is needed before staging install succeeds. |
+
+### 5-minute SLA evidence
+
+Story 1.5 dogfooded the scaffold against `apps/sample-grpc-app/` (domain
+`sample`). Time-stamped dev-log entries `t0..t3` (scaffold start → first
+`go build` green → first `helm lint` green → pod Running on staging) live in
+`docs/dev/logs/1.5-dev-log.md` §E2E.
+
+---
+
 ## 文档
 
 - [PRD](docs/prd.md)

@@ -66,14 +66,52 @@ jobs:
             echo "no coverage.out produced" >> "$GITHUB_STEP_SUMMARY"
           fi
 
+  # Story 1.5 Q4 ruling — vendored Go gen drift detection. CI runs
+  # `buf generate` and fails if `packages/proto/gen/` differs from committed
+  # state, catching any proto edit that did not refresh the generated code.
+  buf-generate-drift:
+    name: buf-generate-drift
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          version: 1.34.0
+
+      - name: Install protoc plugins (Go + connect-go)
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.34.2
+          go install connectrpc.com/connect/cmd/protoc-gen-connect-go@v1.16.2
+          echo "$(go env GOBIN || echo $(go env GOPATH)/bin)" >> "$GITHUB_PATH"
+
+      - name: buf lint
+        working-directory: packages/proto
+        run: buf lint
+
+      - name: buf generate && git diff --exit-code packages/proto/gen
+        working-directory: packages/proto
+        run: |
+          buf generate
+          cd "${GITHUB_WORKSPACE}"
+          git diff --exit-code packages/proto/gen/ || {
+            echo "::error::vendored generated code is out of date — run 'buf generate' under packages/proto and commit the result" >&2
+            exit 1
+          }
+
   integration:
     name: integration
     runs-on: ubuntu-22.04
-    needs: [unit-ts, unit-go]
+    needs: [unit-ts, unit-go, buf-generate-drift]
     steps:
       - uses: actions/checkout@v4
 
       - name: Integration placeholder
         run: |
-          echo "integration tests deferred to Story 1.5/1.6"
+          echo "integration tests deferred to Story 1.6"
           exit 0

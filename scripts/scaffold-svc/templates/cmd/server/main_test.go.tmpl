@@ -1,0 +1,37 @@
+package main
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"connectrpc.com/connect"
+	${DOMAIN}v1 "github.com/he-api/he-api/packages/proto/gen/go/he/${DOMAIN}/v1"
+	"github.com/he-api/he-api/packages/proto/gen/go/he/${DOMAIN}/v1/${DOMAIN}v1connect"
+)
+
+func TestPing(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.Handle(${DOMAIN}v1connect.New${SVC_PASCAL}ServiceHandler(&${SVC_PASCAL}Server{}))
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	// Build the connect client directly via connect.NewClient so the wire
+	// procedure path is explicit (the generated factory wraps this same call).
+	client := connect.NewClient[${DOMAIN}v1.PingRequest, ${DOMAIN}v1.PingResponse](
+		http.DefaultClient,
+		srv.URL+${DOMAIN}v1connect.${SVC_PASCAL}ServicePingProcedure,
+	)
+	resp, err := client.CallUnary(context.Background(), connect.NewRequest(&${DOMAIN}v1.PingRequest{Ping: "hello"}))
+	if err != nil {
+		t.Fatalf("Ping returned error: %v", err)
+	}
+	if resp.Msg == nil {
+		t.Fatalf("Ping returned nil response message")
+	}
+	if got, want := resp.Msg.GetPong(), "hello"; got != want {
+		t.Errorf("Ping pong = %q, want %q", got, want)
+	}
+}
