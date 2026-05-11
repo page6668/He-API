@@ -102,9 +102,15 @@ var validLocales = map[string]bool{
 const (
 	defaultLocale = "en"
 
-	signupRateLimit     = 5
-	signupRateWindow    = 5 * time.Minute
-	dummyVerifyKeyTTL   = 1 * time.Second
+	signupRateLimit   = 5
+	signupRateWindow  = 5 * time.Minute
+	dummyVerifyKeyTTL = 1 * time.Second
+
+	// Resend rate-limits per BR-2.4.
+	resendIPRateLimit       = 3
+	resendIPRateWindow      = 15 * time.Minute
+	resendEmailRateLimit    = 1
+	resendEmailRateWindow   = 60 * time.Second
 )
 
 // RegisterUser implements AC1. Side-effect order — strict for INT-001..005
@@ -371,20 +377,265 @@ func internalErr(err error, where string) *connect.Error {
 	return connect.NewError(connect.CodeInternal, fmt.Errorf("%s: %s: %w", StatusAuthSvcUnavailable, where, err))
 }
 
-// ---- the four other RPCs remain CodeUnimplemented stubs (P3 + P4 fills) ----
-
+// VerifyEmail implements AC2 (P3b). Flow:
+//
+//  1. ParseFormat — short-circuit malformed tokens at the edge (UNIT-080).
+//  2. Consume — atomic GET + INCR attempts + DEL primary + reverse in
+//     one Lua eval (P3a). Returns ErrTokenNotFound (treat as
+//     410_token_expired — TTL elapsed OR never issued — the same UI),
+//     ErrTokenAttemptsExceeded (treat as 410_token_used + audit
+//     auth.verify_email_brute_force per BR-2.5), or the unwrapped Payload.
+//  3. MarkEmailVerified — idempotent UPDATE. Returns wasNewlyVerified;
+//     false means the user was already verified before this call (BR-2.3
+//     idempotent surface).
+//  4. Audit auth.verify_email (success=true regardless of newly/already —
+//     the audit signal is "verification flow ran successfully").
+//  5. For the already-verified case, fetch the canonical email_verified_at
+//     from PG so the response carries the real timestamp, not now.
 func (s *AuthServer) VerifyEmail(
-	_ context.Context,
-	_ *connect.Request[authv1.VerifyEmailRequest],
+	ctx context.Context,
+	req *connect.Request[authv1.VerifyEmailRequest],
 ) (*connect.Response[authv1.VerifyEmailResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("VerifyEmail: pending P3 (T2, AC2)"))
+	in := req.Msg
+	now := s.Clock()
+
+	// === 1. Format check ===
+	if err := token.ParseFormat(in.GetToken()); err != nil {
+		return nil, statusError(connect.CodeInvalidArgument, StatusInvalidToken)
+	}
+
+	// === 2. Consume ===
+	payload, err := token.Consume(ctx, s.Redis, in.GetToken())
+	if err != nil {
+		switch {
+		case errors.Is(err, token.ErrTokenNotFound):
+			return nil, statusError(connect.CodeFailedPrecondition, StatusTokenExpired)
+		case errors.Is(err, token.ErrTokenAttemptsExceeded):
+			s.auditBestEffort(ctx, audit.Event{
+				EventType: audit.EventVerifyEmailBruteForce,
+				IP:        in.GetClientIp(),
+				UserAgent: in.GetUserAgent(),
+				Timestamp: now,
+				Success:   false,
+				ErrorCode: StatusTokenUsed,
+			})
+			return nil, statusError(connect.CodeFailedPrecondition, StatusTokenUsed)
+		default:
+			return nil, internalErr(err, "token_consume")
+		}
+	}
+
+	// === 3. Mark verified (idempotent UPDATE) ===
+	wasNewlyVerified, err := repository.MarkEmailVerified(ctx, s.DB, payload.UserID)
+	if err != nil {
+		return nil, internalErr(err, "mark_email_verified")
+	}
+
+	// === 4. Audit ===
+	emailHashForAudit := "" // we don't have the email here without a SELECT — leave empty
+	// Optionally hydrate via GetUserByID for the audit email_hash, but that's
+	// an extra round-trip on a path that's already DB-bound; skip.
+	s.auditBestEffort(ctx, audit.Event{
+		EventType: audit.EventVerifyEmail,
+		UserID:    payload.UserID.String(),
+		EmailHash: emailHashForAudit,
+		IP:        in.GetClientIp(),
+		UserAgent: in.GetUserAgent(),
+		Timestamp: now,
+		Success:   true,
+	})
+
+	// === 5. Build response ===
+	status := "email_verified"
+	verifiedAt := now
+	if !wasNewlyVerified {
+		// Already-verified — fetch canonical timestamp for the response. If
+		// the lookup fails we fall back to `now` so the response stays
+		// well-formed; the timestamp is informational, not gating.
+		status = "already_verified"
+		if u, err := repository.GetUserByID(ctx, s.DB, payload.UserID); err == nil && u.EmailVerifiedAt != nil {
+			verifiedAt = *u.EmailVerifiedAt
+		}
+	}
+
+	return connect.NewResponse(&authv1.VerifyEmailResponse{
+		UserId:          payload.UserID.String(),
+		EmailVerifiedAt: verifiedAt.UTC().Format(time.RFC3339),
+		Status:          status,
+	}), nil
 }
 
+// ResendVerification implements AC2 (P3b). Wright Round 1 m-5 ruling:
+// all three branches return the SAME {status:"ok"} response (anti-
+// enumeration). The audit event_type distinguishes them so ops can still
+// see what actually happened.
+//
+// Flow:
+//  1. normalize email; if malformed, take the unknown-email branch (which
+//     also returns {status:"ok"} — never leak format errors to the caller).
+//  2. Rate-limit IP (BR-2.4 — 3/15min). 429 on trip.
+//  3. Rate-limit email (BR-2.4 — 1/60s). 429 on trip.
+//  4. GetUserByEmail.
+//     - ErrUserNotFound → dummy SETEX + audit unknown_email + ok.
+//     - user.email_verified_at != nil → dummy SETEX + audit already_verified + ok.
+//     - else (pending verification) → DeleteForUser (invalidate prior) +
+//       token.Generate + token.Store + notification.SendVerificationEmail +
+//       audit sent + ok. Locale comes from user.Locale per BR-2.6 (UNIT-090).
 func (s *AuthServer) ResendVerification(
-	_ context.Context,
-	_ *connect.Request[authv1.ResendVerificationRequest],
+	ctx context.Context,
+	req *connect.Request[authv1.ResendVerificationRequest],
 ) (*connect.Response[authv1.ResendVerificationResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ResendVerification: pending P3 (T2, AC2)"))
+	in := req.Msg
+	now := s.Clock()
+
+	emailNorm, emailErr := normalizeEmail(in.GetEmail())
+	if emailErr != nil {
+		// Malformed email is treated identically to unknown-email per m-5.
+		// (A real user with a typo will eventually correct it; auth-svc
+		// MUST NOT signal that the address is unparseable here.)
+		s.dummyRedisSetex(ctx, "")
+		s.auditBestEffort(ctx, audit.Event{
+			EventType: audit.EventEmailSendFailed,
+			IP:        in.GetClientIp(),
+			UserAgent: in.GetUserAgent(),
+			Timestamp: now,
+			Success:   false,
+			ErrorCode: StatusInvalidEmail,
+		})
+		return resendOK(), nil
+	}
+	emailHash := ratelimit.EmailHash(emailNorm)
+
+	// === 2. IP rate limit ===
+	ipKey := ratelimit.ResendIPKey(in.GetClientIp())
+	rl, err := ratelimit.CheckAndIncr(ctx, s.Redis, ipKey, resendIPRateLimit, resendIPRateWindow)
+	if errors.Is(err, ratelimit.ErrRateLimited) {
+		s.auditBestEffort(ctx, audit.Event{
+			EventType: audit.EventEmailSendFailed,
+			EmailHash: emailHash,
+			IP:        in.GetClientIp(),
+			UserAgent: in.GetUserAgent(),
+			Timestamp: now,
+			Success:   false,
+			ErrorCode: StatusRateLimitResendIP,
+		})
+		return nil, statusErrorWithRetryAfter(connect.CodeResourceExhausted, StatusRateLimitResendIP, int(rl.RetryAfter/time.Second)+1)
+	}
+	if err != nil {
+		return nil, internalErr(err, "ratelimit_resend_ip")
+	}
+
+	// === 3. Email rate limit ===
+	emailKey := ratelimit.ResendEmailKey(emailNorm)
+	rl, err = ratelimit.CheckAndIncr(ctx, s.Redis, emailKey, resendEmailRateLimit, resendEmailRateWindow)
+	if errors.Is(err, ratelimit.ErrRateLimited) {
+		s.auditBestEffort(ctx, audit.Event{
+			EventType: audit.EventEmailSendFailed,
+			EmailHash: emailHash,
+			IP:        in.GetClientIp(),
+			UserAgent: in.GetUserAgent(),
+			Timestamp: now,
+			Success:   false,
+			ErrorCode: StatusRateLimitResendEm,
+		})
+		return nil, statusErrorWithRetryAfter(connect.CodeResourceExhausted, StatusRateLimitResendEm, int(rl.RetryAfter/time.Second)+1)
+	}
+	if err != nil {
+		return nil, internalErr(err, "ratelimit_resend_email")
+	}
+
+	// === 4. Look up user ===
+	user, err := repository.GetUserByEmail(ctx, s.DB, emailNorm)
+	if errors.Is(err, repository.ErrUserNotFound) {
+		// --- unknown email branch ---
+		s.dummyRedisSetex(ctx, emailHash)
+		s.auditBestEffort(ctx, audit.Event{
+			// EventEmailSendFailed reuses the "not sent" event_type — the
+			// distinguishing detail is ErrorCode. Story 2.2 metadata
+			// declares the 8 event types; the resend-flavor signals
+			// (unknown_email / already_verified / sent) live in ErrorCode
+			// + Metadata until the audit-svc adds dedicated event types.
+			EventType: audit.EventEmailSendFailed,
+			EmailHash: emailHash,
+			IP:        in.GetClientIp(),
+			UserAgent: in.GetUserAgent(),
+			Timestamp: now,
+			Success:   false,
+			ErrorCode: "resend.unknown_email",
+		})
+		return resendOK(), nil
+	}
+	if err != nil {
+		return nil, internalErr(err, "get_user_by_email")
+	}
+
+	// --- already-verified branch ---
+	if user.EmailVerifiedAt != nil {
+		s.dummyRedisSetex(ctx, emailHash)
+		s.auditBestEffort(ctx, audit.Event{
+			EventType: audit.EventEmailSendFailed,
+			UserID:    user.ID.String(),
+			EmailHash: emailHash,
+			IP:        in.GetClientIp(),
+			UserAgent: in.GetUserAgent(),
+			Timestamp: now,
+			Success:   false,
+			ErrorCode: "resend.already_verified",
+		})
+		return resendOK(), nil
+	}
+
+	// --- pending-verification branch (real send) ---
+	// Invalidate any prior token for this user (BR-1.6 — old token immediately
+	// inert before the new one is issued).
+	if _, err := token.DeleteForUser(ctx, s.Redis, user.ID); err != nil {
+		return nil, internalErr(err, "token_delete_for_user")
+	}
+	plaintextTok, err := token.Generate()
+	if err != nil {
+		return nil, internalErr(err, "token_generate")
+	}
+	if err := token.Store(ctx, s.Redis, plaintextTok, user.ID); err != nil {
+		return nil, internalErr(err, "token_store")
+	}
+	// Locale from users.locale per BR-2.6 + UNIT-090 — never from request.
+	verificationLink := buildVerificationLink(s.ConsoleBaseURL, user.Locale, plaintextTok)
+	if err := s.Notification.SendVerificationEmail(ctx, user.Email, user.Locale, plaintextTok, verificationLink); err != nil {
+		s.auditBestEffort(ctx, audit.Event{
+			EventType: audit.EventEmailSendFailed,
+			UserID:    user.ID.String(),
+			EmailHash: emailHash,
+			IP:        in.GetClientIp(),
+			UserAgent: in.GetUserAgent(),
+			Timestamp: now,
+			Success:   false,
+			ErrorCode: StatusEmailSendFailed,
+		})
+		// Even on notification failure, return the canonical anti-enumeration
+		// response — surfacing the failure to the caller would leak that the
+		// email IS registered.
+		return resendOK(), nil
+	}
+	s.auditBestEffort(ctx, audit.Event{
+		EventType: audit.EventEmailSendFailed,
+		UserID:    user.ID.String(),
+		EmailHash: emailHash,
+		IP:        in.GetClientIp(),
+		UserAgent: in.GetUserAgent(),
+		Timestamp: now,
+		Success:   true,
+		ErrorCode: "resend.sent",
+	})
+	return resendOK(), nil
+}
+
+// resendOK is the canonical anti-enumeration response for ResendVerification
+// (Wright Round 1 m-5). All three branches (sent / unknown / already_verified)
+// emit identical body shape.
+func resendOK() *connect.Response[authv1.ResendVerificationResponse] {
+	return connect.NewResponse(&authv1.ResendVerificationResponse{
+		Status: "ok",
+	})
 }
 
 func (s *AuthServer) LoginUser(

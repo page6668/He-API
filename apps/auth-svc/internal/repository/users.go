@@ -71,6 +71,11 @@ RETURNING id`
        pending_deletion_at, created_at, updated_at
 FROM he_api.users WHERE email = $1 LIMIT 1`
 
+	getUserByIDSQL = `SELECT id, email, password_hash, email_verified_at, oauth_provider, oauth_subject,
+       locale, timezone, totp_secret_encrypted, totp_enabled, status, locked_until,
+       pending_deletion_at, created_at, updated_at
+FROM he_api.users WHERE id = $1 LIMIT 1`
+
 	softLockUserSQL = `UPDATE he_api.users SET status='locked', locked_until=$1, updated_at=NOW() WHERE id=$2`
 
 	selfHealLockSQL = `UPDATE he_api.users SET status='active', locked_until=NULL, updated_at=NOW()
@@ -100,7 +105,19 @@ func InsertUser(ctx context.Context, q Querier, email string, passwordHash []byt
 // matched exactly (callers normalize via strings.ToLower + TrimSpace before
 // invoking — see BR-4.2 email-hash invariant).
 func GetUserByEmail(ctx context.Context, q Querier, email string) (*User, error) {
-	row := q.QueryRow(ctx, getUserByEmailSQL, email)
+	return scanUserRow(q.QueryRow(ctx, getUserByEmailSQL, email))
+}
+
+// GetUserByID returns the hydrated User row by primary key, or
+// ErrUserNotFound when absent. VerifyEmail's already-verified path uses
+// this to retrieve the canonical email_verified_at timestamp.
+func GetUserByID(ctx context.Context, q Querier, userID uuid.UUID) (*User, error) {
+	return scanUserRow(q.QueryRow(ctx, getUserByIDSQL, userID))
+}
+
+// scanUserRow centralizes the column ordering so GetUserByEmail and
+// GetUserByID stay in lockstep with the SELECT clause.
+func scanUserRow(row pgx.Row) (*User, error) {
 	var u User
 	err := row.Scan(
 		&u.ID, &u.Email, &u.PasswordHash, &u.EmailVerifiedAt,
