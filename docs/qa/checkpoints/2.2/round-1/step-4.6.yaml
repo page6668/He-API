@@ -1,0 +1,141 @@
+ac_coverage_verification:
+  story_id: '2.2'
+  verification_date: '2026-05-12'
+  verification_method: 'qa_independent_traceability'  # Dev's matrix was empty; QA reconstructed from file inventory + tests
+  placeholder_scan:
+    total_acs: 4
+    placeholder_detected: 4
+    aspects_unchanged: 4
+    clean_entries: 0
+    flagged_acs:
+      - { ac_id: AC1, issues: [code_locations_placeholder, test_locations_placeholder, aspects_unchanged] }
+      - { ac_id: AC2, issues: [code_locations_placeholder, test_locations_placeholder, aspects_unchanged] }
+      - { ac_id: AC3, issues: [code_locations_placeholder, test_locations_placeholder, aspects_unchanged] }
+      - { ac_id: AC4, issues: [code_locations_placeholder, test_locations_placeholder, aspects_unchanged] }
+
+  qa_reconstructed_traceability:
+    AC1:  # Email signup + bcrypt + users INSERT + verification email
+      code_locations:
+        - apps/auth-svc/internal/handlers/server.go               # RegisterUser RPC entrypoint
+        - apps/auth-svc/internal/password/password.go             # bcrypt cost=12 hash + dummy compare
+        - apps/auth-svc/internal/password/hibp.go                 # k-anonymity client (fail-closed)
+        - apps/auth-svc/internal/repository/users.go              # InsertUser (email UNIQUE)
+        - apps/auth-svc/internal/token/token.go                   # Generate + Store (Redis key auth:email_verify:{sha256})
+        - apps/auth-svc/internal/notification/client.go           # SendEmail gRPC client
+        - apps/auth-svc/internal/audit/kafka.go                   # audit.event publisher
+        - apps/api-gateway/internal/handlers/auth.go              # POST /v1/auth/signup proxy
+        - apps/console/app/[locale]/_actions/auth.ts              # registerUser Server Action
+        - apps/console/app/[locale]/(auth)/signup/page.tsx        # signup form page
+        - apps/console/app/[locale]/(auth)/signup/SignupForm.tsx
+        - apps/console/app/[locale]/(auth)/signup/check-inbox/page.tsx
+      test_locations:
+        - apps/auth-svc/internal/password/password_test.go        # UNIT-001..009
+        - apps/auth-svc/internal/password/hibp_test.go            # UNIT-007..009 fail-closed
+        - apps/auth-svc/internal/repository/users_test.go         # UNIT-020..026
+        - apps/auth-svc/internal/handlers/register_user_test.go   # UNIT-030..046 incl. anti-enumeration timing
+        - apps/auth-svc/internal/token/token_test.go              # UNIT-070..077
+        - apps/api-gateway/internal/handlers/auth_test.go         # signup proxy paths
+        - apps/console/__tests__/2.2-email-signup-password-login-email-verification.test.ts  # UNIT-050..064
+      verification_type: unit_test + integration_test (handlers wires real-ish stack via mocks)
+      aspects_covered:
+        main_scenario: true        # signup → bcrypt → INSERT → token write → SendEmail → audit → response
+        business_rules: true       # BR-1.1..1.9 evidenced; BR-1.5 pending_deletion path verified
+        data_validation: true      # zod (signupSchema) + Go RFC5322 + HIBP
+        error_handling: true       # 7 scenarios in register_user_test.go (HIBP 503, ratelimit 429, dup-silent, notif 500)
+      status: VERIFIED
+      issues: []
+
+    AC2:  # Email verification + resend
+      code_locations:
+        - apps/auth-svc/internal/handlers/server.go               # VerifyEmail + ResendVerification
+        - apps/auth-svc/internal/token/token.go                   # Consume + DeleteForUser + reverse-index
+        - apps/auth-svc/internal/repository/users.go              # MarkEmailVerified + GetUserByID
+        - apps/api-gateway/internal/handlers/auth.go              # GET /v1/auth/verify-email + POST /v1/auth/resend-verification
+        - apps/console/app/[locale]/_actions/auth.ts              # verifyEmailAction + resendVerification
+        - apps/console/app/[locale]/(auth)/verify-email/page.tsx
+        - apps/console/app/[locale]/(auth)/signup/check-inbox/ResendModal.tsx
+      test_locations:
+        - apps/auth-svc/internal/token/token_test.go              # UNIT-071..077 incl. brute-force lockout
+        - apps/auth-svc/internal/handlers/verify_resend_test.go   # UNIT-080..091 incl. m-5 anti-enumeration parity
+        - apps/console/__tests__/2.2-email-signup-password-login-email-verification.test.ts  # AC2 keys + verify wiring
+      verification_type: unit_test
+      aspects_covered:
+        main_scenario: true
+        business_rules: true       # BR-2.1 one-shot, BR-2.2 expiry, BR-2.3 idempotent, BR-2.4 m-5 anti-enum (3-branch parity), BR-2.5 brute-force, BR-2.6 locale stickiness
+        data_validation: true      # 64-char base64url
+        error_handling: true       # 410 expired/used, 400 invalid token, 429 resend rate-limit
+      status: VERIFIED
+      issues: []
+
+    AC3:  # Signin + JWT RS256 + cookies
+      code_locations:
+        - apps/auth-svc/internal/handlers/server.go               # LoginUser + RefreshToken
+        - apps/auth-svc/internal/jwt/jwt.go                       # RS256 sign + JWKS
+        - apps/auth-svc/internal/password/password.go             # CompareHashAndPassword + DummyCompare
+        - apps/auth-svc/internal/repository/users.go              # SelfHealLock + GetUserByEmail + UpdateStatus
+        - apps/auth-svc/internal/ratelimit/ratelimit.go           # signin IP+email keys (Lua atomic)
+        - apps/api-gateway/internal/handlers/auth.go              # POST /v1/auth/signin + /refresh proxy
+        - apps/api-gateway/internal/handlers/cookies.go           # Set-Cookie builder (HttpOnly/Secure/SameSite/Path/Domain/Max-Age per env)
+        - apps/api-gateway/internal/handlers/jwks.go              # /.well-known/jwks.json
+        - apps/console/app/[locale]/_actions/auth.ts              # signinAction
+        - apps/console/app/[locale]/(auth)/signin/page.tsx
+        - apps/console/app/[locale]/(auth)/signin/SigninForm.tsx
+        - apps/console/app/[locale]/(auth)/layout.tsx             # already-signed-in cookie redirect
+      test_locations:
+        - apps/auth-svc/internal/jwt/jwt_test.go                  # UNIT-110..115 incl. alg-confusion + RSA size
+        - apps/auth-svc/internal/handlers/login_user_test.go      # UNIT-132/133 dummy-bcrypt + timing parity, UNIT-139 soft-lock
+        - apps/auth-svc/internal/handlers/refresh_token_test.go   # UNIT-118 atomic rotation, UNIT-119 reuse-detection
+        - apps/api-gateway/internal/handlers/signin_refresh_jwks_test.go  # UNIT-150..153 cookie matrix per env, JWKS headers, 2FA passthrough, reuse-clear
+        - apps/console/__tests__/2.2-email-signup-password-login-email-verification.test.ts
+      verification_type: unit_test
+      aspects_covered:
+        main_scenario: true
+        business_rules: true       # BR-3.1 timing-safe / BR-3.2 dummy-bcrypt / BR-3.3 soft-lock / BR-3.4 cost SLO / BR-3.5 RS256+TTLs / BR-3.6 minimal claims / BR-3.7 cookie matrix / BR-3.8 dual-rate / BR-3.9 family rotation+reuse / BR-3.10 i18n
+        data_validation: true
+        error_handling: true       # 401/403/410/423 + ratelimit 429 + 502
+      status: VERIFIED
+      issues: []
+
+    AC4:  # Cross-cutting security
+      code_locations:
+        - apps/auth-svc/internal/ratelimit/ratelimit.go           # 5 typed keys + EmailHash + Lua atomic INCR+EXPIRE
+        - apps/auth-svc/internal/audit/kafka.go                   # KafkaPublisher (Async, partition by EmailHash, no plaintext PII)
+        - apps/auth-svc/internal/audit/audit.go                   # event schema BR-4.5
+        - apps/auth-svc/internal/metrics/metrics.go               # 5 BR-4.8 counters
+        - apps/api-gateway/internal/middleware/security_headers.go # 5 BR-4.7 headers
+        - apps/api-gateway/internal/middleware/csrf.go            # Origin/Referer allowlist + opaque 403
+        - apps/api-gateway/internal/middleware/jwt_verify.go      # JWT verification middleware (consumer side)
+        - infra/helm/auth-svc/templates/networkpolicy.yaml        # INT-067 default-deny + 3 allow-policies
+        - infra/helm/auth-svc/templates/prometheusrule.yaml       # BR-4.9 alerts (Feishu warning + PagerDuty critical)
+        - infra/grafana-dashboards/auth-svc.json                  # 7 panels
+      test_locations:
+        - apps/auth-svc/internal/ratelimit/ratelimit_test.go      # UNIT-170..175 atomic INCR+EXPIRE + EmailHash + no-plaintext guard
+        - apps/auth-svc/internal/audit/audit_test.go              # UNIT-181 publish-failure non-blocking + BR-4.5 schema + UNIT-184 no-plaintext
+        - apps/auth-svc/internal/audit/kafka_test.go              # BR-4.5 round-trip + partition key
+        - apps/auth-svc/internal/metrics/metrics_test.go          # UNIT-185/186 5 counter names+labels
+        - apps/api-gateway/internal/middleware/middleware_test.go # UNIT-190..194 5 headers + UNIT-195/196 CSRF
+        - apps/console/e2e/2.2-security-attacks.spec.ts           # SEC-A01..A07 (4 implemented; 2 marked test.skip with rationale)
+      verification_type: unit_test (+ partial e2e_test)
+      aspects_covered:
+        main_scenario: true
+        business_rules: true       # BR-4.1..4.9 — see Dev Log §26 traceability matrix
+        data_validation: 'N/A'
+        error_handling: true       # 429 + 423 + 403 CSRF + Kafka-down non-blocking
+      status: VERIFIED_WITH_GAPS
+      gaps:
+        - 'E2E timing-attack probe (SEC-A04 in 2.2-security-attacks.spec.ts) marked test.skip — needs dedicated CI runner with stable timing harness'
+        - 'JWT algorithm-confusion E2E (SEC-A07) marked test.skip — needs JWT-forging helper not yet implemented'
+        - 'INT-064/INT-065/INT-067 testcontainers + NetworkPolicy integration tests not executed (require Kind/Docker env)'
+        - 'INT-060 5-headers E2E across all auth endpoints not executed (covered at unit-middleware layer only)'
+      issues:
+        - { severity: MEDIUM, issue: '2 of 6 E2E security scenarios deferred via test.skip with clear follow-up notes' }
+        - { severity: MEDIUM, issue: 'NetworkPolicy + Kafka integration tests pending real-cluster execution' }
+
+  summary:
+    total_acs: 4
+    fully_verified: 3
+    partially_verified: 1   # AC4 — VERIFIED_WITH_GAPS
+    not_verified: 0
+    coverage_rate: 100      # all ACs implemented + unit-tested; AC4 carries known E2E gaps documented in story
+  blocking_issues_count: 0
+  result: CONCERNS          # Dev's traceability matrix is empty even though QA could reconstruct it; AC4 has known deferrals

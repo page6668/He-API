@@ -1,0 +1,51 @@
+schema: 1
+story: '2.2'
+step: 4
+round: 3
+mode: incremental_independent_rerun
+automated_tests:
+  verification_method: 'independent_execution'
+  test_command: 'CGO_ENABLED=0 go test -count=1 ./apps/{auth-svc,api-gateway,notification-svc}/... ; pnpm vitest run __tests__/2.2-*.test.ts ; pnpm exec tsc --noEmit'
+  exit_code: 0
+  passed: true
+  total: 15  # 9 auth-svc + 3 api-gateway + 3 notification-svc Go packages
+  passed_count: 15
+  failed_count: 0
+  skipped_count: 0
+  pass_rate: 100
+  by_module:
+    auth-svc:
+      audit:        '1.336s OK'
+      handlers:     '2.873s OK'
+      jwt:          '3.806s OK'
+      metrics:      '2.560s OK'
+      notification: '3.843s OK'
+      password:     '47.700s OK (bcrypt cost=12 + statistical timing benchmark)'
+      ratelimit:    '4.616s OK (atomic Lua INCR+EXPIRE)'
+      repository:   '5.887s OK'
+      token:        '5.261s OK'
+    api-gateway:
+      handlers:     '4.039s OK'
+      middleware:   '4.661s OK'
+      cmd_server:   '1.362s OK'
+    notification-svc:
+      handlers:    '2.116s OK'
+      sendgrid:    '5.399s OK'
+      templates:   '2.746s OK'
+  vitest_console:
+    suite_run: '__tests__/2.2-email-signup-password-login-email-verification.test.ts'
+    tests: 32
+    passed: 32
+    failed: 0
+    duration_ms: 610
+  go_vet: 'clean across all 3 modules'
+  tsc_no_emit: 'clean'
+  integrity_check:
+    dev_evidence_found: true
+    dev_claimed_pass: true
+    discrepancy: false
+  issues: []
+notes: |
+  Round 3 incremental sanity run. Dev only modified docs in Round 3 (docs/prd/epic-2-account-i18n.yaml +22 lines
+  and story file) — no source/test files touched, confirmed by `git diff --stat HEAD`. Test outcomes identical to
+  Round 2 baseline as expected. CGO_ENABLED=0 workaround active per OI-2.2-06 (LOW; pre-existing macOS Tahoe / Go 1.22 dyld).

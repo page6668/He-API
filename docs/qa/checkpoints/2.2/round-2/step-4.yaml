@@ -1,0 +1,19 @@
+automated_tests:
+  verification_method: independent_execution_count1
+  passed: true
+  pass_rate: 100
+  exit_code: 0
+  notes: |
+    Round 2 fresh execution (count=1 forces no-cache):
+      - auth-svc:           9 pkg OK   (password 45.5s due to bcrypt cost=12 + timing-attack benchmark)
+      - api-gateway:        3 pkg OK
+      - notification-svc:   3 pkg OK   (cmd/server: no test files)
+      - go vet:             clean across all 3 modules
+      - vitest console:     157 passed | 33 skipped (190)  — same skip set as Round 1 (E2E deferred per OI-2.2-03/04/05)
+      - tsc --noEmit:       clean
+    Workaround active: CGO_ENABLED=0 (LOW issue OI-2.2-06 from Round 1; documented).
+  integrity_check:
+    dev_evidence_found: true
+    dev_claimed_pass: true
+    discrepancy: false
+  issues: []

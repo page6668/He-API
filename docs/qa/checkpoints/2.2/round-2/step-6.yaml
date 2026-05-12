@@ -1,0 +1,18 @@
+evidence:
+  directory: 'docs/qa/checkpoints/2.2/'
+  files_collected: 8
+  inventory:
+    - step-1.yaml         # risk (incremental cached HIGH/full_testing)
+    - step-2.yaml         # project type (incremental cached fullstack)
+    - step-4.yaml         # automated tests Round 2 fresh (count=1) — Go 9+3+3 + vitest + tsc all green
+    - step-4.5.yaml       # checkbox audit — 60/75 ticked (Round 1: 35/75)
+    - step-4.6.yaml       # AC coverage — all 4 ACs VERIFIED (AC4 VERIFIED_WITH_GAPS, mitigation chain documented)
+    - step-4.7.yaml       # regression skip (no root tests/e2e/story-*)
+    - step-5.yaml         # E2E skipped — env not brought up; SEC-A05 statically verified
+    - step-5.5.yaml       # blind spot — incremental skip (no Round 1 missing)
+    - round-1/            # archived Round 1 checkpoints (preserved as evidence)
+  issues_with_evidence: []
+  notes: |
+    Round 2 produced one substantive new finding: deferral path-(b) sub-requirements partially incomplete
+    (no follow-up Story stubs in epic-2 PRD; Architect sign-off pending). All other Round 1 issues
+    fully resolved. See gate file status_reason for the verdict + recommended next action.

@@ -1,0 +1,50 @@
+automated_tests:
+  verification_method: independent_execution
+  passed: true
+  pass_rate: 100
+  notes: |
+    macOS Tahoe (Darwin 25) + Go 1.22 binaries fail at runtime with "missing LC_UUID load command";
+    QA worked around via CGO_ENABLED=0 (pure-Go binaries skip the dyld check).
+    All packages PASS under pure-Go build; functional behavior unaffected.
+  packages:
+    - module: apps/auth-svc
+      command: 'CGO_ENABLED=0 go test -count=1 ./...'
+      results:
+        - { package: cmd/server,                 status: '[no test files]' }
+        - { package: internal/audit,             status: ok, duration_s: 1.43 }
+        - { package: internal/handlers,          status: ok, duration_s: 2.80 }
+        - { package: internal/jwt,               status: ok, duration_s: 4.09 }
+        - { package: internal/metrics,           status: ok, duration_s: 4.70 }
+        - { package: internal/notification,      status: ok, duration_s: 2.74 }
+        - { package: internal/password,          status: ok, duration_s: 46.46 }
+        - { package: internal/ratelimit,         status: ok, duration_s: 4.01 }
+        - { package: internal/repository,        status: ok, duration_s: 6.71 }
+        - { package: internal/token,             status: ok, duration_s: 6.04 }
+    - module: apps/api-gateway
+      command: 'CGO_ENABLED=0 go test -count=1 ./...'
+      results:
+        - { package: cmd/server,                 status: ok, duration_s: 2.14 }
+        - { package: internal/handlers,          status: ok, duration_s: 2.78 }
+        - { package: internal/middleware,        status: ok, duration_s: 1.35 }
+    - module: apps/notification-svc
+      command: 'CGO_ENABLED=0 go test -count=1 ./...'
+      results:
+        - { package: cmd/server,                 status: '[no test files]' }
+        - { package: internal/handlers,          status: ok, duration_s: 0.69 }
+        - { package: internal/sendgrid,          status: ok, duration_s: 3.35 }
+        - { package: internal/templates,         status: ok, duration_s: 1.99 }
+    - module: apps/console
+      command: 'pnpm test'
+      summary: '157 passed | 33 skipped (190 total)'
+      story_2_2_subset:
+        file: __tests__/2.2-email-signup-password-login-email-verification.test.ts
+        passed: 32
+        failed: 0
+    - module: apps/console
+      command: 'pnpm typecheck'
+      result: clean
+  integrity_check:
+    dev_evidence_found: true   # Dev Log §26 records the same test outcomes
+    dev_claimed_pass: true
+    discrepancy: false
+  issues: []

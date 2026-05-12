@@ -1,0 +1,7 @@
+regression:
+  executed: false
+  reason: 'no persisted tests/e2e/story-*.spec.ts at project root (Story 2.1 had no E2E; first auth E2E lives at apps/console/e2e/2.2-*.spec.ts which is not in the regression-suite glob)'
+  passed: true   # null/skipped → treated as pass per Step 4.7.3 contract
+  tests_total: 0
+  tests_failed: 0
+  issues: []

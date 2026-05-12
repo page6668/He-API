@@ -1,0 +1,16 @@
+schema: 1
+story: '2.2'
+step: 5
+round: 3
+mode: incremental_skip
+e2e_tests:
+  executed: false
+  skipped: true
+  skip_reason: |
+    Same as Round 2: docker-compose env (PG + Redis + mailpit + notification-svc + Kafka + Playwright browsers)
+    not brought up locally. SEC-A05 (Critical SEC-008 brute-force mitigation E2E) verified statically as
+    fully-implemented in apps/console/e2e/2.2-security-attacks.spec.ts — no test.skip; full
+    register→verify→5×wrong→6th=423+Retry-After Playwright assertion. Layer 3 of the SEC-008 mitigation chain
+    is therefore in-tree and CI-ready even without local Docker execution.
+  issues: []
+  failed_scenarios: []

@@ -1,0 +1,16 @@
+schema: 1
+story: '2.2'
+step: 2
+round: 3
+mode: incremental_cached
+project_type:
+  type: fullstack
+  subtype: go-grpc-svc + next-bff
+cached_from_round: 2
+test_strategy:
+  primary_tool: bash  # go test / pnpm vitest / tsc
+  requires_environment: true
+  startup_command: 'docker-compose up (mailpit + HIBP + PG + Redis)'
+  expected_port: 3000
+  env_available: false
+  e2e_skip_reason: 'Same as Round 2 — no docker-compose env locally; Playwright suite uses mailpit/HIBP stubs not brought up.'

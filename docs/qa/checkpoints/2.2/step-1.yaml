@@ -1,0 +1,14 @@
+schema: 1
+story: '2.2'
+step: 1
+round: 3
+mode: incremental
+risk_level: HIGH
+review_mode: full_testing
+skip_e2e: false
+cached_from_round: 2
+rationale: |
+  Round 3 incremental — risk_level cached from Round 2 gate file (HIGH). Story is
+  security-sensitive (password storage, JWT, brute-force, email verification);
+  complexity_indicators=7 (api/db/patterns/cross_service/security/core_docs/data_sync);
+  unchanged from R1/R2. Procedural-only fixes in Round 3 do not change risk profile.

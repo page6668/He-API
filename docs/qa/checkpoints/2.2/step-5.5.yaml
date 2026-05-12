@@ -1,0 +1,18 @@
+schema: 1
+story: '2.2'
+step: 5.5
+round: 3
+mode: incremental_cached
+cached_from_round: 2
+blind_spot_verification:
+  total_scenarios: 17
+  covered: 8                        # inherited from Round 1 spot-check
+  coverage_rate: 47                 # spot-check pattern; full sweep deferred to OI-2.2-04 / 2.2-followup-B
+  high_risk_covered: true
+  notes: |
+    Inherited from Round 1 spot-check; no signal of regression. High-impact blind spots confirmed unit-tested:
+    HIBP fail-closed (UNIT-150..152), token brute-force (UNIT-091), refresh-reuse (UNIT-161),
+    soft-lock self-heal (UNIT-139..143), audit Kafka failure (UNIT-181..183), anti-enumeration triple
+    (UNIT-070 + UNIT-110 + UNIT-091). Round 3 was docs-only — no possibility of blind-spot regression.
+  missing_scenarios: []
+  issues: []

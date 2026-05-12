@@ -1,0 +1,9 @@
+risk_level: HIGH
+review_mode: full_testing
+skip_e2e: false
+review_round: 1
+rationale: |
+  Story 2.2 is security_sensitive=true (password storage, JWT issuance, email-verification tokens, brute-force protection),
+  complexity_indicators=7, has_ui_changes=true, has_api_changes=true, has_user_facing_deliverable=true.
+  Risk profile (docs/qa/assessments/2.2-risk-20260512.md) identified 25 risks: 1 Critical (SEC-008 brute-force) /
+  7 High / 15 Medium / 2 Low. Comprehensive test design (187 scenarios, 119 P0).

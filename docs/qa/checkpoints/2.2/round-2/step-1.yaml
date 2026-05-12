@@ -1,0 +1,7 @@
+# Round 2 — incremental mode (cached from Round 1 gate)
+review_round: 2
+review_mode_type: incremental
+risk_level: HIGH
+review_mode: full_testing
+skip_e2e: false   # cached; Round 2 will still keep E2E skipped in Step 5 due to env constraints
+source: cached_from_gate_round_1

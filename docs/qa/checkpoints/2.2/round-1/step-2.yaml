@@ -1,0 +1,17 @@
+project_type:
+  type: fullstack
+  subtype: nextjs_console + go_grpc_services
+  components:
+    - apps/auth-svc           # Go gRPC (handlers, jwt, password, ratelimit, repository, token, audit, notification, metrics)
+    - apps/api-gateway        # Go HTTP gateway (signup/verify-email/signin/refresh/JWKS handlers + middleware)
+    - apps/notification-svc   # Go gRPC (sendgrid + templates)
+    - apps/console            # Next.js 14 App Router (auth route group + Server Actions)
+    - packages/proto          # he.auth.v1 + he.notification.v1 protobuf
+    - migrations/postgres     # Atlas 0002_create_users.sql
+test_strategy:
+  primary_tools: [go_test, vitest, playwright_mcp]
+  requires_environment: false   # QA executed unit/integration test suites that don't need testcontainers; full E2E (mailpit + console + gateway + auth-svc) deferred to a dedicated environment run
+  unit_runners:
+    - 'CGO_ENABLED=0 go test ./...' (per-app)
+    - 'pnpm --filter @he-api/console test'
+    - 'pnpm --filter @he-api/console typecheck'

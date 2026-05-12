@@ -1,0 +1,48 @@
+evidence:
+  directory: 'docs/qa/checkpoints/2.2/'
+  files_collected: 7
+  evidence_inventory:
+    - path: docs/qa/checkpoints/2.2/step-1.yaml
+      kind: risk_classification
+    - path: docs/qa/checkpoints/2.2/step-2.yaml
+      kind: project_type
+    - path: docs/qa/checkpoints/2.2/step-4.yaml
+      kind: automated_test_results
+    - path: docs/qa/checkpoints/2.2/step-4.5.yaml
+      kind: task_checkbox_audit
+    - path: docs/qa/checkpoints/2.2/step-4.6.yaml
+      kind: ac_coverage_qa_reconstructed
+    - path: docs/qa/checkpoints/2.2/step-5.yaml
+      kind: e2e_status
+    - path: docs/qa/checkpoints/2.2/step-5.5.yaml
+      kind: blind_spot_spot_check
+  issues_with_evidence:
+    - issue_id: TRACEABILITY-EMPTY
+      severity: HIGH
+      finding: 'AC Traceability Matrix entirely template-default (story §AC Traceability Matrix lines 1450-1535)'
+      evidence: docs/qa/checkpoints/2.2/step-4.6.yaml (qa_reconstructed_traceability section)
+      reproduction: 'grep -E "code_locations|test_locations|aspects_covered" docs/stories/2.2-email-signup-password-login-email-verification.md | head -40'
+    - issue_id: DEV-RECORD-EMPTY
+      severity: HIGH
+      finding: 'Dev Agent Record fields all <TODO: Dev fill> (Agent Model, Implementation Summary, File List, Database Changes details, API Endpoints — only 1 of 5 REST + 0 of 5 gRPC documented, Open Issues)'
+      evidence: 'docs/stories/2.2-email-signup-password-login-email-verification.md lines 1551-1635'
+    - issue_id: TASK-CHECKBOXES-STALE
+      severity: HIGH
+      finding: '40/75 task checkboxes unchecked despite implementation present and tests green'
+      evidence: docs/qa/checkpoints/2.2/step-4.5.yaml
+    - issue_id: INTEGRATION-DEFERRED
+      severity: HIGH
+      finding: 'T1.5/T2.4/T3.6/T5.1-T5.6 (testcontainers + Playwright E2E) not executed; covered only at unit/handler-mock layer'
+      evidence: docs/qa/checkpoints/2.2/step-5.yaml
+    - issue_id: SECURITY-E2E-PARTIAL
+      severity: MEDIUM
+      finding: 'apps/console/e2e/2.2-security-attacks.spec.ts has 2 of 6 scenarios marked test.skip (timing-probe SEC-A04 + JWT alg-confusion SEC-A07)'
+      evidence: 'apps/console/e2e/2.2-security-attacks.spec.ts'
+    - issue_id: T6-FINAL-VERIFICATION-OPEN
+      severity: MEDIUM
+      finding: 'T6.1..T6.7 (lint / buf-drift / atlas-drift / helm-template / OWASP ASVS L2 / deliverable-bindings grep) not executed'
+      evidence: docs/qa/checkpoints/2.2/step-4.5.yaml
+    - issue_id: GO-TOOLCHAIN-DRIFT
+      severity: LOW
+      finding: 'Go 1.22 binaries refuse to launch on macOS Tahoe (Darwin 25) due to missing LC_UUID; QA worked around via CGO_ENABLED=0. Recommend upgrading to Go 1.23+ or documenting the workaround in CI.'
+      evidence: 'go test ./... output (LC_UUID dyld errors); resolved by CGO_ENABLED=0 rerun'

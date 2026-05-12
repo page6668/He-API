@@ -1,0 +1,33 @@
+schema: 1
+story: '2.2'
+step: 4.6
+round: 3
+mode: incremental_cached
+cached_from_round: 2
+ac_coverage:
+  verification_method: traceability_verification_round_3_inherited
+  coverage_rate: 100
+  passed: true
+  blocking_issues_count: 0
+  failed_acs: []
+  details:
+    AC1: { status: VERIFIED, code_locations: 12, test_locations: 7, all_aspects_covered: true }
+    AC2: { status: VERIFIED, code_locations: 7, test_locations: 3, all_aspects_covered: true }
+    AC3: { status: VERIFIED, code_locations: 12, test_locations: 5, all_aspects_covered: true }
+    AC4:
+      status: VERIFIED_WITH_GAPS
+      code_locations: 9
+      test_locations: 6
+      all_aspects_covered: true   # main + business_rules + error_handling; data_validation N/A
+      gaps_documented:
+        - SEC-A04 timing-probe E2E test.skip (OI-2.2-01)
+        - SEC-A07 JWT alg-confusion E2E test.skip (OI-2.2-02)
+        - INT-060/INT-064/INT-067 testcontainers skip-skeletons (OI-2.2-03)
+      mitigation_chain_for_SEC_008:
+        layer_1_unit: 'UNIT-139 + UNIT-141 + ratelimit_test (atomic Lua)'
+        layer_2_handler: 'login_user_test.go status branches + IP+email rate keys'
+        layer_3_e2e: 'apps/console/e2e/2.2-security-attacks.spec.ts SEC-A05 (full Playwright register→verify→5×wrong→6th=423+Retry-After, no test.skip)'
+  issues: []
+  notes: |
+    Round 3 inherits Round 2 AC coverage verification — Dev only modified docs in Round 3; AC Traceability
+    Matrix entries, source files, and test files are byte-identical to Round 2. No regression.

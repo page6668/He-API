@@ -45,3 +45,25 @@ stories:
       - 注销后账号锁定
       - 30 天内可恢复
       - 30 天后物理删除
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Story 2.2 deferral follow-ups (added 2026-05-12 per QA Round 2 gate
+  # PRD-FOLLOWUP-MISSING — close path-(b) deferral acceptance criteria for
+  # OI-2.2-03/04/05 in docs/stories/2.2-email-signup-password-login-email-verification.md).
+  # Stub schema (Backlog): id + title + description + source_open_issue + status.
+  # ──────────────────────────────────────────────────────────────────────
+  - id: "2.2-followup-A"
+    title: auth-svc integration-test CI matrix (testcontainers PG + Redis + Kafka)
+    description: Bring up `go test -tags=integration ./apps/auth-svc/...` in CI; close 11 skip-skeletons (INT-002/003/020/021/022/040/041/042/050/060/064/067) one PR at a time. Source — Story 2.2 Open Issue OI-2.2-03.
+    source_open_issue: OI-2.2-03
+    status: Backlog
+  - id: "2.2-followup-B"
+    title: Playwright E2E breadth fills for Story 2.2 (17 throw-on-run stubs)
+    description: Enable docker-compose (mailpit + HIBP stub + browsers) in CI and convert 17 QA-authored throw-stubs in `apps/console/e2e/2.2-email-signup-password-login-email-verification.spec.ts` to runnable scenarios, grouped per AC. Helpers already land at P6b. Source — Story 2.2 Open Issue OI-2.2-04.
+    source_open_issue: OI-2.2-04
+    status: Backlog
+  - id: "2.2-followup-C"
+    title: Story 2.2 final-verification CI workflow (lint / buf / atlas / helm / OWASP ASVS L2)
+    description: Author `epic-2-story-2.2-final-verify.yml` running golangci-lint, `buf generate && git diff --exit-code`, `atlas migrate diff`, `helm template ... | kubeconform`, and OWASP ASVS L2 checklist (T6.1/T6.2/T6.4/T6.5). Source — Story 2.2 Open Issue OI-2.2-05.
+    source_open_issue: OI-2.2-05
+    status: Backlog

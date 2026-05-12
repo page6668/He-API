@@ -1,0 +1,9 @@
+project_type:
+  type: fullstack
+  subtype: turbo_pnpm_go_workspace
+test_strategy:
+  primary_tool: bash
+  requires_environment: false   # incremental — independent test runs only (no docker-compose env)
+  startup_command: ''
+  expected_port: 0
+source: cached_from_gate_round_1

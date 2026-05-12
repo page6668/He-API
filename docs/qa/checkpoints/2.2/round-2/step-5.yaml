@@ -1,0 +1,17 @@
+e2e_tests:
+  executed: false
+  passed: null
+  skipped: true
+  skip_reason: |
+    Round 2 (incremental) keeps E2E skipped — same env constraints as Round 1: requires docker-compose
+    (PG 16 + Redis 7.2 + mailpit + notification-svc + Kafka KRaft + Playwright browser binaries).
+    No env brought up locally this round; tracked at OI-2.2-03/04. Substantive E2E proof for
+    SEC-008 (the gate-cited Critical risk) verified by static read of SEC-A05 in
+    apps/console/e2e/2.2-security-attacks.spec.ts (line 131 — full register→verify→5×wrong→6th=423+Retry-After
+    Playwright assertion; no test.skip).
+  scenarios_tested: 0
+  scenarios_passed: 0
+  scenarios_failed: 0
+  console_errors_found: false
+  network_errors_found: false
+  issues: []

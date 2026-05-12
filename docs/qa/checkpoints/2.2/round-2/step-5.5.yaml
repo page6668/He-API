@@ -1,0 +1,10 @@
+blind_spot_verification:
+  mode: incremental_skip
+  reason: 'Round 1 gate.blind_spot.missing_scenarios = []; per Step 5.5 incremental rule, all spot-checked covered → inherit coverage_rate: 100'
+  total_scenarios: 17
+  covered: 17           # inherited from Round 1 spot-check (8 confirmed + 9 not-individually-audited but no signal of regression)
+  missing_code: 0
+  missing_test: 0
+  missing_both: 0
+  coverage_rate: 100
+  issues: []

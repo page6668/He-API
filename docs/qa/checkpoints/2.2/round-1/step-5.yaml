@@ -1,0 +1,15 @@
+e2e_tests:
+  executed: false
+  skipped: true
+  skip_reason: |
+    Full E2E (Playwright + mailpit + console + api-gateway + auth-svc + notification-svc + PG + Redis + Kafka) requires
+    a docker-compose / Kind environment that QA did not bring up this round. Story has an E2E spec at
+    apps/console/e2e/2.2-email-signup-password-login-email-verification.spec.ts plus
+    apps/console/e2e/2.2-security-attacks.spec.ts (4 of 6 scenarios implemented, 2 explicitly test.skip with rationale).
+    Recommend dev-run before close, or schedule under a dedicated infra Story.
+  scenarios_tested: 0
+  scenarios_passed: 0
+  scenarios_failed: 0
+  console_errors_found: null
+  network_errors_found: null
+  issues: []

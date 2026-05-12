@@ -1,0 +1,67 @@
+ac_coverage:
+  verification_method: traceability_verification_round_2
+  coverage_rate: 100
+  passed: true
+  blocking_issues_count: 0
+  failed_acs: []
+  details:
+    AC1:
+      traceability_entry_found: true
+      placeholders_remaining: false
+      code_locations_count: 12
+      test_locations_count: 7
+      aspects_covered:
+        main_scenario: true
+        business_rules: true
+        data_validation: true
+        error_handling: true
+      status: VERIFIED
+    AC2:
+      traceability_entry_found: true
+      placeholders_remaining: false
+      code_locations_count: 7
+      test_locations_count: 3
+      aspects_covered:
+        main_scenario: true
+        business_rules: true
+        data_validation: true
+        error_handling: true
+      status: VERIFIED
+      notes: 'INT-020..022 skip-skeletons under //go:build integration (Docker-CI bound).'
+    AC3:
+      traceability_entry_found: true
+      placeholders_remaining: false
+      code_locations_count: 12
+      test_locations_count: 5
+      aspects_covered:
+        main_scenario: true
+        business_rules: true
+        data_validation: true
+        error_handling: true
+      status: VERIFIED
+      notes: 'INT-040..050 skip-skeletons; E2E-020/021 fully implemented.'
+    AC4:
+      traceability_entry_found: true
+      placeholders_remaining: false
+      code_locations_count: 9
+      test_locations_count: 6
+      aspects_covered:
+        main_scenario: true
+        business_rules: true
+        data_validation: 'N/A'
+        error_handling: true
+      status: VERIFIED_WITH_GAPS
+      gaps_documented:
+        - SEC-A04 timing-probe E2E test.skip with outline (OI-2.2-01)
+        - SEC-A07 JWT alg-confusion E2E test.skip with outline (OI-2.2-02)
+        - INT-060/INT-064/INT-067 testcontainers skip-skeletons (OI-2.2-03)
+      mitigation_chain_for_SEC_008:
+        layer_1_unit: 'UNIT-139 soft-lock + UNIT-141 IP rate-limit + ratelimit_test atomic Lua'
+        layer_2_handler: 'login_user_test.go (status branches + IP+email rate keys)'
+        layer_3_e2e: 'apps/console/e2e/2.2-security-attacks.spec.ts SEC-A05 — full Playwright register→verify→5×wrong→6th=423+Retry-After'
+  issues: []
+  discrepancies: []
+  resolution_summary: |
+    Round 1 finding TRACEABILITY-EMPTY (HIGH) is fully resolved. AC Traceability Matrix now has populated
+    code_locations + test_locations + aspects_covered for all 4 ACs (no template defaults remain).
+    Cross-checked file paths exist on disk; test files contain assertions matching AC requirements.

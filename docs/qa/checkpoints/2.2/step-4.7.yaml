@@ -1,0 +1,16 @@
+schema: 1
+story: '2.2'
+step: 4.7
+round: 3
+mode: incremental_cached
+cached_from_round: 2
+regression:
+  executed: false
+  passed: true
+  tests_total: 0
+  tests_failed: 0
+  reason: |
+    Same as Round 2: no persisted tests/e2e/story-*.spec.ts at project root regression-suite glob; the auth E2E
+    suite at apps/console/e2e/2.2-*.spec.ts is not yet folded into the regression matrix (tracked at OI-2.2-04 +
+    follow-up stub 2.2-followup-B). Sibling Story 2.1 (i18n console skeleton) is unaffected — Round 3 was docs-only.
+  issues: []

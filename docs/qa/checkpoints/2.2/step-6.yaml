@@ -1,0 +1,55 @@
+schema: 1
+story: '2.2'
+step: 6
+round: 3
+evidence:
+  directory: 'docs/qa/checkpoints/2.2/'
+  files_collected: 9
+  inventory:
+    - step-1.yaml          # risk (cached HIGH)
+    - step-2.yaml          # project type (cached fullstack)
+    - step-4.yaml          # Round 3 fresh independent test run — all green
+    - step-4.5.yaml        # checkbox audit (60/75 — unchanged vs R2; no source changes)
+    - step-4.6.yaml        # AC coverage (4/4 VERIFIED — unchanged vs R2)
+    - step-4.7.yaml        # regression skip (same rationale as R2)
+    - step-5.yaml          # E2E skip (no docker env locally)
+    - step-5.5.yaml        # blind spot (inherited spot-check)
+    - step-6.yaml          # this file
+    - round-1/             # archived Round 1 checkpoints
+    - round-2/             # archived Round 2 checkpoints (this round 3 starts fresh)
+  round_2_gate_top_issues_disposition:
+    - id: PRD-FOLLOWUP-MISSING
+      severity_was: HIGH
+      r3_status: RESOLVED
+      verification: |
+        Verified 3 follow-up Story stubs landed in docs/prd/epic-2-account-i18n.yaml lines 55-69:
+          - 2.2-followup-A "auth-svc integration-test CI matrix" → OI-2.2-03
+          - 2.2-followup-B "Playwright E2E breadth fills for Story 2.2" → OI-2.2-04
+          - 2.2-followup-C "Story 2.2 final-verification CI workflow" → OI-2.2-05
+        Each stub has: id + title + description (with OI cross-reference) + source_open_issue + status: Backlog.
+        Matches gate suggested_action exactly. Block-header comment explains provenance (lines 50-54).
+    - id: ARCHITECT-SIGNOFF-PENDING
+      severity_was: MEDIUM
+      r3_status: PROCEDURALLY_ADDRESSED_AWAITING_VERDICT
+      verification: |
+        OI-2.2-03 architect_signoff_request block present (story lines 2009-2028):
+          requested_by: 'Dev (Linus)'
+          requested_on: '2026-05-12'
+          requested_to: 'Architect (Wright)'
+          mitigation_chain_to_review: SEC-008 3-layer end-to-end proof enumerated (UNIT-139 +
+            ratelimit_test + SEC-A05 Playwright)
+          decision_paths_offered: 3 (GRANT_SIGNOFF / CONCERNS / ESCALATE)
+          verdict: 'PENDING_ARCHITECT_REVIEW'
+        Top-level deferral_approved_by (story line 2067) flipped from 'pending' to
+        'REQUESTED 2026-05-12 ... PENDING_ARCHITECT_VERDICT'.
+        Dev's Round 2 contractual ask was "tag Architect via OI-2.2-03 update" — completed exactly as gate asked.
+        Architect-side verdict is downstream-async; SEC-008 substantive concern materially mitigated via SEC-A05
+        Playwright (Round 2 gate explicitly: "rationale for requiring sign-off has been weakened").
+    - id: SEC-A04-A07-CARRYOVER
+      severity_was: LOW
+      r3_status: CARRY_OVER_ACCEPTABLE
+      verification: |
+        Unchanged: SEC-A04 + SEC-A07 remain test.skip in apps/console/e2e/2.2-security-attacks.spec.ts
+        lines 108, 211. Underlying defenses unit-tested at UNIT-133 + UNIT-115. Documented at OI-2.2-01/02 with
+        implementation outlines. Round 2 gate explicitly allowed as carry-over (downgraded MEDIUM → LOW in R2).
+  issues_with_evidence: []

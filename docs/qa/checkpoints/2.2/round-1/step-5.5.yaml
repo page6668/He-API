@@ -1,0 +1,21 @@
+blind_spot_verification:
+  notes: |
+    Test design (docs/qa/assessments/2.2-test-design-20260512.md) declares 17 BLIND-SPOT scenarios.
+    Spot-check on the high-impact ones (BOUNDARY/ERROR/CONCURRENCY) shows code handling exists in:
+      - HIBP fail-closed (ERROR)        → apps/auth-svc/internal/password/hibp.go + hibp_test.go
+      - Token brute-force lockout       → apps/auth-svc/internal/token/token.go (DeleteForUser at attempts==5) + token_test.go UNIT-077
+      - Refresh-token reuse detection   → apps/auth-svc/internal/handlers/refresh_token_test.go UNIT-119 (luaRotateRefreshFamily)
+      - Self-heal soft-lock (FLOW)      → apps/auth-svc/internal/repository/users.go SelfHealLock + login_user_test.go
+      - Audit Kafka publish failure     → apps/auth-svc/internal/audit/audit_test.go UNIT-181 PublishBestEffort
+      - Anti-enumeration (resend m-5)   → apps/auth-svc/internal/handlers/verify_resend_test.go UNIT-087/088/091
+      - Anti-enumeration (signup BR-1.4)→ apps/auth-svc/internal/handlers/register_user_test.go UNIT-037 timing parity
+      - CSRF Origin allowlist           → apps/api-gateway/internal/middleware/csrf.go + middleware_test.go UNIT-195/196
+    Full per-blind-spot audit not executed; QA-reconstructed AC4 traceability covers the highest-risk items.
+  total_scenarios: 17
+  covered: 8        # spot-checked
+  missing_code: 0
+  missing_test: 9   # not blind spots failing — the remaining 9 not individually audited this round
+  missing_both: 0
+  coverage_rate: 47   # spot-check rate; not full-scan
+  issues:
+    - { severity: MEDIUM, category: COVERAGE, description: 'Remaining 9 blind-spot scenarios not individually audited; recommend incremental round if Dev populates AC traceability' }
