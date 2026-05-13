@@ -1,0 +1,7 @@
+review_mode_type: incremental
+review_round: 2
+previous_gate: docs/qa/gates/2.3-oauth-google-github.yml
+previous_round_result: CONCERNS
+cached_risk_level: HIGH
+cached_review_mode: full_testing
+cached_project_type: fullstack

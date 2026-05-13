@@ -1,0 +1,29 @@
+automated_tests:
+  verification_method: independent_execution
+  go:
+    test_command: "CGO_ENABLED=0 go test ./apps/auth-svc/... ./apps/api-gateway/..."
+    exit_code: 0
+    passed: true
+    packages_total: 14
+    packages_failed: 0
+    pass_rate: 100
+  vitest:
+    test_command: "pnpm --filter @he-api/console test"
+    exit_code: 0
+    passed: true
+    total: 203
+    passed_count: 170
+    failed_count: 0
+    skipped_count: 33
+    pass_rate: 100  # 170/170 active tests
+    story_2_3_file:
+      file: "apps/console/__tests__/2.3-oauth-google-github.test.ts"
+      tests: 13
+      passed: 13
+      failed: 0
+      previously: "13 throwing stubs (Round 1)"
+  integrity_check:
+    dev_evidence_found: true
+    dev_claimed_pass: true
+    discrepancy: false
+  issues: []

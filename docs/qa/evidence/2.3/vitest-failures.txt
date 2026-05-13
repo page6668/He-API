@@ -1,0 +1,40 @@
+     → Test not implemented: 2.3-UNIT-062
+     → Test not implemented: 2.3-UNIT-062 (zh-CN)
+     → Test not implemented: 2.3-UNIT-062 (ja)
+     → Test not implemented: 2.3-UNIT-062 (ko)
+     → Test not implemented: 2.3-UNIT-062 (ar)
+     → Test not implemented: 2.3-UNIT-063 (Google)
+     → Test not implemented: 2.3-UNIT-063 (GitHub)
+     → Test not implemented: 2.3-UNIT-064 (en complete)
+     → Test not implemented: 2.3-UNIT-064 (placeholder fallback)
+     → Test not implemented: 2.3-UNIT-065
+     → Test not implemented: 2.3-UNIT-065 (valid providers)
+     → Test not implemented: 2.3-UNIT-066
+     → Test not implemented: 2.3-BLIND-FLOW-002
+⎯⎯⎯⎯⎯⎯ Failed Tests 13 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  __tests__/2.3-oauth-google-github.test.ts > AC4: <OAuthButtonGroup> locale-aware ordering and rendering > UNIT-062: en locale renders Google button first, GitHub second
+Error: Test not implemented: 2.3-UNIT-062
+     31|     throw new Error('Test not implemented: 2.3-UNIT-062');
+ FAIL  __tests__/2.3-oauth-google-github.test.ts > AC4: <OAuthButtonGroup> locale-aware ordering and rendering > UNIT-062: zh-CN locale renders GitHub button first (Asia preference)
+Error: Test not implemented: 2.3-UNIT-062 (zh-CN)
+     40|     throw new Error('Test not implemented: 2.3-UNIT-062 (zh-CN)');
+ FAIL  __tests__/2.3-oauth-google-github.test.ts > AC4: <OAuthButtonGroup> locale-aware ordering and rendering > UNIT-062: ja locale renders GitHub button first
+Error: Test not implemented: 2.3-UNIT-062 (ja)
+     49|     throw new Error('Test not implemented: 2.3-UNIT-062 (ja)');
+ FAIL  __tests__/2.3-oauth-google-github.test.ts > AC4: <OAuthButtonGroup> locale-aware ordering and rendering > UNIT-062: ko locale renders GitHub button first
+Error: Test not implemented: 2.3-UNIT-062 (ko)
+     58|     throw new Error('Test not implemented: 2.3-UNIT-062 (ko)');
+ FAIL  __tests__/2.3-oauth-google-github.test.ts > AC4: <OAuthButtonGroup> locale-aware ordering and rendering > UNIT-062: ar locale renders RTL with mirrored visual order (logical Google-first)
+Error: Test not implemented: 2.3-UNIT-062 (ar)
+     67|     throw new Error('Test not implemented: 2.3-UNIT-062 (ar)');
+ FAIL  __tests__/2.3-oauth-google-github.test.ts > AC4: <OAuthButtonGroup> locale-aware ordering and rendering > UNIT-063: Google button renders brand-color logo (#4285F4 background + white logo)
+Error: Test not implemented: 2.3-UNIT-063 (Google)
+     76|     throw new Error('Test not implemented: 2.3-UNIT-063 (Google)');
+ FAIL  __tests__/2.3-oauth-google-github.test.ts > AC4: <OAuthButtonGroup> locale-aware ordering and rendering > UNIT-063: GitHub button renders Octocat monochrome logo
+Error: Test not implemented: 2.3-UNIT-063 (GitHub)
+     84|     throw new Error('Test not implemented: 2.3-UNIT-063 (GitHub)');
+ FAIL  __tests__/2.3-oauth-google-github.test.ts > AC4: i18n auth.json oauth.* keys > UNIT-064: en messages contain all 14 oauth.* keys with non-empty values
+Error: Test not implemented: 2.3-UNIT-064 (en complete)
+     99|     throw new Error('Test not implemented: 2.3-UNIT-064 (en complete)'…
+ FAIL  __tests__/2.3-oauth-google-github.test.ts > AC4: i18n auth.json oauth.* keys > UNIT-064: 9 non-en locales contain oauth.* keys with placeholder pattern fallback
+Error: Test not implemented: 2.3-UNIT-064 (placeholder fallback)

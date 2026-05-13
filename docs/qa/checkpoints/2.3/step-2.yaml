@@ -1,0 +1,9 @@
+project_type:
+  type: fullstack
+  subtype: go_connect_rpc + next_app_router
+test_strategy:
+  primary_tool: bash
+  requires_environment: false  # Round 2 incremental: re-verify fixed unit/integration tests; E2E still CI-gated
+  startup_command: ""
+  expected_port: 0
+note: "Cached from previous round per incremental mode (Step 2 SKIP)."

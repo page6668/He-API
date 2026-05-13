@@ -1,0 +1,10 @@
+regression:
+  executed: true
+  passed: true
+  scope: "Story 2.1 + Story 2.2 suites (via go test ./apps/auth-svc/... ./apps/api-gateway/... + pnpm console test)"
+  story_2_1_console_test_file: "apps/console/__tests__/2.1-nextjs-console-skeleton-i18n.test.ts → 158 tests, 33 skipped, 0 failed"
+  story_2_2_console_test_file: "apps/console/__tests__/2.2-email-signup-password-login-email-verification.test.ts → 32 tests, 0 failed"
+  go_packages_unchanged: 14
+  tests_total: ~145 Go + 170 vitest
+  tests_failed: 0
+  issues: []

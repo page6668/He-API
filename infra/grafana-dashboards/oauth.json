@@ -1,0 +1,165 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "id": 1,
+      "title": "OAuth Initiate Rate (per provider)",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [
+        {
+          "expr": "sum by (provider) (rate(auth_oauth_initiate_total[1m]))",
+          "legendFormat": "{{provider}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "reqps", "color": {"mode": "palette-classic"}}}
+    },
+    {
+      "id": 2,
+      "title": "OAuth Callback Success Rate (per provider)",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [
+        {
+          "expr": "sum by (provider) (rate(auth_oauth_callback_total{outcome=\"success\"}[1m])) / sum by (provider) (rate(auth_oauth_callback_total[1m]))",
+          "legendFormat": "{{provider}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}}
+    },
+    {
+      "id": 3,
+      "title": "Link Branch Distribution (Branch A/B/C + rejections)",
+      "type": "timeseries",
+      "description": "Per-branch link outcome counters; spike in B.4/B.5 = potential probing.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "targets": [
+        {
+          "expr": "sum by (branch) (rate(auth_oauth_link_total[5m]))",
+          "legendFormat": "{{branch}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "reqps"}}
+    },
+    {
+      "id": 4,
+      "title": "Provider Latency (p50/p95/p99 per endpoint)",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, provider, endpoint) (rate(auth_oauth_provider_latency_seconds_bucket[5m])))",
+          "legendFormat": "p50 {{provider}} {{endpoint}}",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, provider, endpoint) (rate(auth_oauth_provider_latency_seconds_bucket[5m])))",
+          "legendFormat": "p95 {{provider}} {{endpoint}}",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le, provider, endpoint) (rate(auth_oauth_provider_latency_seconds_bucket[5m])))",
+          "legendFormat": "p99 {{provider}} {{endpoint}}",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "id": 5,
+      "title": "Callback Error Distribution",
+      "type": "piechart",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 16},
+      "targets": [
+        {
+          "expr": "sum by (outcome) (rate(auth_oauth_callback_total{outcome!=\"success\"}[5m]))",
+          "legendFormat": "{{outcome}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "2FA-Required Path (per provider)",
+      "type": "timeseries",
+      "description": "BR-3.5 hook — OAuth login that required 2FA challenge (proxy: link outcomes where the upstream RequiresMFA=true). Visible once Story 2.4 lands.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 16},
+      "targets": [
+        {
+          "expr": "sum by (provider) (rate(auth_oauth_callback_total{outcome=\"requires_2fa\"}[5m]))",
+          "legendFormat": "{{provider}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "reqps"}}
+    },
+    {
+      "id": 7,
+      "title": "Cumulative New User Signups via OAuth (Branch C)",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 16},
+      "targets": [
+        {
+          "expr": "sum(auth_oauth_link_total{branch=\"C\"})",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "short", "color": {"mode": "value"}}}
+    },
+    {
+      "id": 8,
+      "title": "OAuth Bypassed-Lock Rate (m-3) — security signal",
+      "description": "Rate of OAuth logins that bypassed users.status='locked' soft-lock per BR-3.10. Sustained non-zero values for the same user_id_hash suggest brute-force probing on a password account being kept alive via OAuth.",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24},
+      "targets": [
+        {
+          "expr": "sum(rate(auth_oauth_link_total{branch=\"A\", was_locked=\"true\"}[5m]))",
+          "legendFormat": "bypassed-lock rate (overall)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 0.1},
+              {"color": "red", "value": 0.5}
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["oauth", "auth", "story-2.3"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {},
+  "timezone": "",
+  "title": "Auth OAuth (Story 2.3)",
+  "uid": "auth-oauth-2-3",
+  "version": 1,
+  "weekStart": ""
+}

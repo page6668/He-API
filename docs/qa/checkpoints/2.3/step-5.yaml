@@ -1,0 +1,23 @@
+e2e_tests:
+  executed: false
+  skipped: true
+  skip_reason: "Local Playwright browsers + docker-compose oauth-mock stack absent. Spec file is implemented (4 active scenarios + 9 test.skip with explicit CI references)."
+  spec_file: apps/console/e2e/2.3-oauth-google-github.spec.ts
+  spec_status:
+    active_scenarios: [E2E-001, E2E-002, E2E-005, E2E-007]
+    test_skip_scenarios: [E2E-003, E2E-004, E2E-006, E2E-008, E2E-009, E2E-010, E2E-011, BLIND-FLOW-001, BLIND-FLOW-003]
+    round_1_minimum_requirement: "Implement E2E-001/002 (Google Branch C) + E2E-005 (GitHub Branch C)"
+    round_1_minimum_met: true
+    round_1_exceeded_by: ["E2E-007 (open-redirect)"]
+  attack_spec_file: apps/console/e2e/2.3-oauth-google-github-attacks.spec.ts
+  attack_spec_status:
+    active_scenarios: [SEC-A03, SEC-A04, SEC-A06]
+    test_skip_scenarios: [SEC-A01, SEC-A02, SEC-A05, SEC-A07, SEC-A08]
+    round_1_minimum_requirement: "Stub all SEC-A01..A08 scenarios"
+    round_1_minimum_met: true
+    round_1_exceeded_by: ["3 of 8 scenarios are executable (not just stubs)"]
+  scenarios_required: 11
+  scenarios_implemented_local: 4
+  scenarios_implemented_attack: 3
+  scenarios_ci_gated: 16  # 9 main + 5 attacks + 2 BLIND-FLOW
+  issues: []

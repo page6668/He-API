@@ -19,6 +19,15 @@ service AuthService {
   rpc ResendVerification(ResendVerificationRequest) returns (ResendVerificationResponse);
   rpc LoginUser(LoginUserRequest) returns (LoginUserResponse);
   rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse);
+
+  // Story 2.3 — OAuth (Google + GitHub) Authorization Code + PKCE flow.
+  // BeginOAuth: generate state + PKCE verifier, persist to Redis (TTL=600s
+  // GETDEL one-shot per Wright Round 1 Q1=(a)), return provider authorize URL.
+  // CompleteOAuth: redeem code+state, validate provider token, execute
+  // verify-only auto-link decision (Wright Round 1 Q2=(a); 10 branches per
+  // BR-3.1..BR-3.10), issue JWT (Story 2.2 jwt pkg) or 2FA challenge.
+  rpc BeginOAuth(BeginOAuthRequest) returns (BeginOAuthResponse);
+  rpc CompleteOAuth(CompleteOAuthRequest) returns (CompleteOAuthResponse);
 }
 
 // --- RegisterUser --------------------------------------------------------
@@ -111,4 +120,87 @@ message RefreshTokenResponse {
   string refresh_token = 2; // rotated jti; old jti DEL'd in Redis
   int32 access_token_expires_in_seconds = 3;
   int32 refresh_token_expires_in_seconds = 4;
+}
+
+// --- BeginOAuth (Story 2.3) ---------------------------------------------
+
+message BeginOAuthRequest {
+  // "google" | "github" — validated server-side; unknown values rejected
+  // with INVALID_ARGUMENT.
+  string provider = 1;
+  // Caller-requested post-callback destination. MUST pass the api-gateway
+  // allow-list (BR-1.5) before reaching Redis; rejection happens before any
+  // state write.
+  string return_to = 2;
+  // next-intl locale propagated for provider hl= hint + Branch C INSERT
+  // locale column.
+  string locale = 3;
+  // Client-attribution metadata. api-gateway populates from request headers
+  // and X-Forwarded-For first-hop; auth-svc hashes both for state binding
+  // (BR-1.6) — relaxed to /24 IPv4 / /64 IPv6 per Wright Round 1 m-4 ruling.
+  string client_ip = 4;
+  string user_agent = 5;
+}
+
+message BeginOAuthResponse {
+  // Provider authorize endpoint URL with state + PKCE code_challenge + scope
+  // + redirect_uri. api-gateway forwards via 302 Location header.
+  string authorize_url = 1;
+  // Raw base64url state_id (≥256-bit entropy crypto/rand 32 bytes). The
+  // api-gateway stamps this verbatim into the short-lived he_oauth_state
+  // cookie (Path=/v1/auth/oauth, Secure, HttpOnly, SameSite=Lax, Max-Age=600)
+  // per BR-1.3.
+  string state_id = 2;
+  // Unix-seconds expiry of the state (now + 600s). Used by api-gateway for
+  // cookie Max-Age + observability.
+  int64 expires_at_unix = 3;
+}
+
+// --- CompleteOAuth (Story 2.3) ------------------------------------------
+
+message CompleteOAuthRequest {
+  string provider = 1;
+  // Provider-issued authorization code from the callback URL query.
+  string code = 2;
+  // Raw state_id extracted from query AND he_oauth_state cookie (caller
+  // verifies cookie == query before invocation; auth-svc re-verifies the
+  // Redis sha256(state_id) match).
+  string state_id = 3;
+  string client_ip = 4;
+  string user_agent = 5;
+}
+
+message CompleteOAuthResponse {
+  // Newly created or existing user UUID. Populated on success only.
+  string user_id = 1;
+  // RS256 JWT access token (15 min) on full session; or 90s-exp 2FA
+  // challenge token when requires_2fa=true (Story 2.2 BR-3.5 hook).
+  string access_token = 2;
+  // RS256 JWT refresh token (7 days). Empty when requires_2fa=true.
+  string refresh_token = 3;
+  // True when users.totp_enabled — caller MUST redirect to /2fa-challenge
+  // instead of return_to.
+  bool requires_2fa = 4;
+  // True for Branch C (new-user-via-OAuth); false for Branch A/B.
+  bool is_new_user = 5;
+  // Branch outcome for audit + observability; never user-facing.
+  // Renamed from `OAuthLinkOutcome` to `LinkOutcome` to satisfy buf lint
+  // (the canonical enum-value prefix rule treats "OAuth" as "O" + "Auth";
+  // semantically identical; CompleteOAuth scope makes the OAuth context
+  // explicit at the response level).
+  LinkOutcome link_outcome = 6;
+  // Validated post-callback redirect target. Always within allow-list per
+  // BR-1.5; api-gateway emits 302 Location with this value.
+  string return_to = 7;
+}
+
+enum LinkOutcome {
+  LINK_OUTCOME_UNSPECIFIED = 0;
+  // Branch C — fresh INSERT (email did not exist in users).
+  LINK_OUTCOME_NEW_USER = 1;
+  // Branch B.1 — existing-verified-user auto-link (UPDATE oauth_provider,
+  // oauth_subject).
+  LINK_OUTCOME_LINKED = 2;
+  // Branch A — existing OAuth user re-login (UPDATE updated_at only).
+  LINK_OUTCOME_RELOGIN = 3;
 }

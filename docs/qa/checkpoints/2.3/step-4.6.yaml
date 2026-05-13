@@ -1,0 +1,22 @@
+ac_coverage:
+  verification_method: incremental_traceability_verification
+  scope: previous_failed_acs
+  previous_failed_acs: []  # Round 1: 0 AC failures structurally; only semantic gaps tracked as M1/M2/M3
+  semantic_gaps_status:
+    BR-3.9_hashed_PII:
+      previously: MEDIUM (QA-2.3-M1)
+      status: RESOLVED
+      evidence: "apps/auth-svc/internal/handlers/server.go lines 231/239/288/308/322/339/357/531/600/608/628/654/673/702/717/785/876/932/955/1277 populate EmailHash; 1404-1489 populate Metadata.subject_hash via oauth.HashSubject"
+    BR-3.10_was_locked_jwt_claim:
+      previously: MEDIUM (QA-2.3-M2)
+      status: RESOLVED
+      evidence: "apps/auth-svc/internal/jwt/jwt.go:90 Claims.WasLocked + lines 155-175 SignAccessTokenWithLockBypass. Test TestSignAccessTokenWithLockBypass_EmbedsClaim passes in jwt package."
+    BR-4.3_event_taxonomy:
+      previously: MEDIUM (QA-2.3-M3)
+      status: RESOLVED
+      evidence: "apps/auth-svc/internal/audit/audit.go lines 46-57: 12 OAuth event types (EventOAuthLinkRejConflict retired; added RejSubjectMismatch, RejOtherProvider, CallbackRejSuspended, InvalidReturnTo). grep confirms no remaining references to retired constant."
+  coverage_rate: 100
+  passed: true
+  blocking_issues_count: 0
+  failed_acs: []
+  issues: []

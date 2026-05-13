@@ -56,6 +56,11 @@ const (
 	// AuthServiceRefreshTokenProcedure is the fully-qualified name of the AuthService's RefreshToken
 	// RPC.
 	AuthServiceRefreshTokenProcedure = "/he.auth.v1.AuthService/RefreshToken"
+	// AuthServiceBeginOAuthProcedure is the fully-qualified name of the AuthService's BeginOAuth RPC.
+	AuthServiceBeginOAuthProcedure = "/he.auth.v1.AuthService/BeginOAuth"
+	// AuthServiceCompleteOAuthProcedure is the fully-qualified name of the AuthService's CompleteOAuth
+	// RPC.
+	AuthServiceCompleteOAuthProcedure = "/he.auth.v1.AuthService/CompleteOAuth"
 )
 
 // These variables are the protoreflect.Descriptor objects for the RPCs defined in this package.
@@ -66,6 +71,8 @@ var (
 	authServiceResendVerificationMethodDescriptor = authServiceServiceDescriptor.Methods().ByName("ResendVerification")
 	authServiceLoginUserMethodDescriptor          = authServiceServiceDescriptor.Methods().ByName("LoginUser")
 	authServiceRefreshTokenMethodDescriptor       = authServiceServiceDescriptor.Methods().ByName("RefreshToken")
+	authServiceBeginOAuthMethodDescriptor         = authServiceServiceDescriptor.Methods().ByName("BeginOAuth")
+	authServiceCompleteOAuthMethodDescriptor      = authServiceServiceDescriptor.Methods().ByName("CompleteOAuth")
 )
 
 // AuthServiceClient is a client for the he.auth.v1.AuthService service.
@@ -75,6 +82,14 @@ type AuthServiceClient interface {
 	ResendVerification(context.Context, *connect.Request[v1.ResendVerificationRequest]) (*connect.Response[v1.ResendVerificationResponse], error)
 	LoginUser(context.Context, *connect.Request[v1.LoginUserRequest]) (*connect.Response[v1.LoginUserResponse], error)
 	RefreshToken(context.Context, *connect.Request[v1.RefreshTokenRequest]) (*connect.Response[v1.RefreshTokenResponse], error)
+	// Story 2.3 — OAuth (Google + GitHub) Authorization Code + PKCE flow.
+	// BeginOAuth: generate state + PKCE verifier, persist to Redis (TTL=600s
+	// GETDEL one-shot per Wright Round 1 Q1=(a)), return provider authorize URL.
+	// CompleteOAuth: redeem code+state, validate provider token, execute
+	// verify-only auto-link decision (Wright Round 1 Q2=(a); 10 branches per
+	// BR-3.1..BR-3.10), issue JWT (Story 2.2 jwt pkg) or 2FA challenge.
+	BeginOAuth(context.Context, *connect.Request[v1.BeginOAuthRequest]) (*connect.Response[v1.BeginOAuthResponse], error)
+	CompleteOAuth(context.Context, *connect.Request[v1.CompleteOAuthRequest]) (*connect.Response[v1.CompleteOAuthResponse], error)
 }
 
 // NewAuthServiceClient constructs a client for the he.auth.v1.AuthService service. By default, it
@@ -117,6 +132,18 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceRefreshTokenMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
+		beginOAuth: connect.NewClient[v1.BeginOAuthRequest, v1.BeginOAuthResponse](
+			httpClient,
+			baseURL+AuthServiceBeginOAuthProcedure,
+			connect.WithSchema(authServiceBeginOAuthMethodDescriptor),
+			connect.WithClientOptions(opts...),
+		),
+		completeOAuth: connect.NewClient[v1.CompleteOAuthRequest, v1.CompleteOAuthResponse](
+			httpClient,
+			baseURL+AuthServiceCompleteOAuthProcedure,
+			connect.WithSchema(authServiceCompleteOAuthMethodDescriptor),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -127,6 +154,8 @@ type authServiceClient struct {
 	resendVerification *connect.Client[v1.ResendVerificationRequest, v1.ResendVerificationResponse]
 	loginUser          *connect.Client[v1.LoginUserRequest, v1.LoginUserResponse]
 	refreshToken       *connect.Client[v1.RefreshTokenRequest, v1.RefreshTokenResponse]
+	beginOAuth         *connect.Client[v1.BeginOAuthRequest, v1.BeginOAuthResponse]
+	completeOAuth      *connect.Client[v1.CompleteOAuthRequest, v1.CompleteOAuthResponse]
 }
 
 // RegisterUser calls he.auth.v1.AuthService.RegisterUser.
@@ -154,6 +183,16 @@ func (c *authServiceClient) RefreshToken(ctx context.Context, req *connect.Reque
 	return c.refreshToken.CallUnary(ctx, req)
 }
 
+// BeginOAuth calls he.auth.v1.AuthService.BeginOAuth.
+func (c *authServiceClient) BeginOAuth(ctx context.Context, req *connect.Request[v1.BeginOAuthRequest]) (*connect.Response[v1.BeginOAuthResponse], error) {
+	return c.beginOAuth.CallUnary(ctx, req)
+}
+
+// CompleteOAuth calls he.auth.v1.AuthService.CompleteOAuth.
+func (c *authServiceClient) CompleteOAuth(ctx context.Context, req *connect.Request[v1.CompleteOAuthRequest]) (*connect.Response[v1.CompleteOAuthResponse], error) {
+	return c.completeOAuth.CallUnary(ctx, req)
+}
+
 // AuthServiceHandler is an implementation of the he.auth.v1.AuthService service.
 type AuthServiceHandler interface {
 	RegisterUser(context.Context, *connect.Request[v1.RegisterUserRequest]) (*connect.Response[v1.RegisterUserResponse], error)
@@ -161,6 +200,14 @@ type AuthServiceHandler interface {
 	ResendVerification(context.Context, *connect.Request[v1.ResendVerificationRequest]) (*connect.Response[v1.ResendVerificationResponse], error)
 	LoginUser(context.Context, *connect.Request[v1.LoginUserRequest]) (*connect.Response[v1.LoginUserResponse], error)
 	RefreshToken(context.Context, *connect.Request[v1.RefreshTokenRequest]) (*connect.Response[v1.RefreshTokenResponse], error)
+	// Story 2.3 — OAuth (Google + GitHub) Authorization Code + PKCE flow.
+	// BeginOAuth: generate state + PKCE verifier, persist to Redis (TTL=600s
+	// GETDEL one-shot per Wright Round 1 Q1=(a)), return provider authorize URL.
+	// CompleteOAuth: redeem code+state, validate provider token, execute
+	// verify-only auto-link decision (Wright Round 1 Q2=(a); 10 branches per
+	// BR-3.1..BR-3.10), issue JWT (Story 2.2 jwt pkg) or 2FA challenge.
+	BeginOAuth(context.Context, *connect.Request[v1.BeginOAuthRequest]) (*connect.Response[v1.BeginOAuthResponse], error)
+	CompleteOAuth(context.Context, *connect.Request[v1.CompleteOAuthRequest]) (*connect.Response[v1.CompleteOAuthResponse], error)
 }
 
 // NewAuthServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -199,6 +246,18 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceRefreshTokenMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceBeginOAuthHandler := connect.NewUnaryHandler(
+		AuthServiceBeginOAuthProcedure,
+		svc.BeginOAuth,
+		connect.WithSchema(authServiceBeginOAuthMethodDescriptor),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceCompleteOAuthHandler := connect.NewUnaryHandler(
+		AuthServiceCompleteOAuthProcedure,
+		svc.CompleteOAuth,
+		connect.WithSchema(authServiceCompleteOAuthMethodDescriptor),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/he.auth.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthServiceRegisterUserProcedure:
@@ -211,6 +270,10 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceLoginUserHandler.ServeHTTP(w, r)
 		case AuthServiceRefreshTokenProcedure:
 			authServiceRefreshTokenHandler.ServeHTTP(w, r)
+		case AuthServiceBeginOAuthProcedure:
+			authServiceBeginOAuthHandler.ServeHTTP(w, r)
+		case AuthServiceCompleteOAuthProcedure:
+			authServiceCompleteOAuthHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -238,4 +301,12 @@ func (UnimplementedAuthServiceHandler) LoginUser(context.Context, *connect.Reque
 
 func (UnimplementedAuthServiceHandler) RefreshToken(context.Context, *connect.Request[v1.RefreshTokenRequest]) (*connect.Response[v1.RefreshTokenResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.RefreshToken is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) BeginOAuth(context.Context, *connect.Request[v1.BeginOAuthRequest]) (*connect.Response[v1.BeginOAuthResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.BeginOAuth is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) CompleteOAuth(context.Context, *connect.Request[v1.CompleteOAuthRequest]) (*connect.Response[v1.CompleteOAuthResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.CompleteOAuth is not implemented"))
 }

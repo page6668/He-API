@@ -1,0 +1,5 @@
+evidence:
+  directory: docs/qa/evidence/2.3/
+  files_collected: 0  # Round 1 vitest-failures.txt is now stale (vitest now PASS); no new failures to capture
+  issues_with_evidence: []
+  note: "Round 2 had zero new test failures or blocking issues; evidence collection unnecessary."

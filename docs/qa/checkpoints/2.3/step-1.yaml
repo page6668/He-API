@@ -1,0 +1,5 @@
+risk_level: HIGH
+review_mode: full_testing
+skip_e2e: false
+review_round: 2
+note: "Cached from previous round per incremental mode (Step 1 SKIP)."

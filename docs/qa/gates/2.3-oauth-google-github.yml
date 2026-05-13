@@ -1,0 +1,195 @@
+schema: 1
+story: '2.3'
+slug: oauth-google-github
+gate: PASS
+status_reason: |
+  Round 2 incremental review verifies all Round 1 blocking items closed.
+  HIGH ×3 (Vitest stubs, Playwright minimum-viable E2E, attack spec file)
+  resolved; MEDIUM ×6 closed except M4 testcontainers (acceptable CI
+  deferral per Round 1 acceptance) — M1 hashed-PII / M2 was_locked JWT
+  claim / M3 12-event taxonomy / M5 OWASP ASVS L2 checklist / M6
+  CONCURRENCY-001/002 priority blind spots all landed with verifiable
+  code+test evidence. Independent test execution: Go 14/14 packages PASS,
+  Vitest 170/170 active tests PASS (was 157/170), Story 2.1+2.2
+  regression suites green. Residue is cosmetic checkbox hygiene on
+  CI-deferred parent headers + ~70% of E2E/integration matrix still
+  CI-gated per accepted plan.
+reviewer: Turing
+agent_model_used: claude-opus-4-7[1m]
+updated: 2026-05-13T18:35:00Z
+
+review_round: 2
+risk_level: HIGH
+review_mode: full_testing
+review_mode_type: incremental
+project_type: fullstack
+
+test_results:
+  automated_tests:
+    go:
+      test_command: "CGO_ENABLED=0 go test ./apps/auth-svc/... ./apps/api-gateway/..."
+      passed: true
+      packages_total: 14
+      packages_failed: 0
+      pass_rate: 100
+    vitest:
+      test_command: "pnpm --filter @he-api/console test"
+      passed: true
+      total: 203
+      passed_count: 170
+      failed_count: 0
+      skipped_count: 33
+      pass_rate: 100  # 170/170 active tests; Round 1 was 157/170 with 13 stub failures
+      delta_from_round_1: "+13 stubs filled → all green"
+
+  task_checkbox_verification:
+    completion_rate_subtasks: 82  # round 1 was 55
+    consistency_issues: 0
+    unchecked_critical: 0
+    round_1_flagged_items_now_checked: 13  # all 13 explicitly flagged in Round 1 are now ticked
+    residual_unchecked:
+      count: 12
+      categorization: ci_deferred  # T1.11/T2.4/T5.*/T6.*/T7.2/T8.{1,2,3,6}
+      severity: LOW
+      rationale: "Parent task headers (T1-T8) and subtasks for testcontainers/Playwright/ZAP/kubeconform remain ☐ because they're CI-gated per accepted Round 1 M4 deferral."
+
+  ac_coverage:
+    structural_rate: 100
+    semantic_gaps: 0  # Round 1 had 3 semantic gaps (BR-3.9/3.10/4.3); all resolved this round
+    passed: true
+    failed_acs: []
+    semantic_gaps_resolved:
+      - br: BR-3.9
+        previously_severity: MEDIUM
+        evidence: "apps/auth-svc/internal/handlers/server.go lines 231/239/288/308/322/339/357/531/600+: EmailHash populated on all 18 OAuth audit emissions. Lines 1404-1489 populate Metadata.subject_hash via oauth.HashSubject helper."
+      - br: BR-3.10
+        previously_severity: MEDIUM
+        evidence: "apps/auth-svc/internal/jwt/jwt.go:82-90 Claims.WasLocked + lines 155-175 SignAccessTokenWithLockBypass. Test TestSignAccessTokenWithLockBypass_EmbedsClaim passes."
+      - br: BR-4.3
+        previously_severity: MEDIUM
+        evidence: "apps/auth-svc/internal/audit/audit.go lines 46-57: 12 OAuth event types implemented. EventOAuthLinkRejConflict retired (grep confirms 0 references); 4 new types added (RejSubjectMismatch, RejOtherProvider, CallbackRejSuspended, InvalidReturnTo). BR-4.8 (b) PagerDuty alert can now discriminate B.4 cleanly."
+
+  regression:
+    executed: true
+    passed: true
+    story_2_1_suites_passed: true  # 158 tests in 2.1-nextjs-console-skeleton-i18n.test.ts (+33 skipped)
+    story_2_2_suites_passed: true  # 32 tests in 2.2-email-signup-password-login-email-verification.test.ts
+    go_packages_unchanged: 14
+
+  e2e_tests:
+    executed: false
+    skipped: true
+    skip_reason: "Local Playwright browsers + docker-compose oauth-mock stack absent. Spec is implemented (4 active scenarios + 9 test.skip with explicit CI references)."
+    spec_file: apps/console/e2e/2.3-oauth-google-github.spec.ts
+    active_scenarios_local: [E2E-001, E2E-002, E2E-005, E2E-007]
+    round_1_minimum_requirement: "Implement E2E-001/002 (Google Branch C) + E2E-005 (GitHub Branch C)"
+    round_1_minimum_met: true
+    round_1_exceeded_by: [E2E-007]
+    attack_spec_file: apps/console/e2e/2.3-oauth-google-github-attacks.spec.ts
+    attack_spec_active_scenarios: [SEC-A03, SEC-A04, SEC-A06]
+    attack_spec_skipped_scenarios: [SEC-A01, SEC-A02, SEC-A05, SEC-A07, SEC-A08]
+    scenarios_required_total: 11
+    scenarios_implemented_local_total: 7  # 4 E2E + 3 attack-spec active
+    scenarios_ci_gated_total: 14
+    ci_gate_workflow: epic-2-story-2.3-final-verify.yml
+
+  blind_spot_verification:
+    total_scenarios: 30
+    covered: 8  # Round 1 was 5
+    coverage_rate: 26.7  # Round 1 was 16.7
+    newly_covered_this_round: [BLIND-CONCURRENCY-001, BLIND-CONCURRENCY-002, BLIND-FLOW-002]
+    remaining_uncovered: 22
+    remaining_categories: { BOUNDARY: 6, ERROR: 5, FLOW: 3, CONCURRENCY: 1, DATA: 4, RESOURCE: 2 }
+    rationale: "Round 1 acceptance prioritized BLIND-CONCURRENCY-001/002 (BR-3.3 race protection); both landed with Go tests passing. Remainder is CI-gated per M6 plan."
+
+  asvs_l2_compliance:
+    checklist_file: docs/qa/assessments/2.3-asvs-checklist.md
+    controls_total: 17
+    controls_pass: 16
+    controls_deferred: 1  # V3.5.1 token revocation → Story 2.5
+    controls_fail: 0
+    signed_off: true
+    signed_by: "Dev (Linus) authored, Turing (QA) verified"
+
+top_issues:
+  - id: QA-2.3-L4
+    severity: LOW
+    category: cosmetic
+    finding: "Parent task headers T1-T8 remain ☐ (with subtask completion ranging from 0/2 to 12/12); residual stems from CI-deferred subtasks T1.11/T2.4/T5.*/T6.*/T7.2/T8.{1,2,3,6}. T8.1 specifically should arguably tick locally since `go test` + `pnpm test` both PASS."
+    affected_acs: []
+    failure_type: cosmetic
+    recommendation: "Optional sweep — flip parent headers once CI workflow run is captured; or annotate parent headers as 'CI-deferred subtasks tracked separately' to remove ambiguity. Not blocking Done."
+
+  - id: QA-2.3-L5
+    severity: LOW
+    category: blind_spot_coverage_residue
+    finding: "20 blind-spot scenarios remain locally uncovered (Round 2 covered 3 of 25 from Round 1 backlog; 22 remain). Categories: BOUNDARY×6, ERROR×5, FLOW×3, DATA×4, RESOURCE×2, CONCURRENCY×1."
+    affected_acs: [AC1, AC2, AC3, AC4]
+    failure_type: deferred_to_ci
+    recommendation: "Acceptable per Round 1 M6 plan — CONCURRENCY priority items closed locally; remainder runs in epic-2-story-2.3-final-verify.yml integration + E2E suite against docker-compose oauth-mock stack. Document in CI gate that the full 30-scenario blind-spot matrix exits 0."
+
+  # All Round 1 H1/H2/H3 + M1/M2/M3/M5/M6 + L1/L2/L3 closed — see resolved_round_1_issues below
+
+resolved_round_1_issues:
+  - id: QA-2.3-H1
+    previously: HIGH
+    resolution: "13 Vitest tests filled — pnpm --filter @he-api/console test now PASS 170/170 active (Round 1: 157/170 with 13 stub failures). Tests cover locale-aware ordering × 5 locales, brand SVG assertion × 2 providers, 14 i18n keys × 10 locales presence, assertProvider validation, callback a11y, double-click guard (also closes BLIND-FLOW-002)."
+  - id: QA-2.3-H2
+    previously: HIGH
+    resolution: "Playwright spec implemented — E2E-001/002 (Google Branch C signup) + E2E-005 (GitHub Branch C signup) + E2E-007 (open-redirect) active locally; 8 remaining scenarios test.skip with explicit CI-gate env-var preconditions. Round 1 minimum (E2E-001/002 + E2E-005) met and exceeded."
+  - id: QA-2.3-H3
+    previously: HIGH
+    resolution: "apps/console/e2e/2.3-oauth-google-github-attacks.spec.ts committed — 8 SEC-A scenarios (SEC-A01..A08). 3 executable locally (A03 missing-cookie 400, A04 cookie-mismatch 400, A06 open-redirect 400 + zero provider hit); 5 test.skip needing seeded DB / Redis state replay / JWKS confusion harness — all CI-gated."
+  - id: QA-2.3-M1
+    previously: MEDIUM
+    resolution: "BR-3.9 hashed PII populated on all 18 OAuth audit emissions in apps/auth-svc/internal/handlers/server.go — EmailHash via ratelimit.EmailHash(emailNorm), Metadata.subject_hash via oauth.HashSubject(subject)."
+  - id: QA-2.3-M2
+    previously: MEDIUM
+    resolution: "BR-3.10 was_locked claim implemented — apps/auth-svc/internal/jwt/jwt.go:90 Claims.WasLocked (omitempty), lines 155-175 Signer.SignAccessTokenWithLockBypass; threaded outcome.WasLocked through CompleteOAuth in server.go. Password-login SignAccessToken unchanged."
+  - id: QA-2.3-M3
+    previously: MEDIUM
+    resolution: "BR-4.3 event taxonomy expanded from 9 to 12 — retired EventOAuthLinkRejConflict; added EventOAuthLinkRejSubjectMismatch, EventOAuthLinkRejOtherProvider, EventOAuthCallbackRejSuspended, EventOAuthInvalidReturnTo. BR-4.8 (b) PagerDuty alert on Branch B.4 (subject mismatch) now isolatable."
+  - id: QA-2.3-M4
+    previously: MEDIUM
+    resolution: "Documented CI deferral — full testcontainers integration suite runs in epic-2-story-2.3-final-verify.yml against docker-compose stack with oauth-mock service. Round 1 finding noted this as 'Acceptable if CI gate is strict' — gate is strict."
+  - id: QA-2.3-M5
+    previously: MEDIUM
+    resolution: "docs/qa/assessments/2.3-asvs-checklist.md authored — OWASP ASVS L2 17 controls × explicit evidence per item; 16 PASS + 1 DEFERRED (V3.5.1 token revocation → Story 2.5). 109 lines, ASVS v4.0.3."
+  - id: QA-2.3-M6
+    previously: MEDIUM
+    resolution: "Priority CONCURRENCY blind spots closed — TestLinking_BlindConcurrency001_BranchC_Race + TestLinking_BlindConcurrency002_B1CrossProvider_Race in linking_test.go cover BR-3.3 race-protection guarantee. BLIND-FLOW-002 (double-click guard) also covered via Vitest. Blind-spot coverage 16.7% → 26.7%."
+  - id: QA-2.3-L1
+    previously: LOW
+    resolution: "Acceptable as deferred operator step per Dev annotation; CI gate may verify Cilium ClusterwideNetworkPolicy when staging cluster is provisioned."
+  - id: QA-2.3-L2
+    previously: LOW
+    resolution: "All 13 Round-1-flagged stale boxes flipped (T2.3, T3.1-3.5, T8.4, T8.5, T8.7, T8.8, T8.9, T4.12, T7.1). Residual L4 finding tracks parent-header / CI-deferred-subtask cosmetic residue."
+  - id: QA-2.3-L3
+    previously: LOW
+    resolution: "Acceptable — go vet + buf lint + tsc all clean locally; golangci-lint is CI-gated per Story 2.2 P1 carry-over constraint."
+
+quality_score: 92
+# Calculation: 100 - 0×10 (HIGH) - 0×2 (MEDIUM) - 2×1 (LOW residue) - 0 (CRITICAL); minor -6 deduction for ~70% of E2E/integration matrix remaining CI-gated and blind-spot residue 26.7% vs 100% ideal.
+
+waiver:
+  active: false
+
+evidence:
+  directory: docs/qa/evidence/2.3/
+  artifacts:
+    - vitest-failures.txt  # stale from Round 1 — vitest now PASS
+  note: "Round 2 had zero new test failures or blocking issues; no new evidence artifacts collected."
+
+next_status: Done
+next_action: mark_story_complete
+next_handoff: "sm: *draft 2.4"
+
+incremental_context:
+  cached_risk_level: HIGH
+  cached_review_mode: full_testing
+  cached_project_type: fullstack
+
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []  # Acceptable CI-deferred residue (22 scenarios); not gating
+  checkbox_issues: []  # All Round 1 flagged items resolved; L4 residue is cosmetic
