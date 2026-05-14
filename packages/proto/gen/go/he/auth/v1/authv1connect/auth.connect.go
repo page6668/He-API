@@ -61,18 +61,23 @@ const (
 	// AuthServiceCompleteOAuthProcedure is the fully-qualified name of the AuthService's CompleteOAuth
 	// RPC.
 	AuthServiceCompleteOAuthProcedure = "/he.auth.v1.AuthService/CompleteOAuth"
-)
-
-// These variables are the protoreflect.Descriptor objects for the RPCs defined in this package.
-var (
-	authServiceServiceDescriptor                  = v1.File_he_auth_v1_auth_proto.Services().ByName("AuthService")
-	authServiceRegisterUserMethodDescriptor       = authServiceServiceDescriptor.Methods().ByName("RegisterUser")
-	authServiceVerifyEmailMethodDescriptor        = authServiceServiceDescriptor.Methods().ByName("VerifyEmail")
-	authServiceResendVerificationMethodDescriptor = authServiceServiceDescriptor.Methods().ByName("ResendVerification")
-	authServiceLoginUserMethodDescriptor          = authServiceServiceDescriptor.Methods().ByName("LoginUser")
-	authServiceRefreshTokenMethodDescriptor       = authServiceServiceDescriptor.Methods().ByName("RefreshToken")
-	authServiceBeginOAuthMethodDescriptor         = authServiceServiceDescriptor.Methods().ByName("BeginOAuth")
-	authServiceCompleteOAuthMethodDescriptor      = authServiceServiceDescriptor.Methods().ByName("CompleteOAuth")
+	// AuthServiceEnrollTOTPInitProcedure is the fully-qualified name of the AuthService's
+	// EnrollTOTPInit RPC.
+	AuthServiceEnrollTOTPInitProcedure = "/he.auth.v1.AuthService/EnrollTOTPInit"
+	// AuthServiceEnrollTOTPVerifyProcedure is the fully-qualified name of the AuthService's
+	// EnrollTOTPVerify RPC.
+	AuthServiceEnrollTOTPVerifyProcedure = "/he.auth.v1.AuthService/EnrollTOTPVerify"
+	// AuthServiceChallengeTOTPProcedure is the fully-qualified name of the AuthService's ChallengeTOTP
+	// RPC.
+	AuthServiceChallengeTOTPProcedure = "/he.auth.v1.AuthService/ChallengeTOTP"
+	// AuthServiceUseRecoveryCodeProcedure is the fully-qualified name of the AuthService's
+	// UseRecoveryCode RPC.
+	AuthServiceUseRecoveryCodeProcedure = "/he.auth.v1.AuthService/UseRecoveryCode"
+	// AuthServiceDisableTOTPProcedure is the fully-qualified name of the AuthService's DisableTOTP RPC.
+	AuthServiceDisableTOTPProcedure = "/he.auth.v1.AuthService/DisableTOTP"
+	// AuthServiceRegenerateRecoveryCodesProcedure is the fully-qualified name of the AuthService's
+	// RegenerateRecoveryCodes RPC.
+	AuthServiceRegenerateRecoveryCodesProcedure = "/he.auth.v1.AuthService/RegenerateRecoveryCodes"
 )
 
 // AuthServiceClient is a client for the he.auth.v1.AuthService service.
@@ -90,6 +95,32 @@ type AuthServiceClient interface {
 	// BR-3.1..BR-3.10), issue JWT (Story 2.2 jwt pkg) or 2FA challenge.
 	BeginOAuth(context.Context, *connect.Request[v1.BeginOAuthRequest]) (*connect.Response[v1.BeginOAuthResponse], error)
 	CompleteOAuth(context.Context, *connect.Request[v1.CompleteOAuthRequest]) (*connect.Response[v1.CompleteOAuthResponse], error)
+	// Story 2.4 — TOTP 2FA (RFC 6238 + recovery codes + KMS envelope).
+	// EnrollTOTPInit: generate 160-bit secret + 10 recovery codes, KMS-encrypt,
+	// stage in Redis (auth:2fa:enroll:{user_id}, TTL=600s GETDEL one-shot),
+	// return otpauth_uri + QR + plaintext recovery codes (only response that
+	// returns them).
+	// EnrollTOTPVerify: consume staged enrollment, validate first TOTP code,
+	// persist totp_secret_encrypted + 10 bcrypt-hashed recovery codes in a
+	// single PG transaction. Out-of-band 2fa_enabled email.
+	// ChallengeTOTP: validates mfa_token (short-lived RS256 JWT, purpose=
+	// '2fa_challenge') + 6-digit code, issues full-session access+refresh
+	// tokens with aal=2 claim. Single-use JTI (Redis DEL on success).
+	// UseRecoveryCode: alternative to ChallengeTOTP — bcrypt-compares input
+	// against unused mfa_recovery_codes rows, atomic mark-used, issues aal=2
+	// session tokens. Out-of-band 2fa_recovery_used email.
+	// DisableTOTP: clears totp_secret_encrypted + deletes all recovery codes,
+	// requires aal=2 session + factor re-verification (TOTP or password).
+	// Out-of-band 2fa_disabled email (HIGH severity).
+	// RegenerateRecoveryCodes: marks all current unused codes as used (forensic
+	// trail) + issues 10 fresh codes in a single PG transaction. Requires
+	// aal=2 + factor re-verification.
+	EnrollTOTPInit(context.Context, *connect.Request[v1.EnrollTOTPInitRequest]) (*connect.Response[v1.EnrollTOTPInitResponse], error)
+	EnrollTOTPVerify(context.Context, *connect.Request[v1.EnrollTOTPVerifyRequest]) (*connect.Response[v1.EnrollTOTPVerifyResponse], error)
+	ChallengeTOTP(context.Context, *connect.Request[v1.ChallengeTOTPRequest]) (*connect.Response[v1.ChallengeTOTPResponse], error)
+	UseRecoveryCode(context.Context, *connect.Request[v1.UseRecoveryCodeRequest]) (*connect.Response[v1.UseRecoveryCodeResponse], error)
+	DisableTOTP(context.Context, *connect.Request[v1.DisableTOTPRequest]) (*connect.Response[v1.DisableTOTPResponse], error)
+	RegenerateRecoveryCodes(context.Context, *connect.Request[v1.RegenerateRecoveryCodesRequest]) (*connect.Response[v1.RegenerateRecoveryCodesResponse], error)
 }
 
 // NewAuthServiceClient constructs a client for the he.auth.v1.AuthService service. By default, it
@@ -101,47 +132,84 @@ type AuthServiceClient interface {
 // http://api.acme.com or https://acme.com/grpc).
 func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) AuthServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
+	authServiceMethods := v1.File_he_auth_v1_auth_proto.Services().ByName("AuthService").Methods()
 	return &authServiceClient{
 		registerUser: connect.NewClient[v1.RegisterUserRequest, v1.RegisterUserResponse](
 			httpClient,
 			baseURL+AuthServiceRegisterUserProcedure,
-			connect.WithSchema(authServiceRegisterUserMethodDescriptor),
+			connect.WithSchema(authServiceMethods.ByName("RegisterUser")),
 			connect.WithClientOptions(opts...),
 		),
 		verifyEmail: connect.NewClient[v1.VerifyEmailRequest, v1.VerifyEmailResponse](
 			httpClient,
 			baseURL+AuthServiceVerifyEmailProcedure,
-			connect.WithSchema(authServiceVerifyEmailMethodDescriptor),
+			connect.WithSchema(authServiceMethods.ByName("VerifyEmail")),
 			connect.WithClientOptions(opts...),
 		),
 		resendVerification: connect.NewClient[v1.ResendVerificationRequest, v1.ResendVerificationResponse](
 			httpClient,
 			baseURL+AuthServiceResendVerificationProcedure,
-			connect.WithSchema(authServiceResendVerificationMethodDescriptor),
+			connect.WithSchema(authServiceMethods.ByName("ResendVerification")),
 			connect.WithClientOptions(opts...),
 		),
 		loginUser: connect.NewClient[v1.LoginUserRequest, v1.LoginUserResponse](
 			httpClient,
 			baseURL+AuthServiceLoginUserProcedure,
-			connect.WithSchema(authServiceLoginUserMethodDescriptor),
+			connect.WithSchema(authServiceMethods.ByName("LoginUser")),
 			connect.WithClientOptions(opts...),
 		),
 		refreshToken: connect.NewClient[v1.RefreshTokenRequest, v1.RefreshTokenResponse](
 			httpClient,
 			baseURL+AuthServiceRefreshTokenProcedure,
-			connect.WithSchema(authServiceRefreshTokenMethodDescriptor),
+			connect.WithSchema(authServiceMethods.ByName("RefreshToken")),
 			connect.WithClientOptions(opts...),
 		),
 		beginOAuth: connect.NewClient[v1.BeginOAuthRequest, v1.BeginOAuthResponse](
 			httpClient,
 			baseURL+AuthServiceBeginOAuthProcedure,
-			connect.WithSchema(authServiceBeginOAuthMethodDescriptor),
+			connect.WithSchema(authServiceMethods.ByName("BeginOAuth")),
 			connect.WithClientOptions(opts...),
 		),
 		completeOAuth: connect.NewClient[v1.CompleteOAuthRequest, v1.CompleteOAuthResponse](
 			httpClient,
 			baseURL+AuthServiceCompleteOAuthProcedure,
-			connect.WithSchema(authServiceCompleteOAuthMethodDescriptor),
+			connect.WithSchema(authServiceMethods.ByName("CompleteOAuth")),
+			connect.WithClientOptions(opts...),
+		),
+		enrollTOTPInit: connect.NewClient[v1.EnrollTOTPInitRequest, v1.EnrollTOTPInitResponse](
+			httpClient,
+			baseURL+AuthServiceEnrollTOTPInitProcedure,
+			connect.WithSchema(authServiceMethods.ByName("EnrollTOTPInit")),
+			connect.WithClientOptions(opts...),
+		),
+		enrollTOTPVerify: connect.NewClient[v1.EnrollTOTPVerifyRequest, v1.EnrollTOTPVerifyResponse](
+			httpClient,
+			baseURL+AuthServiceEnrollTOTPVerifyProcedure,
+			connect.WithSchema(authServiceMethods.ByName("EnrollTOTPVerify")),
+			connect.WithClientOptions(opts...),
+		),
+		challengeTOTP: connect.NewClient[v1.ChallengeTOTPRequest, v1.ChallengeTOTPResponse](
+			httpClient,
+			baseURL+AuthServiceChallengeTOTPProcedure,
+			connect.WithSchema(authServiceMethods.ByName("ChallengeTOTP")),
+			connect.WithClientOptions(opts...),
+		),
+		useRecoveryCode: connect.NewClient[v1.UseRecoveryCodeRequest, v1.UseRecoveryCodeResponse](
+			httpClient,
+			baseURL+AuthServiceUseRecoveryCodeProcedure,
+			connect.WithSchema(authServiceMethods.ByName("UseRecoveryCode")),
+			connect.WithClientOptions(opts...),
+		),
+		disableTOTP: connect.NewClient[v1.DisableTOTPRequest, v1.DisableTOTPResponse](
+			httpClient,
+			baseURL+AuthServiceDisableTOTPProcedure,
+			connect.WithSchema(authServiceMethods.ByName("DisableTOTP")),
+			connect.WithClientOptions(opts...),
+		),
+		regenerateRecoveryCodes: connect.NewClient[v1.RegenerateRecoveryCodesRequest, v1.RegenerateRecoveryCodesResponse](
+			httpClient,
+			baseURL+AuthServiceRegenerateRecoveryCodesProcedure,
+			connect.WithSchema(authServiceMethods.ByName("RegenerateRecoveryCodes")),
 			connect.WithClientOptions(opts...),
 		),
 	}
@@ -149,13 +217,19 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 
 // authServiceClient implements AuthServiceClient.
 type authServiceClient struct {
-	registerUser       *connect.Client[v1.RegisterUserRequest, v1.RegisterUserResponse]
-	verifyEmail        *connect.Client[v1.VerifyEmailRequest, v1.VerifyEmailResponse]
-	resendVerification *connect.Client[v1.ResendVerificationRequest, v1.ResendVerificationResponse]
-	loginUser          *connect.Client[v1.LoginUserRequest, v1.LoginUserResponse]
-	refreshToken       *connect.Client[v1.RefreshTokenRequest, v1.RefreshTokenResponse]
-	beginOAuth         *connect.Client[v1.BeginOAuthRequest, v1.BeginOAuthResponse]
-	completeOAuth      *connect.Client[v1.CompleteOAuthRequest, v1.CompleteOAuthResponse]
+	registerUser            *connect.Client[v1.RegisterUserRequest, v1.RegisterUserResponse]
+	verifyEmail             *connect.Client[v1.VerifyEmailRequest, v1.VerifyEmailResponse]
+	resendVerification      *connect.Client[v1.ResendVerificationRequest, v1.ResendVerificationResponse]
+	loginUser               *connect.Client[v1.LoginUserRequest, v1.LoginUserResponse]
+	refreshToken            *connect.Client[v1.RefreshTokenRequest, v1.RefreshTokenResponse]
+	beginOAuth              *connect.Client[v1.BeginOAuthRequest, v1.BeginOAuthResponse]
+	completeOAuth           *connect.Client[v1.CompleteOAuthRequest, v1.CompleteOAuthResponse]
+	enrollTOTPInit          *connect.Client[v1.EnrollTOTPInitRequest, v1.EnrollTOTPInitResponse]
+	enrollTOTPVerify        *connect.Client[v1.EnrollTOTPVerifyRequest, v1.EnrollTOTPVerifyResponse]
+	challengeTOTP           *connect.Client[v1.ChallengeTOTPRequest, v1.ChallengeTOTPResponse]
+	useRecoveryCode         *connect.Client[v1.UseRecoveryCodeRequest, v1.UseRecoveryCodeResponse]
+	disableTOTP             *connect.Client[v1.DisableTOTPRequest, v1.DisableTOTPResponse]
+	regenerateRecoveryCodes *connect.Client[v1.RegenerateRecoveryCodesRequest, v1.RegenerateRecoveryCodesResponse]
 }
 
 // RegisterUser calls he.auth.v1.AuthService.RegisterUser.
@@ -193,6 +267,36 @@ func (c *authServiceClient) CompleteOAuth(ctx context.Context, req *connect.Requ
 	return c.completeOAuth.CallUnary(ctx, req)
 }
 
+// EnrollTOTPInit calls he.auth.v1.AuthService.EnrollTOTPInit.
+func (c *authServiceClient) EnrollTOTPInit(ctx context.Context, req *connect.Request[v1.EnrollTOTPInitRequest]) (*connect.Response[v1.EnrollTOTPInitResponse], error) {
+	return c.enrollTOTPInit.CallUnary(ctx, req)
+}
+
+// EnrollTOTPVerify calls he.auth.v1.AuthService.EnrollTOTPVerify.
+func (c *authServiceClient) EnrollTOTPVerify(ctx context.Context, req *connect.Request[v1.EnrollTOTPVerifyRequest]) (*connect.Response[v1.EnrollTOTPVerifyResponse], error) {
+	return c.enrollTOTPVerify.CallUnary(ctx, req)
+}
+
+// ChallengeTOTP calls he.auth.v1.AuthService.ChallengeTOTP.
+func (c *authServiceClient) ChallengeTOTP(ctx context.Context, req *connect.Request[v1.ChallengeTOTPRequest]) (*connect.Response[v1.ChallengeTOTPResponse], error) {
+	return c.challengeTOTP.CallUnary(ctx, req)
+}
+
+// UseRecoveryCode calls he.auth.v1.AuthService.UseRecoveryCode.
+func (c *authServiceClient) UseRecoveryCode(ctx context.Context, req *connect.Request[v1.UseRecoveryCodeRequest]) (*connect.Response[v1.UseRecoveryCodeResponse], error) {
+	return c.useRecoveryCode.CallUnary(ctx, req)
+}
+
+// DisableTOTP calls he.auth.v1.AuthService.DisableTOTP.
+func (c *authServiceClient) DisableTOTP(ctx context.Context, req *connect.Request[v1.DisableTOTPRequest]) (*connect.Response[v1.DisableTOTPResponse], error) {
+	return c.disableTOTP.CallUnary(ctx, req)
+}
+
+// RegenerateRecoveryCodes calls he.auth.v1.AuthService.RegenerateRecoveryCodes.
+func (c *authServiceClient) RegenerateRecoveryCodes(ctx context.Context, req *connect.Request[v1.RegenerateRecoveryCodesRequest]) (*connect.Response[v1.RegenerateRecoveryCodesResponse], error) {
+	return c.regenerateRecoveryCodes.CallUnary(ctx, req)
+}
+
 // AuthServiceHandler is an implementation of the he.auth.v1.AuthService service.
 type AuthServiceHandler interface {
 	RegisterUser(context.Context, *connect.Request[v1.RegisterUserRequest]) (*connect.Response[v1.RegisterUserResponse], error)
@@ -208,6 +312,32 @@ type AuthServiceHandler interface {
 	// BR-3.1..BR-3.10), issue JWT (Story 2.2 jwt pkg) or 2FA challenge.
 	BeginOAuth(context.Context, *connect.Request[v1.BeginOAuthRequest]) (*connect.Response[v1.BeginOAuthResponse], error)
 	CompleteOAuth(context.Context, *connect.Request[v1.CompleteOAuthRequest]) (*connect.Response[v1.CompleteOAuthResponse], error)
+	// Story 2.4 — TOTP 2FA (RFC 6238 + recovery codes + KMS envelope).
+	// EnrollTOTPInit: generate 160-bit secret + 10 recovery codes, KMS-encrypt,
+	// stage in Redis (auth:2fa:enroll:{user_id}, TTL=600s GETDEL one-shot),
+	// return otpauth_uri + QR + plaintext recovery codes (only response that
+	// returns them).
+	// EnrollTOTPVerify: consume staged enrollment, validate first TOTP code,
+	// persist totp_secret_encrypted + 10 bcrypt-hashed recovery codes in a
+	// single PG transaction. Out-of-band 2fa_enabled email.
+	// ChallengeTOTP: validates mfa_token (short-lived RS256 JWT, purpose=
+	// '2fa_challenge') + 6-digit code, issues full-session access+refresh
+	// tokens with aal=2 claim. Single-use JTI (Redis DEL on success).
+	// UseRecoveryCode: alternative to ChallengeTOTP — bcrypt-compares input
+	// against unused mfa_recovery_codes rows, atomic mark-used, issues aal=2
+	// session tokens. Out-of-band 2fa_recovery_used email.
+	// DisableTOTP: clears totp_secret_encrypted + deletes all recovery codes,
+	// requires aal=2 session + factor re-verification (TOTP or password).
+	// Out-of-band 2fa_disabled email (HIGH severity).
+	// RegenerateRecoveryCodes: marks all current unused codes as used (forensic
+	// trail) + issues 10 fresh codes in a single PG transaction. Requires
+	// aal=2 + factor re-verification.
+	EnrollTOTPInit(context.Context, *connect.Request[v1.EnrollTOTPInitRequest]) (*connect.Response[v1.EnrollTOTPInitResponse], error)
+	EnrollTOTPVerify(context.Context, *connect.Request[v1.EnrollTOTPVerifyRequest]) (*connect.Response[v1.EnrollTOTPVerifyResponse], error)
+	ChallengeTOTP(context.Context, *connect.Request[v1.ChallengeTOTPRequest]) (*connect.Response[v1.ChallengeTOTPResponse], error)
+	UseRecoveryCode(context.Context, *connect.Request[v1.UseRecoveryCodeRequest]) (*connect.Response[v1.UseRecoveryCodeResponse], error)
+	DisableTOTP(context.Context, *connect.Request[v1.DisableTOTPRequest]) (*connect.Response[v1.DisableTOTPResponse], error)
+	RegenerateRecoveryCodes(context.Context, *connect.Request[v1.RegenerateRecoveryCodesRequest]) (*connect.Response[v1.RegenerateRecoveryCodesResponse], error)
 }
 
 // NewAuthServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -216,46 +346,83 @@ type AuthServiceHandler interface {
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
 func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	authServiceMethods := v1.File_he_auth_v1_auth_proto.Services().ByName("AuthService").Methods()
 	authServiceRegisterUserHandler := connect.NewUnaryHandler(
 		AuthServiceRegisterUserProcedure,
 		svc.RegisterUser,
-		connect.WithSchema(authServiceRegisterUserMethodDescriptor),
+		connect.WithSchema(authServiceMethods.ByName("RegisterUser")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authServiceVerifyEmailHandler := connect.NewUnaryHandler(
 		AuthServiceVerifyEmailProcedure,
 		svc.VerifyEmail,
-		connect.WithSchema(authServiceVerifyEmailMethodDescriptor),
+		connect.WithSchema(authServiceMethods.ByName("VerifyEmail")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authServiceResendVerificationHandler := connect.NewUnaryHandler(
 		AuthServiceResendVerificationProcedure,
 		svc.ResendVerification,
-		connect.WithSchema(authServiceResendVerificationMethodDescriptor),
+		connect.WithSchema(authServiceMethods.ByName("ResendVerification")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authServiceLoginUserHandler := connect.NewUnaryHandler(
 		AuthServiceLoginUserProcedure,
 		svc.LoginUser,
-		connect.WithSchema(authServiceLoginUserMethodDescriptor),
+		connect.WithSchema(authServiceMethods.ByName("LoginUser")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authServiceRefreshTokenHandler := connect.NewUnaryHandler(
 		AuthServiceRefreshTokenProcedure,
 		svc.RefreshToken,
-		connect.WithSchema(authServiceRefreshTokenMethodDescriptor),
+		connect.WithSchema(authServiceMethods.ByName("RefreshToken")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authServiceBeginOAuthHandler := connect.NewUnaryHandler(
 		AuthServiceBeginOAuthProcedure,
 		svc.BeginOAuth,
-		connect.WithSchema(authServiceBeginOAuthMethodDescriptor),
+		connect.WithSchema(authServiceMethods.ByName("BeginOAuth")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authServiceCompleteOAuthHandler := connect.NewUnaryHandler(
 		AuthServiceCompleteOAuthProcedure,
 		svc.CompleteOAuth,
-		connect.WithSchema(authServiceCompleteOAuthMethodDescriptor),
+		connect.WithSchema(authServiceMethods.ByName("CompleteOAuth")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceEnrollTOTPInitHandler := connect.NewUnaryHandler(
+		AuthServiceEnrollTOTPInitProcedure,
+		svc.EnrollTOTPInit,
+		connect.WithSchema(authServiceMethods.ByName("EnrollTOTPInit")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceEnrollTOTPVerifyHandler := connect.NewUnaryHandler(
+		AuthServiceEnrollTOTPVerifyProcedure,
+		svc.EnrollTOTPVerify,
+		connect.WithSchema(authServiceMethods.ByName("EnrollTOTPVerify")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceChallengeTOTPHandler := connect.NewUnaryHandler(
+		AuthServiceChallengeTOTPProcedure,
+		svc.ChallengeTOTP,
+		connect.WithSchema(authServiceMethods.ByName("ChallengeTOTP")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceUseRecoveryCodeHandler := connect.NewUnaryHandler(
+		AuthServiceUseRecoveryCodeProcedure,
+		svc.UseRecoveryCode,
+		connect.WithSchema(authServiceMethods.ByName("UseRecoveryCode")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceDisableTOTPHandler := connect.NewUnaryHandler(
+		AuthServiceDisableTOTPProcedure,
+		svc.DisableTOTP,
+		connect.WithSchema(authServiceMethods.ByName("DisableTOTP")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceRegenerateRecoveryCodesHandler := connect.NewUnaryHandler(
+		AuthServiceRegenerateRecoveryCodesProcedure,
+		svc.RegenerateRecoveryCodes,
+		connect.WithSchema(authServiceMethods.ByName("RegenerateRecoveryCodes")),
 		connect.WithHandlerOptions(opts...),
 	)
 	return "/he.auth.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -274,6 +441,18 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceBeginOAuthHandler.ServeHTTP(w, r)
 		case AuthServiceCompleteOAuthProcedure:
 			authServiceCompleteOAuthHandler.ServeHTTP(w, r)
+		case AuthServiceEnrollTOTPInitProcedure:
+			authServiceEnrollTOTPInitHandler.ServeHTTP(w, r)
+		case AuthServiceEnrollTOTPVerifyProcedure:
+			authServiceEnrollTOTPVerifyHandler.ServeHTTP(w, r)
+		case AuthServiceChallengeTOTPProcedure:
+			authServiceChallengeTOTPHandler.ServeHTTP(w, r)
+		case AuthServiceUseRecoveryCodeProcedure:
+			authServiceUseRecoveryCodeHandler.ServeHTTP(w, r)
+		case AuthServiceDisableTOTPProcedure:
+			authServiceDisableTOTPHandler.ServeHTTP(w, r)
+		case AuthServiceRegenerateRecoveryCodesProcedure:
+			authServiceRegenerateRecoveryCodesHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -309,4 +488,28 @@ func (UnimplementedAuthServiceHandler) BeginOAuth(context.Context, *connect.Requ
 
 func (UnimplementedAuthServiceHandler) CompleteOAuth(context.Context, *connect.Request[v1.CompleteOAuthRequest]) (*connect.Response[v1.CompleteOAuthResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.CompleteOAuth is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) EnrollTOTPInit(context.Context, *connect.Request[v1.EnrollTOTPInitRequest]) (*connect.Response[v1.EnrollTOTPInitResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.EnrollTOTPInit is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) EnrollTOTPVerify(context.Context, *connect.Request[v1.EnrollTOTPVerifyRequest]) (*connect.Response[v1.EnrollTOTPVerifyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.EnrollTOTPVerify is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) ChallengeTOTP(context.Context, *connect.Request[v1.ChallengeTOTPRequest]) (*connect.Response[v1.ChallengeTOTPResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.ChallengeTOTP is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) UseRecoveryCode(context.Context, *connect.Request[v1.UseRecoveryCodeRequest]) (*connect.Response[v1.UseRecoveryCodeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.UseRecoveryCode is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) DisableTOTP(context.Context, *connect.Request[v1.DisableTOTPRequest]) (*connect.Response[v1.DisableTOTPResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.DisableTOTP is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) RegenerateRecoveryCodes(context.Context, *connect.Request[v1.RegenerateRecoveryCodesRequest]) (*connect.Response[v1.RegenerateRecoveryCodesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.RegenerateRecoveryCodes is not implemented"))
 }

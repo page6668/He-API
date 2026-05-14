@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"time"
 
@@ -83,6 +84,80 @@ WHERE id=$1 AND status='locked' AND locked_until <= NOW()`
 
 	markEmailVerifiedSQL = `UPDATE he_api.users SET email_verified_at=NOW(), updated_at=NOW()
 WHERE id=$1 AND email_verified_at IS NULL`
+
+	// Story 2.3 — OAuth-specific queries.
+	//
+	// getUserByOAuthSQL drives Branch A (existing OAuth user re-login).
+	// idx_users_oauth (partial WHERE oauth_provider IS NOT NULL) carries the
+	// index scan; without the partial filter the planner would have to scan
+	// the password-only majority of the table.
+	getUserByOAuthSQL = `SELECT id, email, password_hash, email_verified_at, oauth_provider, oauth_subject,
+       locale, timezone, totp_secret_encrypted, totp_enabled, status, locked_until,
+       pending_deletion_at, created_at, updated_at
+FROM he_api.users
+WHERE oauth_provider = $1 AND oauth_subject = $2
+LIMIT 1`
+
+	// linkOAuthIdentitySQL drives Branch B.1 (auto-link existing verified
+	// user). The WHERE oauth_provider IS NULL guard is the lost-update
+	// defence (two concurrent OAuth callbacks for the same email each see
+	// the user as unlinked; whichever UPDATE arrives second matches 0 rows
+	// and the handler falls back to Branch A re-fetch).
+	//
+	// password_hash / email_verified_at / status are intentionally NOT
+	// updated — BR-3.7 preserves password login path + email-verified state.
+	linkOAuthIdentitySQL = `UPDATE he_api.users
+SET oauth_provider = $1, oauth_subject = $2, updated_at = NOW()
+WHERE id = $3 AND oauth_provider IS NULL`
+
+	// upsertOAuthUserSQL drives Branch C (new user via OAuth). ON CONFLICT
+	// (email) DO NOTHING guarantees race-safety: when two concurrent
+	// callbacks for the same new email arrive, only one INSERT succeeds; the
+	// loser receives 0 rows and the handler falls back to Branch B.
+	//
+	// password_hash is NULL (BR-3.6 — OAuth-only user). email_verified_at
+	// is set to NOW() because the provider already vouched (BR-1.7 / BR-2.7
+	// — provider email_verified=true was already validated).
+	upsertOAuthUserSQL = `INSERT INTO he_api.users
+       (id, email, password_hash, email_verified_at, oauth_provider, oauth_subject,
+        locale, timezone, status, created_at, updated_at)
+VALUES (gen_random_uuid(), $1, NULL, NOW(), $2, $3, $4, 'UTC', 'active', NOW(), NOW())
+ON CONFLICT (email) DO NOTHING
+RETURNING id`
+
+	// touchUserUpdatedAtSQL drives Branch A re-login bookkeeping. No identity
+	// fields are touched — only updated_at refreshes so Grafana / audit see
+	// the last OAuth login timestamp.
+	touchUserUpdatedAtSQL = `UPDATE he_api.users SET updated_at=NOW() WHERE id=$1`
+
+	// -- Story 2.4 TOTP queries ---------------------------------------
+
+	// setTOTPSecretSQL flips totp_enabled=TRUE atomically with the secret
+	// write + totp_enrolled_at. Called from EnrollTOTPVerify inside a PG
+	// transaction that ALSO inserts the 10 mfa_recovery_codes rows; the
+	// caller is responsible for the transaction boundary.
+	setTOTPSecretSQL = `UPDATE he_api.users
+SET totp_secret_encrypted=$1, totp_enabled=TRUE, totp_enrolled_at=NOW(), updated_at=NOW()
+WHERE id=$2`
+
+	// clearTOTPSecretSQL is the AC4 Disable companion. NULLs every TOTP
+	// column + flips totp_enabled=FALSE atomically with the caller's
+	// `DELETE FROM mfa_recovery_codes WHERE user_id=...`.
+	clearTOTPSecretSQL = `UPDATE he_api.users
+SET totp_secret_encrypted=NULL, totp_enabled=FALSE,
+    totp_enrolled_at=NULL, totp_last_used_at=NULL, updated_at=NOW()
+WHERE id=$1`
+
+	// markTOTPUsedSQL refreshes totp_last_used_at on a successful 2FA
+	// challenge or recovery code use. Caller invokes after issuing the
+	// access/refresh tokens (best-effort; failure here does NOT block the
+	// session minting).
+	markTOTPUsedSQL = `UPDATE he_api.users SET totp_last_used_at=NOW(), updated_at=NOW() WHERE id=$1`
+
+	// getTOTPSecretSQL retrieves the KMS-encrypted secret + enrollment
+	// state. Used by ChallengeTOTP + DisableTOTP factor='totp' paths.
+	getTOTPSecretSQL = `SELECT totp_secret_encrypted, totp_enabled, totp_enrolled_at
+FROM he_api.users WHERE id=$1 LIMIT 1`
 )
 
 // InsertUser inserts a fresh user row (status='active', email_verified_at=NULL)
@@ -166,4 +241,148 @@ func MarkEmailVerified(ctx context.Context, q Querier, userID uuid.UUID) (bool, 
 		return false, err
 	}
 	return tag.RowsAffected() == 1, nil
+}
+
+// -- Story 2.3 OAuth helpers ----------------------------------------------
+
+// UpsertOAuthUserParams is the input to UpsertOAuthUser. Spelling it as a
+// struct rather than positional args keeps Branch C INSERT signature
+// stable even if Story 2.5 (profile management) adds optional fields like
+// display_name down the line.
+type UpsertOAuthUserParams struct {
+	Email    string
+	Provider string
+	Subject  string
+	Locale   string
+}
+
+// GetUserByOAuth drives the Branch A lookup. Returns the canonical User
+// row when oauth_provider+oauth_subject match; ErrUserNotFound otherwise.
+//
+// The partial index idx_users_oauth (WHERE oauth_provider IS NOT NULL)
+// carries this lookup — Story 2.2 landed the index ahead of the OAuth
+// feature so EXPLAIN ANALYZE shows Index Scan, not Seq Scan.
+func GetUserByOAuth(ctx context.Context, q Querier, provider, subject string) (*User, error) {
+	return scanUserRow(q.QueryRow(ctx, getUserByOAuthSQL, provider, subject))
+}
+
+// LinkOAuthIdentity drives Branch B.1 — the auto-link. WHERE oauth_provider
+// IS NULL is the lost-update guard: when two concurrent callbacks try to
+// link the same row, only the first UPDATE matches; the second receives
+// 0 rows and the caller falls back to Branch A re-fetch.
+//
+// Returns (true, nil) when the row was successfully linked; (false, nil)
+// when the WHERE clause matched nothing (already linked — caller falls
+// back to Branch A); error on Redis / DB failure.
+func LinkOAuthIdentity(ctx context.Context, q Querier, userID uuid.UUID, provider, subject string) (bool, error) {
+	tag, err := q.Exec(ctx, linkOAuthIdentitySQL, provider, subject, userID)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+// UpsertOAuthUser drives Branch C — the new-user-via-OAuth INSERT. ON
+// CONFLICT (email) DO NOTHING returns 0 rows on race; caller falls back
+// to Branch B.
+//
+// Returns (userID, true, nil) on fresh INSERT; (uuid.Nil, false, nil) on
+// race (caller MUST re-run the email lookup); (uuid.Nil, false, err) on
+// driver failure. Note this CANNOT return ErrEmailExists like InsertUser
+// does — the ON CONFLICT DO NOTHING swallows the unique violation by
+// design.
+func UpsertOAuthUser(ctx context.Context, q Querier, p UpsertOAuthUserParams) (uuid.UUID, bool, error) {
+	var id uuid.UUID
+	err := q.QueryRow(ctx, upsertOAuthUserSQL,
+		p.Email, p.Provider, p.Subject, p.Locale,
+	).Scan(&id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, false, nil // race — caller falls back to Branch B
+		}
+		return uuid.Nil, false, err
+	}
+	return id, true, nil
+}
+
+// TouchUserUpdatedAt refreshes updated_at on the supplied user_id. Branch A
+// re-login uses this so dashboards / audit see the OAuth-login timestamp
+// without disturbing identity columns.
+func TouchUserUpdatedAt(ctx context.Context, q Querier, userID uuid.UUID) error {
+	_, err := q.Exec(ctx, touchUserUpdatedAtSQL, userID)
+	return err
+}
+
+// -- Story 2.4 TOTP helpers -----------------------------------------------
+
+// SetTOTPSecret persists the KMS-encrypted secret + flips totp_enabled=TRUE.
+// Must be invoked inside a PG transaction that also inserts the 10 fresh
+// mfa_recovery_codes rows (atomic enrollment per AC1 BR-1.6). Returns
+// (true, nil) on a single-row UPDATE; (false, nil) when the WHERE clause
+// matched nothing.
+//
+// totp_secret_encrypted is TEXT (migration 0002); we base64-encode the
+// KMS ciphertext blob to fit. Encoding choice is local to the repository
+// so handlers handle raw kms.Ciphertext bytes only.
+func SetTOTPSecret(ctx context.Context, q Querier, userID uuid.UUID, encryptedSecret []byte) (bool, error) {
+	encoded := base64.StdEncoding.EncodeToString(encryptedSecret)
+	tag, err := q.Exec(ctx, setTOTPSecretSQL, encoded, userID)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+// ClearTOTPSecret zeroes every TOTP column + sets totp_enabled=FALSE. Must
+// be invoked inside the AC4 Disable transaction that also DELETEs all
+// mfa_recovery_codes for this user (atomic clean-slate per BR-3.9 + BR-4.3).
+func ClearTOTPSecret(ctx context.Context, q Querier, userID uuid.UUID) (bool, error) {
+	tag, err := q.Exec(ctx, clearTOTPSecretSQL, userID)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+// MarkTOTPUsed refreshes totp_last_used_at on a successful challenge or
+// recovery code use. Best-effort: failure should not block session issuance
+// (caller swallows + logs at warn).
+func MarkTOTPUsed(ctx context.Context, q Querier, userID uuid.UUID) error {
+	_, err := q.Exec(ctx, markTOTPUsedSQL, userID)
+	return err
+}
+
+// TOTPSecretRow is the minimal projection used by ChallengeTOTP + DisableTOTP
+// factor='totp' paths. Separate from the full User row to avoid pulling the
+// rest of the columns on every challenge.
+type TOTPSecretRow struct {
+	EncryptedSecret []byte     // NULL when totp_enabled=FALSE
+	Enabled         bool
+	EnrolledAt      *time.Time
+}
+
+// GetTOTPSecret returns the encrypted secret + enrollment state. Returns
+// ErrUserNotFound if the user_id does not exist; otherwise the row even
+// when totp_enabled=FALSE (callers check the Enabled bool).
+//
+// Base64-decoded inside the repository — handlers see raw kms.Ciphertext
+// bytes. Returns nil + non-nil error on decode failure (corrupted column).
+func GetTOTPSecret(ctx context.Context, q Querier, userID uuid.UUID) (*TOTPSecretRow, error) {
+	var r TOTPSecretRow
+	var enc *string
+	err := q.QueryRow(ctx, getTOTPSecretSQL, userID).Scan(&enc, &r.Enabled, &r.EnrolledAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+	if enc != nil {
+		decoded, decErr := base64.StdEncoding.DecodeString(*enc)
+		if decErr != nil {
+			return nil, decErr
+		}
+		r.EncryptedSecret = decoded
+	}
+	return &r, nil
 }

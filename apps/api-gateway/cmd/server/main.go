@@ -101,6 +101,15 @@ func main() {
 	}
 	jwks := handlers.NewJWKSHandler(jwksBytes)
 
+	// Story 2.4 — JWT verifier for the protected 2FA endpoints (T1.3).
+	// Parses the same RSA public key the JWKS endpoint advertises.
+	rsaPub, err := parseRSAPublicPEM(jwtPubPEM)
+	if err != nil {
+		logger.Error("parse RSA public key for JWT verify", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	jwtVerifier := middleware.NewJWTVerifier(rsaPub)
+
 	mux := http.NewServeMux()
 	// Story 2.2 — /v1/auth/* REST surface (Wright Round 1 Q1 ruling).
 	mux.HandleFunc("POST /v1/auth/signup", auth.Signup)
@@ -109,6 +118,45 @@ func main() {
 	mux.HandleFunc("POST /v1/auth/signin", auth.Signin)
 	mux.HandleFunc("POST /v1/auth/refresh", auth.Refresh)
 	mux.HandleFunc("GET /.well-known/jwks.json", jwks.Serve)
+
+	// Story 2.3 — OAuth surface (4 endpoints). Provider parameterised in the
+	// path; OAuthHandler dispatches on the literal segment so the upstream
+	// gRPC call receives the right Provider string.
+	oauthHandler := &handlers.OAuthHandler{Upstream: authUpstream, Env: deployEnv}
+	// Per BR-4.1 ratelimit each endpoint on its own counter. Redis client
+	// shares the same backend as Story 2.2's ratelimit.
+	// NOTE: P6 wires the route topology; the actual Redis client is wired
+	// in cmd/server/main.go once HE_API_REDIS_URL surfaces in env (P7 task).
+	// For now, route un-rate-limited — CI gate confirms the routes are
+	// registered; ratelimit middleware is functional and unit-tested.
+	mux.Handle("GET /v1/auth/oauth/google/initiate", oauthHandler.Initiate("google"))
+	mux.Handle("GET /v1/auth/oauth/google/callback", oauthHandler.Callback("google"))
+	mux.Handle("GET /v1/auth/oauth/github/initiate", oauthHandler.Initiate("github"))
+	mux.Handle("GET /v1/auth/oauth/github/callback", oauthHandler.Callback("github"))
+
+	// Story 2.4 — TOTP 2FA routes (T1.3, T2.5, T3.3, T4.3 wire the rest).
+	// JWT-protected: /v1/auth/2fa/enroll/* and (T4.3) /v1/auth/2fa/disable +
+	// (T3.3) /v1/auth/2fa/recovery-codes/regenerate. The two challenge
+	// endpoints (/v1/auth/2fa/challenge + /v1/auth/2fa/recovery-codes/use)
+	// use he_mfa cookie instead — wired in T2.5 / T3.3.
+	mux.Handle("POST /v1/auth/2fa/enroll/init", jwtVerifier.RequireJWT(http.HandlerFunc(auth.EnrollTOTPInit)))
+	mux.Handle("POST /v1/auth/2fa/enroll/verify", jwtVerifier.RequireJWT(http.HandlerFunc(auth.EnrollTOTPVerify)))
+	// /v1/auth/2fa/challenge uses he_mfa cookie (not he_access), so it is
+	// NOT wrapped by jwtVerifier.RequireJWT — auth-svc verifies the
+	// mfa_token internally and short-circuits on missing JTI / binding fail.
+	mux.HandleFunc("POST /v1/auth/2fa/challenge", auth.ChallengeTOTP)
+	// /recovery-codes/use also uses he_mfa cookie; /regenerate is JWT-protected.
+	// AAL=2 enforcement on regenerate lands in T5.2 — for now T1.3 RequireJWT
+	// gives us authenticated-only.
+	mux.HandleFunc("POST /v1/auth/2fa/recovery-codes/use", auth.UseRecoveryCode)
+	// Regenerate + disable require aal=2 (Story 2.4 BR-4.1 / T5.2). The
+	// outer RequireJWT places the AAL claim in context; the inner RequireAAL
+	// gates on min=2 → emits 403_aal2_required when the user only signed in
+	// with password.
+	mux.Handle("POST /v1/auth/2fa/recovery-codes/regenerate",
+		jwtVerifier.RequireJWT(jwtVerifier.RequireAAL(2, http.HandlerFunc(auth.RegenerateRecoveryCodes))))
+	mux.Handle("POST /v1/auth/2fa/disable",
+		jwtVerifier.RequireJWT(jwtVerifier.RequireAAL(2, http.HandlerFunc(auth.DisableTOTP))))
 
 	// Middleware chain (outer → inner): SecurityHeaders → CSRF → mux.
 	// SecurityHeaders writes the BR-4.7 response headers on every response.
@@ -168,6 +216,25 @@ func csrfAllowlistFor(env handlers.DeployEnv) []string {
 			"http://localhost:8080",
 		}
 	}
+}
+
+// parseRSAPublicPEM parses an RSA public key from PEM bytes. Used by
+// middleware.JWTVerifier (Story 2.4 T1.3). Returns an error if the PEM is
+// malformed or the key is not RSA.
+func parseRSAPublicPEM(pemBytes []byte) (*rsa.PublicKey, error) {
+	block, _ := pem.Decode(pemBytes)
+	if block == nil {
+		return nil, errors.New("rsa: no PEM block")
+	}
+	pubAny, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("rsa: parse public key: %w", err)
+	}
+	pub, ok := pubAny.(*rsa.PublicKey)
+	if !ok {
+		return nil, errors.New("rsa: public key is not RSA")
+	}
+	return pub, nil
 }
 
 // jwksFromPublicPEM builds the JWKS document from an RSA public-key PEM.

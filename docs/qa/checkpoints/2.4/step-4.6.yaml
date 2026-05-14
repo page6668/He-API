@@ -1,0 +1,128 @@
+step: 4.6
+name: ac_coverage_verification
+placeholder_scan:
+  total_acs: 6
+  placeholder_detected: 0
+  aspects_unchanged: 0
+  clean_entries: 6
+ac_coverage:
+  AC1:
+    traceability_entry_found: true
+    status: VERIFIED
+    aspects:
+      main_scenario: true        # init + verify wizard happy path verified at totp_enroll.go
+      business_rules: true       # BR-1.2 20-byte crypto/rand ✓, BR-1.5 KMS-encrypted Redis blob (with documented BR-1.5 vs BR-1.6 GET-vs-GETDEL resolution) ✓, BR-1.7 ack flag ✓
+      data_validation: true
+      error_handling: true
+    issues: []
+    notes: "BR-1.5 (GETDEL one-shot) contradicts BR-1.6 (retry within TTL window) — Dev correctly resolved as GET-on-start + DEL-on-success and inline-commented. Spec should be reconciled in a doc-backfill."
+  AC2:
+    traceability_entry_found: true
+    status: VERIFIED
+    aspects:
+      main_scenario: true       # password + OAuth paths both wire mfa_token issuance
+      business_rules: true      # BR-2.2 single-use JTI ✓, BR-2.3 IP/UA binding ✓, BR-2.4 ±1 window ✓, BR-2.5 crypto/subtle ✓, BR-2.6 5-fail soft-lock + DEL JTI ✓, BR-2.8 aal=2 claim ✓
+      data_validation: true
+      error_handling: true
+    issues:
+      - severity: LOW
+        ref: "BR-5.10"
+        finding: "Account-lock precedence ('BEFORE running any 2FA logic, return 423 if users.status='locked'') is not checked at the start of ChallengeTOTP. Practically the lockout that matters (in-flight 5-fail) is correctly handled — line 109-126 soft-locks + DELs JTI. The cross-endpoint case (user gets locked between login and challenge) would surface as a downstream failure rather than the prescribed 423 early-return."
+        recommendation: "Add an early users.status='locked' AND locked_until>NOW() short-circuit in ChallengeTOTP/UseRecoveryCode before KMS decrypt. Non-blocking — defense-in-depth."
+    notes: "Cross-token rejection (Architect Q2 HARD) verified at three boundaries: jwt.ParseMFAToken purpose check (mfa_token.go:160), VerifyAccess purpose-empty check (mfa_token.go:200), and gateway middleware. Tests UNIT-035 + UNIT-036 + UNIT-036b present."
+  AC3:
+    traceability_entry_found: true
+    status: VERIFIED
+    aspects:
+      main_scenario: true
+      business_rules: true      # BR-3.1 50-bit base32 entropy ✓, BR-3.2 bcrypt cost=12 ✓, BR-3.3 atomic mark-used WHERE used_at IS NULL ✓, BR-3.6 constant-time iterate-all-rows ✓ (line 142-149 deliberately Do-NOT-break), BR-3.7 low signal ✓, BR-3.8 every-use email ✓
+      data_validation: true
+      error_handling: true
+    issues: []
+    notes: "totp_recovery.go:145 uses short-circuit Compare(...)&&matchedID==Nil; Go evaluates left-to-right so bcrypt.Compare is still called on every iteration — constant-time invariant preserved."
+  AC4:
+    traceability_entry_found: true
+    status: PARTIAL_HIGH
+    aspects:
+      main_scenario: true
+      business_rules: false     # BR-3.9 + AC4 Scenario require 'single PG transaction'; implementation runs ClearTOTPSecret + DeleteAllRecoveryCodesForUser as two non-transactional statements
+      data_validation: true
+      error_handling: true
+    issues:
+      - severity: HIGH
+        id: "AC4-TX-001"
+        ref: "AC4 Scenario / BR-3.9"
+        finding: "DisableTOTP runs ClearTOTPSecret (UPDATE users) and DeleteAllRecoveryCodesForUser (DELETE FROM mfa_recovery_codes) as TWO independent non-transactional statements (totp_disable.go:121-126). Comment at line 115-120 explicitly acknowledges: 'we don't open a transaction here … see Architect §Rec.1 design note for the production cmd/server tx-capable upgrade.'"
+        impact: "On partial failure (DB connection drop between the two statements), user ends up with totp_enabled=FALSE but ORPHAN recovery_code rows. Re-enroll (AC1) would then accumulate stale codes; forensic queries would see inconsistent state; violates BR-3.9 ('all mfa_recovery_codes rows for the user are physically deleted')."
+        recommendation: "Either (a) elevate the Querier interface to support tx-capable callers and wrap both statements in a single transaction, or (b) accept the gap explicitly via a Story 2.4 follow-up TODO + ticket + Open Issue in Dev Agent Record. Blind-spot test 2.4-BLIND-DATA-002 ('inject failure → both rolled back') is also missing."
+        blocking: true
+    notes: "aal=2 gate enforced at gateway via RequireAAL(2); factor re-verify defense-in-depth in auth-svc; HIGH-severity audit + email out-of-band all correct."
+  AC5:
+    traceability_entry_found: true
+    status: VERIFIED
+    aspects:
+      main_scenario: true
+      business_rules: true      # BR-5.1..BR-5.12 covered (5 ratelimit prefixes, KMS envelope, 96-bit nonce, JTI hashed-key, constant-time, ±1 window, audit schema, slog redaction with 8-key substring list, out-of-band emails, single-use replay)
+      data_validation: true
+      error_handling: true
+    issues:
+      - severity: MEDIUM
+        id: "AC5-ASVS-001"
+        ref: "Story T9.1 / ASVS L2 checklist"
+        finding: "ASVS L2 checklist at docs/qa/checkpoints/2.4/asvs-l2-checklist.md has Dev Evidence Summary block at the top but 53 per-requirement '⏳ PENDING DEV' markers remain. Dev landed a summary; per-control evidence rows were not filled."
+        recommendation: "Dev fills the per-control evidence rows (one-line citations to source/tests) in a follow-up edit; QA signs off post-fill."
+        blocking: false
+    notes: "DefaultRedactKeys list = [password, token, cookie, secret, authorization, bearer, recovery_code, otpauth] — case-insensitive substring matching covers BR-5.8 sensitive-field redaction."
+  AC6:
+    traceability_entry_found: true
+    status: VERIFIED
+    aspects:
+      main_scenario: true
+      business_rules: true      # BR-6.1 auth namespace ✓, BR-6.2 10-locale parity ✓ (CI green), BR-6.3 CLDR plurals per locale ✓
+      data_validation: true
+      error_handling: true
+    issues:
+      - severity: LOW
+        id: "AC6-UI-001"
+        ref: "T1.4 / T2.7 / T3.5 / T4.4 / T6.3 / T6.4"
+        finding: "Console UI (TOTPEnrollWizard, /2fa-challenge page, RegenerateRecoveryCodesModal, TOTPDisableModal, LowRecoveryCodesBanner, QRCodePanel, RecoveryCodesGrid), axe-core a11y, and RTL visual baselines are deferred to a follow-up PR by Dev. AC6 'UI flows' explicitly enumerates these as in-scope deliverables."
+        impact: "Backend AC6 (i18n key parity) is met; user-facing UI is not. End users cannot exercise 2FA through console until follow-up PR ships."
+        recommendation: "Track as follow-up PR (Dev already documented this in §AC traceability notes). For Story 2.4 closure-as-Done: either narrow AC6 to backend-only or split into 2.4a (backend) + 2.4b (UI)."
+        blocking: false   # documented deferral; spec scope question, not implementation defect
+    notes: "i18n CI gate verified locally (2 namespaces × 10 locales pass). 70-key auth.2fa.* block present in all 10 locales."
+
+ac_coverage_summary:
+  total_acs: 6
+  fully_verified: 4         # AC1, AC2, AC3, AC5 (with non-blocking concerns)
+  partially_verified: 2     # AC4 (transaction gap), AC6 (UI deferred)
+  not_verified: 0
+  coverage_rate: 67         # fully_verified/total = 4/6
+
+issues_by_severity:
+  critical: []
+  high:
+    - { ac: AC4, id: "AC4-TX-001", finding: "Disable runs ClearTOTPSecret + DeleteAllRecoveryCodesForUser non-transactionally (violates AC4 Scenario + BR-3.9)" }
+  medium:
+    - { ac: AC5, id: "AC5-ASVS-001", finding: "ASVS L2 checklist has 53 ⏳ PENDING DEV markers — only summary block was added" }
+  low:
+    - { ac: AC2, id: "AC2-BR5.10-001", finding: "Account-lock precedence not explicitly checked at ChallengeTOTP/UseRecoveryCode entry" }
+    - { ac: AC6, id: "AC6-UI-001", finding: "Console UI + axe-core + RTL visual deferred to follow-up PR (documented)" }
+    - { ac: "AC1+AC4", id: "BLIND-TESTS-001", finding: "Only 1 of 15 BLIND-* scenario tags embedded in tests (BLIND-BOUNDARY-001..003 in totp_enroll_test); BLIND-DATA-002 atomicity test missing — this is the test that would catch AC4-TX-001" }
+
+traceability_tag_coverage:
+  total_planned: 172
+  embedded: 82
+  coverage_rate: 48
+  breakdown:
+    UNIT: { embedded: 61, target: 86, pct: 71 }
+    INT:  { embedded: 12, target: 38, pct: 32 }
+    SEC:  { embedded:  8, target: 15, pct: 53 }
+    BLIND: { embedded: 1, target: 15, pct:  7 }
+    E2E:  { embedded:  0, target: 18, pct:  0, note: "deferred to follow-up PR" }
+
+ac_coverage_result:
+  result: CONCERNS
+  coverage_rate: 67
+  blocking_issues_count: 1    # AC4-TX-001
+passed: false
+issues: []   # rolled up above

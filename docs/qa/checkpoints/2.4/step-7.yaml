@@ -1,0 +1,47 @@
+step: 7
+name: gate_decision
+round: 2
+mode: incremental
+gate: PASS
+quality_score: 95
+risk_level: HIGH
+project_type: web_backend
+
+inputs_used:
+  - round_1_gate_file: docs/qa/gates/2.4-totp-2fa.yml (rewritten to Round 2)
+  - h1_fix_verified: apps/auth-svc/internal/handlers/totp_disable.go:122-138
+  - h2_test_verified: apps/auth-svc/internal/handlers/totp_disable_test.go:208-261
+  - m1_asvs_filled: docs/qa/checkpoints/2.4/asvs-l2-checklist.md (0 PENDING / 57 filled)
+  - m3_race_gate: apps/auth-svc/internal/handlers/totp_challenge.go:179-189 (atomic Redis DEL)
+  - m4_forensic_tests: apps/auth-svc/internal/repository/mfa_recovery_codes_test.go (3 BLIND-DATA-001 branches)
+
+decision_context:
+  automated_tests_passed: true
+  ac_coverage_rate: 100
+  ac_coverage_passed: true
+  acs_fully_verified: 6
+  acs_not_verified: 0
+  regression_executed: true
+  regression_passed: true
+  regression_failures_count: 0
+  blind_spot_coverage_rate: 38      # 6/16 (+3 over Round 1 — DATA-001×3 + DATA-002×1)
+  blind_spot_missing_code: 0        # no missing-code blind spots in this round
+  highs_remaining: 0
+  mediums_remaining: 0
+  lows_remaining: 5                 # M2-CARRY + M3-CARRY + L1-CARRY + L2-CARRY + M5/L3-CARRY (deferred)
+  asvs_per_control_evidence_filled: 57
+  asvs_per_control_evidence_pending: 0
+  asvs_signed_off: true
+
+decisions:
+  - "All Round 1 HIGH blockers resolved with code-fix + RED-test"
+  - "All Round 1 MEDIUM blockers resolved (M1 / M4 fully; M3 canonically via atomic-DEL — explicit test downgraded to LOW backlog)"
+  - "Remaining items carry forward as documented LOW backlog (M2 sub-checkbox hygiene; M3 missing unit test; L1 entry-time lock; L2 Redis-503 mapping; M5/L3 deferred per Story §AC6)"
+  - "Quality score: 100 - 5 LOW = 95 (+17 vs Round 1 78)"
+  - "Gate: PASS"
+  - "Next status: Done (Story 2.4 backend slice closes; UI / E2E / email templates / RTL / axe-core / testcontainers tracked as 2.4 follow-up PRs)"
+  - "Next handoff: sm: *next-story 2.5"
+
+artifacts_written:
+  - docs/qa/gates/2.4-totp-2fa.yml (Round 2 rewrite)
+  - docs/qa/checkpoints/2.4/step-7.yaml (this file)

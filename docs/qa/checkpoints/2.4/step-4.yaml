@@ -1,0 +1,41 @@
+step: 4
+name: independent_automated_test_execution
+verification_method: independent_execution
+test_commands:
+  - "go test -count=1 ./...  (per-module: auth-svc + api-gateway + notification-svc + go-observability)"
+  - "go vet ./...            (per-module)"
+  - "tsx scripts/check-i18n-keys.ts"
+results:
+  auth_svc:
+    exit_code: 0
+    packages_passed: 13
+    packages_failed: 0
+    notable_durations: { password: "46.665s (bcrypt cost 12 — Q4 hot)", jwt: "9.337s", ratelimit: "7.429s", notification: "6.022s", repository: "6.623s" }
+  api_gateway:
+    exit_code: 0
+    packages_passed: 3
+    packages_failed: 0
+  notification_svc:
+    exit_code: 0
+    packages_passed: 3
+    packages_failed: 0
+  go_observability:
+    exit_code: 0
+    packages_passed: 1
+    packages_failed: 0
+  go_vet:
+    auth_svc: clean
+    api_gateway: clean
+    notification_svc: clean
+    go_observability: clean
+  i18n_check:
+    exit_code: 0
+    output: "✅ i18n key completeness check passed (2 namespace(s) × 10 locale(s))"
+total_pass_rate: 100
+integrity_check:
+  dev_evidence_found: true
+  dev_claimed_pass: true
+  discrepancy: false
+  note: "Matches Dev Agent Record claim of 13 auth-svc + 3 api-gateway packages green + i18n 10/10."
+passed: true
+issues: []

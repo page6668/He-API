@@ -89,6 +89,9 @@ func (f *fakeOAuthJWT) SignAccessTokenWithLockBypass(uid uuid.UUID, now time.Tim
 	f.lastWasLockedSeen = true
 	return f.SignAccessToken(uid, now)
 }
+func (f *fakeOAuthJWT) SignAccessTokenWithAAL(uid uuid.UUID, now time.Time, _ int32) (string, error) {
+	return f.SignAccessToken(uid, now)
+}
 func (f *fakeOAuthJWT) SignRefreshToken(_ uuid.UUID, _ uuid.UUID, _ time.Time) (string, error) {
 	if f.signErr != nil {
 		return "", f.signErr
@@ -127,11 +130,23 @@ func newOAuthServer(t *testing.T, opts ...func(*AuthServer)) (*AuthServer, *coll
 		OAuthGoogle:  &fakeOAuthProvider{subject: "google-sub-1", email: "alice@example.com"},
 		OAuthGithub:  &fakeOAuthProvider{subject: "github-987654321", email: "dev@example.com"},
 		OAuthLinking: &fakeLinker{outcome: oauthpkg.LinkOutcome{UserID: uuid.New(), Branch: oauthpkg.BranchCNewUser, IsNewUser: true}},
+		// Story 2.4 — RequiresMFA branch needs an MFASigner to issue
+		// mfa_token. Inline stub returns deterministic ("test-mfa-tok",
+		// "test-jti") which the BR-2.9 ordering test checks.
+		MFASigner: &oauthMFAStub{},
 	}
 	for _, opt := range opts {
 		opt(&srv)
 	}
 	return NewAuthServer(srv), pub
+}
+
+// oauthMFAStub is a deterministic MFATokenIssuer used by oauth_test.go.
+type oauthMFAStub struct{ seq int }
+
+func (s *oauthMFAStub) IssueMFAToken(in MFAIssueInput, now time.Time) (string, string, error) {
+	s.seq++
+	return "test-mfa-tok", "test-jti", nil
 }
 
 // -- BeginOAuth -----------------------------------------------------------

@@ -32,6 +32,7 @@ type fakeJWT struct {
 	refreshSeq  int
 	lastFamily  uuid.UUID
 	lastUserID  uuid.UUID
+	lastAAL     int32 // Story 2.4 T5.3 — last aal value passed to SignAccessTokenWithAAL
 }
 
 // We construct a real-looking JWT shape (header.payload.signature) so the
@@ -43,6 +44,27 @@ func (f *fakeJWT) SignAccessToken(userID uuid.UUID, _ time.Time) (string, error)
 	seq := f.accessSeq
 	f.mu.Unlock()
 	return testJWT(`{"sub":"`+userID.String()+`","jti":"access-jti-`+itoa(seq)+`","aud":"he-api"}`), nil
+}
+
+func (f *fakeJWT) SignAccessTokenWithLockBypass(userID uuid.UUID, now time.Time, wasLocked bool) (string, error) {
+	if wasLocked {
+		f.mu.Lock()
+		f.accessSeq++
+		seq := f.accessSeq
+		f.mu.Unlock()
+		return testJWT(`{"sub":"` + userID.String() + `","jti":"access-jti-` + itoa(seq) + `","aud":"he-api","was_locked":true}`), nil
+	}
+	return f.SignAccessToken(userID, now)
+}
+
+// Story 2.4 T5.3 — emits the aal claim.
+func (f *fakeJWT) SignAccessTokenWithAAL(userID uuid.UUID, now time.Time, aal int32) (string, error) {
+	f.mu.Lock()
+	f.accessSeq++
+	seq := f.accessSeq
+	f.lastAAL = aal
+	f.mu.Unlock()
+	return testJWT(`{"sub":"` + userID.String() + `","jti":"access-jti-` + itoa(seq) + `","aud":"he-api","aal":` + itoa(int(aal)) + `}`), nil
 }
 
 func (f *fakeJWT) SignRefreshToken(userID uuid.UUID, familyID uuid.UUID, _ time.Time) (string, error) {

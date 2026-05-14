@@ -47,6 +47,13 @@ type fakeNotification struct {
 	lastToken   string
 	lastLink    string
 	err         error // notification.ErrTransient / ErrPermanent
+
+	// Story 2.4 security-alert capture.
+	alertCalls    int
+	lastAlert     notification.SecurityAlertTemplate
+	lastAlertTo   string
+	lastAlertVars map[string]string
+	alertErr      error
 }
 
 func (f *fakeNotification) SendVerificationEmail(_ context.Context, to, locale, tok, link string) error {
@@ -55,6 +62,17 @@ func (f *fakeNotification) SendVerificationEmail(_ context.Context, to, locale, 
 	f.calls++
 	f.lastTo, f.lastLocale, f.lastToken, f.lastLink = to, locale, tok, link
 	return f.err
+}
+
+func (f *fakeNotification) SendSecurityAlert(_ context.Context, template notification.SecurityAlertTemplate, to, locale string, vars map[string]string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.alertCalls++
+	f.lastAlert = template
+	f.lastAlertTo = to
+	f.lastLocale = locale
+	f.lastAlertVars = vars
+	return f.alertErr
 }
 
 type recordingAudit struct {

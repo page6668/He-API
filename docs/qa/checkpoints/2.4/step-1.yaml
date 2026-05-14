@@ -1,0 +1,17 @@
+step: 1
+name: risk_assessment
+inputs:
+  complexity_count: 5      # cumulative_context_impact has 5 truthy flags
+  security_sensitive: true
+  dev_gate_score: 95       # claimed by Dev "all 13 + 3 packages green"
+  has_ui_changes: true     # i18n + (UI deferred)
+  has_api_changes: true    # 6 new gRPC + 6 REST + cookie matrix
+  has_user_facing_deliverable: true
+  test_coverage_level: high
+risk_level: HIGH
+review_mode: full_testing
+skip_e2e: false
+review_round: 1
+notes: |
+  Story is security_sensitive + 4 High risks (SEC-003/004/007/009 — SEC-009 accepted-gap).
+  E2E + UI deferred to follow-up PRs per Dev statement; backend-only review for round 1.

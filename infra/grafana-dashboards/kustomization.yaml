@@ -20,6 +20,7 @@ configMapGenerator:
       - payment.json
       - compliance.json
       - auth-svc.json
+      - oauth.json
     options:
       labels:
         grafana_dashboard: "1"

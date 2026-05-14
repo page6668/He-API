@@ -68,10 +68,12 @@ var (
 // tokens additionally populate FamilyID; access tokens leave it empty.
 //
 // All field names follow the IANA JWT registry (sub/iat/exp/jti/aud) +
-// a custom `fam` for refresh-family rotation per BR-3.9.
+// custom `fam` (refresh family per BR-3.9) and `aal` (Story 2.4 AAL2
+// signal per NIST SP 800-63B §4).
 //
 // Custom MarshalJSON is intentionally NOT defined — the implementation
-// relies on the `omitempty` on FamilyID to exclude it from access tokens.
+// relies on the `omitempty` on FamilyID + AAL + WasLocked to exclude them
+// from tokens that don't need them.
 type Claims struct {
 	Subject   string `json:"sub"`
 	IssuedAt  int64  `json:"iat"`
@@ -79,6 +81,24 @@ type Claims struct {
 	JTI       string `json:"jti"`
 	Audience  string `json:"aud"`
 	FamilyID  string `json:"fam,omitempty"`
+	// WasLocked is the BR-3.10 lock-bypass marker. Emitted on access
+	// tokens minted during the OAuth callback when the matched users
+	// row carried status='locked'; OAuth provider verification is
+	// considered out-of-band proof of identity strong enough to bypass
+	// the soft lock, but downstream consumers need the signal so they
+	// can surface "we noticed unusual activity" UX and prompt extra
+	// authentication on sensitive operations. Password-login access
+	// tokens leave this `false` (omitempty drops the claim entirely).
+	WasLocked bool `json:"was_locked,omitempty"`
+	// AAL is the NIST SP 800-63B Authentication Assurance Level (Story 2.4
+	// BR-2.8). 1 = password-only or OAuth-only; 2 = post-TOTP challenge or
+	// recovery code use. Downstream services (billing-svc /v1/payments,
+	// the GDPR delete-account flow in Story 2.7) can require `aal >= 2` for
+	// sensitive operations; the api-gateway aal_check middleware enforces
+	// at the routing layer. `omitempty` drops the claim when AAL=0 (which
+	// callers MUST treat as equivalent to 1 for backwards compatibility
+	// with pre-Story-2.4 tokens issued before this claim existed).
+	AAL int32 `json:"aal,omitempty"`
 }
 
 // GetExpirationTime implements gojwt.Claims so the library can validate
@@ -140,6 +160,28 @@ func NewSigner(privateKeyPEM []byte) (*Signer, error) {
 // (overridable by tests for deterministic exp values). The 15-min TTL
 // reflects BR-3.5.
 func (s *Signer) SignAccessToken(userID uuid.UUID, now time.Time) (string, error) {
+	return s.signAccessToken(userID, now, false, 0)
+}
+
+// SignAccessTokenWithLockBypass issues an access token that embeds the
+// BR-3.10 `was_locked` marker. Used by the OAuth callback path when
+// outcome.WasLocked=true (the matched users row was status='locked'
+// but provider verification bypassed the soft lock). Password-login
+// keeps using SignAccessToken which defaults the claim to false.
+func (s *Signer) SignAccessTokenWithLockBypass(userID uuid.UUID, now time.Time, wasLocked bool) (string, error) {
+	return s.signAccessToken(userID, now, wasLocked, 0)
+}
+
+// SignAccessTokenWithAAL issues an access token carrying the AAL claim
+// (Story 2.4 BR-2.8 / NIST SP 800-63B §4). Caller passes 2 after a
+// successful TOTP challenge or recovery code use. Use 0 (omitempty drops
+// the claim) for the password-only signin path so older verifiers don't
+// see an unexpected field.
+func (s *Signer) SignAccessTokenWithAAL(userID uuid.UUID, now time.Time, aal int32) (string, error) {
+	return s.signAccessToken(userID, now, false, aal)
+}
+
+func (s *Signer) signAccessToken(userID uuid.UUID, now time.Time, wasLocked bool, aal int32) (string, error) {
 	jti, err := uuid.NewRandom()
 	if err != nil {
 		return "", fmt.Errorf("jwt: gen jti: %w", err)
@@ -150,6 +192,8 @@ func (s *Signer) SignAccessToken(userID uuid.UUID, now time.Time) (string, error
 		ExpiresAt: now.Add(AccessTokenTTL).Unix(),
 		JTI:       jti.String(),
 		Audience:  Audience,
+		WasLocked: wasLocked,
+		AAL:       aal,
 	}
 	return s.sign(claims)
 }

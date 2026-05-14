@@ -45,6 +45,14 @@ jwt:
 db:
   credsSecretName: he-api-db-creds
 
+# Story 2.3 — OAuth provider credentials (Wright Round 1 Q5 ruling).
+# `secretName` holds the 4 client-credentials keys (Google + GitHub IDs +
+# secrets); `configMapName` holds the non-secret OAUTH_REDIRECT_URI_BASE.
+# Both are provisioned by the `oauth-credentials` Terraform module.
+oauth:
+  secretName: he-api-oauth-credentials
+  configMapName: he-api-oauth-config
+
 serviceAccount:
   create: true
   name: ""
@@ -60,6 +68,9 @@ prometheusRule:
   # 5-min sums above these thresholds trigger the BR-4.9 alerts.
   signinFailureThreshold: 100
   accountLockedThreshold: 10
+  # Story 2.3 BR-4.8 OAuth alert thresholds.
+  oauthSubjectMismatchThreshold: 5
+  oauthBypassedLockThreshold: 3
 
 # Story 2.2 P5d (INT-067) — NetworkPolicy.
 # Default-deny ingress+egress; explicit allow lists below.
@@ -75,6 +86,13 @@ networkPolicy:
   redisPort: 6379
   kafkaCIDRs: []
   kafkaPort: 9092
+  # Story 2.3 (T0.4) — OAuth provider egress to accounts.google.com /
+  # oauth2.googleapis.com / github.com / api.github.com on port 443.
+  # FQDN matching is operator-tightenable via providerCIDRs; the default
+  # empty list lands as 0.0.0.0/0 + port 443, matching the off-cluster
+  # ipBlock pattern Story 2.2 already uses for PG / Redis / Kafka.
+  providerCIDRs: []
+  providerEgressPort: 443
 
 nodeSelector: {}
 tolerations: []

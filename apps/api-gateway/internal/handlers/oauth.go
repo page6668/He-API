@@ -138,10 +138,15 @@ func (h *OAuthHandler) Callback(provider string) http.HandlerFunc {
 			return
 		}
 
-		// 2FA hook — auth-svc returns Requires_2Fa=true when users.totp_enabled.
-		// For Story 2.3 we route to a placeholder /{locale}/2fa-challenge.
-		// Story 2.4 will fill in the actual challenge flow.
+		// Story 2.4 — auth-svc returns Requires_2Fa=true + mfa_token when
+		// users.totp_enabled. Stamp the mfa_token into he_mfa cookie (narrow
+		// Path=/v1/auth/2fa) so the browser only sends it back to the
+		// challenge endpoint. 302 to /{locale}/2fa-challenge where the
+		// console reads the cookie server-side and renders the TOTP form.
 		if resp.Msg.GetRequires_2Fa() {
+			if mfa := resp.Msg.GetMfaToken(); mfa != "" {
+				SetMFACookie(w, mfa, h.Env)
+			}
 			locale := localeFromReturnTo(resp.Msg.GetReturnTo(), "en")
 			target := buildAbsoluteConsoleURL(h.Env, "/"+locale+"/2fa-challenge")
 			http.Redirect(w, r, target, http.StatusFound)

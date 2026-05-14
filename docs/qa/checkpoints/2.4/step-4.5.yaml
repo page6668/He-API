@@ -1,0 +1,41 @@
+step: 4.5
+name: task_checkbox_verification
+task_checkbox_verification:
+  total_checkboxes: 95
+  checked_count: 0
+  unchecked_count: 95
+  completion_rate: 0
+  consistency_checks:
+    total: 0
+    passed: 0
+    failed: 0
+    consistency_rate: null  # not applicable when 0 boxes were checked
+  analysis: |
+    Tasks/Subtasks section contains 95 unchecked boxes spanning T0–T10. Dev Agent Record
+    claims "backend + cross-cutting security + i18n parity COMPLETE" and lists specific
+    deferrals (console UI, email templates, axe-core, RTL visual, testcontainers, Playwright,
+    professional translations). The substantive Dev evidence (code + tests + AC traceability +
+    13 + 3 + 3 + 1 packages green) is independently verified in Step 4.
+
+    Three categories of unchecked boxes:
+      (A) "Completed but not marked" — T0.* infrastructure, T1.1–T1.3 + T1.5–T1.6,
+          T2.1–T2.6 + T2.8–T2.9, T3.1–T3.3 + T3.7–T3.8, T4.1–T4.3 + T4.5–T4.6,
+          T5.1–T5.5, T6.1–T6.2 + T6.5 (email-template enum only), T10.1–T10.7.
+      (B) "Documented deferrals" — T1.4 (TOTPEnrollWizard UI), T2.7 (/2fa-challenge page),
+          T3.4–T3.6 (recovery UI + low-codes banner), T4.4 (TOTPDisableModal),
+          T6.3 (axe-core), T6.4 (RTL visual baselines), T7 (testcontainers integration),
+          T8 (Playwright E2E), T9.2 (threat model not located inline), T10.8–T10.10
+          (axe-core + Dev Log + closeout).
+      (C) "Ambiguous" — T0.13 (40 email templates × 10 locales — Dev marked deferred to
+          notification-svc plumbing Story), T0.15/T0.16 (Architect-owned doc backfill),
+          T5.4 staging bcrypt benchmark (scaffold ready, run gated on staging availability).
+  issues:
+    critical: []
+    high: []
+    medium:
+      - id: "CHK-001"
+        finding: "All 95 Task/Subtask checkboxes left unchecked despite Dev claiming backend completion (Category A items above). Process-hygiene violation: future readers cannot tell at-a-glance which tasks landed vs which were deferred. Independently-verified Step 4 evidence shows the backend work IS present and tests pass."
+        recommendation: "Dev SHOULD flip Category-A boxes to [x] in a follow-up edit; Category-B/C remain [ ] with explicit deferral note in Open Issues. No code change required."
+        category: "checkbox_hygiene"
+        blocking: false
+  result: PASS_WITH_PROCESS_FINDING

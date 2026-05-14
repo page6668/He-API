@@ -1,0 +1,14 @@
+step: 2
+name: project_type_detection
+project_type:
+  type: web_backend
+  subtype: go_monolith_workspace
+test_strategy:
+  primary_tool: bash
+  requires_environment: false   # backend unit tests are self-contained; testcontainers integration deferred per story
+  startup_command: ""
+  expected_port: 0
+  test_command_root: "go test ./..."
+notes: |
+  Monolith Go workspace (go.work). Console (Next.js) UI is explicitly deferred to follow-up PR per
+  Story Dev Agent Record. Backend review focuses on auth-svc + api-gateway + go-observability Go suites.

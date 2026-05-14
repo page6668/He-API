@@ -34,7 +34,69 @@ const (
 	EventSigninFailure           EventType = "auth.signin_failure"
 	EventAccountLocked           EventType = "auth.account_locked"
 	EventEmailSendFailed         EventType = "auth.email_send_failed"
+
+	// Story 2.3 OAuth event types (12 total per BR-4.3). All carry
+	// hashed PII only. The set replaces the earlier 9-event collapsed
+	// taxonomy after QA review round 1 split rejected_conflict into the
+	// two distinct B.4 + B.5 reasons and added the missing suspended
+	// rejection path. The 13th canonical type — invalid_return_to —
+	// is emitted as a structured warn log from api-gateway because the
+	// rejection happens pre-Redis and api-gateway has no Kafka publisher
+	// in Story 2.3 scope (see apps/api-gateway/internal/handlers/oauth.go).
+	EventOAuthInitiate                EventType = "auth.oauth.initiate"
+	EventOAuthCallbackSuccess         EventType = "auth.oauth.callback.success"
+	EventOAuthCallbackErrState        EventType = "auth.oauth.callback.error_state"
+	EventOAuthCallbackErrProv         EventType = "auth.oauth.callback.error_provider"
+	EventOAuthCallbackErrBinding      EventType = "auth.oauth.callback.error_binding"
+	EventOAuthCallbackRejSuspended    EventType = "auth.oauth.callback.rejected_suspended"
+	EventOAuthLinkSuccess             EventType = "auth.oauth.link.success"
+	EventOAuthLinkRejUnverified       EventType = "auth.oauth.link.rejected_unverified"
+	EventOAuthLinkRejSubjectMismatch  EventType = "auth.oauth.link.rejected_subject_mismatch"
+	EventOAuthLinkRejOtherProvider    EventType = "auth.oauth.link.rejected_other_provider"
+	EventOAuthLockBypass              EventType = "auth.oauth.lock_bypass"
+	EventOAuthInvalidReturnTo         EventType = "auth.oauth.invalid_return_to"
+
+	// Story 2.4 — 2FA event taxonomy (10 types per BR-5.7). Severity is
+	// recorded in Event.Metadata["severity"] = LOW/MEDIUM/HIGH per BR-5.7
+	// mapping so audit-svc routing keeps a single envelope shape.
+	Event2FAEnrollInitiated     EventType = "auth.2fa.enroll.initiated"     // LOW
+	Event2FAEnrolled            EventType = "auth.2fa.enrolled"             // MEDIUM
+	Event2FAEnrollFailed        EventType = "auth.2fa.enroll.failed"        // LOW
+	Event2FAChallengeSuccess    EventType = "auth.2fa.challenge.success"    // LOW
+	Event2FAChallengeFailed     EventType = "auth.2fa.challenge.failed"     // LOW
+	Event2FAChallengeLocked     EventType = "auth.2fa.challenge.locked"     // HIGH — possible attack
+	Event2FAChallengeBinding    EventType = "auth.2fa.challenge.binding_failed" // HIGH — possible cookie theft
+	Event2FARecoveryUsed        EventType = "auth.2fa.recovery.used"        // HIGH — out-of-band event
+	Event2FARecoveryRegenerated EventType = "auth.2fa.recovery.regenerated" // MEDIUM
+	Event2FADisabled            EventType = "auth.2fa.disabled"             // HIGH — security downgrade
 )
+
+// Severity classification for the 10 Story 2.4 event types per BR-5.7.
+// audit-svc downstream consumers use this to route HIGH events to ops
+// alerting + ClickHouse-with-retention bucket separation.
+const (
+	SeverityLow    = "LOW"
+	SeverityMedium = "MEDIUM"
+	SeverityHigh   = "HIGH"
+)
+
+// Severity2FA returns the canonical severity for a 2FA event type. Returns
+// SeverityLow for non-2FA event types (the legacy Story 2.2 / 2.3 taxonomy
+// uses a flatter convention — see audit-svc consumer for those mappings).
+func Severity2FA(t EventType) string {
+	switch t {
+	case Event2FAChallengeLocked, Event2FAChallengeBinding,
+		Event2FARecoveryUsed, Event2FADisabled:
+		return SeverityHigh
+	case Event2FAEnrolled, Event2FARecoveryRegenerated:
+		return SeverityMedium
+	case Event2FAEnrollInitiated, Event2FAEnrollFailed,
+		Event2FAChallengeSuccess, Event2FAChallengeFailed:
+		return SeverityLow
+	default:
+		return SeverityLow
+	}
+}
 
 // Event is the BR-4.5 wire-shape consumed by ClickHouse downstream
 // (audit-svc → topic `audit.event` → ClickHouse `request_logs`).

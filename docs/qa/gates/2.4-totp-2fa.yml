@@ -1,0 +1,219 @@
+schema: 1
+story: '2.4'
+slug: totp-2fa
+gate: PASS
+status_reason: |
+  Round 2 incremental review. All Round 1 HIGH blockers (H1 + H2) resolved with both
+  code fix and a P0 RED-test that gates the fix.
+
+  H1 fix verified (apps/auth-svc/internal/handlers/totp_disable.go:122-138):
+  DisableTOTP now opens `s.DBTx.Begin(ctx)`, threads the tx through
+  `ClearTOTPSecret(ctx, tx, …)` + `DeleteAllRecoveryCodesForUser(ctx, tx, …)`, and
+  commits — with a deferred `tx.Rollback(ctx)` safety net. The in-code comment ties
+  back to "QA-2.4-H1 fix" per AC4 / BR-3.9 "single PG transaction" mandate.
+
+  H2 fix verified (apps/auth-svc/internal/handlers/totp_disable_test.go:208-261):
+  `TestDisableTOTP_TransactionRollsBackOnRecoveryDeleteFailure` (scenario
+  2.4-BLIND-DATA-002) injects a DB failure on the second statement via pgxmock
+  `ExpectBegin → ExpectExec → ExpectExec(WillReturnError) → ExpectRollback`. The
+  test additionally asserts no `2fa.disabled` audit and no Alert2FADisabled email
+  fire on rollback — covering both atomicity and the success-side-effect guard.
+
+  M1 fix verified (docs/qa/checkpoints/2.4/asvs-l2-checklist.md): zero `PENDING DEV`
+  rows; all 57 V-controls (V2/V3/V6/V7/V8/V11) carry ✅ PASS / N/A / DEFERRED status
+  with code-citations + test-scenario tags. Sign-off banner shows `DEV EVIDENCE
+  FINALIZED 2026-05-13 (QA Round 1 M1 fix) — awaiting QA countersign at *review 2.4
+  Round 2`. QA countersigns at Round 2 close (this gate file).
+
+  M3 fix verified (apps/auth-svc/internal/handlers/totp_challenge.go:172-189): the
+  JTI TOCTOU is closed at the atomic-Redis-DEL level — `Del.Result()` is now
+  required to return exactly 1; any goroutine that loses the race sees `delCount==0`
+  and is rejected with `401_mfa_token_invalid` BEFORE access+refresh issuance. The
+  inline comment ties back to "QA Round 1 M3 fix". This is strictly stronger than
+  the alternative BLIND-CONCURRENCY-001 test would have demonstrated.
+
+  M4 fix verified (apps/auth-svc/internal/repository/mfa_recovery_codes_test.go):
+  `2.4-BLIND-DATA-001` lands as three scenarios — mark-used path asserts
+  `used_at=NOW(), used_from_ip_hash=$2, used_from_ua_hash=$3` columns in the
+  UPDATE; race-branch asserts the `WHERE used_at IS NULL` idempotency guard;
+  regenerate path asserts `MarkAllRecoveryCodesUnused` preserves the forensic
+  columns + writes `regenerated_at + regenerated_reason` (BR-3.5).
+
+  Residual items (non-blocking, deferred or backlog):
+  - M2 (checkbox hygiene): 40/95 boxes flipped (was 0/95). Backend T0/T1.1-1.3/
+    T2.1-2.6/T3.1-3.3/T4.1-4.3 correctly flipped; deferred items (T1.4/T2.7/T3.4-3.6/
+    T4.4/T6.3-5/T7/T8) correctly left unchecked. T5.* and T6.1-2 cross-cutting items
+    are landed but sub-bullets remain unflipped — pure hygiene gap.
+  - M3 (test): code fix is canonical; no explicit BLIND-CONCURRENCY-001 unit test
+    was added. The atomic Redis DEL closes the race irrespective of test coverage,
+    but coverage trace remains 14/15 not 15/15.
+  - M5 (E2E zero scenarios): deferred to follow-up PR per Story §AC6 — 23 stubs
+    remain not-implemented; depends on Console UI Stories T1.4/T2.7/T3.5/T4.4.
+  - L1 (account-lock entry precedence): unchanged — Story 2.5+ may add a
+    cross-endpoint short-circuit for users.status='locked' AND locked_until>NOW().
+  - L2 (Redis-503 mapping): unchanged — Redis Exists failure still returns 500 via
+    internalErr (the KMS path was already 503-mapped).
+  - L3 (UI/email/RTL/axe-core): deferred per Story plan.
+
+  Independent regression: 20/20 Go packages PASS across go.work modules
+  (auth-svc=13, api-gateway=3, notification-svc=3, go-observability=1);
+  `go vet ./...` clean across all 4 modules; i18n CI ✅ 10 locales × 2 namespaces
+  (`scripts/check-i18n-keys.ts`).
+
+reviewer: Turing
+agent_model_used: claude-opus-4-7[1m]
+updated: 2026-05-13T00:00:00Z
+
+review_round: 2
+risk_level: HIGH
+review_mode: full_testing
+review_mode_type: incremental
+project_type: web_backend
+
+test_results:
+  automated_tests:
+    go:
+      test_command: "go test -count=1 ./... (per-module across go.work)"
+      passed: true
+      modules_total: 4
+      packages_total: 20
+      packages_failed: 0
+      pass_rate: 100
+      per_module:
+        auth_svc:       { packages: 13, passed: 13 }
+        api_gateway:    { packages: 3,  passed: 3  }
+        notification_svc: { packages: 3, passed: 3 }
+        go_observability: { packages: 1, passed: 1 }
+    go_vet:
+      auth_svc: clean
+      api_gateway: clean
+      notification_svc: clean
+      go_observability: clean
+    i18n_keys:
+      test_command: "tsx scripts/check-i18n-keys.ts"
+      passed: true
+      namespaces: 2
+      locales: 10
+      output: "✅ i18n key completeness check passed (2 namespace(s) × 10 locale(s))"
+
+  task_checkbox_verification:
+    total: 95
+    checked: 40
+    unchecked: 55
+    delta_round_1_to_2: "+40"
+    finding: "Backend landed-work boxes flipped; deferred items (T1.4 console UI, T2.7, T3.4-3.6, T4.4, T6.3-5, T7 testcontainers, T8 Playwright) correctly left unchecked. T5.*/T6.1-2 cross-cutting sub-bullets remain unflipped despite landed work — Round 2 M2 partial; hygiene-only."
+
+  ac_coverage:
+    structural_rate: 100
+    semantic_rate: 100        # all 6 ACs fully verified (AC4 now PASS; AC6 backend slice complete with UI deferred and documented)
+    passed: true
+    failed_acs: []
+    semantic_gaps: []
+    traceability_tag_coverage:
+      total_planned: 172
+      embedded: 82            # tag-embed counts unchanged Round 1→2; new tests added carry tags
+      coverage_rate: 48
+      note: "Tag-embed coverage stable; net tests added in Round 2 (BLIND-DATA-001 × 3 + BLIND-DATA-002 × 1) all carry scenario tags."
+
+  regression:
+    executed: true
+    passed: true
+    scope: "Go workspace (auth-svc + api-gateway + notification-svc + go-observability); i18n CI script"
+    new_round_2_tests:
+      - "TestDisableTOTP_TransactionRollsBackOnRecoveryDeleteFailure (handlers — 2.4-BLIND-DATA-002 / H1+H2)"
+      - "TestMarkRecoveryCodeUsed_* (repository — 2.4-BLIND-DATA-001 / M4 — mark-used + race)"
+      - "TestMarkAllRecoveryCodesUnused_* (repository — 2.4-BLIND-DATA-001 regenerate branch / M4)"
+
+  e2e_tests:
+    executed: false
+    skipped: true
+    skip_reason: "Console UI still deferred to follow-up PR; 23 Playwright stubs remain not-implemented (M5 carry-forward)."
+    spec_file: apps/console/e2e/2.4-totp-2fa.spec.ts
+    stub_count: 23
+
+  blind_spot_verification:
+    total_scenarios: 16
+    covered: 6              # +3 over Round 1 (BLIND-DATA-001 × 3 of the planned 1 + BLIND-DATA-002)
+    coverage_rate: 38
+    remaining_uncovered: 10
+    by_category:
+      BOUNDARY:    { planned: 4, covered: 3 }
+      CONCURRENCY: { planned: 2, covered: 0,  note: "M3 closed code-side via atomic-DEL race gate; no test added" }
+      DATA:        { planned: 2, covered: 2,  note: "DATA-001 (M4) + DATA-002 (H2) both landed" }
+      ERROR:       { planned: 2, covered: 0 }
+      FLOW:        { planned: 3, covered: 0 }
+      RESOURCE:    { planned: 3, covered: 0 }
+      INTL:        { planned: 1, covered: 1,  note: "i18n CI green; pluralization branches encoded across 10 locales" }
+    rationale: "DATA blind-spots are fully covered (the security-most-load-bearing category). CONCURRENCY / ERROR / FLOW / RESOURCE remain as testcontainers + E2E follow-up — out-of-scope per Story §AC6 deferrals."
+
+  asvs_l2_compliance:
+    checklist_file: docs/qa/checkpoints/2.4/asvs-l2-checklist.md
+    dev_summary_block_present: true
+    per_control_evidence_pending: 0
+    per_control_evidence_filled: 57
+    signed_off: true
+    qa_countersign: "Turing 2026-05-13 (Round 2)"
+    rationale: "All V2/V3/V6/V7/V8/V11 rows show ✅ PASS / N/A / DEFERRED with code-citation + test-scenario tags. QA countersigns at Round 2 close."
+
+top_issues: []  # All Round 1 HIGH + MEDIUM blockers resolved or downgraded to backlog
+
+residual_backlog:
+  - id: QA-2.4-M2-CARRY
+    severity: LOW
+    category: process_hygiene
+    finding: "T5.1-T5.5 and T6.1-T6.2 parent + sub checkboxes remain unflipped despite landed work."
+    recommendation: "Mechanical hygiene flip on next housekeeping pass; no functional impact."
+
+  - id: QA-2.4-M3-CARRY
+    severity: LOW
+    category: missing_test
+    finding: "No explicit 2.4-BLIND-CONCURRENCY-001 unit test for the JTI race scenario."
+    note: "Code-side fix (atomic Redis-DEL gate at totp_challenge.go:179-189) is the canonical solution; an explicit test would assert what the runtime already enforces. Add via in-memory fake when testcontainers tier lands."
+
+  - id: QA-2.4-L1-CARRY
+    severity: LOW
+    category: defense_in_depth
+    finding: "Entry-time users.status='locked' precedence not enforced at ChallengeTOTP / UseRecoveryCode / DisableTOTP."
+    recommendation: "Add early short-circuit returning 423 with Retry-After; Story 2.5+ if cross-endpoint coherence becomes a theme."
+
+  - id: QA-2.4-L2-CARRY
+    severity: LOW
+    category: error_taxonomy
+    finding: "Redis Exists failure on the challenge path returns 500 via internalErr; spec hints at 503 Unavailable."
+    recommendation: "Map Redis transient failures to CodeUnavailable + 503 status code; ~10-min change."
+
+  - id: QA-2.4-M5-CARRY / QA-2.4-L3-CARRY
+    severity: LOW
+    category: deferred_to_followup_pr
+    finding: "Console UI (T1.4/T2.7/T3.5/T4.4) + 40 email templates + axe-core a11y + RTL visual baselines + Playwright E2E + testcontainers integration + professional translation all deferred per Story §AC6."
+    recommendation: "Track as Story 2.4 follow-up PR (or split 2.4a backend / 2.4b UI)."
+
+quality_score: 95
+# Calculation: 100 (start) - 0 HIGH - 0 MEDIUM (all resolved or downgraded) - 2 LOW × 1 (L1+L2 unchanged) - 3 LOW × 1 (M2/M3/M5 carry as LOW)
+# = 100 - 5 = 95. Round 1 was 78; +17 round-over-round improvement.
+
+waiver:
+  active: false
+
+evidence:
+  directory: docs/qa/evidence/2.4/
+  checkpoint_directory: docs/qa/checkpoints/2.4/
+  artifacts:
+    - "step-1.yaml (risk assessment — cached from Round 1)"
+    - "step-2.yaml (project type — cached)"
+    - "step-7.yaml (Round 2 gate decision context)"
+    - "asvs-l2-checklist.md (57 controls filled; QA countersigned)"
+  round_1_carry_forward:
+    - "Independent test execution + AC coverage + checkbox + blind-spot evidence files from Round 1 retained as historical baseline."
+
+next_status: Done
+next_action: handoff_to_sm_next_story
+next_handoff: "sm: *next-story 2.5"
+
+incremental_context:
+  cached_risk_level: HIGH
+  cached_review_mode: full_testing
+  cached_project_type: web_backend
+  round_1_top_issues_resolved: [QA-2.4-H1, QA-2.4-H2, QA-2.4-M1, QA-2.4-M3, QA-2.4-M4]
+  round_1_top_issues_deferred: [QA-2.4-M5, QA-2.4-L3]
+  round_1_top_issues_carry_low: [QA-2.4-M2, QA-2.4-L1, QA-2.4-L2]

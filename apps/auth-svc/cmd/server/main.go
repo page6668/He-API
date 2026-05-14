@@ -38,10 +38,61 @@ import (
 	"github.com/he-api/he-api/apps/auth-svc/internal/audit"
 	"github.com/he-api/he-api/apps/auth-svc/internal/handlers"
 	authjwt "github.com/he-api/he-api/apps/auth-svc/internal/jwt"
+	"github.com/he-api/he-api/apps/auth-svc/internal/kms"
 	"github.com/he-api/he-api/apps/auth-svc/internal/metrics"
 	"github.com/he-api/he-api/apps/auth-svc/internal/notification"
 	"github.com/he-api/he-api/apps/auth-svc/internal/password"
+
+	"github.com/google/uuid"
 )
+
+// mfaIssuerAdapter bridges *authjwt.Signer.IssueMFAToken (which takes
+// authjwt.MFATokenInput) to handlers.MFATokenIssuer (which takes
+// handlers.MFAIssueInput). The two struct shapes are isomorphic but the
+// interface keeps the handlers package free of the jwt import.
+type mfaIssuerAdapter struct {
+	signer *authjwt.Signer
+}
+
+func (a mfaIssuerAdapter) IssueMFAToken(in handlers.MFAIssueInput, now time.Time) (string, string, error) {
+	return a.signer.IssueMFAToken(authjwt.MFATokenInput{
+		UserID:        in.UserID,
+		LoginMethod:   in.LoginMethod,
+		IPHash:        in.IPHash,
+		UserAgentHash: in.UserAgentHash,
+		ReturnTo:      in.ReturnTo,
+	}, now)
+}
+
+// mfaParserAdapter bridges *authjwt.Verifier.ParseMFAToken to
+// handlers.MFATokenParser.
+type mfaParserAdapter struct {
+	verifier *authjwt.Verifier
+}
+
+func (a mfaParserAdapter) ParseMFAToken(tok string) (*handlers.MFAParsedClaims, error) {
+	c, err := a.verifier.ParseMFAToken(tok)
+	if err != nil {
+		return nil, err
+	}
+	return &handlers.MFAParsedClaims{
+		Subject:       c.Subject,
+		JTI:           c.JTI,
+		Audience:      c.Audience,
+		Purpose:       c.Purpose,
+		LoginMethod:   c.LoginMethod,
+		IPHash:        c.IPHash,
+		UserAgentHash: c.UserAgentHash,
+		ReturnTo:      c.ReturnTo,
+		IssuedAt:      c.IssuedAt,
+		ExpiresAt:     c.ExpiresAt,
+	}, nil
+}
+
+// Silence unused-import linter (the uuid import is consumed by adapter types
+// in their concrete handler call sites — the cmd/server file itself doesn't
+// reference uuid directly).
+var _ = uuid.Nil
 
 const (
 	serviceName    = "auth-svc"
@@ -252,9 +303,27 @@ func main() {
 		os.Exit(1)
 	}
 
+	// === Story 2.4 — KMS master key + MFA signing/parsing adapters ==========
+	// Master key file format: 32 raw bytes (AES-256). Generation/rotation is
+	// an ops runbook (Wright Round 1 Q1 ruling — K8s Secret bootstrap path).
+	kmsKeyPath := envOr("HE_API_KMS_MASTER_KEY_PATH", "/etc/auth-svc/keys/kms_master.bin")
+	kmsKeyBytes, err := os.ReadFile(kmsKeyPath)
+	if err != nil {
+		logger.Error("read KMS master key", slog.String("path", kmsKeyPath), slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	kmsClient, err := kms.NewLocal(kmsKeyBytes)
+	if err != nil {
+		logger.Error("init KMS client", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	mfaIssuer := mfaIssuerAdapter{signer: jwtSigner}
+	mfaParser := mfaParserAdapter{verifier: jwtVerifier}
+
 	// === AuthServer =========================================================
 	authServer := handlers.NewAuthServer(handlers.AuthServer{
 		DB:             pgPool,
+		DBTx:           pgPool,
 		Redis:          rdb,
 		HIBP:           hibp,
 		Notification:   notifClient,
@@ -265,6 +334,11 @@ func main() {
 		Clock:          time.Now,
 		ConsoleBaseURL: envOr("HE_API_CONSOLE_BASE_URL", defaultConsoleBaseURL),
 		Logger:         logger,
+		// Story 2.4 deps
+		KMS:       kmsClient,
+		MFASigner: mfaIssuer,
+		MFAParser: mfaParser,
+		Issuer:    envOr("HE_API_TOTP_ISSUER", "He-API"),
 	})
 
 	mux := http.NewServeMux()

@@ -42,6 +42,36 @@ spec:
               value: {{ .Values.audit.notificationSvcURL | quote }}
             - name: HE_API_CONSOLE_BASE_URL
               value: {{ .Values.audit.consoleBaseURL | quote }}
+            # Story 2.3 — OAuth provider credentials (Wright Round 1 Q5).
+            # Secret holds 4 client-credentials keys; ConfigMap holds the
+            # non-secret OAUTH_REDIRECT_URI_BASE. auth-svc reads these at
+            # startup; rotation = `kubectl rollout restart deploy/auth-svc`
+            # after Terraform applies the new Secret.
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.oauth.secretName }}
+                  key: GOOGLE_CLIENT_ID
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.oauth.secretName }}
+                  key: GOOGLE_CLIENT_SECRET
+            - name: GITHUB_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.oauth.secretName }}
+                  key: GITHUB_CLIENT_ID
+            - name: GITHUB_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.oauth.secretName }}
+                  key: GITHUB_CLIENT_SECRET
+            - name: OAUTH_REDIRECT_URI_BASE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.oauth.configMapName }}
+                  key: OAUTH_REDIRECT_URI_BASE
           envFrom:
             # Story 1.6 — PostgreSQL + Redis URIs (HE_API_DB_POSTGRES_URI,
             # HE_API_DB_REDIS_URI) are mounted from the shared Secret.

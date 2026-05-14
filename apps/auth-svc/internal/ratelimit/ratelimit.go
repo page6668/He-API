@@ -21,6 +21,15 @@ const (
 	keyPrefixSigninEmail = "ratelimit:signin:email:"
 	keyPrefixResendIP    = "ratelimit:resend:ip:"
 	keyPrefixResendEmail = "ratelimit:resend:email:"
+
+	// Story 2.4 — five 2FA rate-limit namespaces (per-user-only per Wright
+	// Round 1 Q5 ruling). Counter TTL matches the window arg passed to
+	// CheckAndIncr; handlers surface 429 via Result.RetryAfter.
+	KeyPrefix2FAEnrollInit    = "ratelimit:2fa:enroll:init:"
+	KeyPrefix2FAEnrollVerify  = "ratelimit:2fa:enroll:verify:"
+	KeyPrefix2FAChallenge     = "ratelimit:2fa:challenge:"
+	KeyPrefix2FARecovery      = "ratelimit:2fa:recovery:"
+	KeyPrefix2FADisable       = "ratelimit:2fa:disable:"
 )
 
 // ErrRateLimited is returned by CheckAndIncr when the post-INCR count exceeds
@@ -144,4 +153,42 @@ func ResendIPKey(ip string) string {
 // key — email_hash, not plaintext.
 func ResendEmailKey(email string) string {
 	return keyPrefixResendEmail + EmailHash(email)
+}
+
+// MFA2FAOperation enumerates the five 2FA rate-limit namespaces. Spelled as a
+// distinct type so the handler call site cannot accidentally swap an
+// operation tag for an unrelated string.
+type MFA2FAOperation string
+
+const (
+	OpMFAEnrollInit   MFA2FAOperation = "enroll_init"
+	OpMFAEnrollVerify MFA2FAOperation = "enroll_verify"
+	OpMFAChallenge    MFA2FAOperation = "challenge"
+	OpMFARecovery     MFA2FAOperation = "recovery"
+	OpMFADisable      MFA2FAOperation = "disable"
+)
+
+// MFAKey builds the per-user rate-limit key for the supplied 2FA operation
+// (BR-5.1). user_id is the canonical UUID string; callers MUST pass the same
+// representation across init and verify so the counter shares a key.
+//
+// Per Wright Round 1 Q5 ruling, this is per-user-only (no per-IP layer);
+// rate-limit dimensionality matches Story 2.2 signin and Story 2.3 OAuth.
+func MFAKey(op MFA2FAOperation, userID string) string {
+	switch op {
+	case OpMFAEnrollInit:
+		return KeyPrefix2FAEnrollInit + userID
+	case OpMFAEnrollVerify:
+		return KeyPrefix2FAEnrollVerify + userID
+	case OpMFAChallenge:
+		return KeyPrefix2FAChallenge + userID
+	case OpMFARecovery:
+		return KeyPrefix2FARecovery + userID
+	case OpMFADisable:
+		return KeyPrefix2FADisable + userID
+	default:
+		// Caller bug; surface a deterministic key prefix that grep'd
+		// audits will catch. Never reached on a well-typed call.
+		return "ratelimit:2fa:unknown:" + userID
+	}
 }

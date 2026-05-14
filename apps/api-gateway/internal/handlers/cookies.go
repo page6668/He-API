@@ -33,16 +33,25 @@ const (
 	EnvDevelopment DeployEnv = "development"
 )
 
-// Cookie names per BR-3.7.
+// Cookie names per BR-3.7 + Story 2.4 BR-2.1.
 const (
 	AccessCookieName  = "he_access"
 	RefreshCookieName = "he_refresh"
+	// MFACookieName carries the short-lived (5-min) mfa_token between
+	// password/OAuth-first-factor success and TOTP code submission.
+	MFACookieName = "he_mfa"
 )
 
-// Cookie path scopes per BR-3.7.
+// Cookie path scopes per BR-3.7 + Story 2.4.
 const (
 	accessCookiePath  = "/"
 	refreshCookiePath = "/v1/auth/refresh"
+	// Story 2.4 — narrow Path so the cookie is only sent to the 2FA
+	// challenge surface. Defense against accidental cross-endpoint leakage.
+	mfaCookiePath = "/v1/auth/2fa"
+
+	// MFA cookie lifetime — must match the mfa_token JWT TTL (BR-2.1).
+	mfaCookieMaxAgeSeconds = 5 * 60
 )
 
 // ParseDeployEnv normalizes the env-var value to a DeployEnv. Unknown
@@ -136,5 +145,38 @@ func ClearRefreshCookie(w http.ResponseWriter, env DeployEnv) {
 		Secure:   secureFlag(env),
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+// SetMFACookie writes the he_mfa cookie. The browser sends this cookie
+// ONLY when the path begins with /v1/auth/2fa — exact scope per Architect
+// §Rec.1. SameSite=Lax matches the access cookie since the 2FA challenge
+// is a top-level navigation flow.
+func SetMFACookie(w http.ResponseWriter, value string, env DeployEnv) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     MFACookieName,
+		Value:    value,
+		Path:     mfaCookiePath,
+		Domain:   cookieDomain(env),
+		MaxAge:   mfaCookieMaxAgeSeconds,
+		Secure:   secureFlag(env),
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// ClearMFACookie writes an expired he_mfa Set-Cookie. Called on successful
+// 2FA challenge (the JTI is also consumed server-side, so leaving the cookie
+// would be benign — but clearing makes the client state explicit).
+func ClearMFACookie(w http.ResponseWriter, env DeployEnv) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     MFACookieName,
+		Value:    "",
+		Path:     mfaCookiePath,
+		Domain:   cookieDomain(env),
+		MaxAge:   -1,
+		Secure:   secureFlag(env),
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
 	})
 }

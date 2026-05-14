@@ -39,7 +39,29 @@ var ErrPermanent = errors.New("notification: permanent upstream failure")
 // handler test can stub out the dependency without pulling in Connect.
 type Sender interface {
 	SendVerificationEmail(ctx context.Context, to, locale, token, verificationLink string) error
+	// SendSecurityAlert dispatches one of the Story 2.4 out-of-band 2FA
+	// templates (BR-5.9). `template` is one of:
+	//   - EMAIL_TEMPLATE_2FA_ENABLED              (AC1)
+	//   - EMAIL_TEMPLATE_2FA_RECOVERY_USED        (AC3)
+	//   - EMAIL_TEMPLATE_2FA_RECOVERY_REGENERATED (AC3)
+	//   - EMAIL_TEMPLATE_2FA_DISABLED             (AC4)
+	// `vars` carries template-specific keys: time, ip_summary, ua_summary,
+	// and template-specific extras (remaining_count, disable_method).
+	SendSecurityAlert(ctx context.Context, template SecurityAlertTemplate, to, locale string, vars map[string]string) error
 }
+
+// SecurityAlertTemplate enumerates the Story 2.4 2FA template ids. Defined
+// as a typed wrapper so handler call sites cannot accidentally swap in an
+// arbitrary EmailTemplate constant; the package's Send method maps to the
+// protobuf enum internally.
+type SecurityAlertTemplate int
+
+const (
+	Alert2FAEnabled SecurityAlertTemplate = iota + 1
+	Alert2FARecoveryUsed
+	Alert2FARecoveryRegenerated
+	Alert2FADisabled
+)
 
 // Client is the production Sender — Connect-go client wrapper.
 type Client struct {
@@ -68,6 +90,34 @@ func (c *Client) SendVerificationEmail(ctx context.Context, to, locale, token, v
 			"token":             token,
 			"verification_link": verificationLink,
 		},
+	})
+	if _, err := c.upstream.SendEmail(ctx, req); err != nil {
+		return mapConnectErr(err)
+	}
+	return nil
+}
+
+// SendSecurityAlert maps the SecurityAlertTemplate wrapper onto the protobuf
+// EmailTemplate enum and invokes notification-svc.
+func (c *Client) SendSecurityAlert(ctx context.Context, template SecurityAlertTemplate, to, locale string, vars map[string]string) error {
+	var tmpl notificationv1.EmailTemplate
+	switch template {
+	case Alert2FAEnabled:
+		tmpl = notificationv1.EmailTemplate_EMAIL_TEMPLATE_2FA_ENABLED
+	case Alert2FARecoveryUsed:
+		tmpl = notificationv1.EmailTemplate_EMAIL_TEMPLATE_2FA_RECOVERY_USED
+	case Alert2FARecoveryRegenerated:
+		tmpl = notificationv1.EmailTemplate_EMAIL_TEMPLATE_2FA_RECOVERY_REGENERATED
+	case Alert2FADisabled:
+		tmpl = notificationv1.EmailTemplate_EMAIL_TEMPLATE_2FA_DISABLED
+	default:
+		return fmt.Errorf("%w: unknown SecurityAlertTemplate %d", ErrPermanent, template)
+	}
+	req := connect.NewRequest(&notificationv1.SendEmailRequest{
+		Template:  tmpl,
+		ToEmail:   to,
+		Locale:    locale,
+		Variables: vars,
 	})
 	if _, err := c.upstream.SendEmail(ctx, req); err != nil {
 		return mapConnectErr(err)

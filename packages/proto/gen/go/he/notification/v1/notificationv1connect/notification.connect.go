@@ -46,12 +46,6 @@ const (
 	NotificationServiceSendEmailProcedure = "/he.notification.v1.NotificationService/SendEmail"
 )
 
-// These variables are the protoreflect.Descriptor objects for the RPCs defined in this package.
-var (
-	notificationServiceServiceDescriptor         = v1.File_he_notification_v1_notification_proto.Services().ByName("NotificationService")
-	notificationServiceSendEmailMethodDescriptor = notificationServiceServiceDescriptor.Methods().ByName("SendEmail")
-)
-
 // NotificationServiceClient is a client for the he.notification.v1.NotificationService service.
 type NotificationServiceClient interface {
 	SendEmail(context.Context, *connect.Request[v1.SendEmailRequest]) (*connect.Response[v1.SendEmailResponse], error)
@@ -66,11 +60,12 @@ type NotificationServiceClient interface {
 // http://api.acme.com or https://acme.com/grpc).
 func NewNotificationServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) NotificationServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
+	notificationServiceMethods := v1.File_he_notification_v1_notification_proto.Services().ByName("NotificationService").Methods()
 	return &notificationServiceClient{
 		sendEmail: connect.NewClient[v1.SendEmailRequest, v1.SendEmailResponse](
 			httpClient,
 			baseURL+NotificationServiceSendEmailProcedure,
-			connect.WithSchema(notificationServiceSendEmailMethodDescriptor),
+			connect.WithSchema(notificationServiceMethods.ByName("SendEmail")),
 			connect.WithClientOptions(opts...),
 		),
 	}
@@ -98,10 +93,11 @@ type NotificationServiceHandler interface {
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
 func NewNotificationServiceHandler(svc NotificationServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	notificationServiceMethods := v1.File_he_notification_v1_notification_proto.Services().ByName("NotificationService").Methods()
 	notificationServiceSendEmailHandler := connect.NewUnaryHandler(
 		NotificationServiceSendEmailProcedure,
 		svc.SendEmail,
-		connect.WithSchema(notificationServiceSendEmailMethodDescriptor),
+		connect.WithSchema(notificationServiceMethods.ByName("SendEmail")),
 		connect.WithHandlerOptions(opts...),
 	)
 	return "/he.notification.v1.NotificationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

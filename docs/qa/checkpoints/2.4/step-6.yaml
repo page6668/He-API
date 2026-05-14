@@ -1,0 +1,71 @@
+step: 6
+name: evidence_collection
+evidence:
+  directory: "docs/qa/evidence/2.4/"
+  files_collected: 0           # no screenshots/logs needed — this is a code-level review
+  issues_with_evidence:
+    - issue_id: "AC4-TX-001"
+      severity: HIGH
+      reproduction_steps: |
+        1. cat apps/auth-svc/internal/handlers/totp_disable.go +115..+126
+        2. Observe: ClearTOTPSecret (UPDATE users) and DeleteAllRecoveryCodesForUser
+           (DELETE) execute as two independent statements on the same Querier.
+        3. Code comment at line 115-120 acknowledges: "we don't open a transaction
+           here … see Architect §Rec.1 design note for the production cmd/server
+           tx-capable upgrade".
+      acceptance_criteria_violated:
+        - AC4 Scenario line: "On success, in a single PG transaction: …"
+        - BR-3.9: "After AC4 (Disable 2FA), all mfa_recovery_codes rows for the
+          user are physically deleted (not just marked used)"
+      file_evidence: "apps/auth-svc/internal/handlers/totp_disable.go:115-126"
+    - issue_id: "BLIND-001"
+      severity: HIGH
+      reproduction_steps: |
+        1. grep -rn "2\\.4-BLIND-DATA-002" apps/ packages/ → no matches
+        2. The single test that would assert this invariant (inject DB failure between
+           ClearTOTPSecret and DeleteAllRecoveryCodesForUser) is not implemented.
+      acceptance_criteria_violated:
+        - Story §Tasks T4.* embedded BLIND-DATA-002 in scenario matrix
+        - test-design enumerates BLIND-DATA-002 as P0
+      file_evidence: "docs/qa/assessments/2.4-test-design-20260513.md (planned), apps/auth-svc/internal/handlers/totp_disable_test.go (missing)"
+    - issue_id: "AC5-ASVS-001"
+      severity: MEDIUM
+      reproduction_steps: |
+        1. grep -c "PENDING DEV\\|⏳" docs/qa/checkpoints/2.4/asvs-l2-checklist.md → 53
+        2. Dev added "Dev Evidence Summary" block at top but per-control evidence
+           rows are still template placeholders.
+      file_evidence: "docs/qa/checkpoints/2.4/asvs-l2-checklist.md"
+    - issue_id: "CHK-001"
+      severity: MEDIUM
+      reproduction_steps: |
+        1. awk '/^## Tasks \\/ Subtasks/,/^## Dev Notes/' docs/stories/2.4-totp-2fa.md \\
+             | grep -c "\\[ \\]" → 95
+        2. Dev claimed backend complete in Change Log but did not flip any checkbox.
+      file_evidence: "docs/stories/2.4-totp-2fa.md (Tasks/Subtasks section)"
+    - issue_id: "BLIND-002"
+      severity: MEDIUM
+      reproduction_steps: |
+        1. apps/auth-svc/internal/handlers/totp_challenge.go:74-82 Redis Exists check
+        2. apps/auth-svc/internal/handlers/totp_challenge.go:173 Redis Del on success
+        3. Two concurrent goroutines hitting Exists between line 77 and line 173
+           would both proceed to Validate → race condition.
+      file_evidence: "apps/auth-svc/internal/handlers/totp_challenge.go:74-173"
+    - issue_id: "E2E-001"
+      severity: MEDIUM
+      reproduction_steps: |
+        1. grep -c "throw new Error" apps/console/e2e/2.4-totp-2fa.spec.ts → 23
+        2. No P0/P1 E2E scenario has a real implementation.
+      file_evidence: "apps/console/e2e/2.4-totp-2fa.spec.ts"
+    - issue_id: "AC2-BR5.10-001"
+      severity: LOW
+      reproduction_steps: |
+        1. apps/auth-svc/internal/handlers/totp_challenge.go:48-100 — no users.status
+           lockout check at handler entry.
+        2. BR-5.10 mandates pre-2FA-logic check.
+      file_evidence: "apps/auth-svc/internal/handlers/totp_challenge.go:48-142"
+    - issue_id: "AC6-UI-001"
+      severity: LOW
+      reproduction_steps: |
+        1. ls apps/console/components/business/ → no TOTPEnrollWizard / TOTPChallenge /
+           TOTPDisableModal / RegenerateRecoveryCodesModal files
+      file_evidence: "Dev Agent Record explicit deferral note"

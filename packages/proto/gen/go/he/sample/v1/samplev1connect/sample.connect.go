@@ -41,12 +41,6 @@ const (
 	SampleServicePingProcedure = "/he.sample.v1.SampleService/Ping"
 )
 
-// These variables are the protoreflect.Descriptor objects for the RPCs defined in this package.
-var (
-	sampleServiceServiceDescriptor    = v1.File_he_sample_v1_sample_proto.Services().ByName("SampleService")
-	sampleServicePingMethodDescriptor = sampleServiceServiceDescriptor.Methods().ByName("Ping")
-)
-
 // SampleServiceClient is a client for the he.sample.v1.SampleService service.
 type SampleServiceClient interface {
 	Ping(context.Context, *connect.Request[v1.PingRequest]) (*connect.Response[v1.PingResponse], error)
@@ -61,11 +55,12 @@ type SampleServiceClient interface {
 // http://api.acme.com or https://acme.com/grpc).
 func NewSampleServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) SampleServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
+	sampleServiceMethods := v1.File_he_sample_v1_sample_proto.Services().ByName("SampleService").Methods()
 	return &sampleServiceClient{
 		ping: connect.NewClient[v1.PingRequest, v1.PingResponse](
 			httpClient,
 			baseURL+SampleServicePingProcedure,
-			connect.WithSchema(sampleServicePingMethodDescriptor),
+			connect.WithSchema(sampleServiceMethods.ByName("Ping")),
 			connect.WithClientOptions(opts...),
 		),
 	}
@@ -92,10 +87,11 @@ type SampleServiceHandler interface {
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
 func NewSampleServiceHandler(svc SampleServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	sampleServiceMethods := v1.File_he_sample_v1_sample_proto.Services().ByName("SampleService").Methods()
 	sampleServicePingHandler := connect.NewUnaryHandler(
 		SampleServicePingProcedure,
 		svc.Ping,
-		connect.WithSchema(sampleServicePingMethodDescriptor),
+		connect.WithSchema(sampleServiceMethods.ByName("Ping")),
 		connect.WithHandlerOptions(opts...),
 	)
 	return "/he.sample.v1.SampleService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

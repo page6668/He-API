@@ -1,0 +1,41 @@
+step: 5.5
+name: blind_spot_verification
+blind_spot_verification:
+  total_scenarios: 16            # 15 in test-design metadata; 16 distinct IDs found in test-design doc
+  covered: 3                     # BLIND-BOUNDARY-001/002/003 grouped in totp_enroll_test.go::TestEnrollTOTPVerify_RejectsWrongLength
+  missing_code: 0                # implementations exist; the gap is on TEST coverage
+  missing_test: 13
+  missing_both: 0
+  coverage_rate: 19
+  by_category:
+    BOUNDARY:    { planned: 4, covered: 3, missing: 1 }     # 004 (plural i18n) deferred to UI work
+    CONCURRENCY: { planned: 2, covered: 0, missing: 2 }     # both require integration / testcontainers
+    DATA:        { planned: 2, covered: 0, missing: 2 }     # DATA-002 missing — would catch AC4-TX-001
+    ERROR:       { planned: 2, covered: 0, missing: 2 }
+    FLOW:        { planned: 3, covered: 0, missing: 3 }     # FLOW-002/003 stubbed in E2E; FLOW-001 missing
+    RESOURCE:    { planned: 3, covered: 0, missing: 3 }
+  issues:
+    - severity: HIGH
+      id: "BLIND-001"
+      ref: "BLIND-DATA-002 (disable transaction atomicity)"
+      finding: "BLIND-DATA-002 missing — this is the exact test that would catch AC4-TX-001 (non-transactional Disable). Test design specifies P0 priority: 'inject failure → both rolled back'."
+      recommendation: "Add a fault-injection test in totp_disable_test.go that mocks the DB to fail after ClearTOTPSecret. Either red-test the gap or implement the transaction wrapper and green-test it."
+      blocking: true
+    - severity: MEDIUM
+      id: "BLIND-002"
+      ref: "BLIND-CONCURRENCY-001 (two concurrent ChallengeTOTP same JTI)"
+      finding: "Concurrent JTI consumption test missing. BR-2.2 single-use invariant has no race-condition test. The current implementation has a TOCTOU window between Redis Exists (line 74-77) and Redis Del-on-success (line 173)."
+      recommendation: "Test via in-memory Redis fake with goroutine race; or move to Redis GETDEL-on-success atomic primitive."
+      blocking: false
+    - severity: MEDIUM
+      id: "BLIND-003"
+      ref: "BLIND-DATA-001 (recovery code forensic trail)"
+      finding: "Test for 'used_at + used_from_ip_hash + used_from_ua_hash preserved (NO physical delete)' missing. Repository code DOES preserve these (mfa_recovery_codes.MarkRecoveryCodeUsed); coverage gap is on the QA-side assertion that re-querying recovers them."
+      recommendation: "Add a repository-level test reading rows back post-mark-used and asserting forensic columns are populated."
+      blocking: false
+    - severity: LOW
+      id: "BLIND-004"
+      ref: "BLIND-ERROR-001 (Redis unavailable → 503 graceful)"
+      finding: "Redis-down behavior on the challenge path is not tested. Code returns internalErr on Redis failures (which maps to 500), but the test-design specifies 503 expected."
+      recommendation: "Add a Redis-fail fake to challenge_test.go; either confirm 500 is correct under the gateway translateConnectError mapping or remap to CodeUnavailable for transient Redis errors."
+      blocking: false

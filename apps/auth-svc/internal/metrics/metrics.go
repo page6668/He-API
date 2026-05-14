@@ -35,6 +35,15 @@ const (
 	CounterVerifyEmailTotal        = "auth_verify_email_total"
 	CounterAccountLockedTotal      = "auth_account_locked_total"
 	CounterRateLimitTriggeredTotal = "auth_rate_limit_triggered_total"
+
+	// Story 2.4 — 5 new 2FA counters per T5.4. Dashboards land in
+	// Story 2.5 / observability epic; the counters register here so
+	// instrumentation call sites can land BEFORE the panels.
+	Counter2FAEnrollTotal       = "auth_2fa_enroll_total"
+	Counter2FAChallengeTotal    = "auth_2fa_challenge_total"
+	Counter2FARecoveryUsedTotal = "auth_2fa_recovery_used_total"
+	Counter2FADisabledTotal     = "auth_2fa_disabled_total"
+	Counter2FALockedTotal       = "auth_2fa_locked_total"
 )
 
 // Label keys per BR-4.8. Cardinality is bounded — `result` is a small
@@ -57,6 +66,12 @@ type Counters struct {
 	verifyEmail        metric.Int64Counter
 	accountLocked      metric.Int64Counter
 	rateLimitTriggered metric.Int64Counter
+	// Story 2.4 — 5 new 2FA counters.
+	twofaEnroll       metric.Int64Counter
+	twofaChallenge    metric.Int64Counter
+	twofaRecoveryUsed metric.Int64Counter
+	twofaDisabled     metric.Int64Counter
+	twofaLocked       metric.Int64Counter
 }
 
 // New registers the 5 counters on the global OTel meter provider. Any
@@ -97,12 +112,49 @@ func New() (*Counters, error) {
 		return nil, err
 	}
 
+	// Story 2.4 — 2FA counters.
+	twofaEnroll, err := meter.Int64Counter(Counter2FAEnrollTotal,
+		metric.WithDescription("auth-svc 2FA enrollments (result=success|failure)"),
+	)
+	if err != nil {
+		return nil, err
+	}
+	twofaChallenge, err := meter.Int64Counter(Counter2FAChallengeTotal,
+		metric.WithDescription("auth-svc 2FA challenge attempts (result=success|failure, factor=totp|recovery)"),
+	)
+	if err != nil {
+		return nil, err
+	}
+	twofaRecoveryUsed, err := meter.Int64Counter(Counter2FARecoveryUsedTotal,
+		metric.WithDescription("auth-svc recovery code uses (always success — failures route through challenge counter)"),
+	)
+	if err != nil {
+		return nil, err
+	}
+	twofaDisabled, err := meter.Int64Counter(Counter2FADisabledTotal,
+		metric.WithDescription("auth-svc 2FA disable operations (factor=totp|password)"),
+	)
+	if err != nil {
+		return nil, err
+	}
+	twofaLocked, err := meter.Int64Counter(Counter2FALockedTotal,
+		metric.WithDescription("auth-svc 2FA soft-locks (factor=totp|recovery|disable)"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Counters{
 		signup:             signup,
 		signin:             signin,
 		verifyEmail:        verifyEmail,
 		accountLocked:      accountLocked,
 		rateLimitTriggered: rateLimitTriggered,
+		twofaEnroll:        twofaEnroll,
+		twofaChallenge:     twofaChallenge,
+		twofaRecoveryUsed:  twofaRecoveryUsed,
+		twofaDisabled:      twofaDisabled,
+		twofaLocked:        twofaLocked,
 	}, nil
 }
 
@@ -173,6 +225,75 @@ func (c *Counters) IncAccountLocked(ctx context.Context) {
 		return
 	}
 	c.accountLocked.Add(ctx, 1)
+}
+
+// Story 2.4 — 2FA counter helpers. All nil-safe so handler tests that
+// don't care about metrics can pass nil Counters.
+
+// TwoFAResult enumerates the outcomes for the 2FA enroll / challenge counters.
+type TwoFAResult string
+
+const (
+	TwoFAResultSuccess TwoFAResult = "success"
+	TwoFAResultFailure TwoFAResult = "failure"
+)
+
+// TwoFAFactor enumerates the factor used in a challenge or disable op.
+type TwoFAFactor string
+
+const (
+	TwoFAFactorTOTP     TwoFAFactor = "totp"
+	TwoFAFactorRecovery TwoFAFactor = "recovery"
+	TwoFAFactorPassword TwoFAFactor = "password"
+	TwoFAFactorDisable  TwoFAFactor = "disable"
+)
+
+// Inc2FAEnroll increments the 2FA enrollment counter (init + verify combined;
+// the call site distinguishes via the `result` label).
+func (c *Counters) Inc2FAEnroll(ctx context.Context, result TwoFAResult) {
+	if c == nil || c.twofaEnroll == nil {
+		return
+	}
+	c.twofaEnroll.Add(ctx, 1, metric.WithAttributes(attribute.String(LabelResult, string(result))))
+}
+
+// Inc2FAChallenge increments the challenge counter (also fires on
+// UseRecoveryCode — factor label distinguishes).
+func (c *Counters) Inc2FAChallenge(ctx context.Context, result TwoFAResult, factor TwoFAFactor) {
+	if c == nil || c.twofaChallenge == nil {
+		return
+	}
+	c.twofaChallenge.Add(ctx, 1, metric.WithAttributes(
+		attribute.String(LabelResult, string(result)),
+		attribute.String("factor", string(factor)),
+	))
+}
+
+// Inc2FARecoveryUsed increments the recovery-code success counter (always
+// success — failures route through Inc2FAChallenge with factor=recovery).
+func (c *Counters) Inc2FARecoveryUsed(ctx context.Context) {
+	if c == nil || c.twofaRecoveryUsed == nil {
+		return
+	}
+	c.twofaRecoveryUsed.Add(ctx, 1)
+}
+
+// Inc2FADisabled increments the disable counter (factor label captures
+// whether TOTP or password authorized the disable).
+func (c *Counters) Inc2FADisabled(ctx context.Context, factor TwoFAFactor) {
+	if c == nil || c.twofaDisabled == nil {
+		return
+	}
+	c.twofaDisabled.Add(ctx, 1, metric.WithAttributes(attribute.String("factor", string(factor))))
+}
+
+// Inc2FALocked increments the 2FA soft-lock counter (challenge / recovery /
+// disable rate-limit exhaustion).
+func (c *Counters) Inc2FALocked(ctx context.Context, factor TwoFAFactor) {
+	if c == nil || c.twofaLocked == nil {
+		return
+	}
+	c.twofaLocked.Add(ctx, 1, metric.WithAttributes(attribute.String("factor", string(factor))))
 }
 
 // RateLimitEndpoint enumerates the rate-limit endpoint surfaces.

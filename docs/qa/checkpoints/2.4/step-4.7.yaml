@@ -1,0 +1,21 @@
+step: 4.7
+name: regression_test_execution
+regression:
+  executed: true              # Go regression bundled into Step 4 (all packages from prior stories ran)
+  passed: true
+  tests_total: "all packages"
+  tests_failed: 0
+  scope: "Go workspace (auth-svc + api-gateway + notification-svc + go-observability)"
+  rationale: |
+    Story 2.4 extends Story 2.2 (signin / signup) and Story 2.3 (OAuth) modules. The
+    Step 4 full uncached run touched every package previously owned by 2.2 + 2.3
+    (handlers / jwt / oauth / repository / ratelimit / audit / notification / metrics).
+    All packages green → backend regression boundary covered.
+
+  playwright_e2e:
+    scope: "apps/console/e2e/{2.1, 2.2, 2.3, 2.4}*.spec.ts"
+    executed: false
+    reason: "Console dev-server not required for this review per Dev Agent Record (UI deferred). Story 2.4 Dev explicitly defers Playwright E2E to a follow-up PR; prior-story Playwright specs would require docker-compose + mailpit + KMS-local + auth services to be running. Backend regression IS covered by Go test suites in Step 4."
+    risk: "If a backend behavior change in 2.4 silently broke an existing E2E user-journey in 2.2/2.3 console flows, this review would not catch it. Mitigation: Step 4 Go integration tests for LoginUser + CompleteOAuth + EnrollTOTPInit/Verify all pass — same code paths as the E2Es exercise."
+
+issues: []

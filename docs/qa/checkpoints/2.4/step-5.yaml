@@ -1,0 +1,23 @@
+step: 5
+name: e2e_testing
+e2e_tests:
+  executed: false
+  passed: null
+  skipped: true
+  scenarios_planned: 18           # per test design (P0=10, P1=6, P2=2)
+  scenarios_tested: 0
+  scenarios_failed: 0
+  console_errors_found: null
+  network_errors_found: null
+  skip_reason: |
+    Per Dev Agent Record Story 2.4 explicitly defers Playwright E2E to a follow-up PR.
+    apps/console/e2e/2.4-totp-2fa.spec.ts contains 23 stub test bodies that all
+    `throw new Error('Test not implemented: 2.4-E2E-NNN')`. Console UI dependencies
+    (TOTPEnrollWizard, /2fa-challenge page, TOTPDisableModal, etc.) are likewise
+    deferred. Running these stubs would 100%-fail without exercising real behavior.
+  issues:
+    - severity: MEDIUM
+      id: "E2E-001"
+      finding: "Zero E2E scenarios executed; 23 stubs in apps/console/e2e/2.4-totp-2fa.spec.ts present but throw not-implemented. Story Tasks T8.1–T8.9 P0/P1 are all unchecked + uncovered."
+      recommendation: "Track in follow-up PR alongside Console UI. Backend Story-2.4 closure should call this out explicitly in Done criteria."
+      blocking: false   # Dev's deferral is explicit; spec scope question

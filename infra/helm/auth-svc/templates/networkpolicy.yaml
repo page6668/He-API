@@ -135,4 +135,25 @@ spec:
       ports:
         - protocol: TCP
           port: {{ .Values.networkPolicy.kafkaPort | default 9092 }}
+    # Story 2.3 (T0.4) — OAuth provider egress over HTTPS:
+    #   accounts.google.com (OIDC discovery + authorize) /
+    #   oauth2.googleapis.com (Google token endpoint) /
+    #   github.com (OAuth authorize + token endpoint) /
+    #   api.github.com (user info + email APIs).
+    # K8s NetworkPolicy lacks FQDN matching natively, so the allowance is
+    # ipBlock + port-only. Operator narrows via providerCIDRs (e.g. Cilium
+    # ClusterwideNetworkPolicy + toFQDNs) before prod cutover.
+    - to:
+        {{- with .Values.networkPolicy.providerCIDRs }}
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+        {{- else }}
+        - ipBlock:
+            cidr: 0.0.0.0/0
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.providerEgressPort | default 443 }}
 {{- end }}

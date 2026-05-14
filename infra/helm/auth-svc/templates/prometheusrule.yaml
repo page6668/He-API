@@ -66,4 +66,56 @@ spec:
               Grafana dashboard rate-limit panel + the audit-event stream
               for the affected user IDs.
             runbook_url: "https://runbooks.he-api.com/auth/account-lock-spike"
+
+        # Story 2.3 BR-4.8 — OAuth alerts.
+        #
+        # 1. OAuthSubjectMismatchSpike — Branch B.4 (oauth_subject changed)
+        #    is rare in practice; a spike suggests either provider account
+        #    takeover OR an attacker probing the platform with bogus
+        #    subject values. Severity critical → PagerDuty.
+        - alert: OAuthSubjectMismatchSpike
+          expr: |
+            sum(increase(auth_oauth_link_total{branch="B.4"}[5m])) > {{ .Values.prometheusRule.oauthSubjectMismatchThreshold | default 5 }}
+          for: 1m
+          labels:
+            severity: critical
+            team: auth
+            service: auth-svc
+            channel: pagerduty
+          annotations:
+            summary: "auth-svc OAuth subject_mismatch spike (Branch B.4) — possible takeover probe"
+            description: |
+              auth_oauth_link_total{branch="B.4"} (subject changed mid-flow)
+              exceeded {{ .Values.prometheusRule.oauthSubjectMismatchThreshold | default 5 }}
+              in the last 5 minutes. Branch B.4 is rare under normal user
+              behavior; a spike suggests provider-side account replacement
+              or an attacker injecting bogus subject values against known
+              accounts. Investigate via Grafana panel #3 + audit-event
+              stream for the affected user_id_hash values.
+            runbook_url: "https://runbooks.he-api.com/auth/oauth-subject-mismatch"
+
+        # 2. OAuthBypassedLockRateHigh — m-3 ruling. OAuth-login while
+        #    users.status='locked' bypasses the soft-lock; a sustained
+        #    bypass rate means an attacker is keeping a brute-forced
+        #    account alive via OAuth re-login. Severity warning → Feishu.
+        - alert: OAuthBypassedLockRateHigh
+          expr: |
+            sum(increase(auth_oauth_link_total{branch="A", was_locked="true"}[5m])) > {{ .Values.prometheusRule.oauthBypassedLockThreshold | default 3 }}
+          for: 5m
+          labels:
+            severity: warning
+            team: auth
+            service: auth-svc
+            channel: feishu
+          annotations:
+            summary: "auth-svc OAuth bypassed-lock rate elevated (m-3)"
+            description: |
+              auth_oauth_link_total{branch="A", was_locked="true"} exceeded
+              {{ .Values.prometheusRule.oauthBypassedLockThreshold | default 3 }}
+              in the last 5 minutes. OAuth login bypasses the password-
+              brute-force soft-lock per BR-3.10 — sustained bypass against
+              the same account(s) suggests an attacker is keeping the
+              account live. Cross-reference Grafana panel #8 + the audit
+              stream for `auth.oauth.lock_bypass` events.
+            runbook_url: "https://runbooks.he-api.com/auth/oauth-bypassed-lock"
 {{- end }}

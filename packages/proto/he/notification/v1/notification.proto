@@ -20,6 +20,14 @@ enum EmailTemplate {
   // Story 2.2 — the only template this Story ships. Additional templates
   // (password_reset, oauth_link_notice, etc.) land in subsequent stories.
   EMAIL_TEMPLATE_EMAIL_VERIFICATION = 1;
+  // Story 2.4 — out-of-band 2FA security alerts (BR-5.9). Each caller
+  // populates a template-specific {variables} map; see notification-svc
+  // template loader for required keys (typically {time, ip_summary,
+  // ua_summary, locale}).
+  EMAIL_TEMPLATE_2FA_ENABLED              = 2; // AC1 — fired on EnrollTOTPVerify success
+  EMAIL_TEMPLATE_2FA_RECOVERY_USED        = 3; // AC3 — fired on every UseRecoveryCode success
+  EMAIL_TEMPLATE_2FA_RECOVERY_REGENERATED = 4; // AC3 — fired on RegenerateRecoveryCodes success
+  EMAIL_TEMPLATE_2FA_DISABLED             = 5; // AC4 — fired on DisableTOTP success (HIGH severity)
 }
 
 message SendEmailRequest {

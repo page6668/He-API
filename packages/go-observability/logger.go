@@ -46,9 +46,16 @@ func (h *TraceContextHandler) WithGroup(name string) slog.Handler {
 }
 
 // NewLogger builds a slog.Logger that writes JSON to stdout at the requested
-// level and stamps every record with trace_id / span_id when the caller's
-// context carries an active span.
+// level, redacts sensitive attribute values (Story 2.4 m-2 / BR-5.8), and
+// stamps every record with trace_id / span_id when the caller's context
+// carries an active span.
+//
+// Handler chain (outermost first): TraceContextHandler → RedactionHandler →
+// JSON. Redaction sits BEFORE the JSON encoder so the [REDACTED] substitution
+// is visible in the serialized output; trace enrichment is outermost so
+// trace_id / span_id are stamped on every record regardless of redaction.
 func NewLogger(level slog.Level) *slog.Logger {
 	json := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})
-	return slog.New(NewTraceContextHandler(json))
+	redacted := NewRedactionHandler(json, nil)
+	return slog.New(NewTraceContextHandler(redacted))
 }

@@ -38,12 +38,31 @@ type fakeAuthClient struct {
 	// RefreshToken (P4d)
 	refreshResp *authv1.RefreshTokenResponse
 	refreshErr  error
+	// Story 2.4 — TOTP 2FA (T1.3 + T2.5)
+	enrollInitResp   *authv1.EnrollTOTPInitResponse
+	enrollInitErr    error
+	enrollVerifyResp *authv1.EnrollTOTPVerifyResponse
+	enrollVerifyErr  error
+	challengeResp    *authv1.ChallengeTOTPResponse
+	challengeErr     error
+	useRecoveryResp  *authv1.UseRecoveryCodeResponse
+	useRecoveryErr   error
+	regenerateResp   *authv1.RegenerateRecoveryCodesResponse
+	regenerateErr    error
+	disableResp      *authv1.DisableTOTPResponse
+	disableErr       error
 	// captured inputs for assertions
-	lastReq         *authv1.RegisterUserRequest
-	lastVerifyReq   *authv1.VerifyEmailRequest
-	lastResendReq   *authv1.ResendVerificationRequest
-	lastLoginReq    *authv1.LoginUserRequest
-	lastRefreshReq  *authv1.RefreshTokenRequest
+	lastReq             *authv1.RegisterUserRequest
+	lastVerifyReq       *authv1.VerifyEmailRequest
+	lastResendReq       *authv1.ResendVerificationRequest
+	lastLoginReq        *authv1.LoginUserRequest
+	lastRefreshReq      *authv1.RefreshTokenRequest
+	lastEnrollInitReq   *authv1.EnrollTOTPInitRequest
+	lastEnrollVerifyReq *authv1.EnrollTOTPVerifyRequest
+	lastChallengeReq    *authv1.ChallengeTOTPRequest
+	lastUseRecoveryReq  *authv1.UseRecoveryCodeRequest
+	lastRegenerateReq   *authv1.RegenerateRecoveryCodesRequest
+	lastDisableReq      *authv1.DisableTOTPRequest
 }
 
 var errFakeUnimplemented = errors.New("fakeAuthClient: method not stubbed")
@@ -104,6 +123,80 @@ func (f *fakeAuthClient) RefreshToken(_ context.Context, r *connect.Request[auth
 		return nil, errFakeUnimplemented
 	}
 	return connect.NewResponse(f.refreshResp), nil
+}
+
+// Story 2.3 — OAuth stubs on the gRPC client fake. P0 only satisfies the
+// interface; P6 (api-gateway HTTP handlers) populates the response-fixture
+// fields and assertions.
+func (f *fakeAuthClient) BeginOAuth(_ context.Context, _ *connect.Request[authv1.BeginOAuthRequest]) (*connect.Response[authv1.BeginOAuthResponse], error) {
+	return nil, errFakeUnimplemented
+}
+func (f *fakeAuthClient) CompleteOAuth(_ context.Context, _ *connect.Request[authv1.CompleteOAuthRequest]) (*connect.Response[authv1.CompleteOAuthResponse], error) {
+	return nil, errFakeUnimplemented
+}
+
+// Story 2.4 — 2FA stubs. T1.3 tests for EnrollTOTPInit / EnrollTOTPVerify
+// populate the per-method response/err fields below; T2.5 / T3.3 / T4.3
+// fill the remaining four.
+func (f *fakeAuthClient) EnrollTOTPInit(_ context.Context, r *connect.Request[authv1.EnrollTOTPInitRequest]) (*connect.Response[authv1.EnrollTOTPInitResponse], error) {
+	f.lastEnrollInitReq = r.Msg
+	if f.enrollInitErr != nil {
+		return nil, f.enrollInitErr
+	}
+	if f.enrollInitResp == nil {
+		return nil, errFakeUnimplemented
+	}
+	return connect.NewResponse(f.enrollInitResp), nil
+}
+func (f *fakeAuthClient) EnrollTOTPVerify(_ context.Context, r *connect.Request[authv1.EnrollTOTPVerifyRequest]) (*connect.Response[authv1.EnrollTOTPVerifyResponse], error) {
+	f.lastEnrollVerifyReq = r.Msg
+	if f.enrollVerifyErr != nil {
+		return nil, f.enrollVerifyErr
+	}
+	if f.enrollVerifyResp == nil {
+		return nil, errFakeUnimplemented
+	}
+	return connect.NewResponse(f.enrollVerifyResp), nil
+}
+func (f *fakeAuthClient) ChallengeTOTP(_ context.Context, r *connect.Request[authv1.ChallengeTOTPRequest]) (*connect.Response[authv1.ChallengeTOTPResponse], error) {
+	f.lastChallengeReq = r.Msg
+	if f.challengeErr != nil {
+		return nil, f.challengeErr
+	}
+	if f.challengeResp == nil {
+		return nil, errFakeUnimplemented
+	}
+	return connect.NewResponse(f.challengeResp), nil
+}
+func (f *fakeAuthClient) UseRecoveryCode(_ context.Context, r *connect.Request[authv1.UseRecoveryCodeRequest]) (*connect.Response[authv1.UseRecoveryCodeResponse], error) {
+	f.lastUseRecoveryReq = r.Msg
+	if f.useRecoveryErr != nil {
+		return nil, f.useRecoveryErr
+	}
+	if f.useRecoveryResp == nil {
+		return nil, errFakeUnimplemented
+	}
+	return connect.NewResponse(f.useRecoveryResp), nil
+}
+func (f *fakeAuthClient) DisableTOTP(_ context.Context, r *connect.Request[authv1.DisableTOTPRequest]) (*connect.Response[authv1.DisableTOTPResponse], error) {
+	f.lastDisableReq = r.Msg
+	if f.disableErr != nil {
+		return nil, f.disableErr
+	}
+	if f.disableResp == nil {
+		return nil, errFakeUnimplemented
+	}
+	return connect.NewResponse(f.disableResp), nil
+}
+func (f *fakeAuthClient) RegenerateRecoveryCodes(_ context.Context, r *connect.Request[authv1.RegenerateRecoveryCodesRequest]) (*connect.Response[authv1.RegenerateRecoveryCodesResponse], error) {
+	f.lastRegenerateReq = r.Msg
+	if f.regenerateErr != nil {
+		return nil, f.regenerateErr
+	}
+	if f.regenerateResp == nil {
+		return nil, errFakeUnimplemented
+	}
+	return connect.NewResponse(f.regenerateResp), nil
 }
 
 var _ authv1connect.AuthServiceClient = (*fakeAuthClient)(nil)

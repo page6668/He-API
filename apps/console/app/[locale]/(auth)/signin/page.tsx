@@ -1,6 +1,7 @@
 import { unstable_setRequestLocale, getTranslations } from 'next-intl/server';
 
 import { isLocale, defaultLocale, type Locale } from '@/i18n/config';
+import { OAuthButtonGroup } from '@/components/business/OAuthButtonGroup';
 import { SigninForm } from './SigninForm';
 
 interface SigninPageProps {
@@ -32,6 +33,8 @@ export default async function SigninPage({
         </h1>
         <p className="text-sm text-neutral-600">{t('subtitle')}</p>
       </header>
+      {/* Story 2.3 — OAuth signin entry; renders above the password form. */}
+      <OAuthButtonGroup locale={resolvedLocale} returnTo={`/${resolvedLocale}/dashboard`} />
       <SigninForm locale={resolvedLocale} prefillEmail={prefillEmail} />
     </section>
   );

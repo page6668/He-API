@@ -28,6 +28,33 @@ service AuthService {
   // BR-3.1..BR-3.10), issue JWT (Story 2.2 jwt pkg) or 2FA challenge.
   rpc BeginOAuth(BeginOAuthRequest) returns (BeginOAuthResponse);
   rpc CompleteOAuth(CompleteOAuthRequest) returns (CompleteOAuthResponse);
+
+  // Story 2.4 — TOTP 2FA (RFC 6238 + recovery codes + KMS envelope).
+  // EnrollTOTPInit: generate 160-bit secret + 10 recovery codes, KMS-encrypt,
+  // stage in Redis (auth:2fa:enroll:{user_id}, TTL=600s GETDEL one-shot),
+  // return otpauth_uri + QR + plaintext recovery codes (only response that
+  // returns them).
+  // EnrollTOTPVerify: consume staged enrollment, validate first TOTP code,
+  // persist totp_secret_encrypted + 10 bcrypt-hashed recovery codes in a
+  // single PG transaction. Out-of-band 2fa_enabled email.
+  // ChallengeTOTP: validates mfa_token (short-lived RS256 JWT, purpose=
+  // '2fa_challenge') + 6-digit code, issues full-session access+refresh
+  // tokens with aal=2 claim. Single-use JTI (Redis DEL on success).
+  // UseRecoveryCode: alternative to ChallengeTOTP — bcrypt-compares input
+  // against unused mfa_recovery_codes rows, atomic mark-used, issues aal=2
+  // session tokens. Out-of-band 2fa_recovery_used email.
+  // DisableTOTP: clears totp_secret_encrypted + deletes all recovery codes,
+  // requires aal=2 session + factor re-verification (TOTP or password).
+  // Out-of-band 2fa_disabled email (HIGH severity).
+  // RegenerateRecoveryCodes: marks all current unused codes as used (forensic
+  // trail) + issues 10 fresh codes in a single PG transaction. Requires
+  // aal=2 + factor re-verification.
+  rpc EnrollTOTPInit(EnrollTOTPInitRequest) returns (EnrollTOTPInitResponse);
+  rpc EnrollTOTPVerify(EnrollTOTPVerifyRequest) returns (EnrollTOTPVerifyResponse);
+  rpc ChallengeTOTP(ChallengeTOTPRequest) returns (ChallengeTOTPResponse);
+  rpc UseRecoveryCode(UseRecoveryCodeRequest) returns (UseRecoveryCodeResponse);
+  rpc DisableTOTP(DisableTOTPRequest) returns (DisableTOTPResponse);
+  rpc RegenerateRecoveryCodes(RegenerateRecoveryCodesRequest) returns (RegenerateRecoveryCodesResponse);
 }
 
 // --- RegisterUser --------------------------------------------------------
@@ -105,6 +132,11 @@ message LoginUserResponse {
   int32 refresh_token_expires_in_seconds = 5; // 2592000
   // Populated when status == LOGIN_STATUS_REQUIRES_2FA (Story 2.4 hook).
   string mfa_token = 6;
+  // Authentication Assurance Level (NIST SP 800-63B §4). Populated when
+  // status == LOGIN_STATUS_OK. 1 = password-only; 2 = post-2FA challenge.
+  // Story 2.2 always emits aal=1 here (password leg); the aal=2 path goes
+  // through ChallengeTOTPResponse / UseRecoveryCodeResponse instead.
+  int32 aal = 7;
 }
 
 // --- RefreshToken --------------------------------------------------------
@@ -192,6 +224,11 @@ message CompleteOAuthResponse {
   // Validated post-callback redirect target. Always within allow-list per
   // BR-1.5; api-gateway emits 302 Location with this value.
   string return_to = 7;
+  // Story 2.4 — short-lived RS256 JWT (purpose='2fa_challenge', 5-min TTL,
+  // JTI tracked in Redis auth:2fa:challenge:{sha256(jti)}). Populated only
+  // when requires_2fa=true. api-gateway stamps this into the he_mfa cookie
+  // and 302s to /{locale}/2fa-challenge.
+  string mfa_token = 8;
 }
 
 enum LinkOutcome {
@@ -203,4 +240,132 @@ enum LinkOutcome {
   LINK_OUTCOME_LINKED = 2;
   // Branch A — existing OAuth user re-login (UPDATE updated_at only).
   LINK_OUTCOME_RELOGIN = 3;
+}
+
+// --- TOTP 2FA (Story 2.4) ------------------------------------------------
+//
+// Verification factor enum — shared by DisableTOTP + RegenerateRecoveryCodes
+// for the re-authentication step. TOTP path requires KMS-decrypt of the
+// stored secret; password path bcrypt-compares against users.password_hash
+// (Story 2.2 BR-3.x). Spelling values with the canonical prefix so buf-lint
+// (ENUM_VALUE_PREFIX) stays clean.
+enum VerificationFactor {
+  VERIFICATION_FACTOR_UNSPECIFIED = 0;
+  VERIFICATION_FACTOR_TOTP = 1;
+  VERIFICATION_FACTOR_PASSWORD = 2;
+}
+
+message EnrollTOTPInitRequest {
+  // The authenticated user_id from JWT `sub` claim (api-gateway populates
+  // after verifying he_access cookie). auth-svc rejects with INVALID_ARGUMENT
+  // when empty / non-UUID.
+  string user_id = 1;
+  string client_ip = 2;
+  string user_agent = 3;
+}
+
+message EnrollTOTPInitResponse {
+  // otpauth://totp/He-API:{email}?secret=...&issuer=He-API&algorithm=SHA1
+  // &digits=6&period=30 — RFC 6238 KeyURI format.
+  string otpauth_uri = 1;
+  // Server-rendered PNG (256x256, EC level Q) embedding otpauth_uri. Console
+  // base64-encodes for <img src="data:image/png;base64,...">. Server-side
+  // render avoids client-side QR library bundle + XSS surface.
+  bytes qr_code_png = 2;
+  // 10 plaintext recovery codes (10-char RFC 4648 base32). Returned ONLY in
+  // this response (and RegenerateRecoveryCodesResponse). Console displays
+  // once + locks; subsequent enrollment-verify does NOT re-emit them.
+  repeated string recovery_codes = 3;
+  // Unix-seconds expiry of the pending Redis blob (now + 600s). Console
+  // surfaces a countdown so users know enrollment must complete in 10 min.
+  int64 expires_at_unix = 4;
+}
+
+message EnrollTOTPVerifyRequest {
+  string user_id = 1;
+  // 6-digit ASCII (regex ^\d{6}$). Validated against ±1 30s window
+  // (RFC 6238 §5.2) on the staged secret in Redis.
+  string code = 2;
+  // BR-1.7 — server rejects with FAILED_PRECONDITION when false.
+  bool ack_recovery_codes_saved = 3;
+  string client_ip = 4;
+  string user_agent = 5;
+}
+
+message EnrollTOTPVerifyResponse {
+  bool ok = 1;
+  // Unix-seconds populated from the PG UPDATE returning clause.
+  int64 enrolled_at_unix = 2;
+}
+
+message ChallengeTOTPRequest {
+  // RS256 JWT — claims: sub, purpose='2fa_challenge', login_method,
+  // client_ip_hash, user_agent_hash, jti, iat, exp (iat+300), return_to.
+  // api-gateway forwards the he_mfa cookie value verbatim.
+  string mfa_token = 1;
+  // 6-digit ASCII.
+  string code = 2;
+  string client_ip = 3;
+  string user_agent = 4;
+}
+
+message ChallengeTOTPResponse {
+  string access_token = 1;
+  string refresh_token = 2;
+  int32 access_token_expires_in_seconds = 3; // 900
+  int32 refresh_token_expires_in_seconds = 4; // 2592000
+  // Always 2 — issued only on successful challenge.
+  int32 aal = 5;
+  // Validated return-to (BR-2.10 allow-list per Story 2.3 BR-1.5).
+  string return_to = 6;
+}
+
+message UseRecoveryCodeRequest {
+  string mfa_token = 1;
+  // Normalized server-side: uppercase + strip non-alphanumeric → 10-char
+  // base32. UI may pass with hyphens ("ABCD-EFGH-J2") for readability.
+  string code = 2;
+  string client_ip = 3;
+  string user_agent = 4;
+}
+
+message UseRecoveryCodeResponse {
+  string access_token = 1;
+  string refresh_token = 2;
+  int32 access_token_expires_in_seconds = 3;
+  int32 refresh_token_expires_in_seconds = 4;
+  int32 aal = 5;
+  // Unused count AFTER this code was marked used. Drives dashboard low-codes
+  // banner when <= 3 (BR-3.7).
+  int32 recovery_codes_remaining = 6;
+  bool recovery_codes_low = 7;
+  string return_to = 8;
+}
+
+message DisableTOTPRequest {
+  string user_id = 1;
+  VerificationFactor factor = 2;
+  // 6-digit TOTP code OR plaintext password — semantics depend on `factor`.
+  string value = 3;
+  string client_ip = 4;
+  string user_agent = 5;
+}
+
+message DisableTOTPResponse {
+  bool ok = 1;
+}
+
+message RegenerateRecoveryCodesRequest {
+  string user_id = 1;
+  VerificationFactor factor = 2;
+  string value = 3;
+  string client_ip = 4;
+  string user_agent = 5;
+}
+
+message RegenerateRecoveryCodesResponse {
+  // 10 fresh plaintext codes. Old codes are bulk-marked used (regenerated_
+  // reason='user_initiated') in the same transaction; previously-used codes
+  // are NOT touched.
+  repeated string recovery_codes = 1;
 }

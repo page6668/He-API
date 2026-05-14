@@ -211,12 +211,14 @@ func (p *AuthProxy) Signin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2FA hook: auth-svc may return LOGIN_STATUS_REQUIRES_2FA with an
-	// mfa_token instead of access/refresh tokens (Story 2.4). When that
-	// lands, the gateway threads the mfa_token through the response body
-	// for the console to render the TOTP challenge. For Story 2.2 the
-	// branch is dead (totp_enabled column is always FALSE in the schema).
+	// Story 2.4 2FA hook: auth-svc returns LOGIN_STATUS_REQUIRES_2FA with
+	// an mfa_token (5-min RS256 JWT) instead of access/refresh tokens.
+	// Stamp the mfa_token into the he_mfa cookie (narrow Path=/v1/auth/2fa)
+	// so the browser only sends it back to the /v1/auth/2fa/challenge
+	// endpoint. The response body carries `status: "requires_2fa"` so the
+	// console Server Action redirects to /{locale}/2fa-challenge.
 	if resp.Msg.GetStatus() == authv1.LoginStatus_LOGIN_STATUS_REQUIRES_2FA {
+		SetMFACookie(w, resp.Msg.GetMfaToken(), p.Env)
 		writeJSON(w, http.StatusOK, signinResponseBody{Status: "requires_2fa"})
 		return
 	}

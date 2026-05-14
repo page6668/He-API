@@ -138,6 +138,45 @@ func TestSignAccessToken_ClaimsMinimization(t *testing.T) {
 	}
 }
 
+// Scenario: 2.3-UNIT-WasLocked (BR-3.10)
+// Default access tokens (password-login path) MUST NOT carry was_locked.
+// Lock-bypass access tokens (OAuth path with outcome.WasLocked=true) MUST
+// carry was_locked=true; wasLocked=false on the bypass variant drops the
+// claim entirely (omitempty).
+func TestSignAccessTokenWithLockBypass_EmbedsClaim(t *testing.T) {
+	t.Parallel()
+	signer, _ := newSignerVerifier(t)
+	userID := uuid.New()
+
+	// Default path — no was_locked.
+	defaultTok, err := signer.SignAccessToken(userID, time.Now())
+	if err != nil {
+		t.Fatalf("SignAccessToken: %v", err)
+	}
+	if _, ok := decodeJWTPayload(t, defaultTok)["was_locked"]; ok {
+		t.Errorf("default access token carries was_locked claim; want omitted (BR-3.6 minimization)")
+	}
+
+	// Bypass variant with wasLocked=false also omits the claim.
+	noBypassTok, err := signer.SignAccessTokenWithLockBypass(userID, time.Now(), false)
+	if err != nil {
+		t.Fatalf("SignAccessTokenWithLockBypass(false): %v", err)
+	}
+	if _, ok := decodeJWTPayload(t, noBypassTok)["was_locked"]; ok {
+		t.Errorf("wasLocked=false token carries was_locked claim; want omitted")
+	}
+
+	// Bypass variant with wasLocked=true MUST carry the claim.
+	bypassTok, err := signer.SignAccessTokenWithLockBypass(userID, time.Now(), true)
+	if err != nil {
+		t.Fatalf("SignAccessTokenWithLockBypass(true): %v", err)
+	}
+	payload := decodeJWTPayload(t, bypassTok)
+	if got := payload["was_locked"]; got != true {
+		t.Errorf("was_locked = %v, want true", got)
+	}
+}
+
 // Refresh tokens additionally carry `fam` (family_id) per BR-3.9.
 func TestSignRefreshToken_CarriesFamilyClaim(t *testing.T) {
 	t.Parallel()

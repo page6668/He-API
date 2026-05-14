@@ -21,6 +21,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
 
 	authv1 "github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1"
@@ -29,6 +30,7 @@ import (
 	authjwt "github.com/he-api/he-api/apps/auth-svc/internal/jwt"
 	"github.com/he-api/he-api/apps/auth-svc/internal/metrics"
 	"github.com/he-api/he-api/apps/auth-svc/internal/notification"
+	oauthpkg "github.com/he-api/he-api/apps/auth-svc/internal/oauth"
 	"github.com/he-api/he-api/apps/auth-svc/internal/password"
 	"github.com/he-api/he-api/apps/auth-svc/internal/ratelimit"
 	"github.com/he-api/he-api/apps/auth-svc/internal/repository"
@@ -41,10 +43,17 @@ type HIBPChecker interface {
 	CheckBreached(ctx context.Context, pw []byte) error
 }
 
-// JWTSigner is the narrow surface LoginUser + RefreshToken depend on.
-// *jwt.Signer satisfies this; tests pass a deterministic fake.
+// JWTSigner is the narrow surface LoginUser + RefreshToken + the OAuth
+// callback depend on. *jwt.Signer satisfies this; tests pass a
+// deterministic fake. SignAccessTokenWithLockBypass is the BR-3.10
+// variant called only on the OAuth path when outcome.WasLocked is true.
+// SignAccessTokenWithAAL is the Story 2.4 BR-2.8 variant called by the
+// 2FA challenge / recovery handlers to embed `aal=2` in the issued
+// access token.
 type JWTSigner interface {
 	SignAccessToken(userID uuid.UUID, now time.Time) (string, error)
+	SignAccessTokenWithLockBypass(userID uuid.UUID, now time.Time, wasLocked bool) (string, error)
+	SignAccessTokenWithAAL(userID uuid.UUID, now time.Time, aal int32) (string, error)
 	SignRefreshToken(userID uuid.UUID, familyID uuid.UUID, now time.Time) (string, error)
 }
 
@@ -54,12 +63,25 @@ type JWTVerifier interface {
 	Verify(token string) (*authjwt.Claims, error)
 }
 
+// TxBeginner is the narrow Begin surface used by handlers that must run
+// multiple statements inside a single PG transaction (AC4 DisableTOTP
+// BR-3.9 atomicity — see QA Round 1 finding QA-2.4-H1). Both
+// *pgxpool.Pool and pgxmock.PgxConnIface satisfy it.
+type TxBeginner interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
 // AuthServer satisfies authv1connect.AuthServiceHandler. P2f wires only
 // RegisterUser; the rest still return CodeUnimplemented + a phase pointer
 // (their fill-in lives in P3/P4).
 type AuthServer struct {
 	// DB is the PostgreSQL queryer (typically a *pgxpool.Pool in production).
 	DB repository.Querier
+	// DBTx is the transaction starter for multi-statement atomic flows
+	// (AC4 DisableTOTP). Typically the same *pgxpool.Pool passed as DB.
+	// Nil-safe at construct time; DisableTOTP returns 500 if invoked
+	// without DBTx wired (caller config issue).
+	DBTx TxBeginner
 	// Redis is the rate-limit + email-verify-token store. redis.Cmdable is
 	// the narrowest interface that covers both ratelimit.CheckAndIncr's
 	// redis.Scripter requirement and token.Store's SET-EX call.
@@ -92,6 +114,93 @@ type AuthServer struct {
 	ConsoleBaseURL string
 	// Logger is the slog logger for audit-best-effort logging + ops.
 	Logger SlogLike
+
+	// === Story 2.3 OAuth dependencies (P5) ===
+	//
+	// All four interfaces below are satisfied by the concrete types in
+	// `internal/oauth`. cmd/server constructs them once at startup and
+	// hands them to AuthServer; tests inject fakes.
+	OAuthState   OAuthStateService
+	OAuthGoogle  OAuthProviderClient
+	OAuthGithub  OAuthProviderClient
+	OAuthLinking OAuthLinker
+
+	// === Story 2.4 TOTP 2FA dependencies (T0.4..T0.7) ===
+	//
+	// All four are nil-safe at construct time so existing handlers (which
+	// don't touch 2FA) remain test-able without 2FA wiring. The 2FA
+	// handlers themselves return InternalError when KMS/MFASigner/Parser
+	// are nil — caller config issue.
+	KMS       MFAKMS       // kms.KMSClient — concrete *kms.Local in prod
+	MFASigner MFATokenIssuer
+	MFAParser MFATokenParser
+	// Issuer is the otpauth label issuer (typically "He-API"). Tests
+	// override; cmd/server sets from config.
+	Issuer string
+}
+
+// MFAKMS is the narrow surface T1.2 / T2.4 / T4.2 need from the KMS package.
+// *kms.Local and *kms.NoOp both satisfy.
+type MFAKMS interface {
+	Encrypt(ctx context.Context, plaintext []byte) ([]byte, error)
+	Decrypt(ctx context.Context, ciphertext []byte) ([]byte, error)
+}
+
+// MFATokenIssuer is the narrow signing surface for mfa_token (Story 2.4 BR-2.1).
+// *jwt.Signer satisfies via a thin adapter — see cmd/server/main.go.
+type MFATokenIssuer interface {
+	IssueMFAToken(in MFAIssueInput, now time.Time) (token string, jti string, err error)
+}
+
+// MFAIssueInput is the handler-package mirror of jwt.MFATokenInput. Defined
+// locally so handler tests don't need to import the jwt package.
+type MFAIssueInput struct {
+	UserID        uuid.UUID
+	LoginMethod   string
+	IPHash        string
+	UserAgentHash string
+	ReturnTo      string
+}
+
+// MFATokenParser is the narrow parse surface for he_mfa cookie validation.
+// *jwt.Verifier satisfies via a thin adapter.
+type MFATokenParser interface {
+	ParseMFAToken(token string) (*MFAParsedClaims, error)
+}
+
+// MFAParsedClaims is the handler-package projection of jwt.MFATokenClaims.
+type MFAParsedClaims struct {
+	Subject       string
+	JTI           string
+	Audience      string
+	Purpose       string
+	LoginMethod   string
+	IPHash        string
+	UserAgentHash string
+	ReturnTo      string
+	IssuedAt      int64
+	ExpiresAt     int64
+}
+
+// OAuthStateService is the narrow surface BeginOAuth / CompleteOAuth needs
+// from `oauth.Service`. Keeps the handler test fakes small.
+type OAuthStateService interface {
+	NewState(ctx context.Context, payload oauthpkg.StatePayload, ttl time.Duration) (stateID, pkceChallenge string, err error)
+	ConsumeState(ctx context.Context, stateID, expectedProvider, currentIP, currentUA string) (oauthpkg.StatePayload, error)
+}
+
+// OAuthProviderClient is the union surface of `*oauth.GoogleClient` and
+// `*oauth.GithubClient`. Both implementations are nil-safe constructors
+// that satisfy this contract.
+type OAuthProviderClient interface {
+	BuildAuthorizeURL(stateID, pkceChallenge, locale string) string
+	ExchangeCode(ctx context.Context, code, pkceVerifier string) (subject, email string, err error)
+}
+
+// OAuthLinker mirrors `*oauth.LinkingService`. Hides the underlying
+// repository dependency from the handler test fakes.
+type OAuthLinker interface {
+	DecideAndLink(ctx context.Context, provider, subject, email, locale string) (oauthpkg.LinkOutcome, error)
 }
 
 // SlogLike is the small slice of slog.Logger the handler needs (avoids a
@@ -857,11 +966,46 @@ func (s *AuthServer) LoginUser(
 
 	// === 7. 2FA hook (Story 2.4) ===
 	if user.TOTPEnabled {
-		// Story 2.4 fills this with a real mfa_token. For Story 2.2 the
-		// column always reads FALSE so this branch is dead in practice.
-		// Returning Unimplemented makes the path visible if data drift
-		// somehow flips the column without 2.4 landing.
-		return nil, connect.NewError(connect.CodeUnimplemented, errors.New("LoginUser: 2FA required — pending Story 2.4 TOTP fill-in"))
+		// Issue an mfa_token (5-min RS256 with purpose='2fa_challenge'),
+		// write the JTI to Redis as a single-use registry entry, and
+		// return REQUIRES_2FA. The client follows up via /v1/auth/2fa/
+		// challenge with the mfa_token + 6-digit code.
+		if s.MFASigner == nil {
+			return nil, internalErr(errors.New("mfa not configured"), "login_user_mfa_signer_nil")
+		}
+		mfaIn := MFAIssueInput{
+			UserID:        user.ID,
+			LoginMethod:   "password",
+			IPHash:        oauthpkg.HashClientIP(in.GetClientIp()),
+			UserAgentHash: oauthpkg.HashUserAgent(in.GetUserAgent()),
+			ReturnTo:      "", // password path doesn't carry a return_to
+		}
+		mfaTok, jti, mfaErr := s.MFASigner.IssueMFAToken(mfaIn, now)
+		if mfaErr != nil {
+			return nil, internalErr(mfaErr, "issue_mfa_token")
+		}
+		if err := s.writeChallengeJTI(ctx, jti, user.ID.String()); err != nil {
+			return nil, internalErr(err, "redis_write_jti")
+		}
+		// Clear the per-window rate-limit counter on a partial signin success
+		// so a 2FA challenge attempt doesn't compete with the IP-window
+		// quota for unrelated requests. We DO NOT clear the per-email
+		// signin failure counter here — the password matched, but the
+		// session isn't real yet; clear only on full 2FA success.
+		s.auditBestEffort(ctx, audit.Event{
+			EventType: audit.EventSigninSuccess, // partial; metadata marks 2fa pending
+			UserID:    user.ID.String(),
+			EmailHash: emailHash,
+			IP:        in.GetClientIp(),
+			UserAgent: in.GetUserAgent(),
+			Timestamp: now,
+			Success:   true,
+			Metadata:  map[string]any{"requires_2fa": true},
+		})
+		return connect.NewResponse(&authv1.LoginUserResponse{
+			Status:   authv1.LoginStatus_LOGIN_STATUS_REQUIRES_2FA,
+			MfaToken: mfaTok,
+		}), nil
 	}
 
 	// === 8. Success — sign tokens + write refresh-family tracker ===
@@ -1173,3 +1317,440 @@ return "ok"
 // edit removes the last usage — gofmt/imports would catch it but a static
 // assertion never hurts.
 var _ = uuid.Nil
+
+// -- Story 2.3 BeginOAuth + CompleteOAuth (P5) ---------------------------
+//
+// The OAuth handlers stitch together four collaborators:
+//
+//   1. OAuthState     — state + PKCE Redis store (one-shot GETDEL)
+//   2. OAuthGoogle    — coreos/go-oidc-backed Google client
+//   3. OAuthGithub    — handwritten GitHub REST client
+//   4. OAuthLinking   — 10-branch account-linking decision matrix
+//
+// Followed by Story 2.2 collaborators:
+//   5. JWT.Sign*      — RS256 token issuance (full session OR 2FA challenge)
+//   6. Audit.Publish  — 9 OAuth-specific event types
+//   7. Metrics        — Prometheus counters (P7 wires the OAuth counter set;
+//                       nil-safe here so P5 lands without P7 dependency)
+//
+// stateTTL is the canonical 10-minute window (matches oauthpkg.StateTTL).
+const oauthStateTTL = 10 * time.Minute
+
+// BeginOAuth generates state + PKCE, persists to Redis, and returns the
+// provider's authorize URL for api-gateway to 302 to.
+//
+// Side-effect order:
+//   1. Validate provider + locale.
+//   2. Compute IP + UA hashes (state binding per BR-1.6 + m-4 /24 prefix).
+//   3. NewState (Redis SETEX with hashed key, TTL=600s).
+//   4. BuildAuthorizeURL (pure URL build; provider-specific param shape).
+//   5. Audit: auth.oauth.initiate (hashed PII only).
+//   6. Return BeginOAuthResponse {authorize_url, state_id, expires_at_unix}.
+//
+// Failure → typed connect.Error with status code prefix; api-gateway maps
+// to HTTP per the standard table.
+func (s *AuthServer) BeginOAuth(
+	ctx context.Context,
+	req *connect.Request[authv1.BeginOAuthRequest],
+) (*connect.Response[authv1.BeginOAuthResponse], error) {
+	in := req.Msg
+	now := s.Clock()
+
+	provider, providerClient, err := s.oauthProviderClient(in.GetProvider())
+	if err != nil {
+		return nil, err
+	}
+
+	locale := resolveLocale(in.GetLocale())
+	if locale == "" {
+		locale = defaultLocale
+	}
+
+	payload := oauthpkg.StatePayload{
+		Provider: provider,
+		ReturnTo: in.GetReturnTo(),
+		IPHash:   oauthpkg.HashClientIP(in.GetClientIp()),
+		UAHash:   oauthpkg.HashUserAgent(in.GetUserAgent()),
+		Locale:   locale,
+	}
+
+	stateID, pkceChallenge, err := s.OAuthState.NewState(ctx, payload, oauthStateTTL)
+	if err != nil {
+		return nil, internalErr(err, "oauth_state_new")
+	}
+
+	authorizeURL := providerClient.BuildAuthorizeURL(stateID, pkceChallenge, locale)
+
+	s.auditBestEffort(ctx, audit.Event{
+		EventType: audit.EventOAuthInitiate,
+		EmailHash: "",
+		IP:        in.GetClientIp(),
+		UserAgent: in.GetUserAgent(),
+		Timestamp: now,
+		Success:   true,
+		Metadata: map[string]any{
+			"provider": provider,
+		},
+	})
+
+	return connect.NewResponse(&authv1.BeginOAuthResponse{
+		AuthorizeUrl:  authorizeURL,
+		StateId:       stateID,
+		ExpiresAtUnix: now.Add(oauthStateTTL).Unix(),
+	}), nil
+}
+
+// CompleteOAuth redeems the authorization code at the provider, validates
+// the state + PKCE round-trip, runs the linking decision, and issues
+// either a full session JWT (access + refresh) or a 2FA challenge token.
+//
+// Side-effect order:
+//   1. Validate provider input.
+//   2. ConsumeState (GETDEL one-shot + provider match + IP/UA binding).
+//      → ErrStateNotFound / Expired / ProviderMismatch / ClientBindingMismatch
+//        all map to StatusOAuthStateInvalid (anti-info-leak; audit reason
+//        differs but user response is identical).
+//   3. provider.ExchangeCode — provider token endpoint POST + claim verify.
+//      → ErrProvider → 502_oauth_provider_error
+//      → ErrEmailNotVerified → 400_oauth_email_not_verified
+//   4. linking.DecideAndLink — 10-branch decision.
+//      → all sentinels map to their specific status codes.
+//   5. JWT issuance — full session OR 2FA challenge (per outcome.RequiresMFA).
+//   6. Audit: auth.oauth.callback.success (+ link.success when Branch B.1).
+//   7. Return CompleteOAuthResponse.
+func (s *AuthServer) CompleteOAuth(
+	ctx context.Context,
+	req *connect.Request[authv1.CompleteOAuthRequest],
+) (*connect.Response[authv1.CompleteOAuthResponse], error) {
+	in := req.Msg
+	now := s.Clock()
+
+	provider, providerClient, err := s.oauthProviderClient(in.GetProvider())
+	if err != nil {
+		return nil, err
+	}
+
+	statePayload, err := s.OAuthState.ConsumeState(ctx, in.GetStateId(), provider, in.GetClientIp(), in.GetUserAgent())
+	if err != nil {
+		switch {
+		case errors.Is(err, oauthpkg.ErrStateNotFound),
+			errors.Is(err, oauthpkg.ErrStateExpired),
+			errors.Is(err, oauthpkg.ErrProviderMismatch):
+			s.auditBestEffort(ctx, audit.Event{
+				EventType: audit.EventOAuthCallbackErrState,
+				IP:        in.GetClientIp(),
+				UserAgent: in.GetUserAgent(),
+				Timestamp: now,
+				ErrorCode: StatusOAuthStateInvalid,
+				Metadata: map[string]any{
+					"provider":  provider,
+					"reason":    err.Error(),
+				},
+			})
+			return nil, statusError(connect.CodeInvalidArgument, StatusOAuthStateInvalid)
+		case errors.Is(err, oauthpkg.ErrClientBindingMismatch):
+			s.auditBestEffort(ctx, audit.Event{
+				EventType: audit.EventOAuthCallbackErrBinding,
+				IP:        in.GetClientIp(),
+				UserAgent: in.GetUserAgent(),
+				Timestamp: now,
+				ErrorCode: StatusOAuthStateInvalid,
+				Metadata: map[string]any{
+					"provider": provider,
+				},
+			})
+			return nil, statusError(connect.CodeInvalidArgument, StatusOAuthStateInvalid)
+		default:
+			return nil, internalErr(err, "oauth_state_consume")
+		}
+	}
+
+	subject, providerEmail, err := providerClient.ExchangeCode(ctx, in.GetCode(), statePayload.PKCEVerifier)
+	if err != nil {
+		switch {
+		case errors.Is(err, oauthpkg.ErrEmailNotVerified):
+			s.auditBestEffort(ctx, audit.Event{
+				EventType: audit.EventOAuthCallbackErrProv,
+				IP:        in.GetClientIp(),
+				UserAgent: in.GetUserAgent(),
+				Timestamp: now,
+				ErrorCode: StatusOAuthEmailNotVerified,
+				Metadata: map[string]any{
+					"provider": provider,
+				},
+			})
+			return nil, statusError(connect.CodeInvalidArgument, StatusOAuthEmailNotVerified)
+		case errors.Is(err, oauthpkg.ErrIDTokenMissing):
+			s.auditBestEffort(ctx, audit.Event{
+				EventType: audit.EventOAuthCallbackErrProv,
+				IP:        in.GetClientIp(),
+				UserAgent: in.GetUserAgent(),
+				Timestamp: now,
+				ErrorCode: StatusOAuthIDTokenInvalid,
+				Metadata: map[string]any{
+					"provider": provider,
+				},
+			})
+			return nil, statusError(connect.CodeUnauthenticated, StatusOAuthIDTokenInvalid)
+		default:
+			s.auditBestEffort(ctx, audit.Event{
+				EventType: audit.EventOAuthCallbackErrProv,
+				IP:        in.GetClientIp(),
+				UserAgent: in.GetUserAgent(),
+				Timestamp: now,
+				ErrorCode: StatusOAuthProviderError,
+				Metadata: map[string]any{
+					"provider": provider,
+				},
+			})
+			return nil, statusError(connect.CodeUnavailable, StatusOAuthProviderError)
+		}
+	}
+
+	// Hashed PII used on every audit emission past this point (BR-3.9
+	// / BR-4.5). EmailHash is computed via the Story 2.2 ratelimit helper
+	// so partition keys stay aligned with `audit.event` Kafka topic
+	// partitioning (sha256(lowercase-trimmed-email)). subject_hash is
+	// stored in Metadata only — audit.Event has no first-class column.
+	emailHashForOAuth := ratelimit.EmailHash(providerEmail)
+	subjectHash := oauthpkg.HashSubject(subject)
+
+	outcome, err := s.OAuthLinking.DecideAndLink(ctx, provider, subject, providerEmail, statePayload.Locale)
+	if err != nil {
+		switch {
+		case errors.Is(err, oauthpkg.ErrAuthenticationFailed):
+			// Anti-enum: identical response to "email not found" path.
+			return nil, statusError(connect.CodeUnauthenticated, StatusInvalidCredentials)
+		case errors.Is(err, oauthpkg.ErrAccountSuspended):
+			s.auditBestEffort(ctx, audit.Event{
+				EventType: audit.EventOAuthCallbackRejSuspended,
+				EmailHash: emailHashForOAuth,
+				IP:        in.GetClientIp(),
+				UserAgent: in.GetUserAgent(),
+				Timestamp: now,
+				ErrorCode: StatusAccountSuspended,
+				Metadata: map[string]any{
+					"provider":     provider,
+					"subject_hash": subjectHash,
+				},
+			})
+			return nil, statusError(connect.CodePermissionDenied, StatusAccountSuspended)
+		case errors.Is(err, oauthpkg.ErrLinkUnverified):
+			s.auditBestEffort(ctx, audit.Event{
+				EventType: audit.EventOAuthLinkRejUnverified,
+				EmailHash: emailHashForOAuth,
+				IP:        in.GetClientIp(),
+				UserAgent: in.GetUserAgent(),
+				Timestamp: now,
+				ErrorCode: StatusOAuthLinkUnverified,
+				Metadata: map[string]any{
+					"provider":     provider,
+					"subject_hash": subjectHash,
+				},
+			})
+			return nil, statusError(connect.CodePermissionDenied, StatusOAuthLinkUnverified)
+		case errors.Is(err, oauthpkg.ErrSubjectMismatch):
+			s.auditBestEffort(ctx, audit.Event{
+				EventType: audit.EventOAuthLinkRejSubjectMismatch,
+				EmailHash: emailHashForOAuth,
+				IP:        in.GetClientIp(),
+				UserAgent: in.GetUserAgent(),
+				Timestamp: now,
+				ErrorCode: StatusOAuthSubjectMismatch,
+				Metadata: map[string]any{
+					"provider":     provider,
+					"subject_hash": subjectHash,
+				},
+			})
+			return nil, statusError(connect.CodeAlreadyExists, StatusOAuthSubjectMismatch)
+		case errors.Is(err, oauthpkg.ErrCrossProvider):
+			s.auditBestEffort(ctx, audit.Event{
+				EventType: audit.EventOAuthLinkRejOtherProvider,
+				EmailHash: emailHashForOAuth,
+				IP:        in.GetClientIp(),
+				UserAgent: in.GetUserAgent(),
+				Timestamp: now,
+				ErrorCode: StatusOAuthCrossProvider,
+				Metadata: map[string]any{
+					"provider":     provider,
+					"subject_hash": subjectHash,
+				},
+			})
+			return nil, statusError(connect.CodeAlreadyExists, StatusOAuthCrossProvider)
+		default:
+			return nil, internalErr(err, "oauth_linking_decide")
+		}
+	}
+
+	// Audit the lock-bypass case (BR-3.10 / m-3 — Grafana panel #8).
+	if outcome.WasLocked {
+		s.auditBestEffort(ctx, audit.Event{
+			EventType: audit.EventOAuthLockBypass,
+			UserID:    outcome.UserID.String(),
+			EmailHash: emailHashForOAuth,
+			IP:        in.GetClientIp(),
+			UserAgent: in.GetUserAgent(),
+			Timestamp: now,
+			Success:   true,
+			Metadata: map[string]any{
+				"provider":     provider,
+				"bypass_lock":  true,
+				"subject_hash": subjectHash,
+			},
+		})
+	}
+
+	// Branch B.1 emits an explicit link.success event in addition to the
+	// generic callback.success — downstream analytics differentiate "fresh
+	// signup" from "auto-link".
+	if outcome.Branch == oauthpkg.BranchB1AutoLink {
+		s.auditBestEffort(ctx, audit.Event{
+			EventType: audit.EventOAuthLinkSuccess,
+			UserID:    outcome.UserID.String(),
+			EmailHash: emailHashForOAuth,
+			IP:        in.GetClientIp(),
+			UserAgent: in.GetUserAgent(),
+			Timestamp: now,
+			Success:   true,
+			Metadata: map[string]any{
+				"provider":     provider,
+				"subject_hash": subjectHash,
+			},
+		})
+	}
+
+	// Story 2.4 2FA hook — when users.totp_enabled is TRUE, issue an mfa_token
+	// (RS256 / purpose='2fa_challenge' / 5-min TTL) and stamp the JTI into
+	// the Redis single-use registry. api-gateway stamps the mfa_token into
+	// the he_mfa cookie and 302s to /{locale}/2fa-challenge.
+	//
+	// BR-2.9 ORDERING: the OAuth state cookie was already GETDEL'd by
+	// OAuthState.ConsumeState above (single-shot — line 1420). The mfa_token
+	// JTI write happens AFTER that, so a partially-completed OAuth+2FA flow
+	// cannot replay the OAuth state.
+	if outcome.RequiresMFA {
+		if s.MFASigner == nil {
+			return nil, internalErr(errors.New("mfa not configured"), "complete_oauth_mfa_signer_nil")
+		}
+		var loginMethod string
+		switch provider {
+		case "google":
+			loginMethod = "oauth_google"
+		case "github":
+			loginMethod = "oauth_github"
+		default:
+			loginMethod = "oauth_" + provider
+		}
+		mfaIn := MFAIssueInput{
+			UserID:        outcome.UserID,
+			LoginMethod:   loginMethod,
+			IPHash:        oauthpkg.HashClientIP(in.GetClientIp()),
+			UserAgentHash: oauthpkg.HashUserAgent(in.GetUserAgent()),
+			ReturnTo:      statePayload.ReturnTo,
+		}
+		mfaTok, jti, mfaErr := s.MFASigner.IssueMFAToken(mfaIn, now)
+		if mfaErr != nil {
+			return nil, internalErr(mfaErr, "issue_mfa_token_oauth")
+		}
+		if err := s.writeChallengeJTI(ctx, jti, outcome.UserID.String()); err != nil {
+			return nil, internalErr(err, "redis_write_jti_oauth")
+		}
+		return connect.NewResponse(&authv1.CompleteOAuthResponse{
+			UserId:      outcome.UserID.String(),
+			Requires_2Fa:  true,
+			IsNewUser:   outcome.IsNewUser,
+			LinkOutcome: branchToProto(outcome.Branch),
+			ReturnTo:    statePayload.ReturnTo,
+			MfaToken:    mfaTok,
+		}), nil
+	}
+
+	familyID, err := uuid.NewRandom()
+	if err != nil {
+		return nil, internalErr(err, "gen_family_id")
+	}
+	// BR-3.10 — embed `was_locked` claim only on the OAuth path so
+	// downstream consumers (api-gateway middleware, console "unusual
+	// activity" banner) can react when provider verification bypassed
+	// the soft lock. Password-login still uses SignAccessToken which
+	// emits no claim at all.
+	accessToken, err := s.JWT.SignAccessTokenWithLockBypass(outcome.UserID, now, outcome.WasLocked)
+	if err != nil {
+		return nil, internalErr(err, "sign_access")
+	}
+	refreshToken, err := s.JWT.SignRefreshToken(outcome.UserID, familyID, now)
+	if err != nil {
+		return nil, internalErr(err, "sign_refresh")
+	}
+	refreshJTI, err := jtiFromToken(refreshToken)
+	if err != nil {
+		return nil, internalErr(err, "decode_refresh_jti")
+	}
+	familyKey := refreshFamilyKeyPrefix + familyID.String()
+	if err := s.Redis.Set(ctx, familyKey, refreshJTI, refreshTokenTTLSeconds()).Err(); err != nil {
+		return nil, internalErr(err, "redis_refresh_family")
+	}
+
+	s.auditBestEffort(ctx, audit.Event{
+		EventType: audit.EventOAuthCallbackSuccess,
+		UserID:    outcome.UserID.String(),
+		EmailHash: emailHashForOAuth,
+		IP:        in.GetClientIp(),
+		UserAgent: in.GetUserAgent(),
+		Timestamp: now,
+		Success:   true,
+		Metadata: map[string]any{
+			"provider":     provider,
+			"is_new_user":  outcome.IsNewUser,
+			"branch":       string(outcome.Branch),
+			"subject_hash": subjectHash,
+		},
+	})
+
+	return connect.NewResponse(&authv1.CompleteOAuthResponse{
+		UserId:       outcome.UserID.String(),
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		Requires_2Fa:   false,
+		IsNewUser:    outcome.IsNewUser,
+		LinkOutcome:  branchToProto(outcome.Branch),
+		ReturnTo:     statePayload.ReturnTo,
+	}), nil
+}
+
+// oauthProviderClient resolves the request's `provider` string to the
+// configured OAuth client. Unknown values produce a uniform
+// StatusOAuthInvalidProvider.
+func (s *AuthServer) oauthProviderClient(provider string) (string, OAuthProviderClient, error) {
+	switch provider {
+	case "google":
+		if s.OAuthGoogle == nil {
+			return "", nil, statusError(connect.CodeUnimplemented, StatusAuthSvcUnavailable)
+		}
+		return "google", s.OAuthGoogle, nil
+	case "github":
+		if s.OAuthGithub == nil {
+			return "", nil, statusError(connect.CodeUnimplemented, StatusAuthSvcUnavailable)
+		}
+		return "github", s.OAuthGithub, nil
+	default:
+		return "", nil, statusError(connect.CodeInvalidArgument, StatusOAuthInvalidProvider)
+	}
+}
+
+// branchToProto maps the internal LinkBranch to the proto enum. Branches
+// outside the proto's NEW_USER / LINKED / RELOGIN trio (B.x rejections)
+// never reach this function — they all return errors before the response
+// is built.
+func branchToProto(b oauthpkg.LinkBranch) authv1.LinkOutcome {
+	switch b {
+	case oauthpkg.BranchCNewUser:
+		return authv1.LinkOutcome_LINK_OUTCOME_NEW_USER
+	case oauthpkg.BranchB1AutoLink:
+		return authv1.LinkOutcome_LINK_OUTCOME_LINKED
+	case oauthpkg.BranchARelogin, oauthpkg.BranchB3Inconsistency:
+		return authv1.LinkOutcome_LINK_OUTCOME_RELOGIN
+	default:
+		return authv1.LinkOutcome_LINK_OUTCOME_UNSPECIFIED
+	}
+}
