@@ -19,6 +19,7 @@ package authv1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -2040,12 +2041,406 @@ func (x *RegenerateRecoveryCodesResponse) GetRecoveryCodes() []string {
 	return nil
 }
 
+type GetMeRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// user_id is set by api-gateway from the verified JWT `sub` claim — clients
+	// MUST NOT supply it (BR-1.1 IDOR defence). auth-svc rejects empty /
+	// non-UUID with INVALID_ARGUMENT.
+	UserId        string `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetMeRequest) Reset() {
+	*x = GetMeRequest{}
+	mi := &file_he_auth_v1_auth_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMeRequest) ProtoMessage() {}
+
+func (x *GetMeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_he_auth_v1_auth_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMeRequest.ProtoReflect.Descriptor instead.
+func (*GetMeRequest) Descriptor() ([]byte, []int) {
+	return file_he_auth_v1_auth_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *GetMeRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+type GetMeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Email         string                 `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
+	DisplayName   *string                `protobuf:"bytes,3,opt,name=display_name,json=displayName,proto3,oneof" json:"display_name,omitempty"` // NULL → field absent (proto3 optional)
+	Locale        string                 `protobuf:"bytes,4,opt,name=locale,proto3" json:"locale,omitempty"`
+	Timezone      string                 `protobuf:"bytes,5,opt,name=timezone,proto3" json:"timezone,omitempty"`
+	TotpEnabled   bool                   `protobuf:"varint,6,opt,name=totp_enabled,json=totpEnabled,proto3" json:"totp_enabled,omitempty"`
+	OauthProvider *string                `protobuf:"bytes,7,opt,name=oauth_provider,json=oauthProvider,proto3,oneof" json:"oauth_provider,omitempty"` // NULL for non-OAuth users
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// etag = `"{updated_at.UnixMicro()}"` (quoted-string per RFC 7232 §2.3) —
+	// Architect Q2 ruling 2026-05-16. The api-gateway forwards verbatim as the
+	// ETag response header.
+	Etag          string `protobuf:"bytes,10,opt,name=etag,proto3" json:"etag,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetMeResponse) Reset() {
+	*x = GetMeResponse{}
+	mi := &file_he_auth_v1_auth_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMeResponse) ProtoMessage() {}
+
+func (x *GetMeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_he_auth_v1_auth_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMeResponse.ProtoReflect.Descriptor instead.
+func (*GetMeResponse) Descriptor() ([]byte, []int) {
+	return file_he_auth_v1_auth_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *GetMeResponse) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *GetMeResponse) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *GetMeResponse) GetDisplayName() string {
+	if x != nil && x.DisplayName != nil {
+		return *x.DisplayName
+	}
+	return ""
+}
+
+func (x *GetMeResponse) GetLocale() string {
+	if x != nil {
+		return x.Locale
+	}
+	return ""
+}
+
+func (x *GetMeResponse) GetTimezone() string {
+	if x != nil {
+		return x.Timezone
+	}
+	return ""
+}
+
+func (x *GetMeResponse) GetTotpEnabled() bool {
+	if x != nil {
+		return x.TotpEnabled
+	}
+	return false
+}
+
+func (x *GetMeResponse) GetOauthProvider() string {
+	if x != nil && x.OauthProvider != nil {
+		return *x.OauthProvider
+	}
+	return ""
+}
+
+func (x *GetMeResponse) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *GetMeResponse) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+func (x *GetMeResponse) GetEtag() string {
+	if x != nil {
+		return x.Etag
+	}
+	return ""
+}
+
+type UpdateProfileRequest struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	UserId string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	// Each field uses proto3 `optional` — wire-absent means "do not change"
+	// (BR-2.1). For display_name specifically, the value "" carries the
+	// "clear to NULL" intent (BR-2.4 / BR-1.6).
+	DisplayName *string `protobuf:"bytes,2,opt,name=display_name,json=displayName,proto3,oneof" json:"display_name,omitempty"`
+	Locale      *string `protobuf:"bytes,3,opt,name=locale,proto3,oneof" json:"locale,omitempty"`
+	Timezone    *string `protobuf:"bytes,4,opt,name=timezone,proto3,oneof" json:"timezone,omitempty"`
+	// if_match echoes the etag returned by GetMeResponse / a prior
+	// UpdateProfileResponse. Empty/missing → INVALID_ARGUMENT (api-gateway
+	// also enforces at the HTTP If-Match layer — 428 Precondition Required).
+	IfMatch string `protobuf:"bytes,5,opt,name=if_match,json=ifMatch,proto3" json:"if_match,omitempty"`
+	// Client attribution (api-gateway populates from request headers — same
+	// pattern as RegisterUserRequest etc).
+	ClientIp      string `protobuf:"bytes,6,opt,name=client_ip,json=clientIp,proto3" json:"client_ip,omitempty"`
+	UserAgent     string `protobuf:"bytes,7,opt,name=user_agent,json=userAgent,proto3" json:"user_agent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateProfileRequest) Reset() {
+	*x = UpdateProfileRequest{}
+	mi := &file_he_auth_v1_auth_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateProfileRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateProfileRequest) ProtoMessage() {}
+
+func (x *UpdateProfileRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_he_auth_v1_auth_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateProfileRequest.ProtoReflect.Descriptor instead.
+func (*UpdateProfileRequest) Descriptor() ([]byte, []int) {
+	return file_he_auth_v1_auth_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *UpdateProfileRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *UpdateProfileRequest) GetDisplayName() string {
+	if x != nil && x.DisplayName != nil {
+		return *x.DisplayName
+	}
+	return ""
+}
+
+func (x *UpdateProfileRequest) GetLocale() string {
+	if x != nil && x.Locale != nil {
+		return *x.Locale
+	}
+	return ""
+}
+
+func (x *UpdateProfileRequest) GetTimezone() string {
+	if x != nil && x.Timezone != nil {
+		return *x.Timezone
+	}
+	return ""
+}
+
+func (x *UpdateProfileRequest) GetIfMatch() string {
+	if x != nil {
+		return x.IfMatch
+	}
+	return ""
+}
+
+func (x *UpdateProfileRequest) GetClientIp() string {
+	if x != nil {
+		return x.ClientIp
+	}
+	return ""
+}
+
+func (x *UpdateProfileRequest) GetUserAgent() string {
+	if x != nil {
+		return x.UserAgent
+	}
+	return ""
+}
+
+type UpdateProfileResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Mirrors GetMeResponse so console reuses the same renderer.
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Email         string                 `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
+	DisplayName   *string                `protobuf:"bytes,3,opt,name=display_name,json=displayName,proto3,oneof" json:"display_name,omitempty"`
+	Locale        string                 `protobuf:"bytes,4,opt,name=locale,proto3" json:"locale,omitempty"`
+	Timezone      string                 `protobuf:"bytes,5,opt,name=timezone,proto3" json:"timezone,omitempty"`
+	TotpEnabled   bool                   `protobuf:"varint,6,opt,name=totp_enabled,json=totpEnabled,proto3" json:"totp_enabled,omitempty"`
+	OauthProvider *string                `protobuf:"bytes,7,opt,name=oauth_provider,json=oauthProvider,proto3,oneof" json:"oauth_provider,omitempty"`
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Etag          string                 `protobuf:"bytes,10,opt,name=etag,proto3" json:"etag,omitempty"`
+	// True when the supplied UpdateProfileRequest.locale differed from the
+	// pre-update DB value. api-gateway uses this to decide whether to
+	// rewrite the he_locale cookie (BR-3.10 / Architect Q3).
+	LocaleChanged bool `protobuf:"varint,11,opt,name=locale_changed,json=localeChanged,proto3" json:"locale_changed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateProfileResponse) Reset() {
+	*x = UpdateProfileResponse{}
+	mi := &file_he_auth_v1_auth_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateProfileResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateProfileResponse) ProtoMessage() {}
+
+func (x *UpdateProfileResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_he_auth_v1_auth_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateProfileResponse.ProtoReflect.Descriptor instead.
+func (*UpdateProfileResponse) Descriptor() ([]byte, []int) {
+	return file_he_auth_v1_auth_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *UpdateProfileResponse) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *UpdateProfileResponse) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *UpdateProfileResponse) GetDisplayName() string {
+	if x != nil && x.DisplayName != nil {
+		return *x.DisplayName
+	}
+	return ""
+}
+
+func (x *UpdateProfileResponse) GetLocale() string {
+	if x != nil {
+		return x.Locale
+	}
+	return ""
+}
+
+func (x *UpdateProfileResponse) GetTimezone() string {
+	if x != nil {
+		return x.Timezone
+	}
+	return ""
+}
+
+func (x *UpdateProfileResponse) GetTotpEnabled() bool {
+	if x != nil {
+		return x.TotpEnabled
+	}
+	return false
+}
+
+func (x *UpdateProfileResponse) GetOauthProvider() string {
+	if x != nil && x.OauthProvider != nil {
+		return *x.OauthProvider
+	}
+	return ""
+}
+
+func (x *UpdateProfileResponse) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *UpdateProfileResponse) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+func (x *UpdateProfileResponse) GetEtag() string {
+	if x != nil {
+		return x.Etag
+	}
+	return ""
+}
+
+func (x *UpdateProfileResponse) GetLocaleChanged() bool {
+	if x != nil {
+		return x.LocaleChanged
+	}
+	return false
+}
+
 var File_he_auth_v1_auth_proto protoreflect.FileDescriptor
 
 const file_he_auth_v1_auth_proto_rawDesc = "" +
 	"\n" +
 	"\x15he/auth/v1/auth.proto\x12\n" +
-	"he.auth.v1\"\x9b\x01\n" +
+	"he.auth.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9b\x01\n" +
 	"\x13RegisterUserRequest\x12\x14\n" +
 	"\x05email\x18\x01 \x01(\tR\x05email\x12\x1a\n" +
 	"\bpassword\x18\x02 \x01(\tR\bpassword\x12\x16\n" +
@@ -2188,7 +2583,54 @@ const file_he_auth_v1_auth_proto_rawDesc = "" +
 	"\n" +
 	"user_agent\x18\x05 \x01(\tR\tuserAgent\"H\n" +
 	"\x1fRegenerateRecoveryCodesResponse\x12%\n" +
-	"\x0erecovery_codes\x18\x01 \x03(\tR\rrecoveryCodes*_\n" +
+	"\x0erecovery_codes\x18\x01 \x03(\tR\rrecoveryCodes\"'\n" +
+	"\fGetMeRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\"\x97\x03\n" +
+	"\rGetMeResponse\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
+	"\x05email\x18\x02 \x01(\tR\x05email\x12&\n" +
+	"\fdisplay_name\x18\x03 \x01(\tH\x00R\vdisplayName\x88\x01\x01\x12\x16\n" +
+	"\x06locale\x18\x04 \x01(\tR\x06locale\x12\x1a\n" +
+	"\btimezone\x18\x05 \x01(\tR\btimezone\x12!\n" +
+	"\ftotp_enabled\x18\x06 \x01(\bR\vtotpEnabled\x12*\n" +
+	"\x0eoauth_provider\x18\a \x01(\tH\x01R\roauthProvider\x88\x01\x01\x129\n" +
+	"\n" +
+	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x12\n" +
+	"\x04etag\x18\n" +
+	" \x01(\tR\x04etagB\x0f\n" +
+	"\r_display_nameB\x11\n" +
+	"\x0f_oauth_provider\"\x95\x02\n" +
+	"\x14UpdateProfileRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12&\n" +
+	"\fdisplay_name\x18\x02 \x01(\tH\x00R\vdisplayName\x88\x01\x01\x12\x1b\n" +
+	"\x06locale\x18\x03 \x01(\tH\x01R\x06locale\x88\x01\x01\x12\x1f\n" +
+	"\btimezone\x18\x04 \x01(\tH\x02R\btimezone\x88\x01\x01\x12\x19\n" +
+	"\bif_match\x18\x05 \x01(\tR\aifMatch\x12\x1b\n" +
+	"\tclient_ip\x18\x06 \x01(\tR\bclientIp\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\a \x01(\tR\tuserAgentB\x0f\n" +
+	"\r_display_nameB\t\n" +
+	"\a_localeB\v\n" +
+	"\t_timezone\"\xc6\x03\n" +
+	"\x15UpdateProfileResponse\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
+	"\x05email\x18\x02 \x01(\tR\x05email\x12&\n" +
+	"\fdisplay_name\x18\x03 \x01(\tH\x00R\vdisplayName\x88\x01\x01\x12\x16\n" +
+	"\x06locale\x18\x04 \x01(\tR\x06locale\x12\x1a\n" +
+	"\btimezone\x18\x05 \x01(\tR\btimezone\x12!\n" +
+	"\ftotp_enabled\x18\x06 \x01(\bR\vtotpEnabled\x12*\n" +
+	"\x0eoauth_provider\x18\a \x01(\tH\x01R\roauthProvider\x88\x01\x01\x129\n" +
+	"\n" +
+	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x12\n" +
+	"\x04etag\x18\n" +
+	" \x01(\tR\x04etag\x12%\n" +
+	"\x0elocale_changed\x18\v \x01(\bR\rlocaleChangedB\x0f\n" +
+	"\r_display_nameB\x11\n" +
+	"\x0f_oauth_provider*_\n" +
 	"\vLoginStatus\x12\x1c\n" +
 	"\x18LOGIN_STATUS_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fLOGIN_STATUS_OK\x10\x01\x12\x1d\n" +
@@ -2201,7 +2643,8 @@ const file_he_auth_v1_auth_proto_rawDesc = "" +
 	"\x12VerificationFactor\x12#\n" +
 	"\x1fVERIFICATION_FACTOR_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18VERIFICATION_FACTOR_TOTP\x10\x01\x12 \n" +
-	"\x1cVERIFICATION_FACTOR_PASSWORD\x10\x022\x83\t\n" +
+	"\x1cVERIFICATION_FACTOR_PASSWORD\x10\x022\x97\n" +
+	"\n" +
 	"\vAuthService\x12Q\n" +
 	"\fRegisterUser\x12\x1f.he.auth.v1.RegisterUserRequest\x1a .he.auth.v1.RegisterUserResponse\x12N\n" +
 	"\vVerifyEmail\x12\x1e.he.auth.v1.VerifyEmailRequest\x1a\x1f.he.auth.v1.VerifyEmailResponse\x12c\n" +
@@ -2216,7 +2659,9 @@ const file_he_auth_v1_auth_proto_rawDesc = "" +
 	"\rChallengeTOTP\x12 .he.auth.v1.ChallengeTOTPRequest\x1a!.he.auth.v1.ChallengeTOTPResponse\x12Z\n" +
 	"\x0fUseRecoveryCode\x12\".he.auth.v1.UseRecoveryCodeRequest\x1a#.he.auth.v1.UseRecoveryCodeResponse\x12N\n" +
 	"\vDisableTOTP\x12\x1e.he.auth.v1.DisableTOTPRequest\x1a\x1f.he.auth.v1.DisableTOTPResponse\x12r\n" +
-	"\x17RegenerateRecoveryCodes\x12*.he.auth.v1.RegenerateRecoveryCodesRequest\x1a+.he.auth.v1.RegenerateRecoveryCodesResponseBBZ@github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1;authv1b\x06proto3"
+	"\x17RegenerateRecoveryCodes\x12*.he.auth.v1.RegenerateRecoveryCodesRequest\x1a+.he.auth.v1.RegenerateRecoveryCodesResponse\x12<\n" +
+	"\x05GetMe\x12\x18.he.auth.v1.GetMeRequest\x1a\x19.he.auth.v1.GetMeResponse\x12T\n" +
+	"\rUpdateProfile\x12 .he.auth.v1.UpdateProfileRequest\x1a!.he.auth.v1.UpdateProfileResponseBBZ@github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1;authv1b\x06proto3"
 
 var (
 	file_he_auth_v1_auth_proto_rawDescOnce sync.Once
@@ -2231,7 +2676,7 @@ func file_he_auth_v1_auth_proto_rawDescGZIP() []byte {
 }
 
 var file_he_auth_v1_auth_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_he_auth_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_he_auth_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_he_auth_v1_auth_proto_goTypes = []any{
 	(LoginStatus)(0),                        // 0: he.auth.v1.LoginStatus
 	(LinkOutcome)(0),                        // 1: he.auth.v1.LinkOutcome
@@ -2262,43 +2707,56 @@ var file_he_auth_v1_auth_proto_goTypes = []any{
 	(*DisableTOTPResponse)(nil),             // 26: he.auth.v1.DisableTOTPResponse
 	(*RegenerateRecoveryCodesRequest)(nil),  // 27: he.auth.v1.RegenerateRecoveryCodesRequest
 	(*RegenerateRecoveryCodesResponse)(nil), // 28: he.auth.v1.RegenerateRecoveryCodesResponse
+	(*GetMeRequest)(nil),                    // 29: he.auth.v1.GetMeRequest
+	(*GetMeResponse)(nil),                   // 30: he.auth.v1.GetMeResponse
+	(*UpdateProfileRequest)(nil),            // 31: he.auth.v1.UpdateProfileRequest
+	(*UpdateProfileResponse)(nil),           // 32: he.auth.v1.UpdateProfileResponse
+	(*timestamppb.Timestamp)(nil),           // 33: google.protobuf.Timestamp
 }
 var file_he_auth_v1_auth_proto_depIdxs = []int32{
 	0,  // 0: he.auth.v1.LoginUserResponse.status:type_name -> he.auth.v1.LoginStatus
 	1,  // 1: he.auth.v1.CompleteOAuthResponse.link_outcome:type_name -> he.auth.v1.LinkOutcome
 	2,  // 2: he.auth.v1.DisableTOTPRequest.factor:type_name -> he.auth.v1.VerificationFactor
 	2,  // 3: he.auth.v1.RegenerateRecoveryCodesRequest.factor:type_name -> he.auth.v1.VerificationFactor
-	3,  // 4: he.auth.v1.AuthService.RegisterUser:input_type -> he.auth.v1.RegisterUserRequest
-	5,  // 5: he.auth.v1.AuthService.VerifyEmail:input_type -> he.auth.v1.VerifyEmailRequest
-	7,  // 6: he.auth.v1.AuthService.ResendVerification:input_type -> he.auth.v1.ResendVerificationRequest
-	9,  // 7: he.auth.v1.AuthService.LoginUser:input_type -> he.auth.v1.LoginUserRequest
-	11, // 8: he.auth.v1.AuthService.RefreshToken:input_type -> he.auth.v1.RefreshTokenRequest
-	13, // 9: he.auth.v1.AuthService.BeginOAuth:input_type -> he.auth.v1.BeginOAuthRequest
-	15, // 10: he.auth.v1.AuthService.CompleteOAuth:input_type -> he.auth.v1.CompleteOAuthRequest
-	17, // 11: he.auth.v1.AuthService.EnrollTOTPInit:input_type -> he.auth.v1.EnrollTOTPInitRequest
-	19, // 12: he.auth.v1.AuthService.EnrollTOTPVerify:input_type -> he.auth.v1.EnrollTOTPVerifyRequest
-	21, // 13: he.auth.v1.AuthService.ChallengeTOTP:input_type -> he.auth.v1.ChallengeTOTPRequest
-	23, // 14: he.auth.v1.AuthService.UseRecoveryCode:input_type -> he.auth.v1.UseRecoveryCodeRequest
-	25, // 15: he.auth.v1.AuthService.DisableTOTP:input_type -> he.auth.v1.DisableTOTPRequest
-	27, // 16: he.auth.v1.AuthService.RegenerateRecoveryCodes:input_type -> he.auth.v1.RegenerateRecoveryCodesRequest
-	4,  // 17: he.auth.v1.AuthService.RegisterUser:output_type -> he.auth.v1.RegisterUserResponse
-	6,  // 18: he.auth.v1.AuthService.VerifyEmail:output_type -> he.auth.v1.VerifyEmailResponse
-	8,  // 19: he.auth.v1.AuthService.ResendVerification:output_type -> he.auth.v1.ResendVerificationResponse
-	10, // 20: he.auth.v1.AuthService.LoginUser:output_type -> he.auth.v1.LoginUserResponse
-	12, // 21: he.auth.v1.AuthService.RefreshToken:output_type -> he.auth.v1.RefreshTokenResponse
-	14, // 22: he.auth.v1.AuthService.BeginOAuth:output_type -> he.auth.v1.BeginOAuthResponse
-	16, // 23: he.auth.v1.AuthService.CompleteOAuth:output_type -> he.auth.v1.CompleteOAuthResponse
-	18, // 24: he.auth.v1.AuthService.EnrollTOTPInit:output_type -> he.auth.v1.EnrollTOTPInitResponse
-	20, // 25: he.auth.v1.AuthService.EnrollTOTPVerify:output_type -> he.auth.v1.EnrollTOTPVerifyResponse
-	22, // 26: he.auth.v1.AuthService.ChallengeTOTP:output_type -> he.auth.v1.ChallengeTOTPResponse
-	24, // 27: he.auth.v1.AuthService.UseRecoveryCode:output_type -> he.auth.v1.UseRecoveryCodeResponse
-	26, // 28: he.auth.v1.AuthService.DisableTOTP:output_type -> he.auth.v1.DisableTOTPResponse
-	28, // 29: he.auth.v1.AuthService.RegenerateRecoveryCodes:output_type -> he.auth.v1.RegenerateRecoveryCodesResponse
-	17, // [17:30] is the sub-list for method output_type
-	4,  // [4:17] is the sub-list for method input_type
-	4,  // [4:4] is the sub-list for extension type_name
-	4,  // [4:4] is the sub-list for extension extendee
-	0,  // [0:4] is the sub-list for field type_name
+	33, // 4: he.auth.v1.GetMeResponse.created_at:type_name -> google.protobuf.Timestamp
+	33, // 5: he.auth.v1.GetMeResponse.updated_at:type_name -> google.protobuf.Timestamp
+	33, // 6: he.auth.v1.UpdateProfileResponse.created_at:type_name -> google.protobuf.Timestamp
+	33, // 7: he.auth.v1.UpdateProfileResponse.updated_at:type_name -> google.protobuf.Timestamp
+	3,  // 8: he.auth.v1.AuthService.RegisterUser:input_type -> he.auth.v1.RegisterUserRequest
+	5,  // 9: he.auth.v1.AuthService.VerifyEmail:input_type -> he.auth.v1.VerifyEmailRequest
+	7,  // 10: he.auth.v1.AuthService.ResendVerification:input_type -> he.auth.v1.ResendVerificationRequest
+	9,  // 11: he.auth.v1.AuthService.LoginUser:input_type -> he.auth.v1.LoginUserRequest
+	11, // 12: he.auth.v1.AuthService.RefreshToken:input_type -> he.auth.v1.RefreshTokenRequest
+	13, // 13: he.auth.v1.AuthService.BeginOAuth:input_type -> he.auth.v1.BeginOAuthRequest
+	15, // 14: he.auth.v1.AuthService.CompleteOAuth:input_type -> he.auth.v1.CompleteOAuthRequest
+	17, // 15: he.auth.v1.AuthService.EnrollTOTPInit:input_type -> he.auth.v1.EnrollTOTPInitRequest
+	19, // 16: he.auth.v1.AuthService.EnrollTOTPVerify:input_type -> he.auth.v1.EnrollTOTPVerifyRequest
+	21, // 17: he.auth.v1.AuthService.ChallengeTOTP:input_type -> he.auth.v1.ChallengeTOTPRequest
+	23, // 18: he.auth.v1.AuthService.UseRecoveryCode:input_type -> he.auth.v1.UseRecoveryCodeRequest
+	25, // 19: he.auth.v1.AuthService.DisableTOTP:input_type -> he.auth.v1.DisableTOTPRequest
+	27, // 20: he.auth.v1.AuthService.RegenerateRecoveryCodes:input_type -> he.auth.v1.RegenerateRecoveryCodesRequest
+	29, // 21: he.auth.v1.AuthService.GetMe:input_type -> he.auth.v1.GetMeRequest
+	31, // 22: he.auth.v1.AuthService.UpdateProfile:input_type -> he.auth.v1.UpdateProfileRequest
+	4,  // 23: he.auth.v1.AuthService.RegisterUser:output_type -> he.auth.v1.RegisterUserResponse
+	6,  // 24: he.auth.v1.AuthService.VerifyEmail:output_type -> he.auth.v1.VerifyEmailResponse
+	8,  // 25: he.auth.v1.AuthService.ResendVerification:output_type -> he.auth.v1.ResendVerificationResponse
+	10, // 26: he.auth.v1.AuthService.LoginUser:output_type -> he.auth.v1.LoginUserResponse
+	12, // 27: he.auth.v1.AuthService.RefreshToken:output_type -> he.auth.v1.RefreshTokenResponse
+	14, // 28: he.auth.v1.AuthService.BeginOAuth:output_type -> he.auth.v1.BeginOAuthResponse
+	16, // 29: he.auth.v1.AuthService.CompleteOAuth:output_type -> he.auth.v1.CompleteOAuthResponse
+	18, // 30: he.auth.v1.AuthService.EnrollTOTPInit:output_type -> he.auth.v1.EnrollTOTPInitResponse
+	20, // 31: he.auth.v1.AuthService.EnrollTOTPVerify:output_type -> he.auth.v1.EnrollTOTPVerifyResponse
+	22, // 32: he.auth.v1.AuthService.ChallengeTOTP:output_type -> he.auth.v1.ChallengeTOTPResponse
+	24, // 33: he.auth.v1.AuthService.UseRecoveryCode:output_type -> he.auth.v1.UseRecoveryCodeResponse
+	26, // 34: he.auth.v1.AuthService.DisableTOTP:output_type -> he.auth.v1.DisableTOTPResponse
+	28, // 35: he.auth.v1.AuthService.RegenerateRecoveryCodes:output_type -> he.auth.v1.RegenerateRecoveryCodesResponse
+	30, // 36: he.auth.v1.AuthService.GetMe:output_type -> he.auth.v1.GetMeResponse
+	32, // 37: he.auth.v1.AuthService.UpdateProfile:output_type -> he.auth.v1.UpdateProfileResponse
+	23, // [23:38] is the sub-list for method output_type
+	8,  // [8:23] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_he_auth_v1_auth_proto_init() }
@@ -2306,13 +2764,16 @@ func file_he_auth_v1_auth_proto_init() {
 	if File_he_auth_v1_auth_proto != nil {
 		return
 	}
+	file_he_auth_v1_auth_proto_msgTypes[27].OneofWrappers = []any{}
+	file_he_auth_v1_auth_proto_msgTypes[28].OneofWrappers = []any{}
+	file_he_auth_v1_auth_proto_msgTypes[29].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_he_auth_v1_auth_proto_rawDesc), len(file_he_auth_v1_auth_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   26,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

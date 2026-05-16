@@ -78,6 +78,11 @@ const (
 	// AuthServiceRegenerateRecoveryCodesProcedure is the fully-qualified name of the AuthService's
 	// RegenerateRecoveryCodes RPC.
 	AuthServiceRegenerateRecoveryCodesProcedure = "/he.auth.v1.AuthService/RegenerateRecoveryCodes"
+	// AuthServiceGetMeProcedure is the fully-qualified name of the AuthService's GetMe RPC.
+	AuthServiceGetMeProcedure = "/he.auth.v1.AuthService/GetMe"
+	// AuthServiceUpdateProfileProcedure is the fully-qualified name of the AuthService's UpdateProfile
+	// RPC.
+	AuthServiceUpdateProfileProcedure = "/he.auth.v1.AuthService/UpdateProfile"
 )
 
 // AuthServiceClient is a client for the he.auth.v1.AuthService service.
@@ -121,6 +126,18 @@ type AuthServiceClient interface {
 	UseRecoveryCode(context.Context, *connect.Request[v1.UseRecoveryCodeRequest]) (*connect.Response[v1.UseRecoveryCodeResponse], error)
 	DisableTOTP(context.Context, *connect.Request[v1.DisableTOTPRequest]) (*connect.Response[v1.DisableTOTPResponse], error)
 	RegenerateRecoveryCodes(context.Context, *connect.Request[v1.RegenerateRecoveryCodesRequest]) (*connect.Response[v1.RegenerateRecoveryCodesResponse], error)
+	// Story 2.5 — profile management.
+	// GetMe: profile read for Settings → Profile (returns whole-user snapshot
+	// including email + totp_enabled + oauth_provider so the page renders
+	// without a second RTT). api-gateway populates user_id from the verified
+	// JWT `sub` claim; clients NEVER supply it (BR-1.1 IDOR defence).
+	// UpdateProfile: partial profile mutation (display_name / locale /
+	// timezone). Optimistic concurrency via `if_match` etag = updated_at
+	// UnixMicro() string (Architect Q2 ruling 2026-05-16). On
+	// successful locale change, api-gateway also rewrites `he_locale` cookie
+	// so next-intl reflects the new locale on next render (Architect Q3).
+	GetMe(context.Context, *connect.Request[v1.GetMeRequest]) (*connect.Response[v1.GetMeResponse], error)
+	UpdateProfile(context.Context, *connect.Request[v1.UpdateProfileRequest]) (*connect.Response[v1.UpdateProfileResponse], error)
 }
 
 // NewAuthServiceClient constructs a client for the he.auth.v1.AuthService service. By default, it
@@ -212,6 +229,18 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("RegenerateRecoveryCodes")),
 			connect.WithClientOptions(opts...),
 		),
+		getMe: connect.NewClient[v1.GetMeRequest, v1.GetMeResponse](
+			httpClient,
+			baseURL+AuthServiceGetMeProcedure,
+			connect.WithSchema(authServiceMethods.ByName("GetMe")),
+			connect.WithClientOptions(opts...),
+		),
+		updateProfile: connect.NewClient[v1.UpdateProfileRequest, v1.UpdateProfileResponse](
+			httpClient,
+			baseURL+AuthServiceUpdateProfileProcedure,
+			connect.WithSchema(authServiceMethods.ByName("UpdateProfile")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -230,6 +259,8 @@ type authServiceClient struct {
 	useRecoveryCode         *connect.Client[v1.UseRecoveryCodeRequest, v1.UseRecoveryCodeResponse]
 	disableTOTP             *connect.Client[v1.DisableTOTPRequest, v1.DisableTOTPResponse]
 	regenerateRecoveryCodes *connect.Client[v1.RegenerateRecoveryCodesRequest, v1.RegenerateRecoveryCodesResponse]
+	getMe                   *connect.Client[v1.GetMeRequest, v1.GetMeResponse]
+	updateProfile           *connect.Client[v1.UpdateProfileRequest, v1.UpdateProfileResponse]
 }
 
 // RegisterUser calls he.auth.v1.AuthService.RegisterUser.
@@ -297,6 +328,16 @@ func (c *authServiceClient) RegenerateRecoveryCodes(ctx context.Context, req *co
 	return c.regenerateRecoveryCodes.CallUnary(ctx, req)
 }
 
+// GetMe calls he.auth.v1.AuthService.GetMe.
+func (c *authServiceClient) GetMe(ctx context.Context, req *connect.Request[v1.GetMeRequest]) (*connect.Response[v1.GetMeResponse], error) {
+	return c.getMe.CallUnary(ctx, req)
+}
+
+// UpdateProfile calls he.auth.v1.AuthService.UpdateProfile.
+func (c *authServiceClient) UpdateProfile(ctx context.Context, req *connect.Request[v1.UpdateProfileRequest]) (*connect.Response[v1.UpdateProfileResponse], error) {
+	return c.updateProfile.CallUnary(ctx, req)
+}
+
 // AuthServiceHandler is an implementation of the he.auth.v1.AuthService service.
 type AuthServiceHandler interface {
 	RegisterUser(context.Context, *connect.Request[v1.RegisterUserRequest]) (*connect.Response[v1.RegisterUserResponse], error)
@@ -338,6 +379,18 @@ type AuthServiceHandler interface {
 	UseRecoveryCode(context.Context, *connect.Request[v1.UseRecoveryCodeRequest]) (*connect.Response[v1.UseRecoveryCodeResponse], error)
 	DisableTOTP(context.Context, *connect.Request[v1.DisableTOTPRequest]) (*connect.Response[v1.DisableTOTPResponse], error)
 	RegenerateRecoveryCodes(context.Context, *connect.Request[v1.RegenerateRecoveryCodesRequest]) (*connect.Response[v1.RegenerateRecoveryCodesResponse], error)
+	// Story 2.5 — profile management.
+	// GetMe: profile read for Settings → Profile (returns whole-user snapshot
+	// including email + totp_enabled + oauth_provider so the page renders
+	// without a second RTT). api-gateway populates user_id from the verified
+	// JWT `sub` claim; clients NEVER supply it (BR-1.1 IDOR defence).
+	// UpdateProfile: partial profile mutation (display_name / locale /
+	// timezone). Optimistic concurrency via `if_match` etag = updated_at
+	// UnixMicro() string (Architect Q2 ruling 2026-05-16). On
+	// successful locale change, api-gateway also rewrites `he_locale` cookie
+	// so next-intl reflects the new locale on next render (Architect Q3).
+	GetMe(context.Context, *connect.Request[v1.GetMeRequest]) (*connect.Response[v1.GetMeResponse], error)
+	UpdateProfile(context.Context, *connect.Request[v1.UpdateProfileRequest]) (*connect.Response[v1.UpdateProfileResponse], error)
 }
 
 // NewAuthServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -425,6 +478,18 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("RegenerateRecoveryCodes")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceGetMeHandler := connect.NewUnaryHandler(
+		AuthServiceGetMeProcedure,
+		svc.GetMe,
+		connect.WithSchema(authServiceMethods.ByName("GetMe")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceUpdateProfileHandler := connect.NewUnaryHandler(
+		AuthServiceUpdateProfileProcedure,
+		svc.UpdateProfile,
+		connect.WithSchema(authServiceMethods.ByName("UpdateProfile")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/he.auth.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthServiceRegisterUserProcedure:
@@ -453,6 +518,10 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceDisableTOTPHandler.ServeHTTP(w, r)
 		case AuthServiceRegenerateRecoveryCodesProcedure:
 			authServiceRegenerateRecoveryCodesHandler.ServeHTTP(w, r)
+		case AuthServiceGetMeProcedure:
+			authServiceGetMeHandler.ServeHTTP(w, r)
+		case AuthServiceUpdateProfileProcedure:
+			authServiceUpdateProfileHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -512,4 +581,12 @@ func (UnimplementedAuthServiceHandler) DisableTOTP(context.Context, *connect.Req
 
 func (UnimplementedAuthServiceHandler) RegenerateRecoveryCodes(context.Context, *connect.Request[v1.RegenerateRecoveryCodesRequest]) (*connect.Response[v1.RegenerateRecoveryCodesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.RegenerateRecoveryCodes is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) GetMe(context.Context, *connect.Request[v1.GetMeRequest]) (*connect.Response[v1.GetMeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.GetMe is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) UpdateProfile(context.Context, *connect.Request[v1.UpdateProfileRequest]) (*connect.Response[v1.UpdateProfileResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.UpdateProfile is not implemented"))
 }

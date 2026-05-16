@@ -69,6 +69,12 @@ const (
 	Event2FARecoveryUsed        EventType = "auth.2fa.recovery.used"        // HIGH — out-of-band event
 	Event2FARecoveryRegenerated EventType = "auth.2fa.recovery.regenerated" // MEDIUM
 	Event2FADisabled            EventType = "auth.2fa.disabled"             // HIGH — security downgrade
+
+	// Story 2.5 — profile mutation event. Severity LOW; emitted on every
+	// successful PUT /v1/me/profile (display_name + locale + timezone).
+	// Diff payload uses BR-2.10 redaction (display_name <set>/<cleared>;
+	// locale/timezone literal). Required for GDPR data-export (Story 2.6).
+	EventProfileUpdated EventType = "profile.updated" // LOW
 )
 
 // Severity classification for the 10 Story 2.4 event types per BR-5.7.

@@ -1,0 +1,69 @@
+{
+  "settings": {
+    "sidebar": {
+      "label": "设置导航",
+      "profile": "个人资料",
+      "security": "安全",
+      "data": "数据"
+    }
+  },
+  "profile": {
+    "title": "个人资料设置",
+    "display_name": {
+      "label": "显示名称",
+      "placeholder": "设置您的显示名称"
+    },
+    "email": {
+      "label": "邮箱",
+      "read_only_hint": "邮箱在注册时设置,无法在此修改",
+      "read_only_tooltip": "邮箱无法在此修改"
+    },
+    "locale": {
+      "label": "语言"
+    },
+    "timezone": {
+      "label": "时区"
+    },
+    "security": {
+      "totp_enabled": "已启用两步验证",
+      "totp_disabled": "未启用两步验证",
+      "manage_link": "在安全设置中管理"
+    },
+    "auth_method": {
+      "oauth_google": "已通过 Google 登录",
+      "oauth_github": "已通过 GitHub 登录",
+      "email_password": "已通过邮箱和密码登录"
+    },
+    "actions": {
+      "save": "保存更改"
+    },
+    "toast": {
+      "saved": "个人资料已更新",
+      "locale_changed": "语言已切换"
+    },
+    "banners": {
+      "concurrent_update": {
+        "message": "您的资料已在另一个标签页中被修改。",
+        "reload_cta": "重新加载"
+      }
+    },
+    "errors": {
+      "load_failed": "无法加载个人资料,请重试。",
+      "generic": "无法保存更改,请重试。",
+      "rate_limited": "更新过于频繁,请稍后再试。",
+      "concurrent_update": "您的资料已在另一个标签页中被修改,请重新加载。",
+      "unknown_field": "请求包含意外字段",
+      "display_name": {
+        "invalid_chars": "显示名称包含无效字符",
+        "too_long": "显示名称不能超过 100 个字符",
+        "too_short": "显示名称不能仅为空白字符"
+      },
+      "locale": {
+        "unsupported": "暂不支持所选语言"
+      },
+      "timezone": {
+        "unknown": "未知时区"
+      }
+    }
+  }
+}

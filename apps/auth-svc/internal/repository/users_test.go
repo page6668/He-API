@@ -315,3 +315,311 @@ func byteOffsetToLine(b []byte, off int) int {
 	}
 	return count
 }
+
+// -- Story 2.5 — display_name + UpdateProfile -----------------------------
+
+// profileColumns is the Story 2.5 GetProfileByID + UpdateProfile RETURNING
+// projection (13 cols — narrower than scanUserRow's 15; adds display_name
+// at the tail). Centralised so the tests stay in lockstep with
+// scanProfileRow's column ordering.
+var profileColumns = []string{
+	"id", "email", "password_hash", "email_verified_at",
+	"oauth_provider", "oauth_subject", "locale", "timezone",
+	"totp_enabled", "status", "created_at", "updated_at",
+	"display_name",
+}
+
+// Scenario: 2.5-UNIT-001 — GetProfileByID surfaces display_name through the
+// User struct after the Story 2.5 ALTER ADD COLUMN. NULL display_name →
+// User.DisplayName == nil.
+func TestGetProfileByID_DisplayNameNullPropagatesAsNil(t *testing.T) {
+	t.Parallel()
+	mock := newMock(t)
+	id := uuid.New()
+	now := time.Now().UTC()
+
+	mock.ExpectQuery(`SELECT .*display_name.* FROM he_api\.users WHERE id = \$1`).
+		WithArgs(id).
+		WillReturnRows(pgxmock.NewRows(profileColumns).AddRow(
+			id, "user@example.com", []byte("$2a$12$hash"), &now,
+			nil, nil, "en", "UTC",
+			false, "active", now, now,
+			(*string)(nil), // display_name NULL
+		))
+
+	user, err := repository.GetProfileByID(context.Background(), mock, id)
+	if err != nil {
+		t.Fatalf("GetProfileByID: %v", err)
+	}
+	if user.DisplayName != nil {
+		t.Fatalf("DisplayName = %v, want nil", user.DisplayName)
+	}
+}
+
+// Scenario: 2.5-UNIT-002 — GetProfileByID hydrates a populated display_name.
+func TestGetProfileByID_DisplayNamePopulated(t *testing.T) {
+	t.Parallel()
+	mock := newMock(t)
+	id := uuid.New()
+	now := time.Now().UTC()
+	want := "Alice"
+
+	mock.ExpectQuery(`SELECT .*display_name.* FROM he_api\.users WHERE id = \$1`).
+		WithArgs(id).
+		WillReturnRows(pgxmock.NewRows(profileColumns).AddRow(
+			id, "user@example.com", []byte("$2a$12$hash"), &now,
+			nil, nil, "en", "UTC",
+			false, "active", now, now,
+			&want,
+		))
+
+	user, err := repository.GetProfileByID(context.Background(), mock, id)
+	if err != nil {
+		t.Fatalf("GetProfileByID: %v", err)
+	}
+	if user.DisplayName == nil || *user.DisplayName != want {
+		t.Fatalf("DisplayName = %v, want %q", user.DisplayName, want)
+	}
+}
+
+// Scenario: 2.5-UNIT-003 — GetProfileByID maps pending_deletion status to
+// ErrAccountPendingDeletion (BR-1.9 — must not surface profile editor).
+func TestGetProfileByID_PendingDeletion_ReturnsErr(t *testing.T) {
+	t.Parallel()
+	mock := newMock(t)
+	id := uuid.New()
+	now := time.Now().UTC()
+
+	mock.ExpectQuery(`SELECT .*display_name.* FROM he_api\.users WHERE id = \$1`).
+		WithArgs(id).
+		WillReturnRows(pgxmock.NewRows(profileColumns).AddRow(
+			id, "u@example.com", []byte{}, &now,
+			nil, nil, "en", "UTC",
+			false, "pending_deletion", now, now,
+			(*string)(nil),
+		))
+
+	_, err := repository.GetProfileByID(context.Background(), mock, id)
+	if !errors.Is(err, repository.ErrAccountPendingDeletion) {
+		t.Fatalf("GetProfileByID(pending_deletion) = %v, want ErrAccountPendingDeletion", err)
+	}
+}
+
+// Scenario: 2.5-UNIT-003b — GetProfileByID maps no-row to ErrUserNotFound.
+func TestGetProfileByID_UserNotFound_ReturnsErr(t *testing.T) {
+	t.Parallel()
+	mock := newMock(t)
+	id := uuid.New()
+
+	mock.ExpectQuery(`SELECT .*display_name.* FROM he_api\.users WHERE id = \$1`).
+		WithArgs(id).
+		WillReturnRows(pgxmock.NewRows(profileColumns)) // empty
+
+	_, err := repository.GetProfileByID(context.Background(), mock, id)
+	if !errors.Is(err, repository.ErrUserNotFound) {
+		t.Fatalf("GetProfileByID(missing) = %v, want ErrUserNotFound", err)
+	}
+}
+
+// Scenario: 2.5-UNIT-029 (repository.UpdateProfile happy path — display_name
+// + locale + timezone all changed; updated_at advances; returned User
+// reflects the new state).
+func TestUpdateProfile_HappyPath_AllThreeFields(t *testing.T) {
+	t.Parallel()
+	mock := newMock(t)
+	id := uuid.New()
+	oldUpdatedAt := time.Date(2026, 5, 16, 10, 0, 0, 123_456_000, time.UTC) // microsecond precision
+	newUpdatedAt := oldUpdatedAt.Add(time.Second)
+	newName := "Bob"
+
+	mock.ExpectQuery(`SELECT updated_at, status FROM he_api\.users WHERE id=\$1 FOR UPDATE`).
+		WithArgs(id).
+		WillReturnRows(pgxmock.NewRows([]string{"updated_at", "status"}).
+			AddRow(oldUpdatedAt, "active"))
+
+	mock.ExpectQuery(`(?s)UPDATE he_api\.users SET updated_at=NOW\(\), display_name=\$1, locale=\$2, timezone=\$3 WHERE id=\$4 RETURNING `).
+		WithArgs(&newName, "zh-CN", "Asia/Shanghai", id).
+		WillReturnRows(pgxmock.NewRows(profileColumns).AddRow(
+			id, "user@example.com", []byte("$2a$12$hash"), &oldUpdatedAt,
+			nil, nil, "zh-CN", "Asia/Shanghai",
+			false, "active", oldUpdatedAt, newUpdatedAt,
+			&newName,
+		))
+
+	got, err := repository.UpdateProfile(context.Background(), mock, id, oldUpdatedAt.UnixMicro(),
+		repository.UpdateProfileParams{
+			DisplayName:    &newName,
+			DisplayNameSet: true,
+			Locale:         "zh-CN",
+			LocaleSet:      true,
+			Timezone:       "Asia/Shanghai",
+			TimezoneSet:    true,
+		})
+	if err != nil {
+		t.Fatalf("UpdateProfile: %v", err)
+	}
+	if got.Locale != "zh-CN" || got.Timezone != "Asia/Shanghai" || got.DisplayName == nil || *got.DisplayName != "Bob" {
+		t.Fatalf("UpdateProfile result mismatch: %+v", got)
+	}
+	if !got.UpdatedAt.Equal(newUpdatedAt) {
+		t.Fatalf("UpdatedAt did not advance — got %v, want %v", got.UpdatedAt, newUpdatedAt)
+	}
+}
+
+// Scenario: 2.5-UNIT-030 (repository.UpdateProfile etag mismatch path —
+// architect Q2 — Go-side UnixMicro compare returns ErrEtagMismatch when
+// the supplied if-match does not equal current updated_at.UnixMicro()).
+func TestUpdateProfile_EtagMismatch_ReturnsErrEtagMismatch(t *testing.T) {
+	t.Parallel()
+	mock := newMock(t)
+	id := uuid.New()
+	current := time.Date(2026, 5, 16, 10, 0, 0, 124_000_000, time.UTC)
+	stale := time.Date(2026, 5, 16, 10, 0, 0, 123_000_000, time.UTC) // different micros
+
+	mock.ExpectQuery(`SELECT updated_at, status FROM he_api\.users WHERE id=\$1 FOR UPDATE`).
+		WithArgs(id).
+		WillReturnRows(pgxmock.NewRows([]string{"updated_at", "status"}).
+			AddRow(current, "active"))
+
+	_, err := repository.UpdateProfile(context.Background(), mock, id, stale.UnixMicro(),
+		repository.UpdateProfileParams{Locale: "en", LocaleSet: true})
+	if !errors.Is(err, repository.ErrEtagMismatch) {
+		t.Fatalf("UpdateProfile etag stale = %v, want ErrEtagMismatch", err)
+	}
+}
+
+// Scenario: 2.5-UNIT-031 (partial update — locale only — does not touch
+// display_name or timezone; UPDATE statement is shorter accordingly).
+func TestUpdateProfile_PartialUpdate_LocaleOnly(t *testing.T) {
+	t.Parallel()
+	mock := newMock(t)
+	id := uuid.New()
+	now := time.Date(2026, 5, 16, 11, 0, 0, 200_000_000, time.UTC)
+	newer := now.Add(time.Millisecond)
+
+	mock.ExpectQuery(`SELECT updated_at, status FROM he_api\.users WHERE id=\$1 FOR UPDATE`).
+		WithArgs(id).
+		WillReturnRows(pgxmock.NewRows([]string{"updated_at", "status"}).
+			AddRow(now, "active"))
+
+	mock.ExpectQuery(`(?s)UPDATE he_api\.users SET updated_at=NOW\(\), locale=\$1 WHERE id=\$2 RETURNING `).
+		WithArgs("de", id).
+		WillReturnRows(pgxmock.NewRows(profileColumns).AddRow(
+			id, "user@example.com", []byte("$2a$12$hash"), &now,
+			nil, nil, "de", "UTC",
+			false, "active", now, newer,
+			(*string)(nil),
+		))
+
+	got, err := repository.UpdateProfile(context.Background(), mock, id, now.UnixMicro(),
+		repository.UpdateProfileParams{Locale: "de", LocaleSet: true})
+	if err != nil {
+		t.Fatalf("UpdateProfile partial: %v", err)
+	}
+	if got.Locale != "de" {
+		t.Fatalf("Locale = %q, want de", got.Locale)
+	}
+}
+
+// Scenario: 2.5-UNIT-032 (display_name=nil clears to NULL via *string nil
+// passed through pgx parameter binding).
+func TestUpdateProfile_DisplayNameNilClearsToNull(t *testing.T) {
+	t.Parallel()
+	mock := newMock(t)
+	id := uuid.New()
+	now := time.Date(2026, 5, 16, 12, 0, 0, 300_000_000, time.UTC)
+
+	mock.ExpectQuery(`SELECT updated_at, status FROM he_api\.users WHERE id=\$1 FOR UPDATE`).
+		WithArgs(id).
+		WillReturnRows(pgxmock.NewRows([]string{"updated_at", "status"}).
+			AddRow(now, "active"))
+
+	mock.ExpectQuery(`(?s)UPDATE he_api\.users SET updated_at=NOW\(\), display_name=\$1 WHERE id=\$2 RETURNING `).
+		WithArgs((*string)(nil), id).
+		WillReturnRows(pgxmock.NewRows(profileColumns).AddRow(
+			id, "user@example.com", []byte("$2a$12$hash"), &now,
+			nil, nil, "en", "UTC",
+			false, "active", now, now.Add(time.Millisecond),
+			(*string)(nil),
+		))
+
+	got, err := repository.UpdateProfile(context.Background(), mock, id, now.UnixMicro(),
+		repository.UpdateProfileParams{DisplayName: nil, DisplayNameSet: true})
+	if err != nil {
+		t.Fatalf("UpdateProfile nil clear: %v", err)
+	}
+	if got.DisplayName != nil {
+		t.Fatalf("DisplayName = %v, want nil after clear", got.DisplayName)
+	}
+}
+
+// Scenario: 2.5-UNIT-033 (pending_deletion path — UpdateProfile returns
+// ErrAccountPendingDeletion when SELECT FOR UPDATE reveals status='pending_deletion').
+func TestUpdateProfile_PendingDeletion_ReturnsErr(t *testing.T) {
+	t.Parallel()
+	mock := newMock(t)
+	id := uuid.New()
+	now := time.Date(2026, 5, 16, 13, 0, 0, 0, time.UTC)
+
+	mock.ExpectQuery(`SELECT updated_at, status FROM he_api\.users WHERE id=\$1 FOR UPDATE`).
+		WithArgs(id).
+		WillReturnRows(pgxmock.NewRows([]string{"updated_at", "status"}).
+			AddRow(now, "pending_deletion"))
+
+	_, err := repository.UpdateProfile(context.Background(), mock, id, now.UnixMicro(),
+		repository.UpdateProfileParams{Locale: "en", LocaleSet: true})
+	if !errors.Is(err, repository.ErrAccountPendingDeletion) {
+		t.Fatalf("UpdateProfile pending_deletion = %v, want ErrAccountPendingDeletion", err)
+	}
+}
+
+// Scenario: 2.5-UNIT-033b (user_not_found path — UpdateProfile returns
+// ErrUserNotFound when SELECT FOR UPDATE matches zero rows).
+func TestUpdateProfile_UserNotFound_ReturnsErr(t *testing.T) {
+	t.Parallel()
+	mock := newMock(t)
+	id := uuid.New()
+
+	mock.ExpectQuery(`SELECT updated_at, status FROM he_api\.users WHERE id=\$1 FOR UPDATE`).
+		WithArgs(id).
+		WillReturnRows(pgxmock.NewRows([]string{"updated_at", "status"}))
+
+	_, err := repository.UpdateProfile(context.Background(), mock, id, 0,
+		repository.UpdateProfileParams{Locale: "en", LocaleSet: true})
+	if !errors.Is(err, repository.ErrUserNotFound) {
+		t.Fatalf("UpdateProfile no-row = %v, want ErrUserNotFound", err)
+	}
+}
+
+// Scenario: 2.5-BLIND-DATA-003 (updated_at strictly monotonic — the
+// UPDATE statement always includes `updated_at=NOW()` even on a 1-field
+// partial update, ensuring etag advances on every successful write).
+func TestUpdateProfile_UpdateStatement_AlwaysAdvancesUpdatedAt(t *testing.T) {
+	t.Parallel()
+	mock := newMock(t)
+	id := uuid.New()
+	now := time.Date(2026, 5, 16, 14, 0, 0, 0, time.UTC)
+	newer := now.Add(time.Millisecond)
+	newName := "Carol"
+
+	mock.ExpectQuery(`SELECT updated_at, status FROM he_api\.users WHERE id=\$1 FOR UPDATE`).
+		WithArgs(id).
+		WillReturnRows(pgxmock.NewRows([]string{"updated_at", "status"}).
+			AddRow(now, "active"))
+
+	// Regex pins the leading `updated_at=NOW()` clause specifically — even
+	// for a single-field update, NOW() advancement MUST be present (BR-2.11).
+	mock.ExpectQuery(`(?s)UPDATE he_api\.users SET updated_at=NOW\(\), display_name=\$1`).
+		WithArgs(&newName, id).
+		WillReturnRows(pgxmock.NewRows(profileColumns).AddRow(
+			id, "u@example.com", []byte{}, &now,
+			nil, nil, "en", "UTC",
+			false, "active", now, newer,
+			&newName,
+		))
+
+	if _, err := repository.UpdateProfile(context.Background(), mock, id, now.UnixMicro(),
+		repository.UpdateProfileParams{DisplayName: &newName, DisplayNameSet: true}); err != nil {
+		t.Fatalf("UpdateProfile: %v", err)
+	}
+}

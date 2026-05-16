@@ -1,0 +1,59 @@
+{
+  "settings": {
+    "sidebar": {
+      "label": "Navigation des paramètres",
+      "profile": "Profil",
+      "security": "Sécurité",
+      "data": "Données"
+    }
+  },
+  "profile": {
+    "title": "Paramètres du profil",
+    "display_name": {
+      "label": "Nom d'affichage",
+      "placeholder": "Définissez votre nom d'affichage"
+    },
+    "email": {
+      "label": "E-mail",
+      "read_only_hint": "L'e-mail est défini lors de l'inscription et ne peut pas être modifié ici",
+      "read_only_tooltip": "L'e-mail ne peut pas être modifié ici"
+    },
+    "locale": { "label": "Langue" },
+    "timezone": { "label": "Fuseau horaire" },
+    "security": {
+      "totp_enabled": "Authentification à deux facteurs activée",
+      "totp_disabled": "Authentification à deux facteurs désactivée",
+      "manage_link": "Gérer dans Sécurité"
+    },
+    "auth_method": {
+      "oauth_google": "Connecté avec Google",
+      "oauth_github": "Connecté avec GitHub",
+      "email_password": "Connecté avec e-mail et mot de passe"
+    },
+    "actions": { "save": "Enregistrer les modifications" },
+    "toast": {
+      "saved": "Profil mis à jour",
+      "locale_changed": "Langue modifiée"
+    },
+    "banners": {
+      "concurrent_update": {
+        "message": "Le profil a été mis à jour dans un autre onglet.",
+        "reload_cta": "Recharger"
+      }
+    },
+    "errors": {
+      "load_failed": "Impossible de charger le profil. Veuillez réessayer.",
+      "generic": "Impossible d'enregistrer les modifications. Veuillez réessayer.",
+      "rate_limited": "Trop de mises à jour. Veuillez patienter avant de réessayer.",
+      "concurrent_update": "Le profil a été mis à jour dans un autre onglet. Veuillez recharger.",
+      "unknown_field": "La requête contenait un champ inattendu",
+      "display_name": {
+        "invalid_chars": "Le nom d'affichage contient des caractères non valides",
+        "too_long": "Le nom doit comporter 100 caractères ou moins",
+        "too_short": "Le nom ne peut pas être uniquement des espaces"
+      },
+      "locale": { "unsupported": "La langue sélectionnée n'est pas encore prise en charge" },
+      "timezone": { "unknown": "Fuseau horaire inconnu" }
+    }
+  }
+}

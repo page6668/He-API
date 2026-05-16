@@ -30,6 +30,10 @@ const (
 	KeyPrefix2FAChallenge     = "ratelimit:2fa:challenge:"
 	KeyPrefix2FARecovery      = "ratelimit:2fa:recovery:"
 	KeyPrefix2FADisable       = "ratelimit:2fa:disable:"
+	// Story 2.5 — profile-update rate-limit key (BR-2.8 — 10 attempts/hour
+	// per user). Per-user-only (no per-IP layer); matches the dimensionality
+	// of other authenticated-mutation endpoints.
+	KeyPrefixProfileUpdate = "ratelimit:profile:update:"
 )
 
 // ErrRateLimited is returned by CheckAndIncr when the post-INCR count exceeds
@@ -174,6 +178,13 @@ const (
 //
 // Per Wright Round 1 Q5 ruling, this is per-user-only (no per-IP layer);
 // rate-limit dimensionality matches Story 2.2 signin and Story 2.3 OAuth.
+// ProfileUpdateKey builds the per-user rate-limit key for Story 2.5 PUT
+// /v1/me/profile (BR-2.8 — 10 successful-or-failed updates / hour / user;
+// anti-abuse, not anti-error). userID is the canonical UUID string.
+func ProfileUpdateKey(userID string) string {
+	return KeyPrefixProfileUpdate + userID
+}
+
 func MFAKey(op MFA2FAOperation, userID string) string {
 	switch op {
 	case OpMFAEnrollInit:

@@ -158,6 +158,14 @@ func main() {
 	mux.Handle("POST /v1/auth/2fa/disable",
 		jwtVerifier.RequireJWT(jwtVerifier.RequireAAL(2, http.HandlerFunc(auth.DisableTOTP))))
 
+	// Story 2.5 — Profile management routes (Architect Q4 ruling 2026-05-16:
+	// aal>=1 only, NO RequireAAL(2,...) wrap — profile mutation is low-blast-
+	// radius UX, not auth/billing/key surface). The api-gateway middleware
+	// derives user_id from the JWT `sub` claim; the handlers NEVER trust a
+	// client-supplied user_id (BR-1.1 IDOR defence).
+	mux.Handle("GET /v1/me", jwtVerifier.RequireJWT(http.HandlerFunc(auth.GetMe)))
+	mux.Handle("PUT /v1/me/profile", jwtVerifier.RequireJWT(http.HandlerFunc(auth.UpdateProfile)))
+
 	// Middleware chain (outer → inner): SecurityHeaders → CSRF → mux.
 	// SecurityHeaders writes the BR-4.7 response headers on every response.
 	// CSRF rejects state-mutating POSTs without a matching Origin header

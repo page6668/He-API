@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,9 +27,11 @@ type Querier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
-// User mirrors he_api.users (migration 0002_create_users.sql). Nullable
-// columns surface as pointer / sql.Null* types; OAuth columns stay nil until
-// Story 2.3 populates them.
+// User mirrors he_api.users (migrations 0002_create_users.sql +
+// 0004_add_display_name_to_users.sql). Nullable columns surface as pointer /
+// sql.Null* types; OAuth columns stay nil until Story 2.3 populates them.
+// DisplayName (Story 2.5) is nullable — Story 2.5 BR-1.6 normalises NULL and
+// empty string to the same "unset" UX state.
 type User struct {
 	ID                  uuid.UUID
 	Email               string
@@ -45,6 +48,7 @@ type User struct {
 	PendingDeletionAt   *time.Time
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
+	DisplayName         *string // Story 2.5 — nullable display name (BR-1.6)
 }
 
 var (
@@ -57,6 +61,19 @@ var (
 	// LoginUser handler uses this to trigger the dummy-bcrypt branch
 	// (BR-3.2 timing parity).
 	ErrUserNotFound = errors.New("repository: user not found")
+
+	// ErrEtagMismatch is returned by UpdateProfile when the supplied
+	// If-Match etag does not match the current users.updated_at row value.
+	// Story 2.5 BR-2.7 — optimistic concurrency. Architect Q2 ruling: etag
+	// format is `UnixMicro()` (16-digit int64) Go-side compared inside the
+	// same FOR UPDATE transaction.
+	ErrEtagMismatch = errors.New("repository: etag mismatch")
+
+	// ErrAccountPendingDeletion is surfaced when a profile read/update
+	// targets a user whose status='pending_deletion' (Story 2.7 grace
+	// window). Story 2.5 BR-1.9 / BR-2.x — already-deleted accounts MUST
+	// NOT surface the profile editor; api-gateway translates this to 403.
+	ErrAccountPendingDeletion = errors.New("repository: account pending deletion")
 )
 
 // Pre-baked SQL strings. Constants make them grep-able from QA static scans
@@ -75,6 +92,16 @@ FROM he_api.users WHERE email = $1 LIMIT 1`
 	getUserByIDSQL = `SELECT id, email, password_hash, email_verified_at, oauth_provider, oauth_subject,
        locale, timezone, totp_secret_encrypted, totp_enabled, status, locked_until,
        pending_deletion_at, created_at, updated_at
+FROM he_api.users WHERE id = $1 LIMIT 1`
+
+	// Story 2.5 — narrower profile-only projection for GET /v1/me + UpdateProfile.
+	// Excludes the auth-leg-only columns (totp_secret_encrypted, locked_until,
+	// pending_deletion_at) — auth-svc handlers read those via separate
+	// SQL paths (GetTOTPSecret + SoftLockUser bookkeeping). Keeps the profile
+	// hot path tight and avoids leaking encrypted secrets through the Settings
+	// page response surface.
+	getProfileByIDSQL = `SELECT id, email, password_hash, email_verified_at, oauth_provider, oauth_subject,
+       locale, timezone, totp_enabled, status, created_at, updated_at, display_name
 FROM he_api.users WHERE id = $1 LIMIT 1`
 
 	softLockUserSQL = `UPDATE he_api.users SET status='locked', locked_until=$1, updated_at=NOW() WHERE id=$2`
@@ -207,6 +234,44 @@ func scanUserRow(row pgx.Row) (*User, error) {
 		return nil, err
 	}
 	return &u, nil
+}
+
+// scanProfileRow is the Story 2.5 GetProfileByID + UpdateProfile RETURNING
+// scanner. Narrower than scanUserRow — excludes auth-leg-only columns
+// (totp_secret_encrypted, locked_until, pending_deletion_at) but adds
+// display_name. The matching SELECT/RETURNING clauses pin the column order.
+func scanProfileRow(row pgx.Row) (*User, error) {
+	var u User
+	err := row.Scan(
+		&u.ID, &u.Email, &u.PasswordHash, &u.EmailVerifiedAt,
+		&u.OAuthProvider, &u.OAuthSubject, &u.Locale, &u.Timezone,
+		&u.TOTPEnabled, &u.Status, &u.CreatedAt, &u.UpdatedAt,
+		&u.DisplayName,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+	return &u, nil
+}
+
+// GetProfileByID is the Story 2.5 profile-focused read path used by the
+// GetMe RPC. Returns ErrUserNotFound when the row is missing, or
+// ErrAccountPendingDeletion when status='pending_deletion' (Story 2.5
+// BR-1.9 — already-deleting accounts must NOT surface the profile editor).
+// Other status values (active / locked / suspended) flow through; the
+// handler decides per-status policy.
+func GetProfileByID(ctx context.Context, q Querier, userID uuid.UUID) (*User, error) {
+	u, err := scanProfileRow(q.QueryRow(ctx, getProfileByIDSQL, userID))
+	if err != nil {
+		return nil, err
+	}
+	if u.Status == "pending_deletion" {
+		return nil, ErrAccountPendingDeletion
+	}
+	return u, nil
 }
 
 // SoftLockUser flips status to 'locked' with the supplied locked_until.
@@ -360,6 +425,174 @@ type TOTPSecretRow struct {
 	Enabled         bool
 	EnrolledAt      *time.Time
 }
+
+// -- Story 2.5 profile helpers ---------------------------------------------
+
+// UpdateProfileParams carries the partial-update payload for UpdateProfile.
+// Each *_Set bool toggles whether the corresponding field participates in
+// the UPDATE statement (partial-update semantics per Story 2.5 BR-2.1).
+// DisplayName uses *string so callers can express both "set to <value>" and
+// "set to NULL" by passing a nil-valued pointer with DisplayNameSet=true.
+type UpdateProfileParams struct {
+	DisplayName    *string
+	DisplayNameSet bool
+	Locale         string
+	LocaleSet      bool
+	Timezone       string
+	TimezoneSet    bool
+}
+
+// UpdateProfile applies the partial profile update, validating the supplied
+// etag against the current updated_at (Story 2.5 BR-2.7 — Go-side UnixMicro
+// compare per Architect Q2 ruling 2026-05-16), then issuing the UPDATE.
+//
+// **The caller MUST pass a transactional Querier** (a pgx.Tx obtained via
+// pgxpool.Pool.Begin) so the inner SELECT FOR UPDATE + UPDATE land in the
+// same transaction with row-level locking. Passing a non-transactional
+// connection breaks the BR-2.7 concurrency guarantee (two-tab race becomes
+// a lost-update). The Querier surface (vs pgx.Tx directly) is for test
+// ergonomics — pgxmock.PgxConnIface satisfies Querier.
+//
+// Returns:
+//   - the refreshed *User on success (DisplayName / Locale / Timezone /
+//     UpdatedAt reflect the new state).
+//   - ErrUserNotFound if the user_id row is missing.
+//   - ErrAccountPendingDeletion if status='pending_deletion'.
+//   - ErrEtagMismatch if ifMatchMicros does not equal current updated_at.UnixMicro().
+//
+// The caller is responsible for application-layer field validation (NFC
+// normalisation, locale allowlist, IANA timezone check) BEFORE invoking —
+// the repository is a thin SQL boundary.
+func UpdateProfile(
+	ctx context.Context,
+	q Querier,
+	userID uuid.UUID,
+	ifMatchMicros int64,
+	params UpdateProfileParams,
+) (*User, error) {
+	// 1. SELECT updated_at + status FOR UPDATE — holds the row lock until
+	//    commit/rollback. Two-tab race resolves here: the second tab's
+	//    SELECT blocks until the first tab commits, then sees the advanced
+	//    updated_at and falls through to the ErrEtagMismatch branch.
+	var currentUpdatedAt time.Time
+	var currentStatus string
+	err := q.QueryRow(ctx,
+		`SELECT updated_at, status FROM he_api.users WHERE id=$1 FOR UPDATE`,
+		userID,
+	).Scan(&currentUpdatedAt, &currentStatus)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+	if currentStatus == "pending_deletion" {
+		return nil, ErrAccountPendingDeletion
+	}
+	if currentUpdatedAt.UnixMicro() != ifMatchMicros {
+		return nil, ErrEtagMismatch
+	}
+
+	// 2. Build the UPDATE statement dynamically based on which fields were
+	//    flagged as "set" by the caller. Always advance updated_at=NOW()
+	//    (BR-2.11 — load-bearing for etag).
+	//
+	//    The SET clause is built from STATIC fragments only (column name +
+	//    placeholder index — both compile-time literals). User-supplied
+	//    values flow exclusively through args[] → pgx parameter binding.
+	//    No format directives appear in the SQL fragments, satisfying the
+	//    package-level "no concatenated SQL" static scan.
+	var setBuilder strings.Builder
+	setBuilder.WriteString("updated_at=NOW()")
+	args := []any{}
+	if params.DisplayNameSet {
+		args = append(args, params.DisplayName) // *string — nil → SQL NULL
+		setBuilder.WriteString(", display_name=")
+		setBuilder.WriteString(placeholder(len(args)))
+	}
+	if params.LocaleSet {
+		args = append(args, params.Locale)
+		setBuilder.WriteString(", locale=")
+		setBuilder.WriteString(placeholder(len(args)))
+	}
+	if params.TimezoneSet {
+		args = append(args, params.Timezone)
+		setBuilder.WriteString(", timezone=")
+		setBuilder.WriteString(placeholder(len(args)))
+	}
+	args = append(args, userID)
+
+	var sqlBuilder strings.Builder
+	sqlBuilder.WriteString(updateProfilePrefix)
+	sqlBuilder.WriteString(setBuilder.String())
+	sqlBuilder.WriteString(" WHERE id=")
+	sqlBuilder.WriteString(placeholder(len(args)))
+	sqlBuilder.WriteString(updateProfileReturning)
+
+	return scanProfileRow(q.QueryRow(ctx, sqlBuilder.String(), args...))
+}
+
+// placeholder returns the pgx positional placeholder string ($1, $2, …) for
+// the supplied 1-based index. Returns "$0" for zero (caller error — only
+// indices ≥ 1 are valid). Kept local so the SQL builder above stays free of
+// fmt.Sprintf calls (package-level static scan ban).
+func placeholder(idx int) string {
+	// Fast path for the common indices (1..16) — avoids strconv allocation
+	// on the hot UPDATE path. Beyond 16, fall through to strconv (no profile
+	// UPDATE will ever hit this branch — only 3 fields + 1 WHERE id).
+	switch idx {
+	case 1:
+		return "$1"
+	case 2:
+		return "$2"
+	case 3:
+		return "$3"
+	case 4:
+		return "$4"
+	case 5:
+		return "$5"
+	case 6:
+		return "$6"
+	case 7:
+		return "$7"
+	case 8:
+		return "$8"
+	}
+	return "$" + strconvItoa(idx)
+}
+
+// strconvItoa is a tiny wrapper so we don't import strconv just for this.
+// Profile UPDATE never exercises the >8-args path; this is purely defensive.
+func strconvItoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	neg := n < 0
+	if neg {
+		n = -n
+	}
+	var buf [20]byte
+	i := len(buf)
+	for n > 0 {
+		i--
+		buf[i] = byte('0' + n%10)
+		n /= 10
+	}
+	if neg {
+		i--
+		buf[i] = '-'
+	}
+	return string(buf[i:])
+}
+
+const (
+	// updateProfilePrefix + updateProfileReturning bracket the dynamically-
+	// built SET clause. Splitting them keeps every fragment a static literal
+	// (no fmt.Sprintf with SQL verbs in format string per the package-level
+	// static SQL scan in users_test.go TestSourceUsesParameterizedSQL).
+	updateProfilePrefix    = "UPDATE he_api.users SET "
+	updateProfileReturning = " RETURNING id, email, password_hash, email_verified_at, oauth_provider, oauth_subject, locale, timezone, totp_enabled, status, created_at, updated_at, display_name"
+)
 
 // GetTOTPSecret returns the encrypted secret + enrollment state. Returns
 // ErrUserNotFound if the user_id does not exist; otherwise the row even

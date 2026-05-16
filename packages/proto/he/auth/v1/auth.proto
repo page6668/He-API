@@ -11,6 +11,8 @@ syntax = "proto3";
 
 package he.auth.v1;
 
+import "google/protobuf/timestamp.proto";
+
 option go_package = "github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1;authv1";
 
 service AuthService {
@@ -55,6 +57,19 @@ service AuthService {
   rpc UseRecoveryCode(UseRecoveryCodeRequest) returns (UseRecoveryCodeResponse);
   rpc DisableTOTP(DisableTOTPRequest) returns (DisableTOTPResponse);
   rpc RegenerateRecoveryCodes(RegenerateRecoveryCodesRequest) returns (RegenerateRecoveryCodesResponse);
+
+  // Story 2.5 — profile management.
+  // GetMe: profile read for Settings → Profile (returns whole-user snapshot
+  // including email + totp_enabled + oauth_provider so the page renders
+  // without a second RTT). api-gateway populates user_id from the verified
+  // JWT `sub` claim; clients NEVER supply it (BR-1.1 IDOR defence).
+  // UpdateProfile: partial profile mutation (display_name / locale /
+  // timezone). Optimistic concurrency via `if_match` etag = updated_at
+  // UnixMicro() string (Architect Q2 ruling 2026-05-16). On
+  // successful locale change, api-gateway also rewrites `he_locale` cookie
+  // so next-intl reflects the new locale on next render (Architect Q3).
+  rpc GetMe(GetMeRequest) returns (GetMeResponse);
+  rpc UpdateProfile(UpdateProfileRequest) returns (UpdateProfileResponse);
 }
 
 // --- RegisterUser --------------------------------------------------------
@@ -368,4 +383,72 @@ message RegenerateRecoveryCodesResponse {
   // reason='user_initiated') in the same transaction; previously-used codes
   // are NOT touched.
   repeated string recovery_codes = 1;
+}
+
+// --- Story 2.5 — Profile (GetMe + UpdateProfile) -------------------------
+//
+// Both messages use proto3 `optional` keyword (Architect Round 1 m-4 ruling
+// 2026-05-16) so absent fields generate Go *string / *bool wire types,
+// avoiding the parallel `*_present` bool boilerplate. Partial-update
+// semantics for UpdateProfileRequest: a nil-valued optional means "do not
+// change"; an explicit empty string in display_name means "clear" (handler
+// normalises to NULL per BR-2.4).
+
+message GetMeRequest {
+  // user_id is set by api-gateway from the verified JWT `sub` claim — clients
+  // MUST NOT supply it (BR-1.1 IDOR defence). auth-svc rejects empty /
+  // non-UUID with INVALID_ARGUMENT.
+  string user_id = 1;
+}
+
+message GetMeResponse {
+  string user_id = 1;
+  string email = 2;
+  optional string display_name = 3;        // NULL → field absent (proto3 optional)
+  string locale = 4;
+  string timezone = 5;
+  bool totp_enabled = 6;
+  optional string oauth_provider = 7;      // NULL for non-OAuth users
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+  // etag = `"{updated_at.UnixMicro()}"` (quoted-string per RFC 7232 §2.3) —
+  // Architect Q2 ruling 2026-05-16. The api-gateway forwards verbatim as the
+  // ETag response header.
+  string etag = 10;
+}
+
+message UpdateProfileRequest {
+  string user_id = 1;
+  // Each field uses proto3 `optional` — wire-absent means "do not change"
+  // (BR-2.1). For display_name specifically, the value "" carries the
+  // "clear to NULL" intent (BR-2.4 / BR-1.6).
+  optional string display_name = 2;
+  optional string locale = 3;
+  optional string timezone = 4;
+  // if_match echoes the etag returned by GetMeResponse / a prior
+  // UpdateProfileResponse. Empty/missing → INVALID_ARGUMENT (api-gateway
+  // also enforces at the HTTP If-Match layer — 428 Precondition Required).
+  string if_match = 5;
+  // Client attribution (api-gateway populates from request headers — same
+  // pattern as RegisterUserRequest etc).
+  string client_ip = 6;
+  string user_agent = 7;
+}
+
+message UpdateProfileResponse {
+  // Mirrors GetMeResponse so console reuses the same renderer.
+  string user_id = 1;
+  string email = 2;
+  optional string display_name = 3;
+  string locale = 4;
+  string timezone = 5;
+  bool totp_enabled = 6;
+  optional string oauth_provider = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+  string etag = 10;
+  // True when the supplied UpdateProfileRequest.locale differed from the
+  // pre-update DB value. api-gateway uses this to decide whether to
+  // rewrite the he_locale cookie (BR-3.10 / Architect Q3).
+  bool locale_changed = 11;
 }

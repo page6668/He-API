@@ -33,16 +33,24 @@ const (
 	EnvDevelopment DeployEnv = "development"
 )
 
-// Cookie names per BR-3.7 + Story 2.4 BR-2.1.
+// Cookie names per BR-3.7 + Story 2.4 BR-2.1 + Story 2.5 BR-3.5.
 const (
 	AccessCookieName  = "he_access"
 	RefreshCookieName = "he_refresh"
 	// MFACookieName carries the short-lived (5-min) mfa_token between
 	// password/OAuth-first-factor success and TOTP code submission.
 	MFACookieName = "he_mfa"
+	// LocaleCookieName mirrors apps/console/i18n/config.ts COOKIE_NAME.
+	// next-intl reads it client-side via document.cookie (HttpOnly=false)
+	// so <LocaleSwitch> can race-free overwrite it. Story 2.5 PUT
+	// /v1/me/profile rewrites this cookie server-side when the user changes
+	// their locale (Architect Q3 ruling 2026-05-16 — Go is canonical
+	// authority for gateway responses; TS buildLocaleCookieOptions stays
+	// the authority for client-driven writes; both MUST stay in sync).
+	LocaleCookieName = "he_locale"
 )
 
-// Cookie path scopes per BR-3.7 + Story 2.4.
+// Cookie path scopes per BR-3.7 + Story 2.4 + Story 2.5.
 const (
 	accessCookiePath  = "/"
 	refreshCookiePath = "/v1/auth/refresh"
@@ -52,6 +60,12 @@ const (
 
 	// MFA cookie lifetime — must match the mfa_token JWT TTL (BR-2.1).
 	mfaCookieMaxAgeSeconds = 5 * 60
+
+	// Story 2.5 — he_locale cookie scope. Path=/ so next-intl middleware
+	// sees it on every navigation. MaxAge mirrors
+	// apps/console/lib/i18n.ts → buildLocaleCookieOptions.maxAge (365 days).
+	localeCookiePath          = "/"
+	localeCookieMaxAgeSeconds = 31536000 // 365 days
 )
 
 // ParseDeployEnv normalizes the env-var value to a DeployEnv. Unknown
@@ -177,6 +191,32 @@ func ClearMFACookie(w http.ResponseWriter, env DeployEnv) {
 		MaxAge:   -1,
 		Secure:   secureFlag(env),
 		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// SetLocaleCookie writes the canonical he_locale Set-Cookie header
+// (Story 2.5 — Architect Q3 ruling 2026-05-16).
+//
+// Attribute parity with apps/console/lib/i18n.ts → buildLocaleCookieOptions
+// is load-bearing per BR-3.5 — the cookie MUST be cross-readable by
+// next-intl middleware on every subsequent navigation. The TS helper
+// remains the authority for client-side writes via <LocaleSwitch>; this
+// Go helper is the authority for server-driven writes on the PUT
+// /v1/me/profile response path.
+//
+// HttpOnly=false is intentional: next-intl's client-side <LocaleSwitch>
+// reads document.cookie to detect / race-free overwrite the current
+// locale. Story 2.1 BR contract.
+func SetLocaleCookie(w http.ResponseWriter, locale string, env DeployEnv) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     LocaleCookieName,
+		Value:    locale,
+		Path:     localeCookiePath,
+		Domain:   cookieDomain(env),
+		MaxAge:   localeCookieMaxAgeSeconds,
+		Secure:   secureFlag(env),
+		HttpOnly: false, // client-readable per Story 2.1 BR
 		SameSite: http.SameSiteLaxMode,
 	})
 }

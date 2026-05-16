@@ -51,6 +51,11 @@ type fakeAuthClient struct {
 	regenerateErr    error
 	disableResp      *authv1.DisableTOTPResponse
 	disableErr       error
+	// Story 2.5 — GetMe + UpdateProfile (T1 / T2)
+	getMeResp         *authv1.GetMeResponse
+	getMeErr          error
+	updateProfileResp *authv1.UpdateProfileResponse
+	updateProfileErr  error
 	// captured inputs for assertions
 	lastReq             *authv1.RegisterUserRequest
 	lastVerifyReq       *authv1.VerifyEmailRequest
@@ -63,6 +68,8 @@ type fakeAuthClient struct {
 	lastUseRecoveryReq  *authv1.UseRecoveryCodeRequest
 	lastRegenerateReq   *authv1.RegenerateRecoveryCodesRequest
 	lastDisableReq      *authv1.DisableTOTPRequest
+	lastGetMeReq        *authv1.GetMeRequest
+	lastUpdateProfileReq *authv1.UpdateProfileRequest
 }
 
 var errFakeUnimplemented = errors.New("fakeAuthClient: method not stubbed")
@@ -197,6 +204,28 @@ func (f *fakeAuthClient) RegenerateRecoveryCodes(_ context.Context, r *connect.R
 		return nil, errFakeUnimplemented
 	}
 	return connect.NewResponse(f.regenerateResp), nil
+}
+
+// Story 2.5 — GetMe + UpdateProfile stubs.
+func (f *fakeAuthClient) GetMe(_ context.Context, r *connect.Request[authv1.GetMeRequest]) (*connect.Response[authv1.GetMeResponse], error) {
+	f.lastGetMeReq = r.Msg
+	if f.getMeErr != nil {
+		return nil, f.getMeErr
+	}
+	if f.getMeResp == nil {
+		return nil, errFakeUnimplemented
+	}
+	return connect.NewResponse(f.getMeResp), nil
+}
+func (f *fakeAuthClient) UpdateProfile(_ context.Context, r *connect.Request[authv1.UpdateProfileRequest]) (*connect.Response[authv1.UpdateProfileResponse], error) {
+	f.lastUpdateProfileReq = r.Msg
+	if f.updateProfileErr != nil {
+		return nil, f.updateProfileErr
+	}
+	if f.updateProfileResp == nil {
+		return nil, errFakeUnimplemented
+	}
+	return connect.NewResponse(f.updateProfileResp), nil
 }
 
 var _ authv1connect.AuthServiceClient = (*fakeAuthClient)(nil)

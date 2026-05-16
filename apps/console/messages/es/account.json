@@ -1,0 +1,59 @@
+{
+  "settings": {
+    "sidebar": {
+      "label": "Navegación de configuración",
+      "profile": "Perfil",
+      "security": "Seguridad",
+      "data": "Datos"
+    }
+  },
+  "profile": {
+    "title": "Configuración del perfil",
+    "display_name": {
+      "label": "Nombre para mostrar",
+      "placeholder": "Establece tu nombre para mostrar"
+    },
+    "email": {
+      "label": "Correo electrónico",
+      "read_only_hint": "El correo electrónico se establece al registrarse y no se puede cambiar aquí",
+      "read_only_tooltip": "El correo no se puede cambiar aquí"
+    },
+    "locale": { "label": "Idioma" },
+    "timezone": { "label": "Zona horaria" },
+    "security": {
+      "totp_enabled": "Autenticación de dos factores activada",
+      "totp_disabled": "Autenticación de dos factores desactivada",
+      "manage_link": "Gestionar en Seguridad"
+    },
+    "auth_method": {
+      "oauth_google": "Sesión iniciada con Google",
+      "oauth_github": "Sesión iniciada con GitHub",
+      "email_password": "Sesión iniciada con correo y contraseña"
+    },
+    "actions": { "save": "Guardar cambios" },
+    "toast": {
+      "saved": "Perfil actualizado",
+      "locale_changed": "Idioma cambiado"
+    },
+    "banners": {
+      "concurrent_update": {
+        "message": "El perfil fue actualizado en otra pestaña.",
+        "reload_cta": "Recargar"
+      }
+    },
+    "errors": {
+      "load_failed": "No se pudo cargar el perfil. Inténtalo de nuevo.",
+      "generic": "No se pudieron guardar los cambios. Inténtalo de nuevo.",
+      "rate_limited": "Demasiadas actualizaciones. Espera un momento antes de reintentar.",
+      "concurrent_update": "El perfil fue actualizado en otra pestaña. Recarga.",
+      "unknown_field": "La solicitud contenía un campo inesperado",
+      "display_name": {
+        "invalid_chars": "El nombre para mostrar contiene caracteres no válidos",
+        "too_long": "El nombre debe tener 100 caracteres o menos",
+        "too_short": "El nombre no puede ser solo espacios en blanco"
+      },
+      "locale": { "unsupported": "El idioma seleccionado aún no se admite" },
+      "timezone": { "unknown": "Zona horaria desconocida" }
+    }
+  }
+}

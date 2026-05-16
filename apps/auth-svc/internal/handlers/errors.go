@@ -73,6 +73,16 @@ const (
 	StatusRateLimit2FARecovery         = "429_rate_limit_2fa_recovery"
 	StatusRateLimit2FADisable          = "429_rate_limit_2fa_disable"
 	StatusKMSUnavailable               = "503_kms_unavailable"
+
+	// Story 2.5 profile status codes — map 1:1 to AC1-AC4 Error Handling tables.
+	StatusInvalidDisplayName     = "400_invalid_display_name"
+	StatusInvalidTimezone        = "400_invalid_timezone"
+	StatusUnknownField           = "400_unknown_field"
+	StatusEtagMissing            = "428_precondition_required"
+	StatusEtagMismatch           = "412_etag_mismatch"
+	StatusAccountPendingDeletion = "403_account_pending_deletion"
+	StatusRateLimitProfileUpdate = "429_rate_limit_profile_update"
+	StatusDatabaseUnavailable    = "503_database_unavailable"
 )
 
 // statusError builds a Connect error whose Message is exactly the status

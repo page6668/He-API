@@ -1,0 +1,69 @@
+{
+  "settings": {
+    "sidebar": {
+      "label": "設定ナビゲーション",
+      "profile": "プロフィール",
+      "security": "セキュリティ",
+      "data": "データ"
+    }
+  },
+  "profile": {
+    "title": "プロフィール設定",
+    "display_name": {
+      "label": "表示名",
+      "placeholder": "表示名を設定してください"
+    },
+    "email": {
+      "label": "メールアドレス",
+      "read_only_hint": "メールアドレスは登録時に設定され、ここでは変更できません",
+      "read_only_tooltip": "メールアドレスはここでは変更できません"
+    },
+    "locale": {
+      "label": "言語"
+    },
+    "timezone": {
+      "label": "タイムゾーン"
+    },
+    "security": {
+      "totp_enabled": "二要素認証が有効です",
+      "totp_disabled": "二要素認証が無効です",
+      "manage_link": "セキュリティ設定で管理"
+    },
+    "auth_method": {
+      "oauth_google": "Google でサインイン中",
+      "oauth_github": "GitHub でサインイン中",
+      "email_password": "メールとパスワードでサインイン中"
+    },
+    "actions": {
+      "save": "変更を保存"
+    },
+    "toast": {
+      "saved": "プロフィールを更新しました",
+      "locale_changed": "言語を切り替えました"
+    },
+    "banners": {
+      "concurrent_update": {
+        "message": "別のタブでプロフィールが更新されました。",
+        "reload_cta": "再読み込み"
+      }
+    },
+    "errors": {
+      "load_failed": "プロフィールを読み込めませんでした。もう一度お試しください。",
+      "generic": "変更を保存できませんでした。もう一度お試しください。",
+      "rate_limited": "更新が多すぎます。しばらく待ってから再試行してください。",
+      "concurrent_update": "別のタブでプロフィールが更新されました。再読み込みしてください。",
+      "unknown_field": "リクエストに予期しないフィールドが含まれています",
+      "display_name": {
+        "invalid_chars": "表示名に使用できない文字が含まれています",
+        "too_long": "表示名は 100 文字以内にしてください",
+        "too_short": "表示名は空白のみにできません"
+      },
+      "locale": {
+        "unsupported": "選択された言語はまだサポートされていません"
+      },
+      "timezone": {
+        "unknown": "不明なタイムゾーンです"
+      }
+    }
+  }
+}

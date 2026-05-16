@@ -334,8 +334,12 @@ func httpStatusForCode(statusCode string, connectCode connect.Code) int {
 			return http.StatusForbidden
 		case "410":
 			return http.StatusGone
+		case "412":
+			return http.StatusPreconditionFailed
 		case "423":
 			return http.StatusLocked
+		case "428":
+			return http.StatusPreconditionRequired
 		case "429":
 			return http.StatusTooManyRequests
 		case "500":

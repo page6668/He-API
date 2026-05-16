@@ -1,0 +1,59 @@
+{
+  "settings": {
+    "sidebar": {
+      "label": "Navegação das configurações",
+      "profile": "Perfil",
+      "security": "Segurança",
+      "data": "Dados"
+    }
+  },
+  "profile": {
+    "title": "Configurações do perfil",
+    "display_name": {
+      "label": "Nome de exibição",
+      "placeholder": "Defina seu nome de exibição"
+    },
+    "email": {
+      "label": "E-mail",
+      "read_only_hint": "O e-mail é definido no cadastro e não pode ser alterado aqui",
+      "read_only_tooltip": "O e-mail não pode ser alterado aqui"
+    },
+    "locale": { "label": "Idioma" },
+    "timezone": { "label": "Fuso horário" },
+    "security": {
+      "totp_enabled": "Autenticação de dois fatores ativada",
+      "totp_disabled": "Autenticação de dois fatores desativada",
+      "manage_link": "Gerenciar em Segurança"
+    },
+    "auth_method": {
+      "oauth_google": "Conectado com Google",
+      "oauth_github": "Conectado com GitHub",
+      "email_password": "Conectado com e-mail e senha"
+    },
+    "actions": { "save": "Salvar alterações" },
+    "toast": {
+      "saved": "Perfil atualizado",
+      "locale_changed": "Idioma alterado"
+    },
+    "banners": {
+      "concurrent_update": {
+        "message": "O perfil foi atualizado em outra aba.",
+        "reload_cta": "Recarregar"
+      }
+    },
+    "errors": {
+      "load_failed": "Não foi possível carregar o perfil. Tente novamente.",
+      "generic": "Não foi possível salvar as alterações. Tente novamente.",
+      "rate_limited": "Atualizações em excesso. Aguarde um momento antes de tentar novamente.",
+      "concurrent_update": "O perfil foi atualizado em outra aba. Recarregue.",
+      "unknown_field": "A solicitação continha um campo inesperado",
+      "display_name": {
+        "invalid_chars": "O nome de exibição contém caracteres inválidos",
+        "too_long": "O nome deve ter 100 caracteres ou menos",
+        "too_short": "O nome não pode ser apenas espaços em branco"
+      },
+      "locale": { "unsupported": "O idioma selecionado ainda não é suportado" },
+      "timezone": { "unknown": "Fuso horário desconhecido" }
+    }
+  }
+}
