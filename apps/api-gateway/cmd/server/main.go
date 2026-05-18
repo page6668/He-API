@@ -34,11 +34,13 @@ import (
 	"github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1/authv1connect"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/notification/v1/notificationv1connect"
 
+	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/otel"
 )
 
 const defaultAuthSvcURL = "http://auth-svc:8080"
 const defaultNotificationSvcURL = "http://notification-svc:8080"
+const defaultRedisURL = "redis://redis:6379/0"
 
 // envOr returns the value of name or fallback when unset / empty.
 func envOr(name, fallback string) string {
@@ -189,6 +191,37 @@ func main() {
 	mux.Handle("GET /v1/account/data-export/current",
 		jwtVerifier.RequireJWT(http.HandlerFunc(accountData.GetCurrentExport)))
 
+	// Story 3.2 — Bearer-token API-key auth on the OpenAI-compatible
+	// /v1/* routes (AC1 / AC4). The middleware is wrapped PER ROUTE — the
+	// JWT-protected /v1/auth/*, /v1/me*, /v1/account/data-export* routes
+	// remain JWT-only by design (TC-7 / BR-1.4).
+	//
+	// Redis client construction is lazy (BR-4.7) — the factory passed to
+	// NewAPIKeyAuthenticator is invoked at most once on the first cache
+	// GET, so a misconfigured HE_API_REDIS_URL does NOT prevent cold-start
+	// (Story 3.1 TC-10 — cold-start ≤ 1000 ms P95 stays intact).
+	redisURL := envOr("HE_API_REDIS_URL", defaultRedisURL)
+	bearerAuth := middleware.NewAPIKeyAuthenticator(
+		authUpstream,
+		func() *redis.Client {
+			opt, parseErr := redis.ParseURL(redisURL)
+			if parseErr != nil {
+				logger.Warn("bearer_auth redis URL parse failed — cache disabled",
+					slog.String("url", redisURL),
+					slog.String("error", parseErr.Error()),
+				)
+				return nil
+			}
+			return redis.NewClient(opt)
+		},
+		logger,
+	)
+
+	// TODO(story-3.3): Replace chatPlaceholder with the real OpenAI-
+	// compatible chat completions handler. The 501 envelope below proves
+	// the bearer middleware integration path end-to-end in this Story.
+	mux.Handle("POST /v1/chat/completions", bearerAuth.RequireAPIKey(http.HandlerFunc(chatPlaceholder)))
+
 	// Middleware chain (outer → inner): SecurityHeaders → CSRF → mux.
 	// SecurityHeaders writes the BR-4.7 response headers on every response.
 	// CSRF rejects state-mutating POSTs without a matching Origin header
@@ -268,6 +301,16 @@ func csrfAllowlistFor(env handlers.DeployEnv) []string {
 			"http://localhost:8080",
 		}
 	}
+}
+
+// chatPlaceholder is the Story 3.2 BR-1.10 501 stub for
+// POST /v1/chat/completions. Inline in main.go per Architect OQ6 ruling
+// (Story 3.3 supersedes within ~1 sprint — an external file is pure
+// churn). The envelope shape matches rest-api-spec.md §5.1.2.
+func chatPlaceholder(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusNotImplemented)
+	_, _ = w.Write([]byte(`{"error":{"code":"501_not_implemented","message":"Chat completions endpoint not yet implemented.","type":"server_error","param":null,"he_request_id":null}}`))
 }
 
 // parseRSAPublicPEM parses an RSA public key from PEM bytes. Used by

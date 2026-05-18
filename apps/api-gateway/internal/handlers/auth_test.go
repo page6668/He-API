@@ -228,6 +228,14 @@ func (f *fakeAuthClient) UpdateProfile(_ context.Context, r *connect.Request[aut
 	return connect.NewResponse(f.updateProfileResp), nil
 }
 
+// Story 3.2 — ValidateApiKey is not exercised by api-gateway handler tests
+// (the bearer-auth middleware lives in apps/api-gateway/internal/middleware
+// and its tests use a stubAuthSvc instance). This stub keeps the interface
+// satisfied so the existing 2FA / profile handler tests still compile.
+func (f *fakeAuthClient) ValidateApiKey(_ context.Context, _ *connect.Request[authv1.ValidateApiKeyRequest]) (*connect.Response[authv1.ValidateApiKeyResponse], error) {
+	return nil, errFakeUnimplemented
+}
+
 var _ authv1connect.AuthServiceClient = (*fakeAuthClient)(nil)
 
 // --- helpers -------------------------------------------------------------

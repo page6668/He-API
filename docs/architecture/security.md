@@ -36,6 +36,43 @@ Revoke:
   3. Reject all subsequent calls
 ```
 
+### 8.2.1 Revocation Lag Note (Story 3.2)
+
+The Validate-step Redis cache (TTL = 300 s) introduces a documented
+**revocation lag**: when an operator UPDATEs `api_keys.revoked_at`, the
+api-gateway continues serving the cached positive result until the entry
+naturally expires — i.e., the worst-case window between revoke and
+client-visible 401 is 5 minutes.
+
+For the MVP this is the accepted design trade-off (Architect Round 1 OQ5
+ruling 2026-05-18): no enterprise SOC-2 customer has been onboarded
+pre-launch, and the lag bound is well-defined + operator-tunable. The
+positives-only cache rule (Story 3.2 BR-1.6) bounds the lag — revoked
+keys cannot pile up beyond cache TTL.
+
+**Immediate-revocation alternatives (future Story, not yet tracked):**
+
+- **(a) Redis pub/sub channel invalidation** — auth-svc publishes
+  `auth.apikey.revoked:{id}` on revoke; gateway-side subscribers `DEL`
+  matching `auth:apikey:<sha256_hex(plaintext)>` keys. Bounds the lag to
+  single-digit seconds; cost is a long-lived gateway↔Redis subscriber per
+  pod. Note: the gateway does not store the plaintext (cache key is
+  derived from sha256(plaintext) — BR-1.5), so this design needs the
+  auth-svc revoke path to publish ALL hashed key entries to delete (or
+  the gateway-side subscriber to maintain a parallel id→hash mapping).
+
+- **(b) Kafka audit.event consumer** — auth-svc emits an
+  `audit.apikey.revoked` event on revoke; a gateway-side consumer
+  applies the same cache-invalidation. Bounds the lag to the Kafka
+  consumer-lag (single-digit seconds at MVP scale). Reuses the existing
+  Story 1.6 `audit.event` topic + 30-day retention so the audit-trail
+  doubles as the invalidation queue.
+
+Both alternatives bound the lag to single-digit seconds; the current
+5-minute lag is the MVP-acceptable design per AC4 documentation. No
+tracked Story spawned now per Architect — "wait for first enterprise
+prospect feedback to size the work".
+
 ## 8.3 GDPR / CCPA 实现
 
 ```

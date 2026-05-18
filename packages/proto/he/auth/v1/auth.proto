@@ -70,6 +70,14 @@ service AuthService {
   // so next-intl reflects the new locale on next render (Architect Q3).
   rpc GetMe(GetMeRequest) returns (GetMeResponse);
   rpc UpdateProfile(UpdateProfileRequest) returns (UpdateProfileResponse);
+
+  // Story 3.2 — API Key validation for the api-gateway Bearer-auth middleware.
+  // Called per request on cache miss; bcrypt-compares the supplied plaintext
+  // against api_keys rows matching the 12-char key_prefix. Returns ok=true
+  // with identity + scope on match; ok=false with REASON for not-found /
+  // revoked. Plaintext key MUST NOT appear in logs, span attributes, or
+  // errors — AC2 BR-2.6 + docs/architecture/coding-standards.md §12.3.
+  rpc ValidateApiKey(ValidateApiKeyRequest) returns (ValidateApiKeyResponse);
 }
 
 // --- RegisterUser --------------------------------------------------------
@@ -451,4 +459,38 @@ message UpdateProfileResponse {
   // pre-update DB value. api-gateway uses this to decide whether to
   // rewrite the he_locale cookie (BR-3.10 / Architect Q3).
   bool locale_changed = 11;
+}
+
+// --- Story 3.2 — ValidateApiKey (Bearer-token API key validation) --------
+
+message ValidateApiKeyRequest {
+  // Full plaintext bearer token (e.g., 'he-abc123XYZ...'). auth-svc applies
+  // the syntactic regex `^he-[A-Za-z0-9]{10,253}$` BEFORE any DB query
+  // (AC2 BR-2.6 — bcrypt-DoS-via-oversized-input defence).
+  string plaintext_key = 1;
+  // Client-attribution metadata; informational only in 3.2 (BR-2.7) —
+  // forwarded for future audit-svc logging when Story 9.x lands. MUST NOT
+  // affect the validate outcome.
+  string client_ip = 2;
+  string user_agent = 3;
+}
+
+message ValidateApiKeyResponse {
+  bool ok = 1;
+  // Populated when ok=true.
+  string api_key_id = 2;     // UUID of the matched api_keys row
+  string user_id = 3;        // UUID; the key's owner
+  string team_id = 4;        // UUID or empty string when api_keys.team_id IS NULL
+  string scope = 5;          // JSON-encoded string of api_keys.scope JSONB column
+  // Populated for SRE alerting + downstream metric attribution.
+  // NEVER surfaced to the HTTP client — gateway maps ALL ok=false to a
+  // single 401 envelope (AC2 BR-2.4 anti-enumeration parity between
+  // NOT_FOUND and REVOKED).
+  ApiKeyValidationReason reason = 6;
+}
+
+enum ApiKeyValidationReason {
+  API_KEY_VALIDATION_REASON_UNSPECIFIED = 0;  // ok=true path
+  API_KEY_VALIDATION_REASON_NOT_FOUND = 1;    // no matching prefix / no bcrypt match / regex reject
+  API_KEY_VALIDATION_REASON_REVOKED = 2;      // match found but revoked_at IS NOT NULL
 }

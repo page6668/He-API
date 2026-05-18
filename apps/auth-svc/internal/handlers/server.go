@@ -137,6 +137,14 @@ type AuthServer struct {
 	// Issuer is the otpauth label issuer (typically "He-API"). Tests
 	// override; cmd/server sets from config.
 	Issuer string
+
+	// === Story 3.2 — API-key bearer-auth validator (AC2) ===
+	//
+	// Wired by cmd/server with a concrete *apikey.Service backed by the
+	// production pgxpool. Nil-safe at construct time so handler tests that
+	// don't exercise ValidateApiKey can pass nil; the RPC returns
+	// CodeInternal when invoked with APIKey unset.
+	APIKey APIKeyValidator
 }
 
 // MFAKMS is the narrow surface T1.2 / T2.4 / T4.2 need from the KMS package.

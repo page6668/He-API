@@ -228,6 +228,33 @@ func writeJWTError(w http.ResponseWriter, status int, code, message string) {
 	_, _ = w.Write(body)
 }
 
-// stripBearer is a helper for future Authorization-header consumers (not
-// used by Story 2.4 since 2FA cookies the access token).
-func stripBearer(h string) string { return strings.TrimPrefix(h, "Bearer ") }
+// StripBearer extracts the token portion of an `Authorization: Bearer <token>`
+// header per RFC 6750 §2.1. The scheme prefix match is case-insensitive
+// ("bearer", "BEARER", "BeArEr" all accepted); the token portion is treated
+// as opaque case-sensitive. Returns "" when the header does not carry a
+// Bearer-scheme token.
+//
+// Story 3.2 OQ3 ruling: promoted from the package-private `stripBearer`
+// stub. Story 2.4's `jwt_verify.go` does not currently consume this helper;
+// it exists for the Story 3.2 bearer_auth middleware (and future
+// Authorization-header consumers).
+func StripBearer(h string) string {
+	const scheme = "Bearer"
+	if len(h) <= len(scheme) {
+		return ""
+	}
+	if !strings.EqualFold(h[:len(scheme)], scheme) {
+		return ""
+	}
+	// Accept one-or-more whitespace chars (space / tab) after the scheme.
+	rest := h[len(scheme):]
+	i := 0
+	for i < len(rest) && (rest[i] == ' ' || rest[i] == '\t') {
+		i++
+	}
+	if i == 0 {
+		// Scheme not followed by whitespace — malformed.
+		return ""
+	}
+	return rest[i:]
+}

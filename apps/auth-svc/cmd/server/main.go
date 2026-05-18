@@ -35,6 +35,7 @@ import (
 	obs "github.com/he-api/he-api/packages/go-observability"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1/authv1connect"
 
+	"github.com/he-api/he-api/apps/auth-svc/internal/apikey"
 	"github.com/he-api/he-api/apps/auth-svc/internal/audit"
 	"github.com/he-api/he-api/apps/auth-svc/internal/handlers"
 	authjwt "github.com/he-api/he-api/apps/auth-svc/internal/jwt"
@@ -320,6 +321,17 @@ func main() {
 	mfaIssuer := mfaIssuerAdapter{signer: jwtSigner}
 	mfaParser := mfaParserAdapter{verifier: jwtVerifier}
 
+	// === Story 3.2 — API-key validator (AC2) ===============================
+	// Backs AuthService.ValidateApiKey. The Repository surface wraps the
+	// shared pgxpool via a thin adapter so the same pool that serves the
+	// other auth handlers (users / mfa / oauth) also serves api_keys
+	// lookups — no separate pool, no extra TCP fanout.
+	apiKeyService := apikey.NewService(
+		apikey.QuerierRepository{Q: pgPool},
+		tp.Tracer("apps/auth-svc/internal/apikey"),
+		logger,
+	)
+
 	// === AuthServer =========================================================
 	authServer := handlers.NewAuthServer(handlers.AuthServer{
 		DB:             pgPool,
@@ -339,6 +351,8 @@ func main() {
 		MFASigner: mfaIssuer,
 		MFAParser: mfaParser,
 		Issuer:    envOr("HE_API_TOTP_ISSUER", "He-API"),
+		// Story 3.2 dep — API-key bearer-auth validator (AC2).
+		APIKey: apiKeyService,
 	})
 
 	mux := http.NewServeMux()

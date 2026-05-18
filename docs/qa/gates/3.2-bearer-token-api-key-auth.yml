@@ -1,0 +1,219 @@
+schema: 1
+story: "3.2"
+story_title: "Bearer Token 鉴权 + Key 校验"
+gate: "PASS"
+status_reason: |
+  Round 2 incremental review: Round 1's single HIGH blocker (QA-3.2-001, T5.1
+  checkbox/deliverable mismatch) is fully resolved via Dev's option-(b) recipe —
+  T5.1 reverted to [ ] with strikethrough + DE-SCOPED rationale + AC Coverage
+  Matrix AC1 row updated. The 4 originally-enumerated cases are covered by the
+  UNIT-NNN backbone (016 / 017 / 018 / 013); binary-spawn / testcontainers
+  replacement remains tracked as QA-3.2-002 monitor entry. Independent test
+  re-execution 31/31 PASS under -race (coverage 85.4%/83.9% — above 80% TC-11
+  security gate); full regression PASS across 17 testable packages. All Round 1
+  medium/low items are monitor-only carry-overs explicitly accepted in Round 1.
+reviewer: "Turing (QA / Test Engineer & Quality Architect)"
+updated: "2026-05-18T17:00:00Z"
+
+review_round: 2
+review_mode_type: incremental
+issues_from_previous_round: 5
+issues_resolved: 1   # QA-3.2-001 HIGH (the only gate-blocker) — option (b) applied
+improvement_percentage: 100  # 1/1 blocker fixed in Round 2
+
+incremental_context:
+  cached_risk_level: "HIGH"
+  cached_review_mode: "full_testing"
+  cached_project_type: "web_backend"
+  failed_acs: []         # PASS — all 4 ACs VERIFIED (inherited from Round 1; re-confirmed)
+  failed_e2e_scenarios: []   # PASS — E2E deferral accepted (QA-3.2-002 monitor)
+  missing_blind_spots: []    # PASS — 3 carry-overs remain monitor-only deferrals (FLOW-003 / BOUNDARY-003 / CONCURRENCY-003)
+  checkbox_issues: []        # PASS — T5.1 reconciled via option (b)
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+# Round 2 introduces no new issues. Round 1's HIGH (QA-3.2-001) is RESOLVED.
+# Remaining Round 1 mediums/lows are preserved as monitor-only — all carry the
+# resolution disposition from Round 1.
+top_issues: []
+
+resolved_in_round_2:
+  - id: "QA-3.2-001"
+    severity: high
+    round_1_finding: |
+      T5.1 checkbox [x] but the deliverable
+      apps/api-gateway/internal/integration/bearer_auth_e2e_test.go was absent.
+    resolution_path: "Option (b) — un-tick T5.1 + Change Log deferral + AC Coverage Matrix update"
+    evidence: |
+      Story line 517: '- [ ] **T5.1** ~~Write ...~~ — **DE-SCOPED per QA Round 1 (QA-3.2-001)**. ...'
+      Verification path: UNIT-016 (cache-miss+success) / UNIT-017 (cache-hit+zero-RPC) /
+      UNIT-018 (invalid-key 401) / UNIT-013 (revoked same envelope) +
+      QA-owned INT-NNN/E2E-NNN per docs/qa/assessments/3.2-test-design-20260518.md.
+
+monitor_carry_overs:
+  - id: "QA-3.2-002"
+    severity: medium
+    finding: |
+      32 INT-NNN + 6 E2E-NNN testcontainers/spawn-binary scenarios from
+      docs/qa/assessments/3.2-test-design-20260518.md not yet executed.
+    disposition: |
+      Defer to QA execution pass when Docker/testcontainers infrastructure
+      is available. Compensating UNIT coverage is strong (31 tests + benchmark
+      + tracetest span discipline). Promote to gating only if Story 3.3 exposes
+      /v1/chat/completions to production traffic before testcontainers infra
+      lands.
+    location: "docs/qa/assessments/3.2-test-design-20260518.md"
+  - id: "QA-3.2-003"
+    severity: medium
+    finding: |
+      Pre-existing flakes in apps/auth-svc/internal/password (Story 2.2):
+      TestDummyCompare_TimingMatchesRealCompare, TestCompare_TimingVariance.
+      Not introduced by Story 3.2 (git log: 3dd17f6 / d721f1d).
+    disposition: |
+      Out-of-3.2 scope. Track as a separate ticket against the Story 2.2
+      owner. Suggested fix direction: tighten dummy-bcrypt cost to match
+      real cost=12 timing profile + gate timing tests behind a build tag.
+    location: "apps/auth-svc/internal/password/password_test.go:99,242,272"
+  - id: "QA-3.2-004"
+    severity: low
+    finding: |
+      TestColdStart (apps/api-gateway/cmd/server) P95 = 1.82s under
+      concurrent -race load alongside apps/auth-svc/internal/password
+      bcrypt cost=12 saturation — exceeds the 1000ms budget. In isolation
+      P95 = 280-305ms (well within ~70% of budget).
+    disposition: |
+      CI-sharding refinement, not a 3.2 regression. Document a CI sharding
+      expectation (api-gateway/cmd/server on a dedicated runner) OR add a
+      t.Skip guard when GOMAXPROCS contention exceeds a threshold.
+    location: "apps/api-gateway/cmd/server/coldstart_test.go:489-516"
+  - id: "QA-3.2-005"
+    severity: low
+    finding: |
+      migrations/postgres/atlas.sum contains placeholder entries
+      (h1:PLACEHOLDER_REGENERATED_BY_CI_OR_OPERATOR). T7.5 ticks atlas
+      migrate hash exits 0 but cannot be verified locally without atlas
+      binary installed.
+    disposition: |
+      Confirm CI's hash-drift gate exits 0 on the next PR. If atlas is
+      pinned to a specific version in CI, mention it in
+      docs/architecture/database-bootstrap.md §2 for reproducibility.
+    location: "migrations/postgres/atlas.sum"
+
+# Round 1 record archived below for audit traceability.
+round_1_archived:
+  gate: "CONCERNS"
+  reviewer: "Turing (QA)"
+  updated: "2026-05-18T16:30:00Z"
+  totals: { critical: 0, high: 1, medium: 2, low: 2 }
+  must_fix:
+    - "Reconcile T5.1: author the e2e test OR un-tick + add Change Log deferral entry"
+  monitor:
+    - "Schedule INT-NNN + E2E-NNN execution before Story 3.3's chat handler exposes the path to /v1/ in production"
+    - "Track Story 2.2 password timing flakes (separate ticket)"
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 31   # Story-3.2-authored: bearer_auth 17 + apikey 9 + repository api_keys 5
+    passed_count: 31
+    failed_count: 0
+    skipped_count: 0
+    pass_rate: 100
+    coverage_percentage: 84.65  # avg of new security-sensitive packages (85.4 + 83.9) / 2
+    coverage_per_package:
+      apps/api-gateway/internal/middleware: 85.4
+      apps/auth-svc/internal/apikey: 83.9
+    failed_tests: []
+    pre_existing_failures_outside_scope:
+      - name: "TestDummyCompare_TimingMatchesRealCompare"
+        file: "apps/auth-svc/internal/password/password_test.go"
+        attribution: "Story 2.2"
+      - name: "TestCompare_TimingVariance"
+        file: "apps/auth-svc/internal/password/password_test.go"
+        attribution: "Story 2.2"
+  regression:
+    executed: true
+    passed: true
+    packages_total: 17
+    packages_failed: 0
+    notes: "go test ./apps/api-gateway/... ./apps/auth-svc/... -count=1 -race -short — all green in isolation."
+  e2e:
+    executed: false
+    passed: null
+    skipped: true
+    skip_reason: "Inherited from Round 1: failed_scenarios=[]; T5.1 de-scoped via option (b); INT/E2E testcontainers suite deferred to QA execution pass per QA-3.2-002 monitor."
+    scenarios_tested: 0
+    scenarios_passed: 0
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: "docs/qa/checkpoints/3.2/"
+  issues:
+    - issue_id: "QA-3.2-001"
+      status: RESOLVED_ROUND_2
+      reproduction_steps: |
+        # Round 2 verification — T5.1 line 517 now [ ] (unchecked) + strikethrough + DE-SCOPED:
+        $ awk 'NR==517' docs/stories/3.2-bearer-token-api-key-auth.md
+        - [ ] **T5.1** ~~Write `apps/api-gateway/internal/integration/bearer_auth_e2e_test.go`~~ — **DE-SCOPED per QA Round 1 (QA-3.2-001)**...
+        # Re-executed tests — 31/31 PASS, coverage unchanged:
+        $ go test ./apps/api-gateway/internal/middleware/... ./apps/auth-svc/internal/apikey/... ./apps/auth-svc/internal/repository/... -count=1 -race -short
+        ok  github.com/he-api/he-api/apps/api-gateway/internal/middleware  4.544s
+        ok  github.com/he-api/he-api/apps/auth-svc/internal/apikey         2.614s
+        ok  github.com/he-api/he-api/apps/auth-svc/internal/repository     3.302s
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 8
+  security_sensitive: true
+  dev_gate_score: 95
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 2, low: 3 }  # all medium/low are monitor-only carry-overs
+  recommendations:
+    must_fix: []
+    monitor:
+      - "Schedule INT-NNN + E2E-NNN execution before Story 3.3 exposes /v1/chat/completions to production traffic"
+      - "Track Story 2.2 password timing flakes as a separate ticket (Story 2.2 owner)"
+      - "Confirm CI atlas hash-drift gate exits 0 on the next PR"
+      - "Add CI sharding for api-gateway/cmd/server vs auth-svc password bcrypt"
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: |
+      Plaintext key never appears in logs / spans / errors (UNIT-010 + TC-9 +
+      code review). Anti-enum parity (BR-2.4) implemented + asserted. bcrypt
+      cost=12 production, cost=4 test-only (compile-time isolation via
+      _test.go). Cache key uses sha256(plaintext) — defence in depth against
+      Redis-dump (BR-1.5). Regex pre-filter forecloses bcrypt-DoS via
+      oversized input (BR-2.6). Per-route middleware application (BR-1.4)
+      verified by code review.
+  performance:
+    status: PASS
+    notes: |
+      Lazy sync.Once Redis init preserves cold-start (TC-10): 280-305ms P95
+      in isolation, well under 1000ms budget. Redis cache hit avoids RPC
+      (UNIT-017). Fire-and-forget last_used_at UPDATE (BR-2.5) decouples
+      hot path from observability writes.
+  reliability:
+    status: PASS
+    notes: |
+      Redis outage degrades to "every request hits auth-svc" (UNIT-022) rather
+      than failing — correctness gate is upstream RPC, cache is perf only.
+      PG connection error surfaces as connect.CodeUnavailable so gateway can
+      distinguish AUTH failure (401) from INFRA failure (503) (BR-1.3).
+  maintainability:
+    status: PASS
+    notes: |
+      Mirrors jwt_verify.go structure 1:1 (context-key helpers + RequireX
+      factory + writeError envelope). Distinct BearerWithUserID per OQ3
+      separation guidance prevents JWT/Bearer auth path collision.
+      TODO(epic-8-or-negcache) marker documents the residual probe-DoS
+      attack surface for the future-Story owner.

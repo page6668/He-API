@@ -83,6 +83,9 @@ const (
 	// AuthServiceUpdateProfileProcedure is the fully-qualified name of the AuthService's UpdateProfile
 	// RPC.
 	AuthServiceUpdateProfileProcedure = "/he.auth.v1.AuthService/UpdateProfile"
+	// AuthServiceValidateApiKeyProcedure is the fully-qualified name of the AuthService's
+	// ValidateApiKey RPC.
+	AuthServiceValidateApiKeyProcedure = "/he.auth.v1.AuthService/ValidateApiKey"
 )
 
 // AuthServiceClient is a client for the he.auth.v1.AuthService service.
@@ -138,6 +141,13 @@ type AuthServiceClient interface {
 	// so next-intl reflects the new locale on next render (Architect Q3).
 	GetMe(context.Context, *connect.Request[v1.GetMeRequest]) (*connect.Response[v1.GetMeResponse], error)
 	UpdateProfile(context.Context, *connect.Request[v1.UpdateProfileRequest]) (*connect.Response[v1.UpdateProfileResponse], error)
+	// Story 3.2 — API Key validation for the api-gateway Bearer-auth middleware.
+	// Called per request on cache miss; bcrypt-compares the supplied plaintext
+	// against api_keys rows matching the 12-char key_prefix. Returns ok=true
+	// with identity + scope on match; ok=false with REASON for not-found /
+	// revoked. Plaintext key MUST NOT appear in logs, span attributes, or
+	// errors — AC2 BR-2.6 + docs/architecture/coding-standards.md §12.3.
+	ValidateApiKey(context.Context, *connect.Request[v1.ValidateApiKeyRequest]) (*connect.Response[v1.ValidateApiKeyResponse], error)
 }
 
 // NewAuthServiceClient constructs a client for the he.auth.v1.AuthService service. By default, it
@@ -241,6 +251,12 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("UpdateProfile")),
 			connect.WithClientOptions(opts...),
 		),
+		validateApiKey: connect.NewClient[v1.ValidateApiKeyRequest, v1.ValidateApiKeyResponse](
+			httpClient,
+			baseURL+AuthServiceValidateApiKeyProcedure,
+			connect.WithSchema(authServiceMethods.ByName("ValidateApiKey")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -261,6 +277,7 @@ type authServiceClient struct {
 	regenerateRecoveryCodes *connect.Client[v1.RegenerateRecoveryCodesRequest, v1.RegenerateRecoveryCodesResponse]
 	getMe                   *connect.Client[v1.GetMeRequest, v1.GetMeResponse]
 	updateProfile           *connect.Client[v1.UpdateProfileRequest, v1.UpdateProfileResponse]
+	validateApiKey          *connect.Client[v1.ValidateApiKeyRequest, v1.ValidateApiKeyResponse]
 }
 
 // RegisterUser calls he.auth.v1.AuthService.RegisterUser.
@@ -338,6 +355,11 @@ func (c *authServiceClient) UpdateProfile(ctx context.Context, req *connect.Requ
 	return c.updateProfile.CallUnary(ctx, req)
 }
 
+// ValidateApiKey calls he.auth.v1.AuthService.ValidateApiKey.
+func (c *authServiceClient) ValidateApiKey(ctx context.Context, req *connect.Request[v1.ValidateApiKeyRequest]) (*connect.Response[v1.ValidateApiKeyResponse], error) {
+	return c.validateApiKey.CallUnary(ctx, req)
+}
+
 // AuthServiceHandler is an implementation of the he.auth.v1.AuthService service.
 type AuthServiceHandler interface {
 	RegisterUser(context.Context, *connect.Request[v1.RegisterUserRequest]) (*connect.Response[v1.RegisterUserResponse], error)
@@ -391,6 +413,13 @@ type AuthServiceHandler interface {
 	// so next-intl reflects the new locale on next render (Architect Q3).
 	GetMe(context.Context, *connect.Request[v1.GetMeRequest]) (*connect.Response[v1.GetMeResponse], error)
 	UpdateProfile(context.Context, *connect.Request[v1.UpdateProfileRequest]) (*connect.Response[v1.UpdateProfileResponse], error)
+	// Story 3.2 — API Key validation for the api-gateway Bearer-auth middleware.
+	// Called per request on cache miss; bcrypt-compares the supplied plaintext
+	// against api_keys rows matching the 12-char key_prefix. Returns ok=true
+	// with identity + scope on match; ok=false with REASON for not-found /
+	// revoked. Plaintext key MUST NOT appear in logs, span attributes, or
+	// errors — AC2 BR-2.6 + docs/architecture/coding-standards.md §12.3.
+	ValidateApiKey(context.Context, *connect.Request[v1.ValidateApiKeyRequest]) (*connect.Response[v1.ValidateApiKeyResponse], error)
 }
 
 // NewAuthServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -490,6 +519,12 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("UpdateProfile")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceValidateApiKeyHandler := connect.NewUnaryHandler(
+		AuthServiceValidateApiKeyProcedure,
+		svc.ValidateApiKey,
+		connect.WithSchema(authServiceMethods.ByName("ValidateApiKey")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/he.auth.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthServiceRegisterUserProcedure:
@@ -522,6 +557,8 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceGetMeHandler.ServeHTTP(w, r)
 		case AuthServiceUpdateProfileProcedure:
 			authServiceUpdateProfileHandler.ServeHTTP(w, r)
+		case AuthServiceValidateApiKeyProcedure:
+			authServiceValidateApiKeyHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -589,4 +626,8 @@ func (UnimplementedAuthServiceHandler) GetMe(context.Context, *connect.Request[v
 
 func (UnimplementedAuthServiceHandler) UpdateProfile(context.Context, *connect.Request[v1.UpdateProfileRequest]) (*connect.Response[v1.UpdateProfileResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.UpdateProfile is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) ValidateApiKey(context.Context, *connect.Request[v1.ValidateApiKeyRequest]) (*connect.Response[v1.ValidateApiKeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.ValidateApiKey is not implemented"))
 }

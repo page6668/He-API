@@ -216,7 +216,7 @@ ratelimit:user:{user_id}:rpm                    INCR + EXPIRE 60
 ratelimit:user:{user_id}:tpm                    INCRBY + EXPIRE 60
 ratelimit:key:{api_key_id}:qps                  同上
 session:{session_id}                            JSON, TTL 7 days
-auth:apikey:{key_hash}                          缓存 user_id + scope, TTL 5min
+auth:apikey:{sha256_hex(plaintext_key)}         缓存 user_id + scope, TTL 5min  # Story 3.2 (T6.5 §4.5 Change Log)
 balance:user:{user_id}:realtime                 实时余额, 跟 PG 对账
 flag:beta_mode                                  bool, 实时 Feature Flag
 ```
@@ -230,5 +230,12 @@ flag:beta_mode                                  bool, 实时 Feature Flag
 | `audit.event` | AuditEvent | audit-svc | 30 天 |
 | `notification.queued` | NotificationEvent | notification-svc | 7 天 |
 | `safety.violation` | SafetyEvent | audit-svc, ops 告警 | 90 天 |
+
+## 4.5 Change Log
+
+| Date | Story | Author | Change |
+|------|-------|--------|--------|
+| 2026-05-18 | 3.2 | Dev (Linus) | **§4.3 Redis Key 规范**: Updated `auth:apikey:{key_hash}` → `auth:apikey:{sha256_hex(plaintext_key)}`. Rationale: the bcrypt `key_hash` cannot be derived from incoming plaintext without a pre-cache DB lookup (bcrypt is one-way; you'd need to bcrypt-compare against candidate hashes — defeating the cache the entry is meant to serve). SHA-256 of plaintext is the only design achieving O(1) cache-key derivation while preserving defence in depth (a Redis-dump compromise cannot reverse to plaintext). Architect Round 1 M4 (2026-05-18) ruled IN FAVOUR of the Story's design. |
+| 2026-05-18 | 3.2 | Dev (Linus) | **§4.1 `api_keys.team_id` FK deferral**: Story 3.2's migration `0006_create_api_keys.sql` lands `team_id UUID` (nullable, no REFERENCES clause) because `he_api.teams` table does not exist yet (created in Epic 5). `ALTER TABLE he_api.api_keys ADD CONSTRAINT fk_api_keys_team FOREIGN KEY (team_id) REFERENCES he_api.teams(id) ON DELETE CASCADE` to land in Epic 5 alongside the `he_api.teams` table creation (Architect Round 1 OQ4 ruling, 2026-05-18). |
 
 ---
