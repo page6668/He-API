@@ -30,6 +30,7 @@ import (
 
 	"github.com/he-api/he-api/apps/api-gateway/internal/handlers"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
+	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/requestid"
 	obs "github.com/he-api/he-api/packages/go-observability"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1/authv1connect"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/notification/v1/notificationv1connect"
@@ -60,7 +61,9 @@ const (
 )
 
 func main() {
-	logger := obs.NewLogger(slog.LevelInfo)
+	// Story 3.6: wire the requestid extractor so every slog record under a
+	// user-traffic request carries `he_request_id` alongside trace_id/span_id.
+	logger := obs.NewLogger(slog.LevelInfo, obs.WithRequestIDExtractor(requestid.FromContext))
 	slog.SetDefault(logger)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -237,15 +240,17 @@ func main() {
 	mux.Handle("GET /v1/models", bearerAuth.RequireAPIKey(modelsHandler))
 	mux.Handle("POST /v1/embeddings", bearerAuth.RequireAPIKey(embeddingsHandler))
 
-	// Middleware chain (outer → inner): SecurityHeaders → CSRF → mux.
-	// SecurityHeaders writes the BR-4.7 response headers on every response.
-	// CSRF rejects state-mutating POSTs without a matching Origin header
-	// (BR-4.6); GET / HEAD / OPTIONS flow through. JWT-verify on protected
-	// routes lands in Story 2.5+.
+	// Middleware chain (outer → inner): RequestID → SecurityHeaders → CSRF → mux.
+	// Story 3.6 BR-2.7: requestid.RequestID is the OUTERMOST user-traffic wrap
+	// so every response (success + error, including ones emitted by
+	// SecurityHeaders / CSRF) carries X-He-Request-Id. The probeMux on
+	// /health and /healthz bypasses this chain (Story 3.1 BR-1.3).
+	// obs.WrapHTTPHandler stays the absolute outermost wrap so requestid
+	// can read the OTel SpanContext that WrapHTTPHandler creates.
 	csrfAllowed := csrfAllowlistFor(deployEnv)
-	handler := middleware.SecurityHeaders(middleware.CSRF(middleware.CSRFConfig{
+	handler := requestid.RequestID(middleware.SecurityHeaders(middleware.CSRF(middleware.CSRFConfig{
 		AllowedOrigins: csrfAllowed,
-	}, mux))
+	}, mux)))
 
 	// Story 3.1 — probeMux carries /health + /healthz on the bypass branch
 	// (BR-1.3). It is dispatched by rootMux BEFORE the SecurityHeaders +

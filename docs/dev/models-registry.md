@@ -6,8 +6,8 @@
 ## Registry Metadata
 
 **Last Updated**: 2026-05-19
-**Total Stories Tracked**: 2
-**Total Models**: 13
+**Total Stories Tracked**: 3
+**Total Models**: 16
 **Repository**: He-API
 **Mode**: monolith
 
@@ -45,6 +45,22 @@
 | `handlers.EmbeddingsHandler` | 3.5 | Handler struct (`logger` + `dim`). Constructed via `NewEmbeddingsHandler(logger, opts...)`. |
 | `handlers.EmbeddingsHandlerOption` | 3.5 | Option-function type for `EmbeddingsHandler`; `WithEmbeddingDim(d int)` is test-only. |
 
+## Go Error-Envelope Types (`apps/api-gateway/internal/openaierr`)
+
+| Type | Story | Notes |
+|------|-------|-------|
+| `openaierr.body` (private) | 3.6 | The §5.1.2 5-field envelope payload. Field declaration order locks JSON marshal order per BR-1.7 (Architect Round 1 OQ2): `code` → `message` → `type` → `param` → `he_request_id`. |
+| `openaierr.envelope` (private) | 3.6 | Top-level wrapper `{"error": body}`. |
+| `openaierr.CodeMetadata` (exported map) | 3.6 | `map[string]struct{HTTPStatus int; ErrorType string}` — single source of truth for the canonical taxonomy. Lookup derives both HTTP status + error.type. RETIRED row `501_streaming_not_implemented` is OMITTED (Architect Round 2 L1). |
+
+## Go Middleware Types (`apps/api-gateway/internal/middleware/requestid`)
+
+| Type | Story | Notes |
+|------|-------|-------|
+| `requestid.requestIDKey` (private) | 3.6 | Empty-struct context key for the per-request `he_request_id` (Go idiom — avoids string-key collisions). Tests reach in via `requestid.WithRequestID(ctx, id)`. |
+| `obs.LoggerOption` (exported) | 3.6 | Functional-option type for `obs.NewLogger`; landed in `packages/go-observability/logger.go` so the gateway can wire `obs.WithRequestIDExtractor(requestid.FromContext)` per BR-2.10. |
+| `obs.RequestIDExtractor` (exported) | 3.6 | `func(ctx context.Context) (string, bool)` — the signature of `requestid.FromContext`. Lives in `packages/go-observability` so the package does not need a hard dep on `apps/api-gateway/internal/middleware/requestid`. |
+
 ## Models by Story
 
 - **3.2** — Bearer-token API-key auth:
@@ -55,3 +71,7 @@
   - `ModelEntry` / `ModelsResponse` / `ModelsHandler` / `ModelsHandlerOption`.
   - `EmbeddingRequest` / `EmbeddingResponse` / `EmbeddingData` / `EmbeddingUsage` / `EmbeddingsHandler` / `EmbeddingsHandlerOption`.
   - Promotion rule (Architect-ratified): if Epic 4 adapter packages need to import any of these, promote to a sibling shared package (e.g., `apps/api-gateway/internal/openai/types`). Story 3.5 does NOT pre-promote per Go's "rule of three".
+- **3.6** — Standardized error envelope + request-id middleware:
+  - New package `openaierr` (`body`, `envelope` private structs; `CodeMetadata` exported map; `Write(w, ctx, status, code, message, *param) error` canonical writer).
+  - New subpackage `middleware/requestid` (`requestIDKey` private context key; `RequestID(next)` middleware; `FromContext(ctx) (string, bool)` accessor; `WithRequestID(ctx, id) context.Context` test-and-cross-package helper).
+  - `packages/go-observability` extended with `LoggerOption` + `RequestIDExtractor` + `WithRequestIDExtractor` so `obs.NewLogger` can auto-inject `he_request_id` into every slog record via the `TraceContextHandler` (BR-2.10 — Architect Round 1 OQ5 RATIFIED).

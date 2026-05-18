@@ -35,6 +35,7 @@ import (
 	authv1 "github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1"
 
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
+	"github.com/he-api/he-api/apps/api-gateway/internal/openaierr"
 )
 
 // meResponseBody is the JSON envelope. Field names match coding-standards
@@ -57,7 +58,7 @@ func (p *AuthProxy) GetMe(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
 		// Should be impossible — RequireJWT wraps this handler. Defensive 401.
-		writeError(w, http.StatusUnauthorized, "401_unauthorized", "missing access token")
+		_ = openaierr.Write(w, r.Context(), http.StatusUnauthorized, "401_unauthorized", "missing access token", nil)
 		return
 	}
 
@@ -65,7 +66,7 @@ func (p *AuthProxy) GetMe(w http.ResponseWriter, r *http.Request) {
 		UserId: userID,
 	}))
 	if err != nil {
-		translateConnectError(w, err)
+		translateConnectError(w, r.Context(), err)
 		return
 	}
 	msg := resp.Msg

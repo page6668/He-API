@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -133,10 +134,18 @@ func expect401Envelope(t *testing.T, rr *httptest.ResponseRecorder, wantMessage 
 	if v, exists := body.Error["param"]; !exists || v != nil {
 		t.Errorf("error.param = %v, want JSON null", v)
 	}
-	if v, exists := body.Error["he_request_id"]; !exists || v != nil {
-		t.Errorf("error.he_request_id = %v, want JSON null", v)
+	// Story 3.6 — flip from `nil` assertion to canonical regex match.
+	// Tests drive the middleware without the RequestID middleware in scope,
+	// so the sentinel "req_000000000000" is the expected value (it matches
+	// the canonical regex since `0` ∈ [a-f0-9]).
+	if v, exists := body.Error["he_request_id"]; !exists {
+		t.Errorf("error.he_request_id missing — expected non-nil string")
+	} else if s, ok := v.(string); !ok || !bearerHeRequestIDRE.MatchString(s) {
+		t.Errorf("error.he_request_id = %v, want match for ^req_[a-f0-9]{12}$", v)
 	}
 }
+
+var bearerHeRequestIDRE = regexp.MustCompile(`^req_[a-f0-9]{12}$`)
 
 func expect503Envelope(t *testing.T, rr *httptest.ResponseRecorder) {
 	t.Helper()

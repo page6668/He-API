@@ -46,6 +46,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/he-api/he-api/apps/api-gateway/internal/openaierr"
 	authv1 "github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1/authv1connect"
 )
@@ -205,13 +206,13 @@ func (a *APIKeyAuthenticator) RequireAPIKey(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		plaintext := StripBearer(r.Header.Get("Authorization"))
 		if plaintext == "" {
-			writeAPIKeyError(w, http.StatusUnauthorized, codeInvalidAPIKey, msgMissingAuthHeader)
+			_ = openaierr.Write(w, r.Context(), http.StatusUnauthorized, codeInvalidAPIKey, msgMissingAuthHeader, nil)
 			return
 		}
 		// BR-1 Data Validation — token byte length gate. Generic RFC-6750
 		// DoS defence; AC2 regex narrows to `he-` shape inside auth-svc.
 		if len(plaintext) < apiKeyMinLen || len(plaintext) > apiKeyMaxLen {
-			writeAPIKeyError(w, http.StatusUnauthorized, codeInvalidAPIKey, msgInvalidAPIKey)
+			_ = openaierr.Write(w, r.Context(), http.StatusUnauthorized, codeInvalidAPIKey, msgInvalidAPIKey, nil)
 			return
 		}
 
@@ -245,7 +246,7 @@ func (a *APIKeyAuthenticator) RequireAPIKey(next http.Handler) http.Handler {
 		}
 		if !resp.Msg.GetOk() {
 			// Anti-enumeration: same 401 envelope for NOT_FOUND and REVOKED.
-			writeAPIKeyError(w, http.StatusUnauthorized, codeInvalidAPIKey, msgInvalidAPIKey)
+			_ = openaierr.Write(w, r.Context(), http.StatusUnauthorized, codeInvalidAPIKey, msgInvalidAPIKey, nil)
 			return
 		}
 
@@ -281,7 +282,7 @@ func (a *APIKeyAuthenticator) handleUpstreamError(w http.ResponseWriter, r *http
 				slog.String("connect_code", cerr.Code().String()),
 				slog.String("error", err.Error()),
 			)
-			writeAPIKeyError(w, http.StatusServiceUnavailable, codeAuthUnavailable, msgAuthUnavailable)
+			_ = openaierr.Write(w, r.Context(), http.StatusServiceUnavailable, codeAuthUnavailable, msgAuthUnavailable, nil)
 			return
 		}
 	}
@@ -290,7 +291,7 @@ func (a *APIKeyAuthenticator) handleUpstreamError(w http.ResponseWriter, r *http
 	a.logger.WarnContext(r.Context(), "auth-svc validate error",
 		slog.String("error", err.Error()),
 	)
-	writeAPIKeyError(w, http.StatusServiceUnavailable, codeAuthUnavailable, msgAuthUnavailable)
+	_ = openaierr.Write(w, r.Context(), http.StatusServiceUnavailable, codeAuthUnavailable, msgAuthUnavailable, nil)
 }
 
 // applyContext is the single point where the validated claims hit the
@@ -354,31 +355,6 @@ func buildCacheKey(plaintext string) string {
 	return cacheKeyPrefix + hex.EncodeToString(sum[:])
 }
 
-// writeAPIKeyError emits the OpenAI-compatible error envelope (TC-3 /
-// rest-api-spec.md §5.1.2). Mirrors writeJWTError's structure but uses
-// the param / he_request_id keys required by §5.1.2 — both rendered as
-// JSON null until Story 3.6 lands the request-id taxonomy.
-func writeAPIKeyError(w http.ResponseWriter, status int, code, message string) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	body, _ := json.Marshal(map[string]any{
-		"error": map[string]any{
-			"code":          code,
-			"message":       message,
-			"type":          mapErrorType(code),
-			"param":         nil,
-			"he_request_id": nil,
-		},
-	})
-	_, _ = w.Write(body)
-}
-
-// mapErrorType is the OpenAI envelope `type` field — `invalid_request_error`
-// for 4xx, `server_error` for 5xx. Caller-supplied code drives the mapping
-// so both branches stay in sync.
-func mapErrorType(code string) string {
-	if len(code) >= 3 && code[0] == '4' {
-		return "invalid_request_error"
-	}
-	return "server_error"
-}
+// Story 3.6: writeAPIKeyError + mapErrorType have been deleted; all error
+// emissions route through openaierr.Write, which derives error.type from
+// the codeMetadata table and stamps he_request_id from requestid.FromContext.

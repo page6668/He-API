@@ -19,12 +19,13 @@ package middleware
 import (
 	"context"
 	"crypto/rsa"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
 
 	gojwt "github.com/golang-jwt/jwt/v5"
+
+	"github.com/he-api/he-api/apps/api-gateway/internal/openaierr"
 )
 
 // Algorithm + audience constants — must match apps/auth-svc/internal/jwt.
@@ -168,7 +169,7 @@ func (v *JWTVerifier) RequireJWT(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(AccessTokenCookieName)
 		if err != nil || cookie.Value == "" {
-			writeJWTError(w, http.StatusUnauthorized, "401_unauthenticated", "missing access token")
+			_ = openaierr.Write(w, r.Context(), http.StatusUnauthorized, "401_unauthenticated", "missing access token", nil)
 			return
 		}
 		userID, aal, err := v.Verify(cookie.Value)
@@ -182,7 +183,7 @@ func (v *JWTVerifier) RequireJWT(next http.Handler) http.Handler {
 				// attempted mfa_token-as-access_token confusion.
 				code, msg = "401_cross_token_rejected", "wrong token purpose"
 			}
-			writeJWTError(w, http.StatusUnauthorized, code, msg)
+			_ = openaierr.Write(w, r.Context(), http.StatusUnauthorized, code, msg, nil)
 			return
 		}
 		ctx := WithUserID(r.Context(), userID)
@@ -205,28 +206,18 @@ func (v *JWTVerifier) RequireAAL(minAAL int32, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got := AALFromContext(r.Context())
 		if got < minAAL {
-			writeJWTError(w, http.StatusForbidden, "403_aal2_required",
-				"This operation requires two-factor authentication. Please sign in again with 2FA.")
+			_ = openaierr.Write(w, r.Context(), http.StatusForbidden, "403_aal2_required",
+				"This operation requires two-factor authentication. Please sign in again with 2FA.", nil)
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
 }
 
-// writeJWTError emits the same envelope shape the rest of the gateway uses
-// (TS-CONS-014). Kept package-private — this is the only place in the
-// middleware that emits errors.
-func writeJWTError(w http.ResponseWriter, status int, code, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	body, _ := json.Marshal(map[string]any{
-		"error": map[string]string{
-			"code":    code,
-			"message": message,
-		},
-	})
-	_, _ = w.Write(body)
-}
+// Story 3.6: writeJWTError has been deleted; all error emissions route
+// through openaierr.Write. The pre-Story-3.6 shape was 2-field (code +
+// message only — Architect Round 2 L3 ruling); post-refactor every response
+// carries the canonical §5.1.2 5-field envelope.
 
 // StripBearer extracts the token portion of an `Authorization: Bearer <token>`
 // header per RFC 6750 §2.1. The scheme prefix match is case-insensitive

@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -270,8 +271,28 @@ func TestChatCompletions_MissingBearerCtx_500(t *testing.T) {
 	if errMap["param"] != nil {
 		t.Errorf("error.param = %v, want nil", errMap["param"])
 	}
-	if errMap["he_request_id"] != nil {
-		t.Errorf("error.he_request_id = %v, want nil", errMap["he_request_id"])
+	// Story 3.6: error.he_request_id flips from `nil` literal to either a
+	// real `req_<12 hex>` (when the requestid middleware is wired) or the
+	// sentinel `req_000000000000` (this test drives the handler directly
+	// without the middleware in the chain).
+	assertHeRequestID(t, errMap["he_request_id"])
+}
+
+// assertHeRequestID asserts the field is a non-empty string matching the
+// canonical regex. Story 3.6 — the sentinel "req_000000000000" matches the
+// regex (`0` ∈ [a-f0-9]) so this single assertion covers both the
+// middleware-stamped path and the in-test no-middleware path.
+var heRequestIDRE = regexp.MustCompile(`^req_[a-f0-9]{12}$`)
+
+func assertHeRequestID(t *testing.T, v any) {
+	t.Helper()
+	s, ok := v.(string)
+	if !ok {
+		t.Errorf("error.he_request_id = %v (type %T), want string matching %s", v, v, heRequestIDRE)
+		return
+	}
+	if !heRequestIDRE.MatchString(s) {
+		t.Errorf("error.he_request_id = %q, want match for %s", s, heRequestIDRE)
 	}
 }
 
@@ -443,9 +464,8 @@ func TestChatCompletions_ValidationCases(t *testing.T) {
 					t.Errorf("error.param = %v, want %v", env["param"], tc.wantParam)
 				}
 			}
-			if env["he_request_id"] != nil {
-				t.Errorf("error.he_request_id = %v, want nil", env["he_request_id"])
-			}
+			// Story 3.6 — flip from nil-literal assertion to regex match.
+			assertHeRequestID(t, env["he_request_id"])
 		})
 	}
 }
@@ -853,7 +873,9 @@ func TestChatCompletions_InvalidJSON_HTTPWire(t *testing.T) {
 		t.Errorf("Content-Type = %q", ct)
 	}
 	body, _ := io.ReadAll(resp.Body)
-	want := `{"error":{"code":"400_invalid_request","he_request_id":null,"message":"Request body is not valid JSON.","param":null,"type":"invalid_request_error"}}`
+	// Story 3.6: canonical struct-based field order (BR-1.7) + sentinel
+	// he_request_id (test drives the handler without RequestID middleware).
+	want := `{"error":{"code":"400_invalid_request","message":"Request body is not valid JSON.","type":"invalid_request_error","param":null,"he_request_id":"req_000000000000"}}`
 	if string(body) != want {
 		t.Errorf("body byte-mismatch\n got=%s\nwant=%s", body, want)
 	}

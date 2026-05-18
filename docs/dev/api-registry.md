@@ -6,7 +6,7 @@
 ## Registry Metadata
 
 **Last Updated**: 2026-05-19
-**Total Stories Tracked**: 4
+**Total Stories Tracked**: 5
 **Total Endpoints**: 4
 **Repository**: He-API
 **Mode**: monolith
@@ -47,3 +47,12 @@
   - New exported pure function: `handlers.GenerateMockEmbedding(input string, dim int) []float32` — Epic 4 contract-test reference vector (deterministic via sha256-seeded sin generator, L2-normalized).
   - SDK contract tests: `apps/api-gateway/tests/openai_sdk_models_contract_test.py` + `apps/api-gateway/tests/openai_sdk_embeddings_contract_test.py` (reuse Story-3.3 `openai==1.40.*` pin; `HE_API_TEST_GATEWAY_URL` skipif convention).
   - Scope deferral: FR-2.3 model-capability 405 → Epic 4 (Story 4.7 matrix + Stories 4.1-4.6 per-adapter checks).
+- **3.6** — Standardized error responses + `he_request_id` (cross-cutting middleware + canonical error writer):
+  - **New shared package**: `apps/api-gateway/internal/openaierr/` — `openaierr.Write(w, ctx, status, code, message, *param) error` is the SINGLE canonical writer for the §5.1.2 5-field envelope. `openaierr.CodeMetadata` exported map keys = active §5.1.2 codes; lookup derives `error.type` (BR-1.4).
+  - **New middleware subpackage**: `apps/api-gateway/internal/middleware/requestid/` — `requestid.RequestID` stamps `X-He-Request-Id` on the response, the request context, and the OTel span attribute `he.request_id`; `requestid.FromContext(ctx) (string, bool)` is the public accessor. Outer-most user-traffic wrap (probeMux still bypasses).
+  - **Response header added**: `X-He-Request-Id: req_<12 hex>` on every /v1/* + /v1/auth/* + /v1/me* + /v1/account/* response (success + error). Probe routes (`/health`, `/healthz`) BYPASS — Story 3.1 BR-1.3 invariant preserved.
+  - **OTel span attribute added**: `he.request_id` (first reserved `he.*` namespace member — see `docs/architecture/11-可观测性observability.md` §11.5).
+  - **Refactor**: 7 divergent error writers deleted in favour of `openaierr.Write` — `handlers/auth.go writeError`, `handlers/chat_completions.go writeChatError`, `middleware/bearer_auth.go writeAPIKeyError`, `middleware/jwt_verify.go writeJWTError`, the helper `writeCSRFViolation` in `middleware/csrf.go`, plus the two inline `http.Error` JSON literals in `middleware/oauth_ratelimit.go`. All envelope-emitting code paths now flow through the single canonical writer.
+  - **Logger extension**: `obs.NewLogger(level, obs.WithRequestIDExtractor(requestid.FromContext))` — every slog record now carries `he_request_id` alongside `trace_id` / `span_id` when the context carries a stamped id (BR-2.10).
+  - **No endpoints added / removed**; the change is envelope-shape across existing surfaces.
+  - SDK contract tests: `apps/api-gateway/tests/openai_sdk_error_contract_test.py` (3.6-E2E-001..005 — bad-bearer envelope shape, 413 envelope, `X-He-Request-Id` success-path header).

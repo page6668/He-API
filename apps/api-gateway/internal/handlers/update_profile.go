@@ -31,6 +31,7 @@ import (
 	authv1 "github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1"
 
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
+	"github.com/he-api/he-api/apps/api-gateway/internal/openaierr"
 )
 
 // updateProfileRequestBody is the strict-field PUT body. Pointers distinguish
@@ -50,14 +51,14 @@ type updateProfileResponseBody = meResponseBody
 func (p *AuthProxy) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "401_unauthorized", "missing access token")
+		_ = openaierr.Write(w, r.Context(), http.StatusUnauthorized, "401_unauthorized", "missing access token", nil)
 		return
 	}
 
 	// If-Match header is REQUIRED (BR-2.7 Data Validation).
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		writeError(w, http.StatusPreconditionRequired, "428_precondition_required", "If-Match header required")
+		_ = openaierr.Write(w, r.Context(), http.StatusPreconditionRequired, "428_precondition_required", "If-Match header required", nil)
 		return
 	}
 
@@ -65,7 +66,7 @@ func (p *AuthProxy) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "400_invalid_body", "request body too large or unreadable")
+		_ = openaierr.Write(w, r.Context(), http.StatusBadRequest, "400_invalid_body", "request body too large or unreadable", nil)
 		return
 	}
 
@@ -73,14 +74,14 @@ func (p *AuthProxy) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	dec.DisallowUnknownFields() // BR-2.2 — strict field check
 	var body updateProfileRequestBody
 	if err := dec.Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "400_unknown_field", err.Error())
+		_ = openaierr.Write(w, r.Context(), http.StatusBadRequest, "400_unknown_field", err.Error(), nil)
 		return
 	}
 
 	// Reject any trailing JSON content after the first object (defensive
 	// against `{...}{...}` smuggling).
 	if dec.More() {
-		writeError(w, http.StatusBadRequest, "400_unknown_field", "request body must contain a single JSON object")
+		_ = openaierr.Write(w, r.Context(), http.StatusBadRequest, "400_unknown_field", "request body must contain a single JSON object", nil)
 		return
 	}
 
@@ -102,7 +103,7 @@ func (p *AuthProxy) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := p.Upstream.UpdateProfile(r.Context(), connect.NewRequest(req))
 	if err != nil {
-		translateConnectError(w, err)
+		translateConnectError(w, r.Context(), err)
 		return
 	}
 	msg := resp.Msg

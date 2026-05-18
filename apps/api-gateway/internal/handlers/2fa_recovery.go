@@ -15,6 +15,7 @@ import (
 	authv1 "github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1"
 
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
+	"github.com/he-api/he-api/apps/api-gateway/internal/openaierr"
 )
 
 // useRecoveryCodeRequestBody — body posted by the console challenge page when
@@ -37,13 +38,13 @@ type useRecoveryCodeResponseBody struct {
 func (p *AuthProxy) UseRecoveryCode(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(MFACookieName)
 	if err != nil || cookie.Value == "" {
-		writeError(w, http.StatusUnauthorized, "401_mfa_token_invalid", "verification session missing")
+		_ = openaierr.Write(w, r.Context(), http.StatusUnauthorized, "401_mfa_token_invalid", "verification session missing", nil)
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<10)
 	var body useRecoveryCodeRequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "400_invalid_recovery_code_format", "request body must include code")
+		_ = openaierr.Write(w, r.Context(), http.StatusBadRequest, "400_invalid_recovery_code_format", "request body must include code", nil)
 		return
 	}
 
@@ -59,7 +60,7 @@ func (p *AuthProxy) UseRecoveryCode(w http.ResponseWriter, r *http.Request) {
 		if shouldClearMFAOnError(err) {
 			ClearMFACookie(w, p.Env)
 		}
-		translateConnectError(w, err)
+		translateConnectError(w, r.Context(), err)
 		return
 	}
 
@@ -91,18 +92,18 @@ type regenerateRecoveryCodesResponseBody struct {
 func (p *AuthProxy) RegenerateRecoveryCodes(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		writeError(w, http.StatusInternalServerError, "500_gateway_misconfigured", "JWT middleware not wired")
+		_ = openaierr.Write(w, r.Context(), http.StatusInternalServerError, "500_gateway_misconfigured", "JWT middleware not wired", nil)
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 2<<10)
 	var body regenerateRecoveryCodesRequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "400_invalid_factor", "request body must include factor + value")
+		_ = openaierr.Write(w, r.Context(), http.StatusBadRequest, "400_invalid_factor", "request body must include factor + value", nil)
 		return
 	}
 	factor, err := parseFactor(body.Factor)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "400_invalid_factor", "factor must be 'totp' or 'password'")
+		_ = openaierr.Write(w, r.Context(), http.StatusBadRequest, "400_invalid_factor", "factor must be 'totp' or 'password'", nil)
 		return
 	}
 	resp, err := p.Upstream.RegenerateRecoveryCodes(r.Context(), connect.NewRequest(&authv1.RegenerateRecoveryCodesRequest{
@@ -113,7 +114,7 @@ func (p *AuthProxy) RegenerateRecoveryCodes(w http.ResponseWriter, r *http.Reque
 		UserAgent: r.UserAgent(),
 	}))
 	if err != nil {
-		translateConnectError(w, err)
+		translateConnectError(w, r.Context(), err)
 		return
 	}
 	writeJSON(w, http.StatusOK, regenerateRecoveryCodesResponseBody{

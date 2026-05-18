@@ -11,6 +11,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 
 	"connectrpc.com/connect"
 
+	"github.com/he-api/he-api/apps/api-gateway/internal/openaierr"
 	authv1 "github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1/authv1connect"
 )
@@ -72,7 +74,7 @@ func (p *AuthProxy) Signup(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
 	var body signupRequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "400_invalid_email", "request body must be JSON with email + password + locale")
+		_ = openaierr.Write(w, r.Context(), http.StatusBadRequest, "400_invalid_email", "request body must be JSON with email + password + locale", nil)
 		return
 	}
 
@@ -84,7 +86,7 @@ func (p *AuthProxy) Signup(w http.ResponseWriter, r *http.Request) {
 		UserAgent: r.UserAgent(),
 	}))
 	if err != nil {
-		translateConnectError(w, err)
+		translateConnectError(w, r.Context(), err)
 		return
 	}
 	// auth-svc returns {status: "pending_verification"} — we collapse to the
@@ -114,7 +116,7 @@ type verifyEmailResponseBody struct {
 func (p *AuthProxy) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	tok := r.URL.Query().Get("token")
 	if tok == "" {
-		writeError(w, http.StatusBadRequest, "400_invalid_token", "token query parameter is required")
+		_ = openaierr.Write(w, r.Context(), http.StatusBadRequest, "400_invalid_token", "token query parameter is required", nil)
 		return
 	}
 	resp, err := p.Upstream.VerifyEmail(r.Context(), connect.NewRequest(&authv1.VerifyEmailRequest{
@@ -123,7 +125,7 @@ func (p *AuthProxy) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		UserAgent: r.UserAgent(),
 	}))
 	if err != nil {
-		translateConnectError(w, err)
+		translateConnectError(w, r.Context(), err)
 		return
 	}
 	writeJSON(w, http.StatusOK, verifyEmailResponseBody{
@@ -157,7 +159,7 @@ func (p *AuthProxy) ResendVerification(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
 	var body resendRequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "400_invalid_email", "request body must be JSON with email")
+		_ = openaierr.Write(w, r.Context(), http.StatusBadRequest, "400_invalid_email", "request body must be JSON with email", nil)
 		return
 	}
 	_, err := p.Upstream.ResendVerification(r.Context(), connect.NewRequest(&authv1.ResendVerificationRequest{
@@ -166,7 +168,7 @@ func (p *AuthProxy) ResendVerification(w http.ResponseWriter, r *http.Request) {
 		UserAgent: r.UserAgent(),
 	}))
 	if err != nil {
-		translateConnectError(w, err)
+		translateConnectError(w, r.Context(), err)
 		return
 	}
 	writeJSON(w, http.StatusOK, resendResponseBody{Status: "ok"})
@@ -196,7 +198,7 @@ func (p *AuthProxy) Signin(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
 	var body signinRequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "401_invalid_credentials", "request body must be JSON")
+		_ = openaierr.Write(w, r.Context(), http.StatusBadRequest, "401_invalid_credentials", "request body must be JSON", nil)
 		return
 	}
 
@@ -207,7 +209,7 @@ func (p *AuthProxy) Signin(w http.ResponseWriter, r *http.Request) {
 		UserAgent: r.UserAgent(),
 	}))
 	if err != nil {
-		translateConnectError(w, err)
+		translateConnectError(w, r.Context(), err)
 		return
 	}
 
@@ -241,7 +243,7 @@ func (p *AuthProxy) Signin(w http.ResponseWriter, r *http.Request) {
 func (p *AuthProxy) Refresh(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(RefreshCookieName)
 	if err != nil || cookie.Value == "" {
-		writeError(w, http.StatusUnauthorized, "401_invalid_credentials", "refresh cookie required")
+		_ = openaierr.Write(w, r.Context(), http.StatusUnauthorized, "401_invalid_credentials", "refresh cookie required", nil)
 		return
 	}
 
@@ -255,7 +257,7 @@ func (p *AuthProxy) Refresh(w http.ResponseWriter, r *http.Request) {
 		// doesn't keep retrying with a dead refresh token.
 		ClearAccessCookie(w, p.Env)
 		ClearRefreshCookie(w, p.Env)
-		translateConnectError(w, err)
+		translateConnectError(w, r.Context(), err)
 		return
 	}
 
@@ -265,17 +267,11 @@ func (p *AuthProxy) Refresh(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- error / envelope helpers -------------------------------------------
-
-// errorResponseBody is the OpenAI-compatible envelope auth-svc errors surface as.
-type errorResponseBody struct {
-	Error errorBody `json:"error"`
-}
-
-type errorBody struct {
-	Code        string `json:"code"`
-	Message     string `json:"message,omitempty"`
-	HeRequestID string `json:"he_request_id,omitempty"`
-}
+//
+// Story 3.6 — the Story-2.2 errorResponseBody + errorBody types + the local
+// writeError helper have all been DELETED. All error paths in this package
+// now route through openaierr.Write so the canonical §5.1.2 5-field envelope
+// is the SINGLE shape emitted gateway-wide. writeJSON (success-path) stays.
 
 // statusCodeRe matches the canonical NNN_xxx prefix auth-svc embeds in
 // Connect error messages (TS-CONS-014).
@@ -285,10 +281,12 @@ var statusCodeRe = regexp.MustCompile(`^(\d{3})_[a-z_]+`)
 // the Connect error message + emits an HTTP envelope with the appropriate
 // status. The Retry-After Connect metadata header (set by 429 / 423 paths)
 // is copied to the HTTP response header so the console can show a countdown.
-func translateConnectError(w http.ResponseWriter, err error) {
+// Story 3.6: takes ctx so the openaierr.Write canonical writer can stamp
+// he_request_id from the request context.
+func translateConnectError(w http.ResponseWriter, ctx context.Context, err error) {
 	var connectErr *connect.Error
 	if !errors.As(err, &connectErr) {
-		writeError(w, http.StatusInternalServerError, "502_auth_svc_unavailable", err.Error())
+		_ = openaierr.Write(w, ctx, http.StatusInternalServerError, "502_auth_svc_unavailable", err.Error(), nil)
 		return
 	}
 
@@ -298,7 +296,7 @@ func translateConnectError(w http.ResponseWriter, err error) {
 	if retryAfter := connectErr.Meta().Get("Retry-After"); retryAfter != "" {
 		w.Header().Set("Retry-After", retryAfter)
 	}
-	writeError(w, httpStatus, statusCode, "")
+	_ = openaierr.Write(w, ctx, httpStatus, statusCode, "", nil)
 }
 
 // extractStatusCode pulls the NNN_xxx prefix from `msg`. Handles two forms:
@@ -371,15 +369,14 @@ func httpStatusForCode(statusCode string, connectCode connect.Code) int {
 	return http.StatusInternalServerError
 }
 
-// writeJSON / writeError serialize the response bodies.
+// writeJSON serializes the success-path response body. Story 3.6: writeError
+// has been DELETED; error paths route through openaierr.Write directly.
+// writeJSON stays because there is no canonical success envelope (per-endpoint
+// shapes vary — see Story 3.5 ModelsResponse, Story 3.3 ChatResponse, etc.).
 func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
-}
-
-func writeError(w http.ResponseWriter, status int, code, detail string) {
-	writeJSON(w, status, errorResponseBody{Error: errorBody{Code: code, Message: detail}})
 }
 
 // clientIP extracts the client IP from the X-Forwarded-For header (taking

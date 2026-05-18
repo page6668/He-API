@@ -1,0 +1,383 @@
+schema: 1
+story: "3.6"
+story_title: "标准化错误响应 + he_request_id"
+gate: "PASS"
+status_reason: |
+  Round 1 full review. Both ACs traced and verified end-to-end. Story 3.6
+  consolidates seven divergent error writers into a single canonical writer
+  (`apps/api-gateway/internal/openaierr.Write`) and stamps a per-request
+  `he_request_id` via the new `apps/api-gateway/internal/middleware/requestid`
+  subpackage on every user-traffic response. Independent test execution:
+  Story-3.6-specific packages all GREEN — `internal/openaierr` (15 unit
+  tests + 50+ table-driven subtests; 1 intentional SKIP on the unreachable
+  marshal-fail), `internal/middleware/requestid` (13 unit tests + 1
+  intentional INAPPLICABLE-SKIP on per-span attribute model that downstream
+  spans don't inherit), `cmd/server` (INT-001..006 PASS in
+  `requestid_int_test.go`), `packages/go-observability` (5 tests including 3
+  new BR-2.10 anchors). `openaierr.Write` call sites verified by grep: 64
+  across 15 files (handlers + middleware); all divergent writers
+  (`writeError`, `writeChatError`, `writeAPIKeyError`, `writeJWTError`,
+  `mapErrorType`, `mapChatErrorType`) DELETED; the `paramValue` helper
+  migrated out of `chat_completions.go` into `openaierr/`; inline
+  `http.Error` JSON literals in `csrf.go` + `oauth_ratelimit.go` REMOVED.
+  Canonical envelope shape pinned byte-exact by struct-based marshalling
+  (BR-1.7 / Architect Round 1 OQ2 RATIFIED) — field order
+  `code → message → type → param → he_request_id`. Derivation rule
+  `req_ + hex(TraceID[0:6])` (BR-2.3 / OQ1) anchored by UNIT-008 (known
+  TraceID → known req_id) and UNIT-007 (crypto/rand fallback for invalid
+  span). All six Architect Round 1 OQs honoured as written: OQ1 derivation,
+  OQ2 struct field order, OQ3 `Write` returns error, OQ4 no `details` field
+  (5-field envelope contract preserved), OQ5 `WithRequestIDExtractor`
+  auto-inject (slog stamps `he_request_id` alongside `trace_id` /
+  `span_id`), OQ6 `requestid/` subpackage path. Architect Round 2 Low
+  observations all anchored: L1 RETIRED-row exclusion (UNIT-014 PASS), L2
+  csrf refactor mechanism (writeCSRFViolation re-signed to take `r
+  *http.Request`), L3 jwt_verify 2→5 field shape upgrade (verified at code
+  by grep — 4 openaierr.Write call sites in jwt_verify.go). Docs
+  ratification complete: rest-api-spec.md §5.1.2 promoted non-OpenAI auth/
+  account codes into the single canonical superset (Architect Round 1
+  Medium-Issue ruling); §5.3 Change Log row appended;
+  11-可观测性observability.md §11.5 created reserving the `he.` span-
+  attribute namespace with `he.request_id` registered as first member;
+  dev/api-registry.md + dev/models-registry.md updated. Dev decisions D1-D4
+  all defensible (D1 codeMetadata superset expansion 38→57 codes non-
+  regressive — UNIT-003 table-driven exercises all; D2 `WithRequestID`
+  exported with GoDoc warning for cross-package tests; D3 rand-fail emits
+  sentinel + proceeds — availability-preserving on the unreachable Linux/
+  Darwin path; D4 two pre-existing flakes verified — TestColdStart passes
+  in isolation, `TestChatCompletionsStream_ClientDisconnect_ConnectionClose`
+  reproduces on stashed/clean tree → originated Story 3.4 commit 1b90571
+  → NOT a Story 3.6 regression). Single MEDIUM finding: 3.6-BLIND-DATA-001
+  (`Test_All_7_refactor_sites_header_equals_body`) cross-site integration
+  sweep not implemented as a standalone matrix test (test design
+  expectation). Substance partially covered at three sites (INT-002 / INT-
+  004 / INT-005 cover bearer_auth + chat_completions + auth.go envelopes);
+  gaps for jwt_verify (L3 anchor) + csrf (L2 anchor) + oauth_ratelimit
+  envelope-shape integration tests. Mitigated by single-canonical-writer
+  architecture: every code path now routes through `openaierr.Write` whose
+  unit tests pin the envelope byte-exact, and the joint header==body
+  invariant is structurally guaranteed by the writer reading from the same
+  context-stamped req-id. Does NOT block PASS (defence-in-depth gap, not a
+  correctness gap). FOLLOWUP Story recommended to add INT-009 / INT-010 /
+  INT-011 for explicit anchoring.
+reviewer: "Turing (QA / Test Engineer & Quality Architect)"
+updated: "2026-05-19T00:00:00Z"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "MEDIUM"
+  cached_review_mode: "automated_plus_spot_check"
+  cached_project_type: "web_backend"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots:
+    - id: "3.6-BLIND-DATA-001"
+      category: "DATA"
+      description: "Test_All_7_refactor_sites_header_equals_body — cross-site sweep across the 7 refactor sites (auth.go writeError · chat_completions writeChatError · bearer_auth writeAPIKeyError · jwt_verify writeJWTError · csrf writeCSRFViolation · oauth_ratelimit 503 · oauth_ratelimit 429)"
+      severity: MEDIUM
+      blocking: false
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+top_issues:
+  - id: "QA-3.6-001"
+    severity: medium
+    finding: |
+      3.6-BLIND-DATA-001 cross-site integration sweep
+      (`Test_All_7_refactor_sites_header_equals_body`) not implemented as a
+      standalone matrix test. Substance partially covered at three sites:
+      INT-002 (models 401 — bearer_auth.go writeAPIKeyError),
+      INT-004 (chat 413 — chat_completions.go writeChatError),
+      INT-005 (auth signin 401 — auth.go writeError). Dedicated 5-field
+      envelope-shape integration tests are missing for: jwt_verify.go
+      writeJWTError (Architect Round 2 L3 anchor — 2→5 field shape
+      upgrade), csrf.go writeCSRFViolation (Architect Round 2 L2 anchor —
+      writeCSRFViolation refactor mechanism), oauth_ratelimit.go 503/429.
+    disposition: |
+      MEDIUM, non-blocking. The 5-field envelope contract is held in
+      production via the single-canonical-writer architecture
+      (`openaierr.Write` is the sole writer; 64 call sites across 15
+      files; ALL divergent writers DELETED). Envelope shape is pinned
+      byte-exact by openaierr unit tests (UNIT-001 / 016 byte comparison +
+      UNIT-003 table-driven across 50+ codes). Joint header==body
+      invariant is structurally guaranteed: every call reads the same
+      context-stamped req-id via `requestid.FromContext`. The missing
+      sweep would only catch FUTURE regressions where a contributor
+      reintroduces a divergent writer, a class catchable by static
+      analysis (forbid `http.ResponseWriter.Write` outside `openaierr/`).
+      Recommendation: FOLLOWUP Story to add INT-009 (jwt 401/403),
+      INT-010 (csrf 403), INT-011 (oauth_ratelimit 429/503) — satisfies
+      BLIND-DATA-001 + L2/L3 explicit anchoring. Does NOT block Story 3.6
+      gate PASS.
+    location: "docs/qa/assessments/3.6-test-design-20260519.md line 173 (test design spec); no implementation in apps/api-gateway/"
+
+monitor_carry_overs:
+  - id: "QA-3.6-001"
+    severity: low
+    finding: |
+      Story-3.6 Python SDK contract tests
+      (apps/api-gateway/tests/openai_sdk_error_contract_test.py — E2E-001..005)
+      are env-guarded (Story-3.3 BR-3.4 pattern — `pytest.mark.skipif` on
+      `HE_API_TEST_GATEWAY_URL`) and were NOT executed during this QA review
+      run because no live gateway is started. Static verification: file
+      `py_compile`-clean (5254 bytes); 5 `def test_*` functions populated
+      with real assertions (NOT stubs); skipif guard raises clearly when env
+      var missing.
+    disposition: |
+      Confirm the next PR's `gateway / openai-sdk-contract` CI job picks up
+      the new test file and exits 0 to close this monitor entry. Pytest
+      auto-discovers `*_test.py` under `apps/api-gateway/tests/` so no CI
+      wiring change is needed. The Go-side INT-001..006 already prove the
+      middleware → handler → response wire chain end-to-end inside the
+      process via `httptest.NewServer` (TCP loopback). The only delta vs
+      E2E is the OpenAI SDK Pydantic-model layer.
+    location: "apps/api-gateway/tests/openai_sdk_error_contract_test.py"
+  - id: "QA-3.6-002"
+    severity: low
+    finding: |
+      Pre-existing test flake — `TestChatCompletionsStream_ClientDisconnect_ConnectionClose`
+      at apps/api-gateway/internal/handlers/chat_completions_stream_test.go:591
+      fails intermittently with `log never showed client_disconnected=true`.
+      QA verified the flake reproduces on a stashed clean tree (with Story
+      3.6 changes stashed away), confirming it is NOT a Story 3.6
+      regression. The test was introduced by Story 3.4 commit 1b90571.
+    disposition: |
+      Out of scope for Story 3.6. Track via Story 3.4 hotfix or Epic 9
+      observability hardening. The test's flake mode is timing-based —
+      assertion runs before the response handler's deferred slog emit
+      completes. Recommendation: convert the polling assertion to use
+      `assert.Eventually` with a 2s deadline, or refactor the handler to
+      emit the `client_disconnected=true` log synchronously before
+      returning from the stream loop.
+    location: "apps/api-gateway/internal/handlers/chat_completions_stream_test.go:591"
+
+# Test execution results
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 30           # Story-3.6-named test functions (openaierr 15 + requestid 13 + logger 3 + INT 6, with overlaps and 2 intentional SKIPs)
+    passed_count: 30
+    failed_count: 0
+    skipped_count: 2    # 1 INAPPLICABLE-by-design (downstream-grpc span) + 1 unreachable marshal-fail
+    pass_rate: 100
+    coverage_percentage: null
+    failed_tests: []
+    notes: |
+      Independent execution by package:
+      * `internal/openaierr`: ok 2.296s — 15 unit tests + 50+ subtests
+        in `Test_Write_status_and_type_table_driven` (table-driven across
+        codeMetadata superset), plus UNIT-014 RETIRED-row anchor PASS,
+        plus UNIT-015 codeMetadata-overrides-caller-status PASS,
+        plus UNIT-017 no-trailing-newline PASS, plus the 1 intentional
+        marshal-fail SKIP (unreachable for canonical 5 string fields).
+      * `internal/middleware/requestid`: ok 0.473s — 13 unit tests PASS,
+        plus 1 INAPPLICABLE-SKIP `Test_RequestID_span_attribute_
+        propagates_to_downstream_grpc` (per-span OTel attribute model
+        does not inherit; documented in QA test design).
+      * `cmd/server`: ok 3.624s — INT-001..006 all PASS (`Test_INT_001_
+        models_success_carries_he_request_id_header` /
+        `Test_INT_002_models_401_header_equals_body` /
+        `Test_INT_003_health_probe_bypasses_request_id_middleware` /
+        `Test_INT_004_chat_completions_413_header_equals_body` /
+        `Test_INT_005_auth_signin_401_emits_5_field_envelope` /
+        `Test_INT_006_method_not_allowed_carries_request_id_header`);
+        `TestColdStart` PASSES in isolation (full-suite flake reported
+        by Dev D4 not reproduced here in isolation).
+      * `packages/go-observability`: ok 1.017s — 5 tests including 3 new
+        BR-2.10 anchors (`TestTraceContextHandler_InjectsHeRequestIDWhen
+        ExtractorWired` / `…NoHeRequestIDWhenExtractorReturnsFalse` /
+        `TestNewLogger_WithRequestIDExtractor_smoke`).
+      * `internal/middleware`: ok 4.097s — bearer_auth tests with
+        `bearerHeRequestIDRE` regex assertion (flipped from `nil` per
+        T5.5); AAL / OAuth-ratelimit tests unchanged.
+      * `internal/handlers`: ONE pre-existing flake confirmed via stash
+        reproduction. See monitor_carry_overs.QA-3.6-002.
+      * `internal/streaming`: ok 4.104s — Story 3.4 streaming untouched.
+  regression:
+    executed: false
+    passed: true
+    tests_total: 0
+    tests_failed: 0
+    notes: |
+      No persisted Story-N E2E spec files (`tests/e2e/story-*.spec.ts`)
+      exist for this project — Go-backend project uses in-process
+      httptest-based integration; no cross-Story persisted spec set
+      gathered yet.
+  e2e:
+    executed: true       # Go-side integration via httptest.NewServer counts as E2E for a backend API
+    passed: true
+    skipped: false
+    scenarios_tested: 6
+    scenarios_passed: 6
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+    notes: |
+      Go integration tests use `httptest.NewServer` (real TCP loopback)
+      and `httptest.NewRecorder` (in-process) — the Go-backend E2E
+      equivalent for a stateless HTTP API. INT-001..006 cover the
+      middleware → handler → response wire chain end-to-end. Python SDK
+      E2E tests (E2E-001..005 in `openai_sdk_error_contract_test.py`)
+      are env-guarded; see monitor_carry_overs.QA-3.6-001.
+
+# Evidence collected
+evidence:
+  directory: "docs/qa/evidence/3.6/"
+  issues:
+    - id: "M-1"
+      severity: medium
+      file: "docs/qa/evidence/3.6/M-1-blind-data-001-missing.md"
+      title: "3.6-BLIND-DATA-001 cross-site integration sweep not implemented"
+
+# Risk assessment
+risk_assessment:
+  risk_level: MEDIUM
+  review_mode: automated_plus_spot_check
+  complexity_count: 3    # api_changes + new_patterns + core_docs
+  security_sensitive: false
+  dev_gate_score: 95     # Dev claimed all T0-T8 complete with go test ./... GREEN; QA independent execution confirms (modulo 1 pre-existing flake)
+
+# AC coverage verification (from Step 4.6)
+ac_coverage:
+  verification_method: "traceability_verification"
+  coverage_rate: 100
+  passed: true
+  blocking_issues_count: 0
+  details:
+    - ac_id: AC1
+      status: VERIFIED
+      code_locations_verified: 15/15   # openaierr/{errors,codes}.go + 13 handler/middleware files refactored
+      test_locations_verified: 15/15   # UNIT-001..006 + UNIT-014..017 + UNIT-020 + BLIND-BOUNDARY-001/002 + BLIND-ERROR-001/003 in errors_test.go + INT-004/005 + E2E-001..004 (env-gated)
+      aspects_verified:
+        main_scenario: true
+        business_rules: 10/10  # BR-1.1..BR-1.10
+        data_validation: true
+        error_handling: true
+        ui_interaction: N_A
+      notes: |
+        openaierr.Write is the SINGLE canonical writer (errors.go:51).
+        Struct-based marshalling (body / envelope) at errors.go:18-31
+        pins canonical field order code→message→type→param→he_request_id
+        (BR-1.7 / OQ2). codeMetadata at codes.go (exported map) is the
+        single source for HTTP status + error.type; caller-supplied
+        status is IGNORED if codeMetadata has a different value
+        (UNIT-015 anchor). Content-Type set to `application/json;
+        charset=utf-8` (BR-1.5). Body via json.Marshal — no trailing
+        newline (BR-1.6 / UNIT-017). Unknown codes → 500_internal_error
+        fallback envelope + non-nil error return (BR-1.3 / UNIT-005).
+        Marshal-fail emits hardcoded fallbackBody (defence-in-depth,
+        unreachable for canonical taxonomy — UNIT covered as SKIP per
+        Dev convention). Sentinel `req_000000000000` on no-context
+        (UNIT-006). All 7 refactor sites verified by grep: 64
+        openaierr.Write call sites across 15 files (handlers/auth.go ·
+        handlers/chat_completions.go · handlers/embeddings.go · handlers/
+        models.go · handlers/me.go · handlers/2fa_* × 4 · handlers/
+        account_data.go · handlers/update_profile.go · middleware/
+        bearer_auth.go · middleware/jwt_verify.go · middleware/csrf.go ·
+        middleware/oauth_ratelimit.go). Zero remaining divergent writers.
+    - ac_id: AC2
+      status: VERIFIED
+      code_locations_verified: 4/4    # middleware/requestid + main.go wiring + go-observability extension + 11-obs.md §11.5
+      test_locations_verified: 16/16  # UNIT-007..013 + UNIT-019 + UNIT-021 + BLIND-BOUNDARY-003 + BLIND-ERROR-002 + BLIND-CONCURRENCY-001/002 + BLIND-DATA-002 + BLIND-RESOURCE-001 + BLIND-FLOW-001 in requestid_test.go + INT-001/002/003/006 + UNIT-018 in logger_test.go
+      aspects_verified:
+        main_scenario: true
+        business_rules: 10/10  # BR-2.1..BR-2.10
+        data_validation: true
+        error_handling: true
+        ui_interaction: N_A
+      notes: |
+        middleware/requestid/requestid.go is the canonical stamper.
+        RequestID(next) sets `X-He-Request-Id` header BEFORE
+        next.ServeHTTP (BR-2.6), stamps context via private
+        requestIDKey{} (BR-2.1), sets OTel span attribute
+        `he.request_id` (BR-2.1 iii / BR-2.8 / §11.5 namespace).
+        deriveRequestID(ctx) at line 86: `req_ + hex(TraceID[0:6])`
+        when SpanContext is valid (BR-2.3 / OQ1); crypto/rand fallback
+        when invalid (BR-2.4); sentinel `req_000000000000` if rand
+        fails (D3 — observability-preserving on the unreachable Linux/
+        Darwin path). FromContext returns commaOK per Go convention.
+        Anti-spoofing: middleware NEVER reads inbound X-Request-Id /
+        X-He-Request-Id / Request-Id (BR-2.5 — verified by
+        `Test_RequestID_ignores_all_three_inbound_header_variants`
+        with table-driven subtests). main.go:251 wires
+        `requestid.RequestID(middleware.SecurityHeaders(...))` as the
+        outer-most user-traffic wrap; probeMux stays mounted on rootMux
+        ABOVE this chain (probe bypass — BR-2.7 / INT-003). main.go:66
+        wires `obs.NewLogger(slog.LevelInfo,
+        obs.WithRequestIDExtractor(requestid.FromContext))` so every
+        slog record carries `he_request_id` alongside `trace_id` /
+        `span_id` (BR-2.10 / OQ5). packages/go-observability/logger.go
+        exposes the injection seam without packages→apps dep.
+        docs/architecture/11-可观测性observability.md §11.5 reserves
+        `he.` namespace; `he.request_id` registered as first member.
+  issues: []
+
+# Task checkbox verification (from Step 4.5)
+task_checkbox_verification:
+  total_checkboxes: 51
+  checked_count: 51
+  unchecked_count: 0
+  completion_rate: 100
+  consistency_checks:
+    total: 51
+    passed: 51
+    failed: 0
+    consistency_rate: 100
+  issues:
+    critical: []
+    high: []
+    medium: []
+  notes: |
+    All 51 task checkboxes ticked. Spot-checked T0 (openaierr package
+    exists + tests GREEN), T1 (Write implementation passes byte-exact
+    UNIT-001), T2 (requestid middleware + logger extension), T3 (main.go
+    wiring with 6 INT tests PASS), T4 (writeError DELETED, callers route
+    through openaierr.Write), T5 (4 divergent writers DELETED, inline
+    http.Error REMOVED), T6 (writeChatError DELETED, paramValue migrated
+    into openaierr/), T7 (SDK contract test file present), T8 (docs
+    ratification done — §5.1.2 promoted codes + §5.3 Change Log + §11.5
+    Span Attribute Naming + registries updated). Improvement over
+    Story 3.4 / 3.5 clerical hygiene gap (those stories had 0/N
+    ticked).
+
+# Blind spot verification (from Step 5.5)
+blind_spot_verification:
+  total_scenarios: 12
+  covered: 11
+  missing_code: 0
+  missing_test: 1
+  missing_both: 0
+  coverage_rate: 91.7
+  issues:
+    - severity: MEDIUM
+      category: DATA
+      description: "BLIND-DATA-001 cross-site invariant sweep not implemented as a standalone matrix test"
+      recommendation: "Defer to FOLLOWUP Story; current coverage adequate via single-canonical-writer architecture"
+
+# Decision routing
+decision:
+  next_status: Done
+  next_action: mark_story_complete
+  next_target_agent: sm
+  next_story_id: "4.1"  # Epic 3 exhausted with Story 3.6; next epic is Epic 4 (Model Adapters)
+
+# Score breakdown (out of 100)
+score: 95
+score_breakdown:
+  ac_coverage: 30 / 30
+  task_checkbox: 15 / 15
+  automated_tests: 25 / 25
+  blind_spot: 14 / 15  # 1 point deducted for missing BLIND-DATA-001 sweep
+  documentation_ratification: 10 / 10
+  code_quality: 1 / 5   # -4 = MEDIUM finding logged; no critical/high
+  total: 95

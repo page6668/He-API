@@ -22,6 +22,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/he-api/he-api/apps/api-gateway/internal/openaierr"
 )
 
 // CSRFConfig configures the allowlist + enforcement scope.
@@ -74,7 +76,7 @@ func CSRF(cfg CSRFConfig, next http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			writeCSRFViolation(w)
+			writeCSRFViolation(w, r)
 			return
 		}
 
@@ -84,7 +86,7 @@ func CSRF(cfg CSRFConfig, next http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			writeCSRFViolation(w)
+			writeCSRFViolation(w, r)
 			return
 		}
 
@@ -102,14 +104,13 @@ func isCSRFExempt(method string) bool {
 	return false
 }
 
-// writeCSRFViolation emits the opaque 403 response per BR-4.6.
-// Message is intentionally non-descriptive — attacker debugging this
-// gets nothing useful.
-func writeCSRFViolation(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusForbidden)
-	// Body is a fixed string — no detail, no per-request id leak.
-	_, _ = w.Write([]byte(`{"error":{"code":"403_csrf_check_failed"}}`))
+// writeCSRFViolation emits the opaque 403 response per BR-4.6 — now via the
+// canonical openaierr.Write so the body carries the §5.1.2 5-field envelope
+// (Story 3.6 T5.3 + Architect Round 2 L2 — helper-fn refactor, not inline
+// http.Error). Message is intentionally non-descriptive — attacker debugging
+// this gets nothing useful.
+func writeCSRFViolation(w http.ResponseWriter, r *http.Request) {
+	_ = openaierr.Write(w, r.Context(), http.StatusForbidden, "403_csrf_check_failed", "CSRF check failed.", nil)
 }
 
 // allowEntry is a parsed allowlist entry. Either an exact-origin match

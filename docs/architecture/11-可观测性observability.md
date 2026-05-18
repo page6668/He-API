@@ -50,4 +50,24 @@
 - **P2 (medium)**: 飞书 + Slack
 - **P3 (info)**: Slack
 
+## 11.5 Span Attribute Naming
+
+> Landed by Story 3.6 per Architect Round 1 High-Issue ruling (BR-2.8). Source of truth for all `he.*` OTel span attributes the gateway + downstream services emit.
+
+**Namespace reservation**: the `he.` prefix is RESERVED as the project's OTel span-attribute namespace. OpenTelemetry semantic conventions OWN the un-prefixed namespace (`http.*`, `db.*`, `messaging.*`, `rpc.*`, etc.). Project-specific attributes MUST use the `he.` prefix to avoid colliding with future OTel-semconv additions.
+
+**Registered `he.*` attributes**:
+
+| Attribute | Type | Format | Stamped by | Story | Notes |
+|-----------|------|--------|-----------|-------|-------|
+| `he.request_id` | string | `^req_[a-f0-9]{12}$` | `apps/api-gateway/internal/middleware/requestid.RequestID` (on every /v1/* + /v1/auth/* + /v1/me* + /v1/account/* span) | 3.6 | Customer-support correlation handle. Searchable in Jaeger UI as `Tags: he.request_id=req_a1b2c3d4e5f6`. |
+
+**Forward-looking note (informational, NOT a future commitment)**: Epic 4 (`he.selected_model` — Story 4.7 routing) and Epic 7 (`he.cost_usd` — billing) will extend this namespace. Subsequent Stories MUST register new `he.*` attributes in §11.5 in the SAME PR that adds the attribute to code; an attribute that lands in code without a §11.5 row is a Story-level breach of the BR-2.8 convention.
+
+### 11.5 Change Log
+
+| Date | Story | Change |
+|------|-------|--------|
+| 2026-05-19 | Story 3.6 (Dev) | §11.5 created; `he.request_id` registered as the first reserved `he.*` span attribute (per BR-2.8 + T8.9). |
+
 ---

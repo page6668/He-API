@@ -31,6 +31,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -41,6 +42,7 @@ import (
 	"github.com/he-api/he-api/packages/proto/gen/go/he/notification/v1/notificationv1connect"
 
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
+	"github.com/he-api/he-api/apps/api-gateway/internal/openaierr"
 )
 
 // AccountDataProxy reverse-proxies the /v1/account/data-export surface
@@ -82,7 +84,7 @@ type getCurrentExportResponseBody struct {
 func (p *AccountDataProxy) RequestDataExport(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "401_unauthorized", "missing access token")
+		_ = openaierr.Write(w, r.Context(), http.StatusUnauthorized, "401_unauthorized", "missing access token", nil)
 		return
 	}
 
@@ -91,12 +93,12 @@ func (p *AccountDataProxy) RequestDataExport(w http.ResponseWriter, r *http.Requ
 	// "..."}` etc., which would be a tampering attempt.
 	body, err := io.ReadAll(io.LimitReader(r.Body, 4096))
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "400_invalid_request", "request body too large or unreadable")
+		_ = openaierr.Write(w, r.Context(), http.StatusBadRequest, "400_invalid_request", "request body too large or unreadable", nil)
 		return
 	}
 	trimmed := bytes.TrimSpace(body)
 	if len(trimmed) > 0 && !bytes.Equal(trimmed, []byte("{}")) {
-		writeError(w, http.StatusBadRequest, "400_invalid_request", "request body must be empty or `{}` — user_id is derived from JWT")
+		_ = openaierr.Write(w, r.Context(), http.StatusBadRequest, "400_invalid_request", "request body must be empty or `{}` — user_id is derived from JWT", nil)
 		return
 	}
 
@@ -106,7 +108,7 @@ func (p *AccountDataProxy) RequestDataExport(w http.ResponseWriter, r *http.Requ
 		// notification-svc handler defaults to 86400 per BR-2.5.
 	}))
 	if err != nil {
-		translateAccountDataError(w, err)
+		translateAccountDataError(w, r.Context(), err)
 		return
 	}
 	msg := resp.Msg
@@ -126,7 +128,7 @@ func (p *AccountDataProxy) RequestDataExport(w http.ResponseWriter, r *http.Requ
 func (p *AccountDataProxy) GetCurrentExport(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "401_unauthorized", "missing access token")
+		_ = openaierr.Write(w, r.Context(), http.StatusUnauthorized, "401_unauthorized", "missing access token", nil)
 		return
 	}
 
@@ -134,7 +136,7 @@ func (p *AccountDataProxy) GetCurrentExport(w http.ResponseWriter, r *http.Reque
 		UserId: userID,
 	}))
 	if err != nil {
-		translateAccountDataError(w, err)
+		translateAccountDataError(w, r.Context(), err)
 		return
 	}
 	msg := resp.Msg
@@ -161,25 +163,25 @@ func (p *AccountDataProxy) GetCurrentExport(w http.ResponseWriter, r *http.Reque
 // error_code. Mirrors translateConnectError (auth.go) but specialized so
 // the BR-2.5 race-condition path emits the canonical
 // 429_rate_limit_gdpr_export code registered in rest-api-spec.md §5.1.2.
-func translateAccountDataError(w http.ResponseWriter, err error) {
+func translateAccountDataError(w http.ResponseWriter, ctx context.Context, err error) {
 	var connectErr *connect.Error
 	if !errors.As(err, &connectErr) {
-		writeError(w, http.StatusBadGateway, "502_notification_svc_unavailable", err.Error())
+		_ = openaierr.Write(w, ctx, http.StatusBadGateway, "502_notification_svc_unavailable", err.Error(), nil)
 		return
 	}
 	switch connectErr.Code() {
 	case connect.CodeInvalidArgument:
-		writeError(w, http.StatusBadRequest, "400_invalid_request", connectErr.Message())
+		_ = openaierr.Write(w, ctx, http.StatusBadRequest, "400_invalid_request", connectErr.Message(), nil)
 	case connect.CodeUnauthenticated:
-		writeError(w, http.StatusUnauthorized, "401_invalid_api_key", "")
+		_ = openaierr.Write(w, ctx, http.StatusUnauthorized, "401_invalid_api_key", "", nil)
 	case connect.CodeResourceExhausted:
 		// BR-2.5 race-condition safety-net.
-		writeError(w, http.StatusTooManyRequests, "429_rate_limit_gdpr_export", "")
+		_ = openaierr.Write(w, ctx, http.StatusTooManyRequests, "429_rate_limit_gdpr_export", "", nil)
 	case connect.CodeUnavailable:
-		writeError(w, http.StatusServiceUnavailable, "503_notification_svc_unavailable", "")
+		_ = openaierr.Write(w, ctx, http.StatusServiceUnavailable, "503_notification_svc_unavailable", "", nil)
 	case connect.CodeDeadlineExceeded:
-		writeError(w, http.StatusGatewayTimeout, "504_notification_svc_timeout", "")
+		_ = openaierr.Write(w, ctx, http.StatusGatewayTimeout, "504_notification_svc_timeout", "", nil)
 	default:
-		writeError(w, http.StatusInternalServerError, "500_internal_error", "")
+		_ = openaierr.Write(w, ctx, http.StatusInternalServerError, "500_internal_error", "", nil)
 	}
 }

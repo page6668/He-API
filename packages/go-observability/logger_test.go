@@ -70,3 +70,59 @@ func TestNewLogger_NotNil(t *testing.T) {
 		t.Fatal("NewLogger returned nil")
 	}
 }
+
+// 3.6-UNIT-018 (P0): WithRequestIDExtractor stamps `he_request_id` on every
+// slog record when the extractor returns ok=true for the record's context.
+// BR-2.10 (Architect Round 1 OQ5 RATIFIED — auto-inject via handler chain).
+func TestTraceContextHandler_InjectsHeRequestIDWhenExtractorWired(t *testing.T) {
+	var buf bytes.Buffer
+	inner := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+
+	type idKey struct{}
+	extractor := func(ctx context.Context) (string, bool) {
+		v, ok := ctx.Value(idKey{}).(string)
+		return v, ok
+	}
+
+	logger := slog.New(NewTraceContextHandlerWithRequestID(inner, extractor))
+
+	ctx := context.WithValue(context.Background(), idKey{}, "req_a1b2c3d4e5f6")
+	logger.InfoContext(ctx, "hello")
+
+	var rec map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &rec); err != nil {
+		t.Fatalf("log line is not JSON: %v — raw=%q", err, buf.String())
+	}
+	got, ok := rec["he_request_id"].(string)
+	if !ok || got != "req_a1b2c3d4e5f6" {
+		t.Fatalf("he_request_id: got=%v want=%q", rec["he_request_id"], "req_a1b2c3d4e5f6")
+	}
+}
+
+// When the extractor returns ok=false (no request-id stamped), the field is
+// absent from the log record.
+func TestTraceContextHandler_NoHeRequestIDWhenExtractorReturnsFalse(t *testing.T) {
+	var buf bytes.Buffer
+	inner := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	extractor := func(_ context.Context) (string, bool) { return "", false }
+
+	logger := slog.New(NewTraceContextHandlerWithRequestID(inner, extractor))
+	logger.InfoContext(context.Background(), "no-id")
+
+	var rec map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &rec); err != nil {
+		t.Fatalf("log line is not JSON: %v", err)
+	}
+	if _, present := rec["he_request_id"]; present {
+		t.Errorf("he_request_id must be absent when extractor returns ok=false; got %v", rec)
+	}
+}
+
+// NewLogger end-to-end with WithRequestIDExtractor option wiring.
+func TestNewLogger_WithRequestIDExtractor_smoke(t *testing.T) {
+	extractor := func(_ context.Context) (string, bool) { return "req_smoke0000abc", true }
+	logger := NewLogger(slog.LevelInfo, WithRequestIDExtractor(extractor))
+	if logger == nil {
+		t.Fatal("NewLogger returned nil")
+	}
+}

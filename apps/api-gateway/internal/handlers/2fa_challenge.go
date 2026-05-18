@@ -17,6 +17,7 @@ import (
 	"connectrpc.com/connect"
 
 	authv1 "github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1"
+	"github.com/he-api/he-api/apps/api-gateway/internal/openaierr"
 )
 
 type challengeRequestBody struct {
@@ -33,13 +34,13 @@ type challengeResponseBody struct {
 func (p *AuthProxy) ChallengeTOTP(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(MFACookieName)
 	if err != nil || cookie.Value == "" {
-		writeError(w, http.StatusUnauthorized, "401_mfa_token_invalid", "verification session missing")
+		_ = openaierr.Write(w, r.Context(), http.StatusUnauthorized, "401_mfa_token_invalid", "verification session missing", nil)
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<10)
 	var body challengeRequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "400_invalid_totp_format", "request body must include code")
+		_ = openaierr.Write(w, r.Context(), http.StatusBadRequest, "400_invalid_totp_format", "request body must include code", nil)
 		return
 	}
 
@@ -57,7 +58,7 @@ func (p *AuthProxy) ChallengeTOTP(w http.ResponseWriter, r *http.Request) {
 		if shouldClearMFAOnError(err) {
 			ClearMFACookie(w, p.Env)
 		}
-		translateConnectError(w, err)
+		translateConnectError(w, r.Context(), err)
 		return
 	}
 

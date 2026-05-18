@@ -35,6 +35,7 @@ import (
 	"net/http"
 
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
+	"github.com/he-api/he-api/apps/api-gateway/internal/openaierr"
 )
 
 // MaxEmbeddingBodyBytes is the 1 MiB body cap (BR-2.2 / Architect OQ2).
@@ -272,7 +273,7 @@ func (h *EmbeddingsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// APIKeyID; if not, the per-route wrap regressed in main.go.
 	apiKeyID, ok := middleware.APIKeyIDFromContext(ctx)
 	if !ok {
-		writeChatError(w, http.StatusInternalServerError,
+		_ = openaierr.Write(w, ctx, http.StatusInternalServerError,
 			"500_gateway_misconfigured",
 			"Bearer-auth middleware not wired", nil)
 		return
@@ -285,19 +286,19 @@ func (h *EmbeddingsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
-			writeChatError(w, http.StatusRequestEntityTooLarge,
+			_ = openaierr.Write(w, ctx, http.StatusRequestEntityTooLarge,
 				"413_payload_too_large",
 				"Request body exceeds 1 MiB.", nil)
 			return
 		}
-		writeChatError(w, http.StatusBadRequest,
+		_ = openaierr.Write(w, ctx, http.StatusBadRequest,
 			"400_invalid_request",
 			"Request body is not valid JSON.", nil)
 		return
 	}
 
 	if status, code, msg, param, valid := validateEmbeddingRequest(&req); !valid {
-		writeChatError(w, status, code, msg, param)
+		_ = openaierr.Write(w, ctx, status, code, msg, param)
 		return
 	}
 
@@ -307,7 +308,7 @@ func (h *EmbeddingsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	inputs, err := parseEmbeddingInputs(req.Input)
 	if err != nil {
 		inputParam := "input"
-		writeChatError(w, http.StatusBadRequest,
+		_ = openaierr.Write(w, ctx, http.StatusBadRequest,
 			"400_invalid_request",
 			"Field 'input' is required and must be a non-empty string or non-empty array of strings.",
 			&inputParam)

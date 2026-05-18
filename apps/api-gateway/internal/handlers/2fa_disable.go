@@ -19,6 +19,7 @@ import (
 	authv1 "github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1"
 
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
+	"github.com/he-api/he-api/apps/api-gateway/internal/openaierr"
 )
 
 type disableTOTPRequestBody struct {
@@ -35,18 +36,18 @@ type disableTOTPResponseBody struct {
 func (p *AuthProxy) DisableTOTP(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		writeError(w, http.StatusInternalServerError, "500_gateway_misconfigured", "JWT middleware not wired")
+		_ = openaierr.Write(w, r.Context(), http.StatusInternalServerError, "500_gateway_misconfigured", "JWT middleware not wired", nil)
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 2<<10)
 	var body disableTOTPRequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "400_invalid_factor", "request body must include factor + value")
+		_ = openaierr.Write(w, r.Context(), http.StatusBadRequest, "400_invalid_factor", "request body must include factor + value", nil)
 		return
 	}
 	factor, err := parseFactor(body.Factor)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "400_invalid_factor", "factor must be 'totp' or 'password'")
+		_ = openaierr.Write(w, r.Context(), http.StatusBadRequest, "400_invalid_factor", "factor must be 'totp' or 'password'", nil)
 		return
 	}
 	resp, err := p.Upstream.DisableTOTP(r.Context(), connect.NewRequest(&authv1.DisableTOTPRequest{
@@ -57,7 +58,7 @@ func (p *AuthProxy) DisableTOTP(w http.ResponseWriter, r *http.Request) {
 		UserAgent: r.UserAgent(),
 	}))
 	if err != nil {
-		translateConnectError(w, err)
+		translateConnectError(w, r.Context(), err)
 		return
 	}
 	writeJSON(w, http.StatusOK, disableTOTPResponseBody{OK: resp.Msg.GetOk()})

@@ -78,7 +78,7 @@ func (h *OAuthHandler) Initiate(provider string) http.HandlerFunc {
 		}
 		resp, err := h.Upstream.BeginOAuth(r.Context(), connect.NewRequest(req))
 		if err != nil {
-			translateConnectError(w, err)
+			translateConnectError(w, r.Context(), err)
 			return
 		}
 		setOAuthStateCookie(w, resp.Msg.GetStateId(), h.Env)

@@ -23,6 +23,8 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
+	"github.com/he-api/he-api/apps/api-gateway/internal/openaierr"
 )
 
 // Defaults match BR-4.1 (30/min/IP) and BR-4.2 (60s window).
@@ -64,15 +66,16 @@ func (m *OAuthRatelimit) Wrap(endpoint string, next http.Handler) http.Handler {
 		key := m.KeyPrefix + endpoint + ":ip:" + ip
 		count, ttl, err := m.incrCount(r.Context(), key)
 		if err != nil {
-			// Fail-closed — Redis unreachable.
-			http.Error(w, `{"error":{"code":"503_service_unavailable"}}`, http.StatusServiceUnavailable)
+			// Fail-closed — Redis unreachable. Story 3.6: route through
+			// openaierr.Write for the canonical §5.1.2 envelope.
+			_ = openaierr.Write(w, r.Context(), http.StatusServiceUnavailable, "503_service_unavailable", "OAuth service temporarily unavailable.", nil)
 			return
 		}
 		if count > int64(m.Limit) {
 			// Retry-After in seconds (round up).
 			ra := int(ttl.Seconds()) + 1
 			w.Header().Set("Retry-After", fmt.Sprintf("%d", ra))
-			http.Error(w, `{"error":{"code":"429_rate_limit_oauth"}}`, http.StatusTooManyRequests)
+			_ = openaierr.Write(w, r.Context(), http.StatusTooManyRequests, "429_rate_limit_oauth", "OAuth rate limit exceeded.", nil)
 			return
 		}
 		next.ServeHTTP(w, r)

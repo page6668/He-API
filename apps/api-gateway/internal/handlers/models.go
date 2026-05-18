@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
+	"github.com/he-api/he-api/apps/api-gateway/internal/openaierr"
 )
 
 // ModelEntry is one row in the /v1/models response data array. Field order
@@ -116,7 +117,7 @@ func (h *ModelsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	apiKeyID, ok := middleware.APIKeyIDFromContext(ctx)
 	if !ok {
-		writeChatError(w, http.StatusInternalServerError,
+		_ = openaierr.Write(w, ctx, http.StatusInternalServerError,
 			"500_gateway_misconfigured",
 			"Bearer-auth middleware not wired", nil)
 		return

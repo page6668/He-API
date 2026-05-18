@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
+	"github.com/he-api/he-api/apps/api-gateway/internal/openaierr"
 )
 
 // MockContent is the literal assistant-message content the mock returns.
@@ -212,7 +213,7 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	// than serving anonymous mock content.
 	apiKeyID, ok := middleware.APIKeyIDFromContext(ctx)
 	if !ok {
-		writeChatError(w, http.StatusInternalServerError,
+		_ = openaierr.Write(w, ctx, http.StatusInternalServerError,
 			"500_gateway_misconfigured",
 			"Bearer-auth middleware not wired", nil)
 		return
@@ -226,12 +227,12 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
-			writeChatError(w, http.StatusRequestEntityTooLarge,
+			_ = openaierr.Write(w, ctx, http.StatusRequestEntityTooLarge,
 				"413_payload_too_large",
 				"Request body exceeds 1 MiB.", nil)
 			return
 		}
-		writeChatError(w, http.StatusBadRequest,
+		_ = openaierr.Write(w, ctx, http.StatusBadRequest,
 			"400_invalid_request",
 			"Request body is not valid JSON.", nil)
 		return
@@ -243,7 +244,7 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	// REMOVED; stream=true is now a dispatch decision, not a validation
 	// failure.
 	if status, code, msg, valid := validateChatRequest(&req); !valid {
-		writeChatError(w, status, code, msg, nil)
+		_ = openaierr.Write(w, ctx, status, code, msg, nil)
 		return
 	}
 
@@ -340,43 +341,8 @@ func writeChatJSON(w http.ResponseWriter, status int, body any) {
 	_, _ = w.Write(buf)
 }
 
-// writeChatError emits the OpenAI §5.1.2 envelope:
-//
-//	{"error":{"code","message","type","param","he_request_id"}}
-//
-// `type` is mapped from the leading status digit (4xx → invalid_request_error,
-// 5xx → server_error). param is null unless explicitly supplied (e.g.,
-// stream=true → "stream"). he_request_id stays null until the Story-3.6
-// request-id taxonomy lands. BR-2.4 — caller MUST NOT pass attacker-supplied
-// request fields in `message`.
-func writeChatError(w http.ResponseWriter, status int, code, message string, param *string) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	envelope := map[string]any{
-		"error": map[string]any{
-			"code":          code,
-			"message":       message,
-			"type":          mapChatErrorType(code),
-			"param":         paramValue(param),
-			"he_request_id": nil,
-		},
-	}
-	buf, _ := json.Marshal(envelope)
-	_, _ = w.Write(buf)
-}
-
-func mapChatErrorType(code string) string {
-	if len(code) >= 3 && code[0] == '4' {
-		return "invalid_request_error"
-	}
-	return "server_error"
-}
-
-// paramValue returns the JSON-rendered value for the envelope's `param`
-// field. nil → JSON null; non-nil → JSON string.
-func paramValue(p *string) any {
-	if p == nil {
-		return nil
-	}
-	return *p
-}
+// Story 3.6: writeChatError + mapChatErrorType + paramValue were deleted in
+// favour of openaierr.Write — the canonical §5.1.2 writer that derives
+// error.type from codeMetadata and stamps he_request_id from
+// requestid.FromContext. The paramValue semantics are preserved verbatim
+// inside openaierr.
