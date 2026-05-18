@@ -38,9 +38,11 @@ import (
 	"go.opentelemetry.io/otel"
 )
 
-const defaultAuthSvcURL = "http://auth-svc:8080"
-const defaultNotificationSvcURL = "http://notification-svc:8080"
-const defaultRedisURL = "redis://redis:6379/0"
+const (
+	defaultAuthSvcURL         = "http://auth-svc:8080"
+	defaultNotificationSvcURL = "http://notification-svc:8080"
+	defaultRedisURL           = "redis://redis:6379/0"
+)
 
 // envOr returns the value of name or fallback when unset / empty.
 func envOr(name, fallback string) string {
@@ -206,7 +208,8 @@ func main() {
 		func() *redis.Client {
 			opt, parseErr := redis.ParseURL(redisURL)
 			if parseErr != nil {
-				logger.Warn("bearer_auth redis URL parse failed — cache disabled",
+				logger.Warn(
+					"bearer_auth redis URL parse failed — cache disabled",
 					slog.String("url", redisURL),
 					slog.String("error", parseErr.Error()),
 				)
@@ -223,6 +226,16 @@ func main() {
 	// the route registration.
 	chatCompletions := handlers.NewChatCompletionsHandler(logger)
 	mux.Handle("POST /v1/chat/completions", bearerAuth.RequireAPIKey(chatCompletions))
+
+	// Story 3.5 — /v1/models (static catalogue) + /v1/embeddings (mock
+	// vector). Per-route bearer-auth wrap mirrors Story 3.2 BR-1.4 +
+	// Story 3.3 precedent. GET / POST method prefixes are load-bearing —
+	// they make wrong-method requests fall through to a stdlib 405
+	// without invoking the bearer-auth chain.
+	modelsHandler := handlers.NewModelsHandler(logger)
+	embeddingsHandler := handlers.NewEmbeddingsHandler(logger)
+	mux.Handle("GET /v1/models", bearerAuth.RequireAPIKey(modelsHandler))
+	mux.Handle("POST /v1/embeddings", bearerAuth.RequireAPIKey(embeddingsHandler))
 
 	// Middleware chain (outer → inner): SecurityHeaders → CSRF → mux.
 	// SecurityHeaders writes the BR-4.7 response headers on every response.
@@ -263,7 +276,8 @@ func main() {
 
 	serverErr := make(chan error, 1)
 	go func() {
-		logger.Info("api-gateway listening",
+		logger.Info(
+			"api-gateway listening",
 			slog.String("addr", listenAddr),
 			slog.String("auth_svc_url", authSvcURL),
 		)

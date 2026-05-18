@@ -5,9 +5,9 @@
 
 ## Registry Metadata
 
-**Last Updated**: 2026-05-18
-**Total Stories Tracked**: 1
-**Total Models**: 5
+**Last Updated**: 2026-05-19
+**Total Stories Tracked**: 2
+**Total Models**: 13
 **Repository**: He-API
 **Mode**: monolith
 
@@ -30,9 +30,28 @@
 |------|-------|-------|
 | `ApiKeyRow` | 3.2 | Mirrors `he_api.api_keys` for the Validate hot path. Nullable columns surface as `pgtype.UUID` / `pgtype.Timestamptz` so the handler distinguishes "no team" from "empty UUID". |
 
+## Go Handler Types (`apps/api-gateway/internal/handlers`)
+
+| Type | Story | Notes |
+|------|-------|-------|
+| `handlers.ModelEntry` | 3.5 | One row in the `/v1/models` response data array. Fields: `ID`/`Object`/`Created`/`OwnedBy` (snake_case JSON tags per OpenAI canonical). Promoted to a shared package if Epic 4 adapters need to import it. |
+| `handlers.ModelsResponse` | 3.5 | Top-level `/v1/models` wrapper (`object="list"` + `data []ModelEntry`). |
+| `handlers.ModelsHandler` | 3.5 | Handler struct (`logger` + `now` + `startedAt`). Constructed via `NewModelsHandler(logger, opts...)`; `WithModelsNow(f)` injects a deterministic clock for the BR-1.6 stable-`created` test. |
+| `handlers.ModelsHandlerOption` | 3.5 | Option-function type for `ModelsHandler` (Architect Round 1 OQ4 ratified pattern; mirrors `ChatHandlerOption`). |
+| `handlers.EmbeddingRequest` | 3.5 | Inbound `/v1/embeddings` JSON body. Critical: `Input json.RawMessage` for BR-2.8 dual-shape parsing (string OR array). |
+| `handlers.EmbeddingResponse` | 3.5 | Top-level `/v1/embeddings` response. Field order per BR-2.9: `object` → `data` → `model` → `usage`. |
+| `handlers.EmbeddingData` | 3.5 | One embedding entry. Field order: `object="embedding"` → `index` → `embedding ([]float32)`. |
+| `handlers.EmbeddingUsage` | 3.5 | Mock token-count. Fields: `prompt_tokens int` + `total_tokens int`. No `completion_tokens` (embeddings have no completion dimension). |
+| `handlers.EmbeddingsHandler` | 3.5 | Handler struct (`logger` + `dim`). Constructed via `NewEmbeddingsHandler(logger, opts...)`. |
+| `handlers.EmbeddingsHandlerOption` | 3.5 | Option-function type for `EmbeddingsHandler`; `WithEmbeddingDim(d int)` is test-only. |
+
 ## Models by Story
 
 - **3.2** — Bearer-token API-key auth:
   - `ValidateApiKeyRequest` / `ValidateApiKeyResponse` / `ApiKeyValidationReason` (proto).
   - `ApiKeyRow` (Go repository type).
   - `middleware.CachedClaims` (gateway-local JSON cache envelope; not part of the cross-service contract).
+- **3.5** — `/v1/models` + `/v1/embeddings` Go types (handler-local, package `handlers`):
+  - `ModelEntry` / `ModelsResponse` / `ModelsHandler` / `ModelsHandlerOption`.
+  - `EmbeddingRequest` / `EmbeddingResponse` / `EmbeddingData` / `EmbeddingUsage` / `EmbeddingsHandler` / `EmbeddingsHandlerOption`.
+  - Promotion rule (Architect-ratified): if Epic 4 adapter packages need to import any of these, promote to a sibling shared package (e.g., `apps/api-gateway/internal/openai/types`). Story 3.5 does NOT pre-promote per Go's "rule of three".

@@ -1,0 +1,437 @@
+schema: 1
+story: "3.5"
+story_title: "/v1/models + /v1/embeddings 端点"
+gate: "PASS"
+status_reason: |
+  Round 1 full review: both ACs traced and verified end-to-end. Independent
+  test execution: `go test ./... -race -count=1` on the api-gateway module
+  is GREEN across all 4 packages (cmd/server 5.41s · internal/handlers 3.72s
+  · internal/middleware 4.97s · internal/streaming 3.17s). The 50 Story-3.5
+  named test functions (`Test_(ModelsCatalogue|NewModelsHandler|ModelsHandler|
+  parseEmbeddingInputs|validateEmbeddingRequest|GenerateMockEmbedding|
+  mockTokenCount|EmbeddingsHandler)*` filter) all PASS — covering UNIT-001..023
+  + INT-001..014 + 10 BLIND-* scenarios. Race-detector clean. All four Architect
+  Round 1 OQ rulings honoured as written: OQ1 11-entry `modelsCatalogue`
+  (`qwen-max/qwen-plus/deepseek-v3/moonshot-v1-128k/glm-4/doubao-pro/doubao-lite/
+  ernie-4.0/he-router-cost/he-router-quality/he-router-latency`) anchored by
+  `Test_ModelsCatalogue_BR_1_4_invariants` (UNIT-001) — 11 entries verified
+  on disk in BR-1.10 declaration order; OQ2 sibling `MaxEmbeddingBodyBytes
+  int64 = 1 << 20` declared distinctly from `maxChatBodyBytes` (embeddings.go:44)
+  — inclusive/exclusive boundary pair `_body_at_exact_1MiB_returns_200` +
+  `_body_over_1MiB_returns_413` both GREEN; OQ3 `defaultEmbeddingDim = 128`
+  triple-tier locked (UNIT-019 generator · INT-006 handler · contract-test
+  E2E-003 SDK); OQ4 5-tuple `validateEmbeddingRequest` signature
+  `(int, string, string, *string, bool)` confirmed at embeddings.go:139 — all
+  UNIT-013..018 destructure all five returns; refactor-to-struct would surface
+  at compile time. BR-2.7 PII discipline verified at `Test_EmbeddingsHandler_
+  does_NOT_log_input_content` with three sub-cases (string / array / long-input)
+  — recursive `slog.Record` attr scan finds zero leakage. Per-request copy
+  semantics for the static catalogue verified by `BLIND-DATA-001` (response
+  mutation does NOT affect the package-level `modelsCatalogue` slice) +
+  `BLIND-CONCURRENCY-001` (100 concurrent /v1/models requests yield identical
+  `created` timestamp under -race). All 10 BLIND-* scenarios COVERED
+  (BOUNDARY×3, CONCURRENCY×2, DATA×1, RESOURCE×1, FLOW×2, ERROR×1). Cold-start
+  regression preserved — the two new handler constructions are O(1) at startup
+  (no DB / network / fs touch). The Story-3.3 `writeChatJSON` / `writeChatError`
+  shared writers (BR-1.3) and the Story-3.2 per-route bearer-auth wrap pattern
+  (BR-1.1 / BR-2.1) are reused verbatim at `cmd/server/main.go:230-238`. Single
+  MEDIUM finding: Dev left 82/82 task subtask checkboxes unticked despite all
+  deliverables present — clerical hygiene gap with zero correctness impact
+  (recommendation logged; does NOT block PASS; same disposition as Story 3.4).
+reviewer: "Turing (QA / Test Engineer & Quality Architect)"
+updated: "2026-05-19T00:00:00Z"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "MEDIUM"
+  cached_review_mode: "automated_plus_spot_check"
+  cached_project_type: "web_backend"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues:
+    - checkbox_text: "T0.1..T0.7 + T1.1..T1.8 + T2.1..T2.8 + T3.1..T3.5 + T4.1..T4.7 + T5.1..T5.4 + T6.1..T6.8"
+      issue_type: "unticked_despite_completion"
+      severity: MEDIUM
+      blocking: false
+      note: |
+        Dev forgot to tick boxes; deliverables verified on disk (8 File List
+        entries exist — 2 production .go + 2 _test.go + 2 .py contract test
+        + main.go edit + go.mod edit), all 50 Story-3.5 named test functions
+        PASS with -race, AC Traceability Matrix fully populated with concrete
+        file:symbol references, all four Architect Round 1 OQ rulings
+        verified at code+test layers. Dev Log confirms each T0-T6 row marked
+        "✅ done" / "✅ PASS" with notes. Recommend Dev tick boxes in
+        follow-up edit (no re-review required); the structural issue is the
+        same as Story 3.4 — `*develop-story` workflow does not populate
+        checkboxes during implementation, leaving the task tracker stale
+        against deliverables. Same disposition as Story 3.4 gate
+        QA-3.4-001.
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+top_issues:
+  - id: "QA-3.5-001"
+    severity: medium
+    finding: |
+      82/82 task subtask checkboxes left unticked in story file's
+      "## Tasks / Subtasks" section despite all deliverables present and all
+      50 Story-3.5-named designed scenarios PASSing. This is the INVERSE
+      failure mode of what Step 4.5 is designed to catch (canonical failure:
+      "ticked box without deliverable"; here: "deliverable without ticked
+      box") — pure clerical hygiene gap with zero correctness impact.
+      Independent verification: all 8 File List entries exist on disk; all
+      named types/funcs (ModelEntry/ModelsResponse/modelsCatalogue/
+      ModelsHandler/ModelsHandlerOption/WithModelsNow/NewModelsHandler +
+      MaxEmbeddingBodyBytes/maxEmbeddingInputBytes/defaultEmbeddingDim/
+      EmbeddingRequest/EmbeddingData/EmbeddingUsage/EmbeddingResponse/
+      parseEmbeddingInputs/validateEmbeddingRequest/GenerateMockEmbedding/
+      mockTokenCount/EmbeddingsHandler/EmbeddingsHandlerOption/
+      WithEmbeddingDim/NewEmbeddingsHandler) are declared and exercised by
+      the test suite.
+    disposition: |
+      Recorded as MEDIUM (consolidated single record rather than 80+
+      duplicate CRITICAL entries that would misrepresent what QA actually
+      observed). Does NOT block PASS — same disposition as Story 3.4 gate.
+      Recommendation: Dev to tick T0.1..T6.8 in a follow-up edit and update
+      `*develop-story` workflow to populate checkboxes during implementation
+      so the task tracker stays authoritative for future audits.
+    location: "docs/stories/3.5-models-embeddings-endpoints.md (lines ~339-493 — Tasks / Subtasks section)"
+
+monitor_carry_overs:
+  - id: "QA-3.5-001"
+    severity: low
+    finding: |
+      Story-3.5 Python SDK contract tests
+      (apps/api-gateway/tests/openai_sdk_models_contract_test.py — E2E-001/002
+      + apps/api-gateway/tests/openai_sdk_embeddings_contract_test.py —
+      E2E-003..006) are env-guarded (pytest.mark.skipif on
+      HE_API_TEST_GATEWAY_URL per Story-3.3 BR-3.1) and were NOT executed
+      during this QA review run because no live gateway is started. Static
+      verification: both files `py_compile`-clean; 2 + 4 = 6 `def test_*`
+      functions populated with real assertions (NOT stubs); skipif guard
+      raises clearly when env var missing.
+    disposition: |
+      Confirm the next PR's `gateway / openai-sdk-contract` CI job picks up
+      both new test files and exits 0 to close this monitor entry. Pytest
+      auto-discovers `*_test.py` under `apps/api-gateway/tests/` so no CI
+      wiring change is needed. The Go-side INT-001..014 already prove the
+      bearer-auth → handler → response wire chain end-to-end inside the
+      process via `httptest.NewServer` (TCP loopback) and
+      `httptest.NewRecorder` (in-process). The only delta vs E2E is the
+      OpenAI SDK Pydantic-model layer, which the test file statically
+      conforms to (model.list() / embeddings.create()).
+    location: "apps/api-gateway/tests/openai_sdk_models_contract_test.py + apps/api-gateway/tests/openai_sdk_embeddings_contract_test.py"
+  - id: "QA-3.5-002"
+    severity: low
+    finding: |
+      Story-3.5 BR-2.10 — FR-2.3 ("如上游模型支持 embedding，否则返回 405")
+      is INTENTIONALLY OUT OF SCOPE for this Story. The placeholder accepts
+      ANY non-empty `model` string (including `qwen-max` even though qwen-max
+      is a chat-model not an embedding-model) and returns the SAME mock vector
+      regardless of model id. Documented scope-deferral, NOT a behaviour
+      regression. The 405-when-unsupported logic requires (a) a model-capability
+      matrix and (b) a per-model adapter capability check — both land in Epic 4
+      (matrix is Story 4.7 `/v1/models 返回完整能力标签`; per-model check is
+      each adapter's surface in Stories 4.1-4.6).
+    disposition: |
+      Track via Epic 4 Story 4.7 (capability matrix) + Stories 4.1-4.6
+      (per-adapter capability check). No Story-3.5 action required — the
+      placeholder contract is "endpoint callable for SDK contract testing";
+      Epic 4 will tighten to "endpoint correctly rejects non-embedding
+      models per FR-2.3". Documented in story Dev Notes / BR-2.10.
+    location: "docs/stories/3.5-models-embeddings-endpoints.md BR-2.10"
+
+# Test execution results
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 50            # Story-3.5-named test functions in handlers package
+    passed_count: 50
+    failed_count: 0
+    skipped_count: 0
+    pass_rate: 100
+    coverage_percentage: null
+    failed_tests: []
+    notes: |
+      Filter `^Test_(ModelsCatalogue|NewModelsHandler|ModelsHandler|
+      parseEmbeddingInputs|validateEmbeddingRequest|GenerateMockEmbedding|
+      mockTokenCount|EmbeddingsHandler)` matched 50 test functions: 13 in
+      models_test.go (UNIT-001..005 + INT-001..005 + BLIND-CONCURRENCY-001
+      + BLIND-DATA-001 + BLIND-FLOW-001) + 37 in embeddings_test.go
+      (UNIT-006..023 covering parser × 7, validator × 6, generator × 3,
+      token-count × 1, PII × 1 + INT-006..014 × 9 + 7 BLIND scenarios).
+      All PASS with `-race -count=1` (real-time wall-clock 1.88s after
+      cache warm; 3.72s cold). The 3 BLIND-CONCURRENCY-001/002 scenarios
+      and the per-request `make + copy` semantics (models.go:135) are the
+      load-bearing race-detector regression guards.
+  regression:
+    executed: true
+    passed: true
+    tests_total: 4       # 4 module packages
+    tests_failed: 0
+    notes: |
+      Cross-story regression preserved end-to-end via `go test
+      ./apps/api-gateway/... -race -count=1`:
+        * Story 3.1 cold-start: cmd/server suite PASS (5.41s).
+        * Story 3.2 auth middleware: internal/middleware suite PASS (4.97s).
+        * Story 3.3 non-streaming: handlers suite PASS — Story-3.3
+          `TestChatCompletions_*` family unchanged + Story-3.5
+          `Test_ModelsHandler_*` + `Test_EmbeddingsHandler_*` integrated
+          into the same package (3.72s).
+        * Story 3.4 streaming: internal/streaming suite PASS (3.17s) —
+          SSE/chunker/writer untouched by Story 3.5.
+        * `go vet ./...` clean across the api-gateway module.
+        * `gofmt -l` clean on the 3 new/modified production files
+          (models.go, embeddings.go, main.go) — gofumpt enforcement
+          confirmed by Dev Log T6.4 in the live env.
+  e2e:
+    executed: true        # Go-side integration via httptest.NewServer counts as E2E for a backend API
+    passed: true
+    skipped: false
+    scenarios_tested: 14
+    scenarios_passed: 14
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+    notes: |
+      Go integration tests use `httptest.NewServer` (real TCP loopback) and
+      `httptest.NewRecorder` (in-process) — the Go-backend E2E equivalent
+      for a stateless HTTP API. INT-001..014 cover the bearer-auth →
+      handler → response wire chain end-to-end across BOTH endpoints:
+      INT-001..005 (GET /v1/models happy path + auth + 405 + stable-created
+      + ordering) + INT-006..014 (POST /v1/embeddings happy/array/413/400×3/
+      auth/405/determinism). Python SDK E2E tests (E2E-001..006) are
+      env-guarded per Story-3.3 BR-3.1 and orchestrated by the existing CI
+      job; see monitor_carry_overs.QA-3.5-001.
+
+# Evidence collected — only MEDIUM checkbox-hygiene finding, evidence inline
+evidence:
+  directory: ""
+  issues: []
+
+# Risk assessment
+risk_assessment:
+  risk_level: MEDIUM
+  review_mode: automated_plus_spot_check
+  complexity_count: 2    # api_changes + new_patterns
+  security_sensitive: false
+  dev_gate_score: 95     # Dev claimed all T0-T6 ✅ done with -race PASS; QA independent execution confirms
+
+# AC coverage verification (from Step 4.6)
+ac_coverage:
+  verification_method: "traceability_verification"
+  coverage_rate: 100
+  passed: true
+  blocking_issues_count: 0
+  details:
+    - ac_id: AC1
+      status: VERIFIED
+      code_locations_verified: 2/2   # models.go (handler family) + main.go (wiring)
+      test_locations_verified: 15/15 # UNIT-001..005 + INT-001..005 + BLIND ×3 + E2E ×2 (env-guarded, statically verified)
+      aspects_verified:
+        main_scenario: true
+        business_rules: 10/10  # BR-1.1..1.10
+        data_validation: true
+        error_handling: true
+        ui_interaction: N_A
+      notes: |
+        ModelEntry/ModelsResponse/modelsCatalogue (11 entries in BR-1.10
+        declaration order)/ModelsHandler/ModelsHandlerOption/WithModelsNow/
+        NewModelsHandler/ServeHTTP all present at models.go:32..157. BR-1.6
+        `startedAt` captured ONCE at handler construction (line 95-104) +
+        threaded into per-request copy (line 135-156). BR-1.7 defence-in-depth
+        `APIKeyIDFromContext` check at the TOP of ServeHTTP (line 113-123 —
+        precedent chat_completions.go:213-219). BR-1.8 exactly-one-log-line
+        via `slog.InfoContext("models_list", event/api_key_id/catalogue_size)`.
+        BR-1.10 per-request `make + copy` semantics verified by BLIND-DATA-001
+        (response mutation does NOT affect package-level slice) + BLIND-CONCURRENCY-001
+        (100 concurrent requests under -race). Per-route wiring at main.go:235-237
+        (`modelsHandler := handlers.NewModelsHandler(logger)` +
+        `mux.Handle("GET /v1/models", bearerAuth.RequireAPIKey(modelsHandler))`).
+    - ac_id: AC2
+      status: VERIFIED
+      code_locations_verified: 2/2   # embeddings.go (handler family) + main.go (wiring)
+      test_locations_verified: 41/41 # UNIT-006..023 ×18 + INT-006..014 ×9 + BLIND ×7 + E2E ×4 + parser/validator/gen sub-tests
+      aspects_verified:
+        main_scenario: true
+        business_rules: 10/10  # BR-2.1..2.10
+        data_validation: true
+        error_handling: true
+        ui_interaction: N_A
+      notes: |
+        MaxEmbeddingBodyBytes (1<<20)/maxEmbeddingInputBytes (256KiB)/
+        defaultEmbeddingDim (128)/EmbeddingRequest (Input json.RawMessage per
+        BR-2.8)/EmbeddingData/EmbeddingUsage/EmbeddingResponse/parseEmbeddingInputs
+        (dual-shape decoder via `json.UnmarshalTypeError` fallback —
+        BR-2.8)/validateEmbeddingRequest (5-tuple per OQ4 — `(status, code,
+        message, *param, valid)` at line 139)/GenerateMockEmbedding (exported
+        per OQ3; sha256-seeded sin generator + L2-normalize at line 200)/
+        mockTokenCount (`len(s)/4` per BR-2.5 at line 223)/EmbeddingsHandler/
+        WithEmbeddingDim/NewEmbeddingsHandler/ServeHTTP all present at
+        embeddings.go:44..300+. BR-2.3 validation ordering verified by 6
+        validator subtests (UNIT-013..018) — body-size → JSON parse → model
+        non-empty/≤modelMaxLen → input dual-shape → input total-bytes sub-cap.
+        BR-2.4 mock generator triple-tier locked (UNIT-019 dim==128 + norm≈1 ·
+        UNIT-020 determinism for same input · UNIT-021 different inputs
+        diverge). BR-2.7 PII discipline verified by UNIT-023 with recursive
+        slog.Record attr scan across string/array/long-input cases. BR-2.10
+        scope-deferral documented (Epic 4 picks up FR-2.3 capability check).
+        Per-route wiring at main.go:236-238 (`embeddingsHandler :=
+        handlers.NewEmbeddingsHandler(logger)` + `mux.Handle("POST /v1/embeddings",
+        bearerAuth.RequireAPIKey(embeddingsHandler))`).
+  issues: []
+
+# Task checkbox verification (from Step 4.5)
+task_checkbox_verification:
+  total_checkboxes: 82
+  checked_count: 0
+  unchecked_count: 82
+  completion_rate: 0
+  consistency_checks:
+    total: 0
+    passed: 0
+    failed: 0
+    consistency_rate: null   # no checked boxes to verify against deliverables
+  issues:
+    critical: []
+    high: []
+    medium:
+      - checkbox_text: "T0.1..T0.7 + T1.1..T1.8 + T2.1..T2.8 + T3.1..T3.5 + T4.1..T4.7 + T5.1..T5.4 + T6.1..T6.8"
+        issue: "Unticked despite deliverables present and tests passing"
+        evidence: |
+          (1) All 8 File List entries exist on disk:
+              apps/api-gateway/internal/handlers/{models,embeddings}.go +
+              apps/api-gateway/internal/handlers/{models,embeddings}_test.go +
+              apps/api-gateway/tests/openai_sdk_{models,embeddings}_contract_test.py +
+              apps/api-gateway/cmd/server/main.go (lines 230-238 edit) +
+              apps/api-gateway/go.mod (goleak v1.3.0 promoted to direct).
+          (2) `go test ./apps/api-gateway/... -race -count=1` → 4/4 packages
+              PASS (cmd/server / internal/handlers / internal/middleware /
+              internal/streaming).
+          (3) 50 Story-3.5-named test functions PASS — 0 FAIL, 0 SKIP.
+          (4) AC Traceability Matrix fully populated with concrete
+              file:symbol references for both ACs.
+          (5) All four Architect Round 1 OQ rulings verified at code+test layers.
+          (6) Dev Log (docs/dev/logs/3.5-dev-log.md) marks every T0-T6 row
+              "✅ done" / "✅ PASS" with implementation notes.
+        recommendation: "Dev to tick T0.1..T6.8 in follow-up edit; update *develop-story workflow to populate checkboxes during implementation so the task tracker stays authoritative for future audits."
+
+# Blind-spot verification (from Step 5.5)
+blind_spot_verification:
+  total_scenarios: 10
+  covered: 10
+  missing_code: 0
+  missing_test: 0
+  missing_both: 0
+  coverage_rate: 100
+  scenarios:
+    - id: "3.5-BLIND-BOUNDARY-001"
+      category: BOUNDARY
+      description: "validateEmbeddingRequest model exactly modelMaxLen (100 chars) → valid (inclusive boundary)"
+      status: COVERED
+      test_location: "apps/api-gateway/internal/handlers/embeddings_test.go::Test_validateEmbeddingRequest_model_exactly_modelMaxLen_explicit_boundary"
+    - id: "3.5-BLIND-BOUNDARY-002"
+      category: BOUNDARY
+      description: "EmbeddingsHandler body at exact 1MiB → 200 (inclusive boundary; pairs with INT-008 exclusive 1MiB+1 → 413)"
+      status: COVERED
+      test_location: "apps/api-gateway/internal/handlers/embeddings_test.go::Test_EmbeddingsHandler_body_at_exact_1MiB_returns_200"
+    - id: "3.5-BLIND-BOUNDARY-003"
+      category: BOUNDARY
+      description: "validateEmbeddingRequest input exactly 256KiB → valid (inclusive boundary)"
+      status: COVERED
+      test_location: "apps/api-gateway/internal/handlers/embeddings_test.go::Test_validateEmbeddingRequest_input_exactly_256KiB_valid"
+    - id: "3.5-BLIND-CONCURRENCY-001"
+      category: CONCURRENCY
+      description: "ModelsHandler 100 concurrent requests under -race yield identical created timestamp + no data race"
+      status: COVERED
+      test_location: "apps/api-gateway/internal/handlers/models_test.go::Test_ModelsHandler_concurrent_100_requests_stable_created"
+    - id: "3.5-BLIND-CONCURRENCY-002"
+      category: CONCURRENCY
+      description: "EmbeddingsHandler 100 concurrent different inputs under -race yield deterministic per-input vectors"
+      status: COVERED
+      test_location: "apps/api-gateway/internal/handlers/embeddings_test.go::Test_EmbeddingsHandler_concurrent_100_different_inputs"
+    - id: "3.5-BLIND-DATA-001"
+      category: DATA
+      description: "ModelsHandler response mutation does NOT affect package-level modelsCatalogue slice (per-request make+copy)"
+      status: COVERED
+      test_location: "apps/api-gateway/internal/handlers/models_test.go::Test_ModelsHandler_response_mutation_does_not_affect_package_slice"
+    - id: "3.5-BLIND-RESOURCE-001"
+      category: RESOURCE
+      description: "EmbeddingsHandler request body drained on early validation failure (no FD leak)"
+      status: COVERED
+      test_location: "apps/api-gateway/internal/handlers/embeddings_test.go::Test_EmbeddingsHandler_request_body_drained_on_early_failure"
+    - id: "3.5-BLIND-FLOW-001"
+      category: FLOW
+      description: "ModelsHandler ignores arbitrary query string suffix (parameterless contract per BR-1.0)"
+      status: COVERED
+      test_location: "apps/api-gateway/internal/handlers/models_test.go::Test_ModelsHandler_ignores_query_string"
+    - id: "3.5-BLIND-FLOW-002"
+      category: FLOW
+      description: "EmbeddingsHandler tolerates Content-Type charset suffix (application/json; charset=utf-8)"
+      status: COVERED
+      test_location: "apps/api-gateway/internal/handlers/embeddings_test.go::Test_EmbeddingsHandler_tolerates_content_type_charset_suffix"
+    - id: "3.5-BLIND-ERROR-001"
+      category: ERROR
+      description: "EmbeddingsHandler client disconnect mid-response → goleak.VerifyNone (no goroutine leak)"
+      status: COVERED
+      test_location: "apps/api-gateway/internal/handlers/embeddings_test.go::Test_EmbeddingsHandler_client_disconnect_mid_response"
+  issues: []
+
+architect_round_1_anchor_verification:
+  OQ1_11_entry_catalogue:
+    primary_anchor: "UNIT-001 (len==11 + ID-set equality + owned_by closed-set) + E2E-001 (SDK iterator subset assertion)"
+    status: VERIFIED
+    location: "apps/api-gateway/internal/handlers/models.go:52-65 (modelsCatalogue var with 11 entries: qwen-max/qwen-plus/deepseek-v3/moonshot-v1-128k/glm-4/doubao-pro/doubao-lite/ernie-4.0/he-router-cost/he-router-quality/he-router-latency)"
+    evidence: |
+      grep+awk extracted the catalogue verbatim — 11 entries in BR-1.10
+      declaration order matching the Architect Round 1 ruling line-for-line.
+      Note: the story body's BR-1.4 text still reads "TOTAL 9" — that is a
+      pending-SM-edit gap documented in the test design under "QA Notes for
+      Dev #1" (`gate YAML pending_sm_absorption.note`). Implementation
+      correctly follows the test design (the binding contract) ahead of
+      the story body. SM should backfill BR-1.4 / AC1 Scenario / AC1
+      Examples / T1.3 / T4.1 to read "11 entries" in a follow-up edit.
+  OQ2_sibling_MaxEmbeddingBodyBytes:
+    primary_anchor: "INT-008 (body > cap → 413) + BLIND-BOUNDARY-002 (body == cap → 200)"
+    status: VERIFIED
+    location: "apps/api-gateway/internal/handlers/embeddings.go:44 (`const MaxEmbeddingBodyBytes int64 = 1 << 20`) — declared as a distinct identity from maxChatBodyBytes per OQ2 ruling so Story 9.x multimodal can independently lift the chat cap."
+    evidence: "Inclusive/exclusive boundary pair both GREEN under -race."
+  OQ3_128_dim_mock:
+    primary_anchor: "UNIT-019 (len==128 + norm≈1) + INT-006 (handler-level len==128) + E2E-003 (SDK-level len==128)"
+    status: VERIFIED
+    location: "apps/api-gateway/internal/handlers/embeddings.go:55 (`const defaultEmbeddingDim = 128`) + line 200 (`func GenerateMockEmbedding(input string, dim int) []float32`)"
+    evidence: |
+      Triple-tier determinism guard: UNIT-019 dim+norm + UNIT-020
+      determinism for same input + UNIT-021 different inputs diverge.
+      Real OpenAI text-embedding-3-small is 1536 — explicit 128 signals
+      "mock" at wire-inspection time.
+  OQ4_5_tuple_validator_signature:
+    primary_anchor: "UNIT-013..018 (each asserts (status, code, message, *param, valid) shape) + INT-009/010 (wire-level param field populated)"
+    status: VERIFIED
+    location: "apps/api-gateway/internal/handlers/embeddings.go:139 (`func validateEmbeddingRequest(req *EmbeddingRequest) (int, string, string, *string, bool)`)"
+    evidence: |
+      Type-system + wire-level defence-in-depth: refactor to struct-return
+      would surface at compile time. The `*string` param value populates
+      the §5.1.2 envelope's `param` field for per-field errors (`model` /
+      `input`).
+
+# Cold-start regression (Story 3.1 TC-10 carry-over)
+cold_start_regression:
+  budget_p95_ms: 1000
+  status: PRESERVED
+  contribution_assessment: |
+    The two new handler constructions (NewModelsHandler + NewEmbeddingsHandler)
+    are O(1) at startup with no DB / network / fs touch. Expected cold-start
+    contribution is sub-millisecond per Dev Log T6.6 measurement. The full
+    `go test ./cmd/server/...` PASS in 5.41s with -race (no regression in
+    Story-3.1 TC-10).

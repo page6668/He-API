@@ -5,9 +5,9 @@
 
 ## Registry Metadata
 
-**Last Updated**: 2026-05-18
-**Total Stories Tracked**: 3
-**Total Endpoints**: 2
+**Last Updated**: 2026-05-19
+**Total Stories Tracked**: 4
+**Total Endpoints**: 4
 **Repository**: He-API
 **Mode**: monolith
 
@@ -18,6 +18,8 @@
 | Method | Route | Auth | Story | Notes |
 |--------|-------|------|-------|-------|
 | POST | `/v1/chat/completions` | Bearer API key (`middleware.RequireAPIKey`) | 3.3 / 3.4 | **Mock-upstream 200** (deterministic body); real `ModelAdapterService` client lands in Epic 4. Story 3.4 supersedes for stream=true: SSE response per OpenAI spec; mock chunker emits ~8 word-boundary chunks of `handlers.MockContent` then `data: [DONE]`; real `ModelAdapterService` streaming client lands in Epic 4. BR-4.1 caveat: `usage` triple `{10, 20, 30}` is synthetic — SDK consumers writing budget logic against this Story's response WILL see incorrect numbers. Mock content carries the `He-API mock` substring (BR-4.2) for log-grep cutover hygiene. |
+| GET | `/v1/models` | Bearer API key (`middleware.RequireAPIKey`) | 3.5 | **Static catalogue** (11 entries per Architect Round 1 OQ1: `qwen-max`/`qwen-plus`/`deepseek-v3`/`moonshot-v1-128k`/`glm-4`/`doubao-pro`/`doubao-lite`/`ernie-4.0`/`he-router-cost`/`he-router-quality`/`he-router-latency`). Response shape = OpenAI `ModelList` (`id`/`object`/`created`/`owned_by`). `created` captured ONCE at handler construction (BR-1.6 — model creation is a vendor event, not a request event). Real DB-backed registry + full capability matrix land in Story 4.7. |
+| POST | `/v1/embeddings` | Bearer API key (`middleware.RequireAPIKey`) | 3.5 | **Deterministic mock vector** placeholder (128-dim per Architect Round 1 OQ3 — intentionally non-canonical to signal mock at wire inspection). Response shape = OpenAI `Embedding` (`object`/`data[]`/`model`/`usage`); `usage.prompt_tokens = len(input)/4` synthetic per BR-2.5. Dual-shape `input` parser via `json.RawMessage` + `*json.UnmarshalTypeError` fallback (BR-2.8). 1 MiB body cap via `MaxEmbeddingBodyBytes` (OQ2 sibling constant, distinct from `maxChatBodyBytes`). Real adapter-backed embeddings land in Epic 4 (Stories 4.1-4.6). |
 
 ### Internal Connect/gRPC RPCs (auth-svc)
 
@@ -38,3 +40,10 @@
   - New package: `apps/api-gateway/internal/streaming/` (first occupant; the directory was reserved by `source-tree.md §6` since Epic 1).
   - SDK contract test: `apps/api-gateway/tests/openai_sdk_streaming_contract_test.py` (reuses Story-3.3 SDK pin `openai==1.40.*`).
   - New constructor option: `handlers.WithNow(f func() time.Time)` — enables deterministic `created` timestamps for the AC2 TTFB tests + INT-007 golden-file regression guard.
+- **3.5** — `/v1/models` + `/v1/embeddings` endpoints (static catalogue + mock vector):
+  - Public: `GET /v1/models` (11-entry static catalogue, OpenAI `ModelList` shape) + `POST /v1/embeddings` (128-dim deterministic mock vector, OpenAI `Embedding` shape).
+  - New constants: `handlers.MaxEmbeddingBodyBytes int64 = 1 << 20` (per Architect Round 1 OQ2 sibling — distinct identity from `maxChatBodyBytes` so per-endpoint caps can diverge in Story 9.x multimodal).
+  - New constructor options: `handlers.WithModelsNow(f func() time.Time)` (test-only — stable-`created` invariant); `handlers.WithEmbeddingDim(d int)` (test-only — production stays at 128).
+  - New exported pure function: `handlers.GenerateMockEmbedding(input string, dim int) []float32` — Epic 4 contract-test reference vector (deterministic via sha256-seeded sin generator, L2-normalized).
+  - SDK contract tests: `apps/api-gateway/tests/openai_sdk_models_contract_test.py` + `apps/api-gateway/tests/openai_sdk_embeddings_contract_test.py` (reuse Story-3.3 `openai==1.40.*` pin; `HE_API_TEST_GATEWAY_URL` skipif convention).
+  - Scope deferral: FR-2.3 model-capability 405 → Epic 4 (Story 4.7 matrix + Stories 4.1-4.6 per-adapter checks).
