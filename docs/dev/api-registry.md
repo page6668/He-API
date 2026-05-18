@@ -6,7 +6,7 @@
 ## Registry Metadata
 
 **Last Updated**: 2026-05-18
-**Total Stories Tracked**: 1
+**Total Stories Tracked**: 2
 **Total Endpoints**: 2
 **Repository**: He-API
 **Mode**: monolith
@@ -17,7 +17,7 @@
 
 | Method | Route | Auth | Story | Notes |
 |--------|-------|------|-------|-------|
-| POST | `/v1/chat/completions` | Bearer API key (`middleware.RequireAPIKey`) | 3.2 | **Placeholder 501** — returns `501_not_implemented` envelope until Story 3.3 ships the real chat handler. Story 3.2 wraps the placeholder with `bearerAuth.RequireAPIKey` to exercise the middleware integration path end-to-end. |
+| POST | `/v1/chat/completions` | Bearer API key (`middleware.RequireAPIKey`) | 3.3 | **Mock-upstream 200** (deterministic body); real `ModelAdapterService` client lands in Epic 4. Story 3.4 supersedes for `stream=true` (currently returns `501_streaming_not_implemented`). BR-4.1 caveat: `usage` triple `{10, 20, 30}` is synthetic — SDK consumers writing budget logic against this Story's response WILL see incorrect numbers. Mock content carries the `He-API mock` substring (BR-4.2) for log-grep cutover hygiene. |
 
 ### Internal Connect/gRPC RPCs (auth-svc)
 
@@ -28,5 +28,8 @@
 ## Endpoints by Story
 
 - **3.2** — Bearer-token API-key auth + key validation:
-  - Public: `POST /v1/chat/completions` (placeholder, bearer-auth wrapped).
+  - Public: `POST /v1/chat/completions` (placeholder, bearer-auth wrapped — superseded by Story 3.3).
   - Internal: `he.auth.v1.AuthService/ValidateApiKey`.
+- **3.3** — Non-streaming chat-completions mock (replaces Story 3.2 placeholder):
+  - Public: `POST /v1/chat/completions` (real handler, deterministic mock body, OpenAI Python SDK-compatible; `stream=true` deferred to Story 3.4 via `501_streaming_not_implemented`).
+  - New testing convention: `apps/api-gateway/tests/` Python contract tests (OpenAI SDK pinned to `==1.40.*`).

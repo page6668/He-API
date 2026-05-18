@@ -56,3 +56,34 @@ jobs:
             echo "gofumpt diff detected — run 'gofumpt -w ./apps'" >&2
             exit 1
           fi
+
+  # Story 3.3 T3.6 — apikey seed-helper import-graph audit. Functionally
+  # re-enforces Story 3.2 BR-2.8 ("no production binary may issue API
+  # keys") after the OQ1 refactor lifted SeedAPIKey out of `_test.go`.
+  # Only the test-utility binary `apps/auth-svc/cmd/issue-test-key` and
+  # `_test.go` files may link `apps/auth-svc/internal/apikey`; any
+  # production binary acquiring a dependency fails the build.
+  apikey-seed-boundary-guard:
+    name: apikey-seed-boundary-guard
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: production binaries MUST NOT depend on internal/apikey/seed
+        run: |
+          # Story 3.3 OQ1 — the SeedAPIKey helper lives in the
+          # `apps/auth-svc/internal/apikey/seed` sub-package. The sibling
+          # `apps/auth-svc/internal/apikey` package (Service for the
+          # ValidateApiKey RPC) is legitimately linked by auth-svc/cmd/server;
+          # the guard targets the seed sub-package only.
+          count=$(go list -deps ./apps/api-gateway/cmd/server ./apps/auth-svc/cmd/server \
+            | grep -c 'apps/auth-svc/internal/apikey/seed$' || true)
+          if [ "$count" -ne 0 ]; then
+            echo "::error::production binary depends on apikey/seed package — Story 3.2 BR-2.8 violation" >&2
+            exit 1
+          fi

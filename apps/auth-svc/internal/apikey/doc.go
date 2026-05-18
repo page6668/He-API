@@ -13,7 +13,11 @@
 //     attribute, or returned error message (TC-9 + BR-2.10 — manual code
 //     review enforced; golangci-lint custom rule pending Epic 9 hardening).
 //
-// `seed_test.go` (not linked into the production binary by Go's `_test.go`
-// rule) exposes IssueKeyForTest for the integration test suite — Story 3.2's
-// only "issue key" UX until Epic 5 lands the real flow.
+// The Story-3.2 IssueKeyForTest helper was relocated to the
+// `apps/auth-svc/internal/apikey/seed` sub-package (Story 3.3 OQ1 ruling)
+// so a CI test-utility binary (`apps/auth-svc/cmd/issue-test-key`) can
+// import the helper without dragging it into a `_test.go` file. The
+// Story 3.2 BR-2.8 invariant ("no production binary may issue keys") is
+// re-enforced via the `apikey-seed-boundary-guard` import-graph CI job
+// (Story 3.3 T3.6) — see `.github/workflows/lint.yml`.
 package apikey

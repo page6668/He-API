@@ -1,0 +1,9 @@
+# Story 3.3 T0.3 — Python contract test dependencies.
+#
+# Reason: the OpenAI Python SDK has had two breaking response-parsing
+# changes in the last 12 months. Story 3.3 BR-3.2 pins the SDK tightly
+# (==1.40.*) so the contract test is hermetic; future Stories upgrading
+# the SDK MUST re-run this contract test and update the pin via a
+# dedicated proposal.
+openai==1.40.*
+pytest==8.*

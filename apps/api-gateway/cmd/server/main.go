@@ -217,10 +217,12 @@ func main() {
 		logger,
 	)
 
-	// TODO(story-3.3): Replace chatPlaceholder with the real OpenAI-
-	// compatible chat completions handler. The 501 envelope below proves
-	// the bearer middleware integration path end-to-end in this Story.
-	mux.Handle("POST /v1/chat/completions", bearerAuth.RequireAPIKey(http.HandlerFunc(chatPlaceholder)))
+	// Story 3.3 — /v1/chat/completions: non-streaming mock chat handler.
+	// Replaces the Story-3.2 `chatPlaceholder` 501 stub. Bearer-auth wrap
+	// is preserved (BR-1.1); the inner handler swap is the only change to
+	// the route registration.
+	chatCompletions := handlers.NewChatCompletionsHandler(logger)
+	mux.Handle("POST /v1/chat/completions", bearerAuth.RequireAPIKey(chatCompletions))
 
 	// Middleware chain (outer → inner): SecurityHeaders → CSRF → mux.
 	// SecurityHeaders writes the BR-4.7 response headers on every response.
@@ -301,16 +303,6 @@ func csrfAllowlistFor(env handlers.DeployEnv) []string {
 			"http://localhost:8080",
 		}
 	}
-}
-
-// chatPlaceholder is the Story 3.2 BR-1.10 501 stub for
-// POST /v1/chat/completions. Inline in main.go per Architect OQ6 ruling
-// (Story 3.3 supersedes within ~1 sprint — an external file is pure
-// churn). The envelope shape matches rest-api-spec.md §5.1.2.
-func chatPlaceholder(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(http.StatusNotImplemented)
-	_, _ = w.Write([]byte(`{"error":{"code":"501_not_implemented","message":"Chat completions endpoint not yet implemented.","type":"server_error","param":null,"he_request_id":null}}`))
 }
 
 // parseRSAPublicPEM parses an RSA public key from PEM bytes. Used by

@@ -72,9 +72,13 @@ Error response (与 OpenAI 一致 + 自定义字段):
 | 429 | `429_rate_limit_qps` | QPS 超限 |
 | 429 | `429_rate_limit_tpm` | TPM 超限 |
 | 429 | `429_rate_limit_gdpr_export` | GDPR 数据导出 24 小时内的限流（Story 2.6 AC2 BR-2.5；正常幂等路径返回 200 + 已存在的导出记录，仅在 100ms 级竞态下命中） |
+| 413 | `413_payload_too_large` | 请求体超出 1 MiB 限制（Story 3.3 BR-1.2 — chat-completions handler） |
+| 500 | `500_gateway_misconfigured` | 网关中间件未正确串联（防御性）— precedented at apps/api-gateway/internal/handlers/2fa_disable.go:38（Story 2.4 backfill） |
+| 500 | `500_internal_error` | 系统异常 |
+| 501 | `501_not_implemented` | 端点占位，未实现（Story 3.2 backfill — chatPlaceholder 501 stub deleted in Story 3.3 T0.4） |
+| 501 | `501_streaming_not_implemented` | 流式响应未实现；将由 Story 3.4 落地（Story 3.3 BR-2.3 — non-streaming mock returns 501 for stream=true） |
 | 502 | `502_upstream_unavailable` | 上游模型不可用（即将 failover） |
 | 504 | `504_upstream_timeout` | 上游模型超时（即将 failover） |
-| 500 | `500_internal_error` | 系统异常 |
 
 ### 5.1.3 其他端点
 
@@ -136,5 +140,11 @@ service QuotaService {
   rpc ConsumeQuota(ConsumeQuotaRequest) returns (Empty);
 }
 ```
+
+## 5.3 Change Log
+
+| Date | Story | Change |
+|------|-------|--------|
+| 2026-05-18 | Story 3.3 (Wright Round 1 OQ2 ruling) | §5.1.2 4 rows added: `413_payload_too_large` + `501_streaming_not_implemented` (Story 3.3 introductions) + `501_not_implemented` (Story 3.2 backfill) + `500_gateway_misconfigured` (Story 2.4 backfill). |
 
 ---

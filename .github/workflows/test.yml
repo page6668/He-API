@@ -194,3 +194,123 @@ jobs:
         run: |
           echo "integration tests deferred to Story 1.6"
           exit 0
+
+  # Story 3.3 T3.4 — OpenAI Python SDK contract test against a live
+  # api-gateway. Boots Postgres + Redis, applies migrations, seeds a
+  # he_api.users row + an api_keys row via scripts/issue-test-key.sh,
+  # starts the gateway, runs `pytest apps/api-gateway/tests/`.
+  #
+  # Re-uses Story 3.2's testcontainers wiring (Postgres 15 + Redis 7.2).
+  # Skips automatically if HE_API_TEST_GATEWAY_URL is unset (BR-3.1).
+  gateway-openai-sdk-contract:
+    name: gateway / openai-sdk-contract
+    runs-on: ubuntu-22.04
+    needs: [unit-go]
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: he_api
+          POSTGRES_PASSWORD: he_api
+          POSTGRES_DB: he_api
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U he_api"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7.2-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      HE_API_DATABASE_URL: postgres://he_api:he_api@localhost:5432/he_api?sslmode=disable
+      HE_API_REDIS_URL: redis://localhost:6379/0
+      HE_API_AUTH_SVC_URL: http://localhost:9090
+      HE_API_JWT_PUBLIC_KEY_PATH: /tmp/he-api/public_key.pem
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install Python deps
+        run: pip install -r apps/api-gateway/tests/requirements.txt
+
+      - name: Generate RSA test keypair
+        run: |
+          mkdir -p /tmp/he-api
+          openssl genrsa -out /tmp/he-api/private_key.pem 2048
+          openssl rsa -in /tmp/he-api/private_key.pem -pubout -out /tmp/he-api/public_key.pem
+
+      - name: Apply migrations
+        run: ./scripts/db-migrate.sh apply
+
+      - name: Seed test user
+        id: seed-user
+        env:
+          PGPASSWORD: he_api
+        run: |
+          USER_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+          psql -h localhost -U he_api -d he_api -c "INSERT INTO he_api.users \
+            (id, email, password_hash, email_verified_at, locale, status) VALUES \
+            ('$USER_ID', 'sdk-contract@example.com', '\\x00', NOW(), 'en', 'active');"
+          echo "user_id=$USER_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Issue test API key
+        id: issue-key
+        env:
+          HE_API_TEST_USER_ID: ${{ steps.seed-user.outputs.user_id }}
+        run: |
+          KEY=$(./scripts/issue-test-key.sh)
+          echo "::add-mask::$KEY"
+          echo "api_key=$KEY" >> "$GITHUB_OUTPUT"
+
+      - name: Start auth-svc (background)
+        env:
+          HE_API_DB_POSTGRES_URI: ${{ env.HE_API_DATABASE_URL }}
+          HE_API_DB_REDIS_URI: ${{ env.HE_API_REDIS_URL }}
+          HE_API_JWT_PRIVATE_KEY_PATH: /tmp/he-api/private_key.pem
+          HE_API_JWT_PUBLIC_KEY_PATH: /tmp/he-api/public_key.pem
+        run: |
+          go run ./apps/auth-svc/cmd/server &
+          echo "AUTH_SVC_PID=$!" >> "$GITHUB_ENV"
+          # crude readiness wait
+          for i in $(seq 1 30); do
+            if nc -z localhost 9090 2>/dev/null; then echo "auth-svc up"; break; fi
+            sleep 1
+          done
+
+      - name: Start api-gateway (background)
+        env:
+          HE_API_DEPLOY_ENV: development
+        run: |
+          go run ./apps/api-gateway/cmd/server &
+          echo "GATEWAY_PID=$!" >> "$GITHUB_ENV"
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/health >/dev/null 2>&1; then echo "gateway up"; break; fi
+            sleep 1
+          done
+
+      - name: Run OpenAI SDK contract test
+        env:
+          HE_API_TEST_GATEWAY_URL: http://localhost:8080
+          HE_API_TEST_API_KEY: ${{ steps.issue-key.outputs.api_key }}
+        run: pytest apps/api-gateway/tests/ -v
+
+      - name: Stop background services
+        if: always()
+        run: |
+          [ -n "${GATEWAY_PID:-}" ] && kill "$GATEWAY_PID" || true
+          [ -n "${AUTH_SVC_PID:-}" ] && kill "$AUTH_SVC_PID" || true
