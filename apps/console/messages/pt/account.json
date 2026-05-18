@@ -18,8 +18,12 @@
       "read_only_hint": "O e-mail é definido no cadastro e não pode ser alterado aqui",
       "read_only_tooltip": "O e-mail não pode ser alterado aqui"
     },
-    "locale": { "label": "Idioma" },
-    "timezone": { "label": "Fuso horário" },
+    "locale": {
+      "label": "Idioma"
+    },
+    "timezone": {
+      "label": "Fuso horário"
+    },
     "security": {
       "totp_enabled": "Autenticação de dois fatores ativada",
       "totp_disabled": "Autenticação de dois fatores desativada",
@@ -30,7 +34,9 @@
       "oauth_github": "Conectado com GitHub",
       "email_password": "Conectado com e-mail e senha"
     },
-    "actions": { "save": "Salvar alterações" },
+    "actions": {
+      "save": "Salvar alterações"
+    },
     "toast": {
       "saved": "Perfil atualizado",
       "locale_changed": "Idioma alterado"
@@ -52,8 +58,54 @@
         "too_long": "O nome deve ter 100 caracteres ou menos",
         "too_short": "O nome não pode ser apenas espaços em branco"
       },
-      "locale": { "unsupported": "O idioma selecionado ainda não é suportado" },
-      "timezone": { "unknown": "Fuso horário desconhecido" }
+      "locale": {
+        "unsupported": "O idioma selecionado ainda não é suportado"
+      },
+      "timezone": {
+        "unknown": "Fuso horário desconhecido"
+      }
+    }
+  },
+  "data": {
+    "title": "Seus dados",
+    "description": "Exporte um arquivo JSON contendo informações da sua conta, metadados de chaves API, registros de solicitações (últimos 90 dias), faturamento, saldo e registros de segurança de conteúdo.",
+    "export": {
+      "cta": {
+        "label": "Exportar meus dados",
+        "disabled_in_progress": "Uma exportação está em preparação. Enviaremos um e-mail quando estiver pronta."
+      },
+      "dialog": {
+        "title": "Confirmar exportação de dados",
+        "body_intro": "Prepararemos um ZIP contendo as seguintes categorias de dados vinculadas à sua conta:",
+        "categories": {
+          "users": "Informações da conta",
+          "api_keys": "Metadados de chaves API",
+          "request_logs": "Registros de solicitações (últimos 90 dias)",
+          "orders": "Faturamento",
+          "balances": "Saldo",
+          "safety_logs": "Registros de segurança de conteúdo"
+        },
+        "slo": "O processamento normalmente leva 5–30 minutos; você receberá um e-mail com um link de download válido por 24 horas.",
+        "confirm": "Confirmar",
+        "cancel": "Cancelar"
+      },
+      "banner": {
+        "processing": "Sua exportação está sendo preparada. Verifique seu e-mail — enviaremos o link de download em 5–30 minutos.",
+        "ready": "Sua última exportação ainda está disponível — verifique seu e-mail ou entre em contato com o suporte se não a recebeu.",
+        "failed": "A última exportação falhou. Tente novamente ou entre em contato com o suporte."
+      },
+      "errors": {
+        "rate_limited": "Você só pode solicitar uma exportação a cada 24 horas. Tente novamente mais tarde.",
+        "generic": "Não foi possível iniciar a exportação. Tente novamente."
+      },
+      "email": {
+        "subject": "Sua exportação de dados He-API está pronta",
+        "greeting": "Olá {display_name},",
+        "body_intro": "Sua exportação de dados foi gerada. Clique no botão abaixo para baixá-la (o link expira em {expires_at}).",
+        "cta": "Baixar meus dados",
+        "expires_at": "O link expira em {expires_at}",
+        "security_disclaimer": "Se você não solicitou esta exportação, entre em contato com o suporte imediatamente."
+      }
     }
   }
 }

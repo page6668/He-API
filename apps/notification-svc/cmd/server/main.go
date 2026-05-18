@@ -1,11 +1,13 @@
-// notification-svc — He-API notification fan-out service (Story 2.2).
+// notification-svc — He-API notification fan-out service (Story 2.2 + 2.6).
 //
 // Wright Round 1 Q4 ruling (option c, with caveat): synchronous SendEmail
 // gRPC entry from auth-svc. Async Kafka migration is an Epic-9 follow-up.
 //
-// P1 scaffold: the binary compiles and listens, but SendEmail returns
-// CodeUnimplemented. Template loader + SendGrid client + per-locale rendering
-// land alongside auth-svc T1 in P2.
+// Story 2.6 — extends the binding with RequestDataExport + GetCurrentExport
+// RPCs. The new RPCs require PG (data_export_requests table) + Redis (rate-
+// limit safety net) + Kafka (gdpr.export.requested topic). Each wiring
+// reads env vars and falls back gracefully so legacy Story-2.2 deployments
+// can run without the new infrastructure (SendEmail-only mode).
 package main
 
 import (
@@ -15,11 +17,19 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
+	"github.com/segmentio/kafka-go"
+
 	obs "github.com/he-api/he-api/packages/go-observability"
+	"github.com/he-api/he-api/apps/notification-svc/internal/audit"
+	"github.com/he-api/he-api/apps/notification-svc/internal/events"
 	"github.com/he-api/he-api/apps/notification-svc/internal/handlers"
+	gdprratelimit "github.com/he-api/he-api/apps/notification-svc/internal/ratelimit"
 	"github.com/he-api/he-api/apps/notification-svc/internal/sendgrid"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/notification/v1/notificationv1connect"
 
@@ -64,8 +74,84 @@ func main() {
 		Name:  "He-API",
 	})
 
+	// Story 2.6 — optional wiring for the data-export RPCs. When the
+	// required env vars are missing we keep the legacy SendEmail-only
+	// binding so existing Story 2.2 deployments aren't broken; the new
+	// RPCs return Unimplemented in that mode (the embedded
+	// *DataExportServer is nil → promoted methods panic; we guard with a
+	// nil-check by binding only the full server when all deps are
+	// present).
+	var dataExport *handlers.DataExportServer
+	if dbURI := strings.TrimSpace(os.Getenv("HE_API_DB_POSTGRES_URI")); dbURI != "" {
+		var pool *pgxpool.Pool
+		pool, err = pgxpool.New(ctx, dbURI)
+		if err != nil {
+			logger.Error("postgres pool init failed", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		defer pool.Close()
+
+		redisAddr := strings.TrimSpace(os.Getenv("HE_API_REDIS_ADDR"))
+		if redisAddr == "" {
+			logger.Error("HE_API_REDIS_ADDR required when HE_API_DB_POSTGRES_URI is set (Story 2.6 wiring)")
+			os.Exit(1)
+		}
+		rdb := redis.NewClient(&redis.Options{
+			Addr:     redisAddr,
+			Password: os.Getenv("HE_API_REDIS_PASSWORD"),
+		})
+		defer rdb.Close()
+
+		kafkaBrokers := strings.Split(strings.TrimSpace(os.Getenv("HE_API_KAFKA_BROKERS")), ",")
+		if len(kafkaBrokers) == 1 && kafkaBrokers[0] == "" {
+			logger.Error("HE_API_KAFKA_BROKERS required when HE_API_DB_POSTGRES_URI is set (Story 2.6 wiring)")
+			os.Exit(1)
+		}
+		gdprWriter := &kafka.Writer{
+			Addr:         kafka.TCP(kafkaBrokers...),
+			Topic:        events.TopicGDPRExportRequested,
+			Balancer:     &kafka.Hash{},
+			Async:        false, // synchronous so commit-then-publish failures surface to caller
+			RequiredAcks: kafka.RequireAll,
+		}
+		defer gdprWriter.Close()
+
+		auditWriter := &kafka.Writer{
+			Addr:         kafka.TCP(kafkaBrokers...),
+			Topic:        "audit.event",
+			Balancer:     &kafka.Hash{},
+			Async:        true,
+			RequiredAcks: kafka.RequireOne,
+			Completion: func(messages []kafka.Message, err error) {
+				if err != nil {
+					logger.Warn("audit publish failed", slog.String("error", err.Error()), slog.Int("messages", len(messages)))
+				}
+			},
+		}
+		defer auditWriter.Close()
+
+		dataExport = handlers.NewDataExportServer(
+			handlers.PoolAdapter(pool),
+			gdprratelimit.NewGDPRExportLimiter(rdb),
+			events.NewGDPRExportPublisher(gdprWriter, logger),
+			audit.NewKafkaPublisher(auditWriter, logger),
+			logger,
+		)
+		logger.Info("notification-svc Story-2.6 data-export RPCs enabled")
+	} else {
+		logger.Warn("HE_API_DB_POSTGRES_URI unset — Story 2.6 RequestDataExport / GetCurrentExport will return Unimplemented")
+	}
+
 	mux := http.NewServeMux()
-	mux.Handle(notificationv1connect.NewNotificationServiceHandler(handlers.NewNotificationServer(sender)))
+	if dataExport != nil {
+		mux.Handle(notificationv1connect.NewNotificationServiceHandler(
+			handlers.NewNotificationServerWithDataExport(sender, dataExport),
+		))
+	} else {
+		mux.Handle(notificationv1connect.NewNotificationServiceHandler(
+			handlers.NewNotificationServer(sender),
+		))
+	}
 
 	srv := &http.Server{
 		Addr:              listenAddr,

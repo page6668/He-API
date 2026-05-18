@@ -17,6 +17,7 @@ package notificationv1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -44,6 +45,13 @@ const (
 	EmailTemplate_EMAIL_TEMPLATE_2FA_RECOVERY_USED        EmailTemplate = 3 // AC3 — fired on every UseRecoveryCode success
 	EmailTemplate_EMAIL_TEMPLATE_2FA_RECOVERY_REGENERATED EmailTemplate = 4 // AC3 — fired on RegenerateRecoveryCodes success
 	EmailTemplate_EMAIL_TEMPLATE_2FA_DISABLED             EmailTemplate = 5 // AC4 — fired on DisableTOTP success (HIGH severity)
+	// Story 2.6 — GDPR data export "your zip is ready" email carrying the
+	// 24-hour signed URL. Required variables: {display_name, signed_url,
+	// expires_at, requested_at}. Architect Round 1 Ruling R-2: caller MUST
+	// pass this enum value, NOT a string template_id; the file-naming slug
+	// `gdpr_export_ready` is internal to notification-svc and decoupled
+	// from the wire contract (the template loader maps enum → slug).
+	EmailTemplate_EMAIL_TEMPLATE_GDPR_EXPORT_READY EmailTemplate = 6
 )
 
 // Enum value maps for EmailTemplate.
@@ -55,6 +63,7 @@ var (
 		3: "EMAIL_TEMPLATE_2FA_RECOVERY_USED",
 		4: "EMAIL_TEMPLATE_2FA_RECOVERY_REGENERATED",
 		5: "EMAIL_TEMPLATE_2FA_DISABLED",
+		6: "EMAIL_TEMPLATE_GDPR_EXPORT_READY",
 	}
 	EmailTemplate_value = map[string]int32{
 		"EMAIL_TEMPLATE_UNSPECIFIED":              0,
@@ -63,6 +72,7 @@ var (
 		"EMAIL_TEMPLATE_2FA_RECOVERY_USED":        3,
 		"EMAIL_TEMPLATE_2FA_RECOVERY_REGENERATED": 4,
 		"EMAIL_TEMPLATE_2FA_DISABLED":             5,
+		"EMAIL_TEMPLATE_GDPR_EXPORT_READY":        6,
 	}
 )
 
@@ -99,12 +109,19 @@ type SendEmailRequest struct {
 	ToEmail  string                 `protobuf:"bytes,2,opt,name=to_email,json=toEmail,proto3" json:"to_email,omitempty"`
 	Locale   string                 `protobuf:"bytes,3,opt,name=locale,proto3" json:"locale,omitempty"` // matches one of apps/console/i18n locales; falls back to 'en'
 	// Free-form template variables. For EMAIL_VERIFICATION the caller MUST
-	// populate keys: {"token", "verification_link"}.
+	// populate keys: {"token", "verification_link"}. For
+	// EMAIL_TEMPLATE_GDPR_EXPORT_READY the caller MUST populate keys:
+	// {"display_name", "signed_url", "expires_at", "requested_at"}.
 	Variables map[string]string `protobuf:"bytes,4,rep,name=variables,proto3" json:"variables,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// Caller-correlated request id (he_request_id) for audit join.
-	RequestId     string `protobuf:"bytes,5,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	RequestId string `protobuf:"bytes,5,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	// Story 2.6 — BR-5.8 dedup key. When non-empty, notification-svc skips
+	// the send if `data_export_requests.email_sent_at IS NOT NULL` for this
+	// export_id. Set by analytics-svc to the export_id; ignored for all
+	// other templates.
+	IdempotencyKey string `protobuf:"bytes,6,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *SendEmailRequest) Reset() {
@@ -172,6 +189,13 @@ func (x *SendEmailRequest) GetRequestId() string {
 	return ""
 }
 
+func (x *SendEmailRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
 type SendEmailResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// SendGrid message id (or stub id in dev). Useful for support tracing.
@@ -217,32 +241,298 @@ func (x *SendEmailResponse) GetProviderMessageId() string {
 	return ""
 }
 
+// RequestDataExportRequest — Story 2.6 AC2. user_id is server-derived from
+// the JWT `sub` claim by api-gateway (BR-2.4); the gateway forwards it on
+// the gRPC call. idempotency_window_seconds is hard-coded to 86400 at the
+// REST handler (BR-2.5) but kept as a field to preserve future tuning
+// without a wire break.
+type RequestDataExportRequest struct {
+	state                    protoimpl.MessageState `protogen:"open.v1"`
+	UserId                   string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	IdempotencyWindowSeconds int32                  `protobuf:"varint,2,opt,name=idempotency_window_seconds,json=idempotencyWindowSeconds,proto3" json:"idempotency_window_seconds,omitempty"` // default 86400 (24h)
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
+}
+
+func (x *RequestDataExportRequest) Reset() {
+	*x = RequestDataExportRequest{}
+	mi := &file_he_notification_v1_notification_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RequestDataExportRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RequestDataExportRequest) ProtoMessage() {}
+
+func (x *RequestDataExportRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_he_notification_v1_notification_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RequestDataExportRequest.ProtoReflect.Descriptor instead.
+func (*RequestDataExportRequest) Descriptor() ([]byte, []int) {
+	return file_he_notification_v1_notification_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *RequestDataExportRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *RequestDataExportRequest) GetIdempotencyWindowSeconds() int32 {
+	if x != nil {
+		return x.IdempotencyWindowSeconds
+	}
+	return 0
+}
+
+// RequestDataExportResponse — see AC2 examples for the three return cases:
+// new export (status=pending), idempotent hit (status ∈ pending/processing/
+// completed), and post-window new export. requested_at is the timestamp of
+// the FIRST insert within the current idempotency window.
+type RequestDataExportResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ExportId      string                 `protobuf:"bytes,1,opt,name=export_id,json=exportId,proto3" json:"export_id,omitempty"`
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"` // "pending" | "processing" | "completed" | "failed" | "expired"
+	RequestedAt   *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=requested_at,json=requestedAt,proto3" json:"requested_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RequestDataExportResponse) Reset() {
+	*x = RequestDataExportResponse{}
+	mi := &file_he_notification_v1_notification_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RequestDataExportResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RequestDataExportResponse) ProtoMessage() {}
+
+func (x *RequestDataExportResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_he_notification_v1_notification_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RequestDataExportResponse.ProtoReflect.Descriptor instead.
+func (*RequestDataExportResponse) Descriptor() ([]byte, []int) {
+	return file_he_notification_v1_notification_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *RequestDataExportResponse) GetExportId() string {
+	if x != nil {
+		return x.ExportId
+	}
+	return ""
+}
+
+func (x *RequestDataExportResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *RequestDataExportResponse) GetRequestedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.RequestedAt
+	}
+	return nil
+}
+
+type GetCurrentExportRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetCurrentExportRequest) Reset() {
+	*x = GetCurrentExportRequest{}
+	mi := &file_he_notification_v1_notification_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetCurrentExportRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetCurrentExportRequest) ProtoMessage() {}
+
+func (x *GetCurrentExportRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_he_notification_v1_notification_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetCurrentExportRequest.ProtoReflect.Descriptor instead.
+func (*GetCurrentExportRequest) Descriptor() ([]byte, []int) {
+	return file_he_notification_v1_notification_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GetCurrentExportRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+// GetCurrentExportResponse — has_current=false ⇒ all other fields are zero
+// values and the UI renders the enabled-CTA path. has_current=true ⇒ the
+// CTA is disabled per AC1 BR-1.5 (status ∈ pending, processing) or the
+// "last export still available" banner is shown (status=completed AND
+// signed_url_expires_at > now).
+type GetCurrentExportResponse struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	HasCurrent         bool                   `protobuf:"varint,1,opt,name=has_current,json=hasCurrent,proto3" json:"has_current,omitempty"`
+	ExportId           string                 `protobuf:"bytes,2,opt,name=export_id,json=exportId,proto3" json:"export_id,omitempty"`
+	Status             string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
+	RequestedAt        *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=requested_at,json=requestedAt,proto3" json:"requested_at,omitempty"`
+	SignedUrlExpiresAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=signed_url_expires_at,json=signedUrlExpiresAt,proto3" json:"signed_url_expires_at,omitempty"` // zero unless status=completed
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *GetCurrentExportResponse) Reset() {
+	*x = GetCurrentExportResponse{}
+	mi := &file_he_notification_v1_notification_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetCurrentExportResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetCurrentExportResponse) ProtoMessage() {}
+
+func (x *GetCurrentExportResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_he_notification_v1_notification_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetCurrentExportResponse.ProtoReflect.Descriptor instead.
+func (*GetCurrentExportResponse) Descriptor() ([]byte, []int) {
+	return file_he_notification_v1_notification_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *GetCurrentExportResponse) GetHasCurrent() bool {
+	if x != nil {
+		return x.HasCurrent
+	}
+	return false
+}
+
+func (x *GetCurrentExportResponse) GetExportId() string {
+	if x != nil {
+		return x.ExportId
+	}
+	return ""
+}
+
+func (x *GetCurrentExportResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *GetCurrentExportResponse) GetRequestedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.RequestedAt
+	}
+	return nil
+}
+
+func (x *GetCurrentExportResponse) GetSignedUrlExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.SignedUrlExpiresAt
+	}
+	return nil
+}
+
 var File_he_notification_v1_notification_proto protoreflect.FileDescriptor
 
 const file_he_notification_v1_notification_proto_rawDesc = "" +
 	"\n" +
-	"%he/notification/v1/notification.proto\x12\x12he.notification.v1\"\xb4\x02\n" +
+	"%he/notification/v1/notification.proto\x12\x12he.notification.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xdd\x02\n" +
 	"\x10SendEmailRequest\x12=\n" +
 	"\btemplate\x18\x01 \x01(\x0e2!.he.notification.v1.EmailTemplateR\btemplate\x12\x19\n" +
 	"\bto_email\x18\x02 \x01(\tR\atoEmail\x12\x16\n" +
 	"\x06locale\x18\x03 \x01(\tR\x06locale\x12Q\n" +
 	"\tvariables\x18\x04 \x03(\v23.he.notification.v1.SendEmailRequest.VariablesEntryR\tvariables\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x05 \x01(\tR\trequestId\x1a<\n" +
+	"request_id\x18\x05 \x01(\tR\trequestId\x12'\n" +
+	"\x0fidempotency_key\x18\x06 \x01(\tR\x0eidempotencyKey\x1a<\n" +
 	"\x0eVariablesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"C\n" +
 	"\x11SendEmailResponse\x12.\n" +
-	"\x13provider_message_id\x18\x01 \x01(\tR\x11providerMessageId*\xea\x01\n" +
+	"\x13provider_message_id\x18\x01 \x01(\tR\x11providerMessageId\"q\n" +
+	"\x18RequestDataExportRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12<\n" +
+	"\x1aidempotency_window_seconds\x18\x02 \x01(\x05R\x18idempotencyWindowSeconds\"\x8f\x01\n" +
+	"\x19RequestDataExportResponse\x12\x1b\n" +
+	"\texport_id\x18\x01 \x01(\tR\bexportId\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12=\n" +
+	"\frequested_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\vrequestedAt\"2\n" +
+	"\x17GetCurrentExportRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\"\xfe\x01\n" +
+	"\x18GetCurrentExportResponse\x12\x1f\n" +
+	"\vhas_current\x18\x01 \x01(\bR\n" +
+	"hasCurrent\x12\x1b\n" +
+	"\texport_id\x18\x02 \x01(\tR\bexportId\x12\x16\n" +
+	"\x06status\x18\x03 \x01(\tR\x06status\x12=\n" +
+	"\frequested_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\vrequestedAt\x12M\n" +
+	"\x15signed_url_expires_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x12signedUrlExpiresAt*\x90\x02\n" +
 	"\rEmailTemplate\x12\x1e\n" +
 	"\x1aEMAIL_TEMPLATE_UNSPECIFIED\x10\x00\x12%\n" +
 	"!EMAIL_TEMPLATE_EMAIL_VERIFICATION\x10\x01\x12\x1e\n" +
 	"\x1aEMAIL_TEMPLATE_2FA_ENABLED\x10\x02\x12$\n" +
 	" EMAIL_TEMPLATE_2FA_RECOVERY_USED\x10\x03\x12+\n" +
 	"'EMAIL_TEMPLATE_2FA_RECOVERY_REGENERATED\x10\x04\x12\x1f\n" +
-	"\x1bEMAIL_TEMPLATE_2FA_DISABLED\x10\x052o\n" +
+	"\x1bEMAIL_TEMPLATE_2FA_DISABLED\x10\x05\x12$\n" +
+	" EMAIL_TEMPLATE_GDPR_EXPORT_READY\x10\x062\xd0\x02\n" +
 	"\x13NotificationService\x12X\n" +
-	"\tSendEmail\x12$.he.notification.v1.SendEmailRequest\x1a%.he.notification.v1.SendEmailResponseBRZPgithub.com/he-api/he-api/packages/proto/gen/go/he/notification/v1;notificationv1b\x06proto3"
+	"\tSendEmail\x12$.he.notification.v1.SendEmailRequest\x1a%.he.notification.v1.SendEmailResponse\x12p\n" +
+	"\x11RequestDataExport\x12,.he.notification.v1.RequestDataExportRequest\x1a-.he.notification.v1.RequestDataExportResponse\x12m\n" +
+	"\x10GetCurrentExport\x12+.he.notification.v1.GetCurrentExportRequest\x1a,.he.notification.v1.GetCurrentExportResponseBRZPgithub.com/he-api/he-api/packages/proto/gen/go/he/notification/v1;notificationv1b\x06proto3"
 
 var (
 	file_he_notification_v1_notification_proto_rawDescOnce sync.Once
@@ -257,23 +547,35 @@ func file_he_notification_v1_notification_proto_rawDescGZIP() []byte {
 }
 
 var file_he_notification_v1_notification_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_he_notification_v1_notification_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_he_notification_v1_notification_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_he_notification_v1_notification_proto_goTypes = []any{
-	(EmailTemplate)(0),        // 0: he.notification.v1.EmailTemplate
-	(*SendEmailRequest)(nil),  // 1: he.notification.v1.SendEmailRequest
-	(*SendEmailResponse)(nil), // 2: he.notification.v1.SendEmailResponse
-	nil,                       // 3: he.notification.v1.SendEmailRequest.VariablesEntry
+	(EmailTemplate)(0),                // 0: he.notification.v1.EmailTemplate
+	(*SendEmailRequest)(nil),          // 1: he.notification.v1.SendEmailRequest
+	(*SendEmailResponse)(nil),         // 2: he.notification.v1.SendEmailResponse
+	(*RequestDataExportRequest)(nil),  // 3: he.notification.v1.RequestDataExportRequest
+	(*RequestDataExportResponse)(nil), // 4: he.notification.v1.RequestDataExportResponse
+	(*GetCurrentExportRequest)(nil),   // 5: he.notification.v1.GetCurrentExportRequest
+	(*GetCurrentExportResponse)(nil),  // 6: he.notification.v1.GetCurrentExportResponse
+	nil,                               // 7: he.notification.v1.SendEmailRequest.VariablesEntry
+	(*timestamppb.Timestamp)(nil),     // 8: google.protobuf.Timestamp
 }
 var file_he_notification_v1_notification_proto_depIdxs = []int32{
 	0, // 0: he.notification.v1.SendEmailRequest.template:type_name -> he.notification.v1.EmailTemplate
-	3, // 1: he.notification.v1.SendEmailRequest.variables:type_name -> he.notification.v1.SendEmailRequest.VariablesEntry
-	1, // 2: he.notification.v1.NotificationService.SendEmail:input_type -> he.notification.v1.SendEmailRequest
-	2, // 3: he.notification.v1.NotificationService.SendEmail:output_type -> he.notification.v1.SendEmailResponse
-	3, // [3:4] is the sub-list for method output_type
-	2, // [2:3] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	7, // 1: he.notification.v1.SendEmailRequest.variables:type_name -> he.notification.v1.SendEmailRequest.VariablesEntry
+	8, // 2: he.notification.v1.RequestDataExportResponse.requested_at:type_name -> google.protobuf.Timestamp
+	8, // 3: he.notification.v1.GetCurrentExportResponse.requested_at:type_name -> google.protobuf.Timestamp
+	8, // 4: he.notification.v1.GetCurrentExportResponse.signed_url_expires_at:type_name -> google.protobuf.Timestamp
+	1, // 5: he.notification.v1.NotificationService.SendEmail:input_type -> he.notification.v1.SendEmailRequest
+	3, // 6: he.notification.v1.NotificationService.RequestDataExport:input_type -> he.notification.v1.RequestDataExportRequest
+	5, // 7: he.notification.v1.NotificationService.GetCurrentExport:input_type -> he.notification.v1.GetCurrentExportRequest
+	2, // 8: he.notification.v1.NotificationService.SendEmail:output_type -> he.notification.v1.SendEmailResponse
+	4, // 9: he.notification.v1.NotificationService.RequestDataExport:output_type -> he.notification.v1.RequestDataExportResponse
+	6, // 10: he.notification.v1.NotificationService.GetCurrentExport:output_type -> he.notification.v1.GetCurrentExportResponse
+	8, // [8:11] is the sub-list for method output_type
+	5, // [5:8] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_he_notification_v1_notification_proto_init() }
@@ -287,7 +589,7 @@ func file_he_notification_v1_notification_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_he_notification_v1_notification_proto_rawDesc), len(file_he_notification_v1_notification_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   3,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

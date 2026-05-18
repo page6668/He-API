@@ -1,0 +1,9 @@
+Tu exportación de datos de He-API está lista
+
+Hola {{.display_name}},
+
+Tu exportación de datos se ha generado. Abre el enlace de abajo para descargarla:
+
+{{.signed_url}}
+
+El enlace caduca el {{.expires_at}}. Si no solicitaste esta exportación, contacta a soporte inmediatamente.

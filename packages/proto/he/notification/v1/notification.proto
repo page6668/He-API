@@ -9,10 +9,28 @@ syntax = "proto3";
 
 package he.notification.v1;
 
+import "google/protobuf/timestamp.proto";
+
 option go_package = "github.com/he-api/he-api/packages/proto/gen/go/he/notification/v1;notificationv1";
 
+// NotificationService — sync-gRPC surface for outbound user notifications and
+// the GDPR data-export request/lookup pair (Story 2.6).
+//
+// Story 2.6 extends Story 2.2's service surface with two new RPCs:
+//   - RequestDataExport — POST /v1/account/data-export proxy target with
+//     24-hour idempotency (AC2 BR-2.5; TS-CONS-016-failed-excluded).
+//   - GetCurrentExport — GET /v1/account/data-export/current proxy target
+//     used by the Settings → Data Server Component for CTA-disabled
+//     hydration (AC1 BR-1.5).
 service NotificationService {
   rpc SendEmail(SendEmailRequest) returns (SendEmailResponse);
+  // Story 2.6 — request a GDPR data export. Returns the existing export's
+  // id when one is in flight (or completed) inside the 24-hour idempotency
+  // window. See AC2 BR-2.5 + TS-CONS-016 (failed rows are NOT counted).
+  rpc RequestDataExport(RequestDataExportRequest) returns (RequestDataExportResponse);
+  // Story 2.6 — read the user's most-recent in-flight export (if any),
+  // for AC1 BR-1.5 CTA-disabled hydration.
+  rpc GetCurrentExport(GetCurrentExportRequest) returns (GetCurrentExportResponse);
 }
 
 enum EmailTemplate {
@@ -28,6 +46,13 @@ enum EmailTemplate {
   EMAIL_TEMPLATE_2FA_RECOVERY_USED        = 3; // AC3 — fired on every UseRecoveryCode success
   EMAIL_TEMPLATE_2FA_RECOVERY_REGENERATED = 4; // AC3 — fired on RegenerateRecoveryCodes success
   EMAIL_TEMPLATE_2FA_DISABLED             = 5; // AC4 — fired on DisableTOTP success (HIGH severity)
+  // Story 2.6 — GDPR data export "your zip is ready" email carrying the
+  // 24-hour signed URL. Required variables: {display_name, signed_url,
+  // expires_at, requested_at}. Architect Round 1 Ruling R-2: caller MUST
+  // pass this enum value, NOT a string template_id; the file-naming slug
+  // `gdpr_export_ready` is internal to notification-svc and decoupled
+  // from the wire contract (the template loader maps enum → slug).
+  EMAIL_TEMPLATE_GDPR_EXPORT_READY        = 6;
 }
 
 message SendEmailRequest {
@@ -35,13 +60,57 @@ message SendEmailRequest {
   string to_email = 2;
   string locale = 3; // matches one of apps/console/i18n locales; falls back to 'en'
   // Free-form template variables. For EMAIL_VERIFICATION the caller MUST
-  // populate keys: {"token", "verification_link"}.
+  // populate keys: {"token", "verification_link"}. For
+  // EMAIL_TEMPLATE_GDPR_EXPORT_READY the caller MUST populate keys:
+  // {"display_name", "signed_url", "expires_at", "requested_at"}.
   map<string, string> variables = 4;
   // Caller-correlated request id (he_request_id) for audit join.
   string request_id = 5;
+  // Story 2.6 — BR-5.8 dedup key. When non-empty, notification-svc skips
+  // the send if `data_export_requests.email_sent_at IS NOT NULL` for this
+  // export_id. Set by analytics-svc to the export_id; ignored for all
+  // other templates.
+  string idempotency_key = 6;
 }
 
 message SendEmailResponse {
   // SendGrid message id (or stub id in dev). Useful for support tracing.
   string provider_message_id = 1;
+}
+
+// RequestDataExportRequest — Story 2.6 AC2. user_id is server-derived from
+// the JWT `sub` claim by api-gateway (BR-2.4); the gateway forwards it on
+// the gRPC call. idempotency_window_seconds is hard-coded to 86400 at the
+// REST handler (BR-2.5) but kept as a field to preserve future tuning
+// without a wire break.
+message RequestDataExportRequest {
+  string user_id = 1;
+  int32  idempotency_window_seconds = 2; // default 86400 (24h)
+}
+
+// RequestDataExportResponse — see AC2 examples for the three return cases:
+// new export (status=pending), idempotent hit (status ∈ pending/processing/
+// completed), and post-window new export. requested_at is the timestamp of
+// the FIRST insert within the current idempotency window.
+message RequestDataExportResponse {
+  string export_id = 1;
+  string status = 2; // "pending" | "processing" | "completed" | "failed" | "expired"
+  google.protobuf.Timestamp requested_at = 3;
+}
+
+message GetCurrentExportRequest {
+  string user_id = 1;
+}
+
+// GetCurrentExportResponse — has_current=false ⇒ all other fields are zero
+// values and the UI renders the enabled-CTA path. has_current=true ⇒ the
+// CTA is disabled per AC1 BR-1.5 (status ∈ pending, processing) or the
+// "last export still available" banner is shown (status=completed AND
+// signed_url_expires_at > now).
+message GetCurrentExportResponse {
+  bool   has_current = 1;
+  string export_id = 2;
+  string status = 3;
+  google.protobuf.Timestamp requested_at = 4;
+  google.protobuf.Timestamp signed_url_expires_at = 5; // zero unless status=completed
 }

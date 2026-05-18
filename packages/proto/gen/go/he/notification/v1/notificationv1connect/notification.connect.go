@@ -44,11 +44,24 @@ const (
 	// NotificationServiceSendEmailProcedure is the fully-qualified name of the NotificationService's
 	// SendEmail RPC.
 	NotificationServiceSendEmailProcedure = "/he.notification.v1.NotificationService/SendEmail"
+	// NotificationServiceRequestDataExportProcedure is the fully-qualified name of the
+	// NotificationService's RequestDataExport RPC.
+	NotificationServiceRequestDataExportProcedure = "/he.notification.v1.NotificationService/RequestDataExport"
+	// NotificationServiceGetCurrentExportProcedure is the fully-qualified name of the
+	// NotificationService's GetCurrentExport RPC.
+	NotificationServiceGetCurrentExportProcedure = "/he.notification.v1.NotificationService/GetCurrentExport"
 )
 
 // NotificationServiceClient is a client for the he.notification.v1.NotificationService service.
 type NotificationServiceClient interface {
 	SendEmail(context.Context, *connect.Request[v1.SendEmailRequest]) (*connect.Response[v1.SendEmailResponse], error)
+	// Story 2.6 — request a GDPR data export. Returns the existing export's
+	// id when one is in flight (or completed) inside the 24-hour idempotency
+	// window. See AC2 BR-2.5 + TS-CONS-016 (failed rows are NOT counted).
+	RequestDataExport(context.Context, *connect.Request[v1.RequestDataExportRequest]) (*connect.Response[v1.RequestDataExportResponse], error)
+	// Story 2.6 — read the user's most-recent in-flight export (if any),
+	// for AC1 BR-1.5 CTA-disabled hydration.
+	GetCurrentExport(context.Context, *connect.Request[v1.GetCurrentExportRequest]) (*connect.Response[v1.GetCurrentExportResponse], error)
 }
 
 // NewNotificationServiceClient constructs a client for the he.notification.v1.NotificationService
@@ -68,12 +81,26 @@ func NewNotificationServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(notificationServiceMethods.ByName("SendEmail")),
 			connect.WithClientOptions(opts...),
 		),
+		requestDataExport: connect.NewClient[v1.RequestDataExportRequest, v1.RequestDataExportResponse](
+			httpClient,
+			baseURL+NotificationServiceRequestDataExportProcedure,
+			connect.WithSchema(notificationServiceMethods.ByName("RequestDataExport")),
+			connect.WithClientOptions(opts...),
+		),
+		getCurrentExport: connect.NewClient[v1.GetCurrentExportRequest, v1.GetCurrentExportResponse](
+			httpClient,
+			baseURL+NotificationServiceGetCurrentExportProcedure,
+			connect.WithSchema(notificationServiceMethods.ByName("GetCurrentExport")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // notificationServiceClient implements NotificationServiceClient.
 type notificationServiceClient struct {
-	sendEmail *connect.Client[v1.SendEmailRequest, v1.SendEmailResponse]
+	sendEmail         *connect.Client[v1.SendEmailRequest, v1.SendEmailResponse]
+	requestDataExport *connect.Client[v1.RequestDataExportRequest, v1.RequestDataExportResponse]
+	getCurrentExport  *connect.Client[v1.GetCurrentExportRequest, v1.GetCurrentExportResponse]
 }
 
 // SendEmail calls he.notification.v1.NotificationService.SendEmail.
@@ -81,10 +108,27 @@ func (c *notificationServiceClient) SendEmail(ctx context.Context, req *connect.
 	return c.sendEmail.CallUnary(ctx, req)
 }
 
+// RequestDataExport calls he.notification.v1.NotificationService.RequestDataExport.
+func (c *notificationServiceClient) RequestDataExport(ctx context.Context, req *connect.Request[v1.RequestDataExportRequest]) (*connect.Response[v1.RequestDataExportResponse], error) {
+	return c.requestDataExport.CallUnary(ctx, req)
+}
+
+// GetCurrentExport calls he.notification.v1.NotificationService.GetCurrentExport.
+func (c *notificationServiceClient) GetCurrentExport(ctx context.Context, req *connect.Request[v1.GetCurrentExportRequest]) (*connect.Response[v1.GetCurrentExportResponse], error) {
+	return c.getCurrentExport.CallUnary(ctx, req)
+}
+
 // NotificationServiceHandler is an implementation of the he.notification.v1.NotificationService
 // service.
 type NotificationServiceHandler interface {
 	SendEmail(context.Context, *connect.Request[v1.SendEmailRequest]) (*connect.Response[v1.SendEmailResponse], error)
+	// Story 2.6 — request a GDPR data export. Returns the existing export's
+	// id when one is in flight (or completed) inside the 24-hour idempotency
+	// window. See AC2 BR-2.5 + TS-CONS-016 (failed rows are NOT counted).
+	RequestDataExport(context.Context, *connect.Request[v1.RequestDataExportRequest]) (*connect.Response[v1.RequestDataExportResponse], error)
+	// Story 2.6 — read the user's most-recent in-flight export (if any),
+	// for AC1 BR-1.5 CTA-disabled hydration.
+	GetCurrentExport(context.Context, *connect.Request[v1.GetCurrentExportRequest]) (*connect.Response[v1.GetCurrentExportResponse], error)
 }
 
 // NewNotificationServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -100,10 +144,26 @@ func NewNotificationServiceHandler(svc NotificationServiceHandler, opts ...conne
 		connect.WithSchema(notificationServiceMethods.ByName("SendEmail")),
 		connect.WithHandlerOptions(opts...),
 	)
+	notificationServiceRequestDataExportHandler := connect.NewUnaryHandler(
+		NotificationServiceRequestDataExportProcedure,
+		svc.RequestDataExport,
+		connect.WithSchema(notificationServiceMethods.ByName("RequestDataExport")),
+		connect.WithHandlerOptions(opts...),
+	)
+	notificationServiceGetCurrentExportHandler := connect.NewUnaryHandler(
+		NotificationServiceGetCurrentExportProcedure,
+		svc.GetCurrentExport,
+		connect.WithSchema(notificationServiceMethods.ByName("GetCurrentExport")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/he.notification.v1.NotificationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case NotificationServiceSendEmailProcedure:
 			notificationServiceSendEmailHandler.ServeHTTP(w, r)
+		case NotificationServiceRequestDataExportProcedure:
+			notificationServiceRequestDataExportHandler.ServeHTTP(w, r)
+		case NotificationServiceGetCurrentExportProcedure:
+			notificationServiceGetCurrentExportHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -115,4 +175,12 @@ type UnimplementedNotificationServiceHandler struct{}
 
 func (UnimplementedNotificationServiceHandler) SendEmail(context.Context, *connect.Request[v1.SendEmailRequest]) (*connect.Response[v1.SendEmailResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.notification.v1.NotificationService.SendEmail is not implemented"))
+}
+
+func (UnimplementedNotificationServiceHandler) RequestDataExport(context.Context, *connect.Request[v1.RequestDataExportRequest]) (*connect.Response[v1.RequestDataExportResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.notification.v1.NotificationService.RequestDataExport is not implemented"))
+}
+
+func (UnimplementedNotificationServiceHandler) GetCurrentExport(context.Context, *connect.Request[v1.GetCurrentExportRequest]) (*connect.Response[v1.GetCurrentExportResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.notification.v1.NotificationService.GetCurrentExport is not implemented"))
 }

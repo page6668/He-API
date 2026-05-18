@@ -71,6 +71,7 @@ Error response (与 OpenAI 一致 + 自定义字段):
 | 400 | `400_invalid_request` | 参数错误 |
 | 429 | `429_rate_limit_qps` | QPS 超限 |
 | 429 | `429_rate_limit_tpm` | TPM 超限 |
+| 429 | `429_rate_limit_gdpr_export` | GDPR 数据导出 24 小时内的限流（Story 2.6 AC2 BR-2.5；正常幂等路径返回 200 + 已存在的导出记录，仅在 100ms 级竞态下命中） |
 | 502 | `502_upstream_unavailable` | 上游模型不可用（即将 failover） |
 | 504 | `504_upstream_timeout` | 上游模型超时（即将 failover） |
 | 500 | `500_internal_error` | 系统异常 |

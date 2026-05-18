@@ -75,6 +75,24 @@ const (
 	// Diff payload uses BR-2.10 redaction (display_name <set>/<cleared>;
 	// locale/timezone literal). Required for GDPR data-export (Story 2.6).
 	EventProfileUpdated EventType = "profile.updated" // LOW
+
+	// Story 2.6 — GDPR data-export taxonomy (3 types per AC6 BR-6.6). The
+	// EVENTS THEMSELVES are emitted by notification-svc and analytics-svc
+	// (Accumulated Context table: "REUSE-OF-PATTERN — each service
+	// instantiates its own publisher with the same contract"). auth-svc
+	// only declares the constants here so the taxonomy stays counted by a
+	// single grep — TS-CONS-004 verifies "31 pre-2.6 → 34 post-2.6" via
+	// apps/auth-svc/internal/audit/audit.go.
+	//
+	// Severity per BR-6.6:
+	//   - requested / completed → INFO/LOW
+	//   - failed (stage ∈ pg_dump / ch_dump / oss_upload / oss_sign_url /
+	//     timeout) → WARN
+	//   - failed (stage = email_send) → ERROR (pages ops via PagerDuty —
+	//     user can't retrieve their data)
+	EventGdprExportRequested EventType = "gdpr.export.requested" // LOW
+	EventGdprExportCompleted EventType = "gdpr.export.completed" // LOW
+	EventGdprExportFailed    EventType = "gdpr.export.failed"    // WARN or ERROR per failed_stage
 )
 
 // Severity classification for the 10 Story 2.4 event types per BR-5.7.

@@ -65,5 +65,47 @@
         "unknown": "Unknown time zone"
       }
     }
+  },
+  "data": {
+    "title": "Your Data",
+    "description": "Export a JSON archive of your account data, API key metadata, request logs (last 90 days), billing, balance, and content-safety records.",
+    "export": {
+      "cta": {
+        "label": "Export My Data",
+        "disabled_in_progress": "An export is currently being prepared. We'll email you when it's ready."
+      },
+      "dialog": {
+        "title": "Confirm data export",
+        "body_intro": "We'll prepare a ZIP containing the following data categories tied to your account:",
+        "categories": {
+          "users": "Account information",
+          "api_keys": "API key metadata",
+          "request_logs": "Request logs (last 90 days)",
+          "orders": "Billing",
+          "balances": "Balance",
+          "safety_logs": "Content-safety records"
+        },
+        "slo": "Processing usually takes 5–30 minutes; you'll receive an email with a download link valid for 24 hours.",
+        "confirm": "Confirm",
+        "cancel": "Cancel"
+      },
+      "banner": {
+        "processing": "Your export is being prepared. Check your email — we'll send the download link within 5–30 minutes.",
+        "ready": "Your last export is still available — check your email or contact support if you didn't receive it.",
+        "failed": "The last export failed. Please try again or contact support."
+      },
+      "errors": {
+        "rate_limited": "You can only request one export every 24 hours. Try again later.",
+        "generic": "Couldn't start the export. Please try again."
+      },
+      "email": {
+        "subject": "Your He-API data export is ready",
+        "greeting": "Hi {display_name},",
+        "body_intro": "Your data export has been generated. Click the button below to download it (the link expires on {expires_at}).",
+        "cta": "Download my data",
+        "expires_at": "Link expires on {expires_at}",
+        "security_disclaimer": "If you didn't request this export, contact support immediately."
+      }
+    }
   }
 }

@@ -186,6 +186,29 @@ Connection pool sizing: out of scope for 1.6; tracked as an Epic 9 followup. Pod
 3. If the key was rotated: re-encrypt existing Secrets via `kubectl get secret he-api-db-creds -n he-api-staging -o yaml | kubectl replace -f -`.
 4. Last resort: `terraform taint kubernetes_secret.he_api_db_admin_creds && terraform apply` recreates the Secret with the current key version.
 
+### GDPR data export — orphan-pending row alert + manual re-run (Story 2.6 T8.6)
+
+**Orphan `pending` rows** (Kafka publish failed after PG commit per AC2 step 3 edge):
+
+1. Grafana panel query: `data_export_requests.status='pending' AND created_at < NOW() - INTERVAL '15 minutes'`. Alert routes to Feishu (default) — bump to PagerDuty when count > 5.
+2. Recovery path: `psql -c "UPDATE he_api.data_export_requests SET status='failed', failure_reason='kafka outbox lost' WHERE id IN (<ids>)"` then notify the affected users via the support channel. The future BR-4.7 cron will pick up these rows; until then the manual flip preserves the operator-readable status invariant.
+
+**Manual re-run for a failed export**:
+
+1. `psql -c "UPDATE he_api.data_export_requests SET status='pending', failure_reason=NULL, started_at=NULL, completed_at=NULL WHERE id='<id>'"`.
+2. Produce a fresh `gdpr.export.requested` Kafka message via `kafka-console-producer --topic gdpr.export.requested --property "parse.key=true" --property "key.separator=:" <<< "<user_id>:<protobuf-payload>"`. (Operator builds the protobuf via `protoc --encode=DataExportRequestedEvent ...`.)
+3. analytics-svc consumer picks it up; row transitions to `processing`.
+
+**Extend the signed URL** (user reports the 24h link expired but still wants the zip):
+
+1. Confirm the OSS object still exists: `aliyun oss ls oss://he-api-gdpr-exports/gdpr-exports/<user_id>/<export_id>.zip` (the 25h lifecycle rule means there's a ~1h window after `signed_url_expires_at` where the object is still there).
+2. Re-sign: `aliyun oss sign --expires 86400 oss://...`. Send the new URL via the support channel (DO NOT log the URL — TS-CONS-008 applies to operator workflows too).
+3. If the lifecycle rule already fired and the object is gone: ask the user to request a fresh export (`POST /v1/account/data-export` — the 24h idempotency window has already passed since they exhausted theirs).
+
+**Delete a user's OSS prefix on Story-2.7 account deletion**:
+
+1. `aliyun oss rm oss://he-api-gdpr-exports/gdpr-exports/<user_id>/ --recursive`. The Story-2.7 deletion handler is responsible for the call; this runbook entry exists for manual recovery if the handler errored.
+
 ---
 
 ## Section 6 — Decision Lineage

@@ -1,0 +1,33 @@
+// events.proto — He-API GDPR domain events (Story 2.6).
+//
+// First occupant of the `gdpr` Buf domain (per source-tree.md
+// he/<domain>/v1/<service>.proto convention; TS-CONS-010).
+//
+// The DataExportRequestedEvent is produced by notification-svc on the
+// `gdpr.export.requested` Kafka topic (NEW; partitions=6, retention=7d,
+// per AC2 BR-2.6 + T0.3 Terraform module) and consumed by analytics-svc
+// (consumer group `analytics-svc.gdpr-export`, BR-4.1).
+//
+// Partition key on the wire = user_id (TS-CONS-015 partition stability).
+//
+// Note: the audit-event payloads for `gdpr.export.{requested,completed,
+// failed}` are carried by the existing `audit.event` topic (Story 2.2
+// TS-CONS-015; TS-CONS-004) and are NOT proto-defined here — they share
+// the auth-svc `audit.Event` JSON envelope.
+syntax = "proto3";
+
+package he.gdpr.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/he-api/he-api/packages/proto/gen/go/he/gdpr/v1;gdprv1";
+
+// DataExportRequestedEvent — Story 2.6 AC2 step 3. Carries the minimum
+// payload required for analytics-svc to look up the
+// `he_api.data_export_requests` row by id and start the 7-dump worker.
+// No PII beyond the user_id UUID (per BR-6.5).
+message DataExportRequestedEvent {
+  string export_id = 1;
+  string user_id = 2;
+  google.protobuf.Timestamp requested_at = 3;
+}

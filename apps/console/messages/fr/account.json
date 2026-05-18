@@ -18,8 +18,12 @@
       "read_only_hint": "L'e-mail est défini lors de l'inscription et ne peut pas être modifié ici",
       "read_only_tooltip": "L'e-mail ne peut pas être modifié ici"
     },
-    "locale": { "label": "Langue" },
-    "timezone": { "label": "Fuseau horaire" },
+    "locale": {
+      "label": "Langue"
+    },
+    "timezone": {
+      "label": "Fuseau horaire"
+    },
     "security": {
       "totp_enabled": "Authentification à deux facteurs activée",
       "totp_disabled": "Authentification à deux facteurs désactivée",
@@ -30,7 +34,9 @@
       "oauth_github": "Connecté avec GitHub",
       "email_password": "Connecté avec e-mail et mot de passe"
     },
-    "actions": { "save": "Enregistrer les modifications" },
+    "actions": {
+      "save": "Enregistrer les modifications"
+    },
     "toast": {
       "saved": "Profil mis à jour",
       "locale_changed": "Langue modifiée"
@@ -52,8 +58,54 @@
         "too_long": "Le nom doit comporter 100 caractères ou moins",
         "too_short": "Le nom ne peut pas être uniquement des espaces"
       },
-      "locale": { "unsupported": "La langue sélectionnée n'est pas encore prise en charge" },
-      "timezone": { "unknown": "Fuseau horaire inconnu" }
+      "locale": {
+        "unsupported": "La langue sélectionnée n'est pas encore prise en charge"
+      },
+      "timezone": {
+        "unknown": "Fuseau horaire inconnu"
+      }
+    }
+  },
+  "data": {
+    "title": "Vos données",
+    "description": "Exportez une archive JSON contenant les informations de votre compte, les métadonnées des clés API, les journaux de requêtes (90 derniers jours), la facturation, le solde et les journaux de sécurité du contenu.",
+    "export": {
+      "cta": {
+        "label": "Exporter mes données",
+        "disabled_in_progress": "Un export est en cours de préparation. Nous vous enverrons un e-mail dès qu'il sera prêt."
+      },
+      "dialog": {
+        "title": "Confirmer l'export de données",
+        "body_intro": "Nous préparerons un ZIP contenant les catégories de données suivantes liées à votre compte :",
+        "categories": {
+          "users": "Informations de compte",
+          "api_keys": "Métadonnées des clés API",
+          "request_logs": "Journaux de requêtes (90 derniers jours)",
+          "orders": "Facturation",
+          "balances": "Solde",
+          "safety_logs": "Journaux de sécurité du contenu"
+        },
+        "slo": "Le traitement prend généralement 5–30 minutes ; vous recevrez un e-mail avec un lien de téléchargement valable 24 heures.",
+        "confirm": "Confirmer",
+        "cancel": "Annuler"
+      },
+      "banner": {
+        "processing": "Votre export est en cours de préparation. Consultez votre e-mail — nous enverrons le lien de téléchargement dans 5–30 minutes.",
+        "ready": "Votre dernier export est toujours disponible — consultez votre e-mail ou contactez le support si vous ne l'avez pas reçu.",
+        "failed": "Le dernier export a échoué. Veuillez réessayer ou contacter le support."
+      },
+      "errors": {
+        "rate_limited": "Vous ne pouvez demander qu'un export toutes les 24 heures. Réessayez plus tard.",
+        "generic": "Impossible de démarrer l'export. Veuillez réessayer."
+      },
+      "email": {
+        "subject": "Votre export de données He-API est prêt",
+        "greeting": "Bonjour {display_name},",
+        "body_intro": "Votre export de données a été généré. Cliquez sur le bouton ci-dessous pour le télécharger (le lien expire le {expires_at}).",
+        "cta": "Télécharger mes données",
+        "expires_at": "Le lien expire le {expires_at}",
+        "security_disclaimer": "Si vous n'avez pas demandé cet export, contactez immédiatement le support."
+      }
     }
   }
 }

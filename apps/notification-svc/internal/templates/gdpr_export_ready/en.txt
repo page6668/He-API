@@ -1,0 +1,9 @@
+Your He-API data export is ready
+
+Hi {{.display_name}},
+
+Your data export has been generated. Open the link below to download it:
+
+{{.signed_url}}
+
+The link expires on {{.expires_at}}. If you didn't request this export, contact support immediately.

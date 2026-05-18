@@ -12,6 +12,7 @@ import (
 )
 
 //go:embed email_verification/*.txt email_verification/*.html
+//go:embed gdpr_export_ready/*.txt gdpr_export_ready/*.html
 var fs embed.FS
 
 // FallbackLocale is the locale that any non-resolvable locale falls back to.
@@ -23,6 +24,10 @@ const FallbackLocale = "en"
 // packages/proto/he/notification/v1/notification.proto.
 const (
 	TemplateEmailVerification = "email_verification"
+	// Story 2.6 — slug for the GDPR data-export "your zip is ready" email
+	// (Architect Round 1 Ruling R-2 — the slug is internal to this
+	// package; the proto wire contract uses the EmailTemplate enum).
+	TemplateGDPRExportReady = "gdpr_export_ready"
 )
 
 // Rendered is what the SendGrid client needs to build one outbound mail.

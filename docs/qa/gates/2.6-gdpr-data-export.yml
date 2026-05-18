@@ -1,0 +1,198 @@
+schema: 1
+story: '2.6'
+slug: gdpr-data-export
+gate: CONCERNS
+status_reason: |
+  Round 2 review. All Round 1 blockers closed: 1 CRITICAL + 3 HIGH + 2 MEDIUM resolved. Story 2.6 now
+  ships the full contract surface honestly — the production analytics-svc binary refuses to claim
+  Kafka messages unless an operator explicitly sets HE_API_ANALYTICS_GDPR_WORKER_ENABLED=true
+  (Option-C per Round 1 gate's own recommendation). AC1 BR-1.9 accessibility (focus trap, focus restore
+  via requestAnimationFrame, document-level ESC, initial focus, overlay-click close) is fully
+  implemented in ExportDataDialog.tsx. The 5 previously-zero-test packages
+  (notification-svc/{audit,events,ratelimit,repository} + analytics-svc/workers) now have 34 top-level
+  Test funcs across 5 new files — including miniredis 16-goroutine BR-2.5 race assertion (exactly-one-winner),
+  TestBR65_PIIGuard_GDPREvents pinning the 3 GDPR event types to zero email/display_name/IP/UA, and
+  workers tests covering BR-4.2 claim/double-consume/dumper-fail/email-fail/7-dumper invariant. The
+  BR-2.5 doc/code drift is closed — repository's FindCurrentInWindow comment now honestly states the
+  as-built design delegates atomicity to Redis Lua INCR, and labels SELECT … FOR UPDATE as "one
+  acceptable mechanism" (not mandatory).
+
+  Independent test execution clean across all surfaces: `go test -count=1 ./apps/api-gateway/internal/handlers/... ./apps/notification-svc/... ./apps/analytics-svc/... ./apps/auth-svc/...` ALL PASS (~150s; 5 newly-tested packages green; 21 existing PASS). `tsx scripts/check-i18n-keys.ts` PASS (3 namespaces × 10 locales). `pnpm --filter @he-api/console typecheck` clean (0 diagnostics).
+
+  Why CONCERNS and not PASS: 3 carryover MEDIUM items (ISSUE-6 commit-before-publish ordering, ISSUE-8 BR-4.6 ZIP cap, ISSUE-9 BR-5.6 retry policy) remain open. All three are entirely behind the Option-C feature flag — the worker is not subscribed in production while NoOps are wired, so the code paths are inactive. They MUST be addressed before HE_API_ANALYTICS_GDPR_WORKER_ENABLED=true is set in any environment. The natural Phase-2 follow-up Story (OSS + ClickHouse SDK vendoring + real Store/Uploader/Email/Audit/Dumpers wiring + Option-C flag flip) inherits these as acceptance criteria. ISSUE-10 (LOW, BR-6.3 cta-key count) is an SM correction.
+
+  Blind-spot coverage improved from 33% (Round 1) to 50% (3 of 6 covered): CONCURRENCY-RACE-2.5 (miniredis 16-goroutine), FLOW-DOUBLE-CONSUME (BR-4.2 already-claimed skip), BOUNDARY-A11Y-FOCUS (Dialog rewrite). Remaining 3 (DATA-PII-DUMP, RESOURCE-ZIP-MEM, ERROR-EMAIL-RETRY) are gated by Option-C and tracked in carryovers.
+
+  Per qa-gate-decision logic: 0 CRITICAL + 0 HIGH + 3 MEDIUM → CONCERNS (mergeable; documents follow-up obligations).
+
+reviewer: Turing
+agent_model_used: claude-opus-4-7[1m]
+updated: 2026-05-18T19:30:00Z
+
+review_round: 2
+risk_level: HIGH
+review_mode: full_testing
+review_mode_type: incremental
+project_type: fullstack
+quality_score: 88
+
+test_results:
+  automated_tests:
+    go:
+      test_command: "go test -count=1 ./apps/api-gateway/internal/handlers/... ./apps/notification-svc/... ./apps/analytics-svc/... ./apps/auth-svc/..."
+      passed: true
+      packages_pass_count: 24
+      newly_tested_packages_round_2:
+        - apps/notification-svc/internal/audit (1.91s, 6 Test funcs incl. TestBR65_PIIGuard_GDPREvents)
+        - apps/notification-svc/internal/events (2.27s, 5 Test funcs — proto round-trip, partition key, error paths)
+        - apps/notification-svc/internal/ratelimit (3.34s, 8 Test funcs — miniredis Lua INCR atomic, TTL-not-extended-on-re-INCR, 16-goroutine ExactlyOneWinner, Reset, KeyPrefix pin)
+        - apps/notification-svc/internal/repository (4.00s, 6 Test funcs — pgxmock FindCurrentInWindow/FindLatestForUser/Insert/error paths)
+        - apps/analytics-svc/internal/workers (6.61s, 9 Test funcs — BR-4.2 claim, double-consume skip, poison proto, OSS/email/dumper failures, 7-dumper invariant, ConsumerGroupID)
+      packages_with_no_tests_remaining:
+        - apps/notification-svc/cmd/server (binary wiring; expected)
+        - apps/analytics-svc/cmd/server (binary wiring; expected)
+        - apps/auth-svc/cmd/server (binary wiring; expected)
+      verification_method: independent_execution
+      cross_reference_with_dev_evidence: consistent
+    i18n_completeness:
+      test_command: "tsx scripts/check-i18n-keys.ts"
+      passed: true
+      namespaces: 3
+      locales: 10
+      missing_keys: 0
+    typescript:
+      test_command: "pnpm --filter @he-api/console typecheck"
+      passed: true
+      diagnostics: 0
+
+  ac_traceability_round_2:
+    ac1_settings_data_ui:
+      status: PASS
+      previous_round_1_status: PARTIAL
+      issue_closure:
+        - ISSUE-2 (HIGH BR-1.9 a11y): CLOSED — ExportDataDialog.tsx:209-286 fully implements WCAG 2.1 AA focus management.
+    ac2_rest_grpc_idempotency:
+      status: PASS
+      previous_round_1_status: PARTIAL
+      issue_closure:
+        - ISSUE-5 (MEDIUM BR-2.5 doc/code drift): CLOSED — repository + handler comments honest about Redis-Lua-only race coverage.
+      carryover:
+        - ISSUE-6 (MEDIUM commit-before-publish ordering): CARRYOVER, gated by Option-C
+    ac3_atlas_migration:
+      status: PASS
+      note: unchanged from Round 1; atlas.sum placeholder per Story 1.6 offline-CI convention
+    ac4_analytics_worker:
+      status: PASS_WITH_DEFERRAL
+      previous_round_1_status: FAIL
+      issue_closure:
+        - ISSUE-1 (CRITICAL production NoOp wiring): CLOSED via Option-C (env-gated, default false)
+      carryover:
+        - ISSUE-8 (MEDIUM BR-4.6 ZIP cap): CARRYOVER, gated by Option-C
+        - Real OSS/CH SDK vendoring + real Store/Uploader/Dumpers wiring: explicit Phase-2 follow-up
+    ac5_email_delivery:
+      status: PASS_WITH_DEFERRAL
+      previous_round_1_status: FAIL
+      issue_closure:
+        - End-to-end non-functional finding: CLOSED via Option-C (worker not subscribed → no NoOp email path active)
+      carryover:
+        - ISSUE-9 (MEDIUM BR-5.6 retry policy): CARRYOVER, gated by Option-C
+        - Template fluency review: deferred per Story 2.1 polyglot precedent
+    ac6_audit_ratelimit_i18n:
+      status: PASS
+      previous_round_1_status: PARTIAL
+      issue_closure:
+        - ISSUE-4 (HIGH TS-CONS-004 runtime breach): CLOSED (formally — subset of ISSUE-1 closure)
+        - ISSUE-7 (MEDIUM BR-6.5 PII guard untested): CLOSED — audit_test.go:59-113 TestBR65_PIIGuard_GDPREvents
+      carryover:
+        - ISSUE-10 (LOW BR-6.3 cta-key count): SM correction (non-blocking)
+
+  blind_spot_verification:
+    total_scenarios: 6
+    covered: 3
+    missing_code_deferred: 3
+    coverage_rate: 50
+    delta_from_round_1: "+17 percentage points (33 → 50)"
+    covered_in_round_2:
+      - {id: CONCURRENCY-RACE-2.5, evidence: "ratelimit/gdpr_export_test.go TestCheckAndIncr_Concurrent_ExactlyOneWinner (16 goroutines, exactly-one-winner)"}
+      - {id: FLOW-DOUBLE-CONSUME, evidence: "workers/gdpr_export_test.go already-claimed skip path"}
+      - {id: BOUNDARY-A11Y-FOCUS, evidence: "ExportDataDialog.tsx Dialog primitive rewrite"}
+    still_missing_code_gated_by_option_c:
+      - {id: DATA-PII-DUMP, status: deferred to SDK-vendoring follow-up}
+      - {id: RESOURCE-ZIP-MEM, status: ISSUE-8 carryover}
+      - {id: ERROR-EMAIL-RETRY, status: ISSUE-9 carryover}
+
+  e2e_tests:
+    executed: false
+    reason: "Same as Round 1 — Playwright scenarios env-gated (E2E_OSS_BUCKET_URL + E2E_KAFKA_AUDIT_QUERY); request path adequately covered by AC1 dialog rewrite + 6 api-gateway unit tests; fulfillment path inactive while Option-C flag is false."
+
+  regression:
+    executed: false
+    reason: "No persisted regression suite at tests/e2e/; Story 2.6 spec lives under apps/console/e2e/ and is env-gated."
+
+top_issues:
+  - id: ISSUE-6
+    severity: MEDIUM
+    finding: "BR-2.5 commit-before-publish ordering — orphan-pending-row risk if Kafka publish fails post-PG-commit. T8.6 operator runbook + 15-min Grafana alert remain in §Deferred."
+    failure_type: ordering_risk
+    affected_acs: [AC2]
+    status: carryover_round_1
+    gated_by: Option-C feature flag (no Kafka publish from notification-svc happens when analytics-svc worker not subscribed; though notification-svc DOES publish, the downstream impact-on-user only matters if worker is enabled)
+    recommendation: "Address before HE_API_ANALYTICS_GDPR_WORKER_ENABLED=true. Either reverse ordering (publish-then-commit outbox) OR ship T8.6 operator runbook."
+  - id: ISSUE-8
+    severity: MEDIUM
+    finding: "BR-4.6 ZIP size cap (100 MB hint) not enforced; worker builds ZIP in memory."
+    failure_type: resource_risk
+    affected_acs: [AC4]
+    status: carryover_round_1
+    gated_by: Option-C feature flag (worker not subscribed → no ZIP build active)
+    recommendation: "Streaming tempfile path when total > 100MB; track as blind-spot RESOURCE-ZIP-MEM in Phase-2 follow-up."
+  - id: ISSUE-9
+    severity: MEDIUM
+    finding: "BR-5.6 SendEmail retry policy (5s/30s/5min) not visible at worker layer; analytics-svc does single Send() then flips to 'failed'."
+    failure_type: design_visibility
+    affected_acs: [AC5]
+    status: carryover_round_1
+    gated_by: Option-C feature flag (worker not subscribed → no Send() invocation)
+    recommendation: "Either confirm SendEmail-internal retry covers BR-5.6 OR add explicit retry loop at worker."
+  - id: ISSUE-10
+    severity: LOW
+    finding: "BR-6.3 cta-key structural deviation: 26 keys instead of 25 (cta nested as {label, disabled_in_progress})."
+    failure_type: bp_vs_impl_drift
+    affected_acs: [AC6]
+    status: carryover_round_1
+    recommendation: "SM correction — update BR-6.3 to count 26 OR rename JSON shape."
+
+closed_in_round_2:
+  - {id: ISSUE-1, prev_severity: CRITICAL, closure_path: "Option-C feature flag", reference: "apps/analytics-svc/cmd/server/main.go:98-110"}
+  - {id: ISSUE-2, prev_severity: HIGH, closure_path: "Dialog primitive rewrite", reference: "apps/console/components/business/ExportDataDialog.tsx:209-286"}
+  - {id: ISSUE-3, prev_severity: HIGH, closure_path: "5 new test files / 34 Test funcs", reference: "audit + events + ratelimit + repository + workers _test.go"}
+  - {id: ISSUE-4, prev_severity: HIGH, closure_path: "Subset of ISSUE-1 (Option-C makes runtime breach operator-controlled)"}
+  - {id: ISSUE-5, prev_severity: MEDIUM, closure_path: "Doc-comment rewrite", reference: "apps/notification-svc/internal/repository/data_export_requests.go:55-70"}
+  - {id: ISSUE-7, prev_severity: MEDIUM, closure_path: "TestBR65_PIIGuard_GDPREvents added", reference: "apps/notification-svc/internal/audit/audit_test.go:59-113"}
+
+phase_2_followup_acceptance_criteria:
+  description: "Acceptance criteria for the SDK-vendoring follow-up Story that flips HE_API_ANALYTICS_GDPR_WORKER_ENABLED=true:"
+  items:
+    - "Vendor alicloud-sdk-go OSS + ClickHouse Go SDK + SendGrid retry-aware client."
+    - "Replace noopStore/noopUploader/noopEmail/noopAudit/emptyDumper with real implementations."
+    - "Address ISSUE-6 (commit-before-publish ordering) — either outbox pattern OR ship T8.6 operator runbook + Grafana 15-min alert."
+    - "Address ISSUE-8 (BR-4.6 ZIP cap) — streaming tempfile path when total > 100MB."
+    - "Address ISSUE-9 (BR-5.6 retry policy) — explicit retry loop or confirmed internal retry."
+    - "21 testcontainers integration scenarios from comprehensive test design (T0..T8)."
+    - "15 of 17 deferred Playwright scenarios (currently skip-with-marker)."
+    - "Wire 3 missing blind spots: DATA-PII-DUMP, RESOURCE-ZIP-MEM, ERROR-EMAIL-RETRY."
+
+waiver:
+  active: false
+
+incremental_context:
+  cached_risk_level: HIGH
+  cached_review_mode: full_testing
+  cached_project_type: fullstack
+  failed_acs: []   # all 4 previously-failed ACs are now PASS or PASS_WITH_DEFERRAL
+  failed_e2e_scenarios: []
+  missing_blind_spots:
+    - {id: DATA-PII-DUMP, category: DATA, description: "PII allow-list declared but not wired into real SQL/CH queries — gated by Option-C"}
+    - {id: RESOURCE-ZIP-MEM, category: RESOURCE, description: "BR-4.6 100MB hint not enforced — gated by Option-C"}
+    - {id: ERROR-EMAIL-RETRY, category: ERROR, description: "BR-5.6 retry policy not visible at worker layer — gated by Option-C"}
+  checkbox_issues: []

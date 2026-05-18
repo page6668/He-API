@@ -1,0 +1,9 @@
+Votre export de données He-API est prêt
+
+Bonjour {{.display_name}},
+
+Votre export de données a été généré. Ouvrez le lien ci-dessous pour le télécharger :
+
+{{.signed_url}}
+
+Le lien expire le {{.expires_at}}. Si vous n'avez pas demandé cet export, contactez immédiatement le support.

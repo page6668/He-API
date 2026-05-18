@@ -1,0 +1,11 @@
+{
+  "name": "@he-api/analytics-svc",
+  "version": "0.0.0",
+  "private": true,
+  "description": "analytics-svc — Kafka consumer for GDPR data-export jobs (Story 2.6). Future home for Story-Epic-7/8 analytics workloads.",
+  "scripts": {
+    "build": "echo \"go build is run via go workspace, not Turborepo\" && exit 0",
+    "lint": "echo lint runs via go workspace not Turborepo \\\" && exit 0",
+    "test": "echo test runs via go workspace not Turborepo \\\" && exit 0"
+  }
+}

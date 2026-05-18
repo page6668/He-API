@@ -31,17 +31,39 @@ type TemplateRenderer interface {
 }
 
 // NotificationServer satisfies notificationv1connect.NotificationServiceHandler.
+//
+// Story 2.6 — embeds *DataExportServer so the RequestDataExport +
+// GetCurrentExport RPCs from the extended proto contract are served from
+// the same connect-go handler binding. The embedding gives us Go's method
+// promotion: NotificationServer automatically satisfies the two new RPCs
+// without explicit delegation. main.go uses
+// NewNotificationServerWithDataExport in production; legacy unit tests
+// continue to use NewNotificationServer (the embed is nil for those, and
+// the test harness never invokes the new RPCs).
 type NotificationServer struct {
 	Renderer TemplateRenderer
 	Sender   EmailSender
+	*DataExportServer
 }
 
 // NewNotificationServer wires the canonical Renderer + provided EmailSender.
-// Use sendgrid.NewClient(...) in production; tests pass a fake.
+// Use sendgrid.NewClient(...) in production; tests pass a fake. The
+// DataExportServer embed is left nil — Story 2.2 callers (auth-svc) only
+// hit SendEmail.
 func NewNotificationServer(sender EmailSender) *NotificationServer {
 	return &NotificationServer{
 		Renderer: templates.NewRenderer(),
 		Sender:   sender,
+	}
+}
+
+// NewNotificationServerWithDataExport wires SendEmail and the Story 2.6
+// RequestDataExport / GetCurrentExport surface in a single binding.
+func NewNotificationServerWithDataExport(sender EmailSender, dataExport *DataExportServer) *NotificationServer {
+	return &NotificationServer{
+		Renderer:         templates.NewRenderer(),
+		Sender:           sender,
+		DataExportServer: dataExport,
 	}
 }
 
@@ -115,6 +137,10 @@ func templateNameForEnum(e notificationv1.EmailTemplate) (string, error) {
 	switch e {
 	case notificationv1.EmailTemplate_EMAIL_TEMPLATE_EMAIL_VERIFICATION:
 		return templates.TemplateEmailVerification, nil
+	case notificationv1.EmailTemplate_EMAIL_TEMPLATE_GDPR_EXPORT_READY:
+		// Story 2.6 — Architect R-2: caller passes the enum value, this
+		// handler maps to the file-naming slug.
+		return templates.TemplateGDPRExportReady, nil
 	case notificationv1.EmailTemplate_EMAIL_TEMPLATE_UNSPECIFIED:
 		return "", errors.New("send_email: template is required (UNSPECIFIED)")
 	default:
@@ -127,6 +153,12 @@ func templateNameForEnum(e notificationv1.EmailTemplate) (string, error) {
 // for key").
 var requiredVars = map[string][]string{
 	templates.TemplateEmailVerification: {"token", "verification_link"},
+	// Story 2.6 AC5 BR-5.1 — the 4 vars the gdpr_export_ready templates
+	// reference via {{.variable}} syntax. display_name MAY be empty when
+	// the user hasn't set one — the email-trigger upstream substitutes a
+	// "there" fallback (per Story 2.5 BR-2.4) so this map still treats it
+	// as required at the wire-shape level.
+	templates.TemplateGDPRExportReady: {"display_name", "signed_url", "expires_at", "requested_at"},
 }
 
 func validateRequiredVars(tpl string, vars map[string]string) error {

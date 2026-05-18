@@ -34,6 +34,23 @@ func (f *fakeUpstream) SendEmail(
 	return connect.NewResponse(&notificationv1.SendEmailResponse{ProviderMessageId: f.respID}), nil
 }
 
+// Story 2.6 — the NotificationServiceHandler interface now requires
+// RequestDataExport + GetCurrentExport (proto extension). auth-svc tests
+// don't exercise those RPCs, so the fakes return Unimplemented.
+func (f *fakeUpstream) RequestDataExport(
+	_ context.Context,
+	_ *connect.Request[notificationv1.RequestDataExportRequest],
+) (*connect.Response[notificationv1.RequestDataExportResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("fakeUpstream: RequestDataExport not stubbed"))
+}
+
+func (f *fakeUpstream) GetCurrentExport(
+	_ context.Context,
+	_ *connect.Request[notificationv1.GetCurrentExportRequest],
+) (*connect.Response[notificationv1.GetCurrentExportResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("fakeUpstream: GetCurrentExport not stubbed"))
+}
+
 func newClientServer(t *testing.T, up *fakeUpstream) *notification.Client {
 	t.Helper()
 	mux := http.NewServeMux()

@@ -1,6 +1,7 @@
 go 1.25.0
 
 use (
+	./apps/analytics-svc
 	./apps/api-gateway
 	./apps/auth-svc
 	./apps/notification-svc

@@ -18,8 +18,12 @@
       "read_only_hint": "Die E-Mail wird bei der Registrierung festgelegt und kann hier nicht geändert werden",
       "read_only_tooltip": "Die E-Mail kann hier nicht geändert werden"
     },
-    "locale": { "label": "Sprache" },
-    "timezone": { "label": "Zeitzone" },
+    "locale": {
+      "label": "Sprache"
+    },
+    "timezone": {
+      "label": "Zeitzone"
+    },
     "security": {
       "totp_enabled": "Zwei-Faktor-Authentifizierung aktiviert",
       "totp_disabled": "Zwei-Faktor-Authentifizierung nicht aktiviert",
@@ -30,7 +34,9 @@
       "oauth_github": "Mit GitHub angemeldet",
       "email_password": "Mit E-Mail und Passwort angemeldet"
     },
-    "actions": { "save": "Änderungen speichern" },
+    "actions": {
+      "save": "Änderungen speichern"
+    },
     "toast": {
       "saved": "Profil aktualisiert",
       "locale_changed": "Sprache geändert"
@@ -52,8 +58,54 @@
         "too_long": "Anzeigename darf höchstens 100 Zeichen umfassen",
         "too_short": "Anzeigename darf nicht nur aus Leerzeichen bestehen"
       },
-      "locale": { "unsupported": "Ausgewählte Sprache wird noch nicht unterstützt" },
-      "timezone": { "unknown": "Unbekannte Zeitzone" }
+      "locale": {
+        "unsupported": "Ausgewählte Sprache wird noch nicht unterstützt"
+      },
+      "timezone": {
+        "unknown": "Unbekannte Zeitzone"
+      }
+    }
+  },
+  "data": {
+    "title": "Ihre Daten",
+    "description": "Exportieren Sie ein JSON-Archiv mit Ihren Kontoinformationen, API-Schlüssel-Metadaten, Anfrageprotokollen (letzte 90 Tage), Abrechnung, Guthaben und Inhaltssicherheitsprotokollen.",
+    "export": {
+      "cta": {
+        "label": "Meine Daten exportieren",
+        "disabled_in_progress": "Ein Export wird derzeit vorbereitet. Wir benachrichtigen Sie per E-Mail, sobald er fertig ist."
+      },
+      "dialog": {
+        "title": "Datenexport bestätigen",
+        "body_intro": "Wir bereiten ein ZIP mit den folgenden Datenkategorien Ihres Kontos vor:",
+        "categories": {
+          "users": "Kontoinformationen",
+          "api_keys": "API-Schlüssel-Metadaten",
+          "request_logs": "Anfrageprotokolle (letzte 90 Tage)",
+          "orders": "Abrechnung",
+          "balances": "Guthaben",
+          "safety_logs": "Inhaltssicherheitsprotokolle"
+        },
+        "slo": "Die Verarbeitung dauert üblicherweise 5–30 Minuten. Sie erhalten eine E-Mail mit einem Download-Link, der 24 Stunden gültig ist.",
+        "confirm": "Bestätigen",
+        "cancel": "Abbrechen"
+      },
+      "banner": {
+        "processing": "Ihr Export wird vorbereitet. Prüfen Sie Ihre E-Mails — wir senden den Download-Link innerhalb von 5–30 Minuten.",
+        "ready": "Ihr letzter Export ist noch verfügbar — prüfen Sie Ihre E-Mails oder kontaktieren Sie den Support, falls Sie ihn nicht erhalten haben.",
+        "failed": "Der letzte Export ist fehlgeschlagen. Bitte versuchen Sie es erneut oder kontaktieren Sie den Support."
+      },
+      "errors": {
+        "rate_limited": "Sie können nur einen Export pro 24 Stunden anfordern. Bitte versuchen Sie es später erneut.",
+        "generic": "Der Export konnte nicht gestartet werden. Bitte versuchen Sie es erneut."
+      },
+      "email": {
+        "subject": "Ihr He-API-Datenexport ist bereit",
+        "greeting": "Hallo {display_name},",
+        "body_intro": "Ihr Datenexport wurde generiert. Klicken Sie auf die Schaltfläche unten, um ihn herunterzuladen (der Link läuft am {expires_at} ab).",
+        "cta": "Meine Daten herunterladen",
+        "expires_at": "Der Link läuft am {expires_at} ab",
+        "security_disclaimer": "Wenn Sie diesen Export nicht angefordert haben, wenden Sie sich sofort an den Support."
+      }
     }
   }
 }

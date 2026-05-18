@@ -32,11 +32,13 @@ import (
 	"github.com/he-api/he-api/apps/api-gateway/internal/handlers"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1/authv1connect"
+	"github.com/he-api/he-api/packages/proto/gen/go/he/notification/v1/notificationv1connect"
 
 	"go.opentelemetry.io/otel"
 )
 
 const defaultAuthSvcURL = "http://auth-svc:8080"
+const defaultNotificationSvcURL = "http://notification-svc:8080"
 
 // envOr returns the value of name or fallback when unset / empty.
 func envOr(name, fallback string) string {
@@ -165,6 +167,21 @@ func main() {
 	// client-supplied user_id (BR-1.1 IDOR defence).
 	mux.Handle("GET /v1/me", jwtVerifier.RequireJWT(http.HandlerFunc(auth.GetMe)))
 	mux.Handle("PUT /v1/me/profile", jwtVerifier.RequireJWT(http.HandlerFunc(auth.UpdateProfile)))
+
+	// Story 2.6 — GDPR data-export routes (AC2). Proxies to notification-svc.
+	// Both routes are aal>=1 (parity with Story 2.5 — user-visible
+	// account-data action, not credential mutation). BR-2.4 user_id-from-JWT
+	// enforcement happens inside the handler (handlers/account_data.go).
+	notificationSvcURL := envOr("HE_API_NOTIFICATION_SVC_URL", defaultNotificationSvcURL)
+	notificationUpstream := notificationv1connect.NewNotificationServiceClient(
+		&http.Client{Timeout: 10 * time.Second},
+		notificationSvcURL,
+	)
+	accountData := handlers.NewAccountDataProxy(notificationUpstream)
+	mux.Handle("POST /v1/account/data-export",
+		jwtVerifier.RequireJWT(http.HandlerFunc(accountData.RequestDataExport)))
+	mux.Handle("GET /v1/account/data-export/current",
+		jwtVerifier.RequireJWT(http.HandlerFunc(accountData.GetCurrentExport)))
 
 	// Middleware chain (outer → inner): SecurityHeaders → CSRF → mux.
 	// SecurityHeaders writes the BR-4.7 response headers on every response.

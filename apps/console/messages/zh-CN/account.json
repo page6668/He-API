@@ -65,5 +65,47 @@
         "unknown": "未知时区"
       }
     }
+  },
+  "data": {
+    "title": "您的数据",
+    "description": "导出包含您的账户信息、API Keys 元数据、调用日志（90 天）、账单、余额和内容安全治理日志的 JSON 归档。",
+    "export": {
+      "cta": {
+        "label": "导出我的数据",
+        "disabled_in_progress": "正在生成数据包，准备好后会通过邮件通知您。"
+      },
+      "dialog": {
+        "title": "确认数据导出",
+        "body_intro": "我们将为您准备一个 ZIP 包，包含以下与您账户相关的数据类别：",
+        "categories": {
+          "users": "账户信息",
+          "api_keys": "API Keys 元数据",
+          "request_logs": "调用日志（90 天）",
+          "orders": "账单",
+          "balances": "余额",
+          "safety_logs": "内容安全治理日志"
+        },
+        "slo": "处理通常需要 5-30 分钟；我们将通过邮件发送下载链接，有效期 24 小时。",
+        "confirm": "确认",
+        "cancel": "取消"
+      },
+      "banner": {
+        "processing": "正在准备您的数据导出。我们会在 5-30 分钟内将下载链接发送到您的邮箱。",
+        "ready": "您最近的数据导出仍可下载——请查看邮箱，如未收到请联系客服。",
+        "failed": "上一次数据导出失败。请重试或联系客服。"
+      },
+      "errors": {
+        "rate_limited": "每 24 小时只能请求一次数据导出，请稍后再试。",
+        "generic": "无法启动数据导出，请重试。"
+      },
+      "email": {
+        "subject": "您的 He-API 数据导出已就绪",
+        "greeting": "您好 {display_name}，",
+        "body_intro": "您的数据导出已生成。请点击下方链接下载（链接将在 {expires_at} 过期）。",
+        "cta": "下载我的数据",
+        "expires_at": "链接将在 {expires_at} 过期",
+        "security_disclaimer": "如果您未请求此导出，请立即联系客服。"
+      }
+    }
   }
 }
