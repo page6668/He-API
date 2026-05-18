@@ -1,0 +1,14 @@
+step: 1
+purpose: Risk Assessment
+inputs:
+  complexity_count: 4              # api_changes + new_patterns + performance + core_docs
+  security_sensitive: false        # bearer-auth governed by Story 3.2; SSE adds protocol-framing only
+  dev_gate_score: 95               # Dev claims 51/51 PASS with -race; no defects raised in Dev Log
+  has_ui_changes: false            # backend-only HTTP API
+  has_api_changes: true            # NEW SSE wire contract on POST /v1/chat/completions
+  has_user_facing_deliverable: false  # no UI; API surface only
+  test_coverage_level: high        # 51 scenarios designed (25 unit / 21 int / 5 e2e)
+risk_level: MEDIUM                 # complexity≥3 + performance SLA + new precedent-setting patterns; no security_sensitive
+review_mode: full_testing          # MEDIUM risk + high test_design_level (Comprehensive) → full automated + spot E2E
+skip_e2e: false                    # E2E tests env-guarded; run if HE_API_TEST_GATEWAY_URL set
+review_round: 1

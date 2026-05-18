@@ -409,8 +409,10 @@ func TestChatCompletions_ValidationCases(t *testing.T) {
 		{"content_empty", `{"model":"qwen-max","messages":[{"role":"user","content":""}]}`, 400, "400_invalid_request", "invalid_request_error", nil},
 		// UNIT-033 — content non-string (multipart array) → 400 (type-strict).
 		{"content_array", `{"model":"qwen-max","messages":[{"role":"user","content":["hi","there"]}]}`, 400, "400_invalid_request", "invalid_request_error", nil},
-		// UNIT-034 — stream=true → 501 with param=stream.
-		{"stream_true", `{"model":"qwen-max","messages":[{"role":"user","content":"hi"}],"stream":true}`, 501, "501_streaming_not_implemented", "server_error", "stream"},
+		// UNIT-034 RETIRED — Story 3.4 T3.4 removed the stream=true → 501
+		// branch from validateChatRequest. stream=true now dispatches to SSE
+		// (see TestChatCompletions_StreamDispatchesToSSE for the new contract).
+		// Negative table-rows in this driver target validation FAILURES only.
 	}
 
 	for _, tc := range cases {
@@ -496,42 +498,50 @@ func TestChatCompletions_BodyTooLarge(t *testing.T) {
 	}
 }
 
-// Scenario: 3.3-UNIT-035 — stream=true short-circuits BEFORE mock generation
-// (panic-on-call factory stub proves BR-2.1 step 5).
-func TestChatCompletions_StreamShortCircuitsBeforeMock(t *testing.T) {
+// Scenario: 3.4-INT-004 (repurposed from 3.3-UNIT-035) — stream=true now
+// dispatches to SSE; the 501 short-circuit is gone (T3.4 removed it).
+func TestChatCompletions_StreamDispatchesToSSE(t *testing.T) {
 	t.Parallel()
-	h := handlers.NewChatCompletionsHandler(slog.New(slog.NewTextHandler(io.Discard, nil)),
-		handlers.WithIDFactory(func() string {
-			panic("id factory invoked on stream=true path — BR-2.1 step 5 violated")
-		}))
+	h := handlers.NewChatCompletionsHandler(slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	rr := doRequest(t, h, `{"model":"qwen-max","messages":[{"role":"user","content":"hi"}],"stream":true}`)
-	if rr.Code != http.StatusNotImplemented {
-		t.Fatalf("status = %d, want 501; body=%s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	if ct := rr.Header().Get("Content-Type"); ct != "text/event-stream; charset=utf-8" {
+		t.Errorf("Content-Type = %q, want \"text/event-stream; charset=utf-8\"", ct)
+	}
+	if !strings.HasPrefix(rr.Body.String(), `data: {"id":"chatcmpl-mock-`) {
+		t.Errorf("body does not start with SSE data line: %q", rr.Body.String())
 	}
 }
 
-// Scenario: 3.3-UNIT-036 — stream-rejected request emits dedicated log
-// event=chat_completions_stream_rejected with api_key_id.
-func TestChatCompletions_StreamRejected_StructuredLog(t *testing.T) {
+// Scenario: 3.4-INT-008 (repurposed from 3.3-UNIT-036) — streaming success
+// emits exactly one structured log line with event=chat_completions_stream
+// (the retired 3.3 marker chat_completions_stream_rejected MUST NOT appear).
+func TestChatCompletions_StreamEmitsCompletionLog(t *testing.T) {
 	t.Parallel()
 	buf := &bytes.Buffer{}
 	h := handlers.NewChatCompletionsHandler(bufLogger(buf))
 
 	rr := doRequest(t, h, `{"model":"qwen-max","messages":[{"role":"user","content":"hi"}],"stream":true}`)
-	if rr.Code != http.StatusNotImplemented {
-		t.Fatalf("status = %d", rr.Code)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
 	}
 	log := buf.String()
-	if !strings.Contains(log, `"event":"chat_completions_stream_rejected"`) {
-		t.Errorf("log missing event=chat_completions_stream_rejected: %s", log)
+	if !strings.Contains(log, `"event":"chat_completions_stream"`) {
+		t.Errorf("log missing event=chat_completions_stream: %s", log)
 	}
 	if !strings.Contains(log, `"api_key_id":"`+testAPIKeyID+`"`) {
 		t.Errorf("log missing api_key_id: %s", log)
 	}
-	// Stream-rejected path MUST NOT emit chat_completions_mock log.
+	// The Story-3.3 rejection marker MUST be gone.
+	if strings.Contains(log, `"event":"chat_completions_stream_rejected"`) {
+		t.Errorf("retired marker chat_completions_stream_rejected still present: %s", log)
+	}
+	// Non-streaming completion marker MUST NOT fire on the SSE path.
 	if strings.Contains(log, `"event":"chat_completions_mock"`) {
-		t.Errorf("stream-rejected path emitted chat_completions_mock log: %s", log)
+		t.Errorf("streaming path emitted chat_completions_mock log: %s", log)
 	}
 }
 
@@ -777,11 +787,12 @@ func TestChatCompletions_WithIDFactoryNil(t *testing.T) {
 
 // ----- AC1+AC3 cross-cut: full HTTP wire --------------------------------
 
-// Scenario: 3.3-INT-003 — full HTTP wire for stream=true 501.
-func TestChatCompletions_StreamRejected_HTTPWire(t *testing.T) {
+// Scenario: 3.4-INT-004 wire-level sibling (repurposed from 3.3-INT-003) —
+// full HTTP wire for stream=true now serves SSE (200 + text/event-stream +
+// data: line). The 501 JSON envelope path is gone.
+func TestChatCompletions_StreamDispatchesToSSE_HTTPWire(t *testing.T) {
 	t.Parallel()
 	h := handlers.NewChatCompletionsHandler(slog.New(slog.NewTextHandler(io.Discard, nil)))
-	// Wrap with a tiny shim that injects bearer context.
 	shim := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r = r.WithContext(withBearerCtx(r.Context()))
 		h.ServeHTTP(w, r)
@@ -796,16 +807,25 @@ func TestChatCompletions_StreamRejected_HTTPWire(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusNotImplemented {
-		t.Fatalf("status = %d, want 501", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
-	if ct := resp.Header.Get("Content-Type"); ct != "application/json; charset=utf-8" {
-		t.Errorf("Content-Type = %q", ct)
+	if ct := resp.Header.Get("Content-Type"); ct != "text/event-stream; charset=utf-8" {
+		t.Errorf("Content-Type = %q, want \"text/event-stream; charset=utf-8\"", ct)
+	}
+	if cc := resp.Header.Get("Cache-Control"); cc != "no-cache, no-transform" {
+		t.Errorf("Cache-Control = %q", cc)
+	}
+	if xab := resp.Header.Get("X-Accel-Buffering"); xab != "no" {
+		t.Errorf("X-Accel-Buffering = %q, want \"no\"", xab)
 	}
 	body, _ := io.ReadAll(resp.Body)
-	want := `{"error":{"code":"501_streaming_not_implemented","he_request_id":null,"message":"Streaming chat completions are not yet implemented. Track Story 3.4 for delivery.","param":"stream","type":"server_error"}}`
-	if string(body) != want {
-		t.Errorf("body byte-mismatch\n got=%s\nwant=%s", body, want)
+	// Body must contain the BR-1.2 framing + the OpenAI [DONE] terminator.
+	if !strings.HasPrefix(string(body), `data: {"id":"chatcmpl-mock-`) {
+		t.Errorf("body does not begin with SSE data: line\nbody=%s", string(body))
+	}
+	if !strings.HasSuffix(string(body), "data: [DONE]\n\n") {
+		t.Errorf("body does not end with [DONE] sentinel\nbody=%s", string(body))
 	}
 }
 

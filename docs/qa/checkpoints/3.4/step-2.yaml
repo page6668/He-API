@@ -1,0 +1,16 @@
+step: 2
+purpose: Project Type Detection
+project_type:
+  type: web_backend
+  subtype: go_net_http_connectrpc
+  language: go
+  go_version: "1.22"
+  test_runner: go_test
+test_strategy:
+  primary_tool: bash
+  test_command: "go test ./apps/api-gateway/... -race -count=1"
+  requires_environment: false       # in-process httptest — no server start needed for unit + integration
+  e2e_requires_environment: true    # Python SDK E2E needs HE_API_TEST_GATEWAY_URL pointing at a running gateway
+  e2e_command: "HE_API_TEST_GATEWAY_URL=... HE_API_TEST_API_KEY=... pytest apps/api-gateway/tests/openai_sdk_streaming_contract_test.py"
+  startup_command: null
+  expected_port: null

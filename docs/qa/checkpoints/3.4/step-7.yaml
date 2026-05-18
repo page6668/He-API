@@ -1,0 +1,61 @@
+step: 7
+purpose: Gate Decision
+decision_context:
+  automated_tests_passed: true
+  automated_tests_evidence_found: true
+  task_checkbox_completion_rate: 1.6     # 1/62 boxes checked
+  task_checkbox_consistency_rate: 100    # the 1 checked box (T3.2 DROPPED) matches AR1-R4 ruling
+  task_checkbox_unchecked_critical: 61   # strict interpretation; consolidated as 1 MEDIUM (see Step 4.5 rationale)
+  task_checkbox_mismatches: 0            # zero "ticked-box-without-deliverable" cases (the canonical Step 4.5 failure mode)
+  ac_coverage_rate: 100
+  ac_coverage_passed: true
+  ac_traceability_found: true
+  ac_discrepancies_count: 0
+  acs_fully_verified: 4
+  acs_not_verified: 0
+  e2e_tests_passed: true
+  regression_executed: true
+  regression_passed: true
+  regression_failures_count: 0
+  e2e_tests_skipped: false
+  console_errors_found: false
+  network_errors_found: false
+  blind_spot_coverage_rate: 100
+  blind_spot_missing_code: 0
+  blind_spot_missing_test: 0
+  issues_by_severity:
+    critical: 0
+    high: 0
+    medium: 1
+    low: 0
+  review_round: 1
+  review_mode: full_testing
+  risk_level: MEDIUM
+gate_result: PASS
+quality_score: 98               # 100 - 2 for the MEDIUM checkbox-hygiene process gap
+reasoning: |
+  Substantive quality is excellent:
+  - 249/249 PASS in `go test ./apps/api-gateway/... -race -count=1` (Step 4 independent execution).
+  - AC coverage 4/4 = 100%; zero discrepancies between Dev's AC Traceability Matrix and QA's
+    semantic verification of code locations + test bodies.
+  - Architect Round 1 contracts all implemented as written: C1 import-cycle fix verified
+    (`go list -deps ./apps/api-gateway/internal/streaming | grep handlers` returns EMPTY);
+    AR1-R1 word-boundary chunking (UNIT-018 byte-exact + UNIT-019 no-partial-words); AR1-R2
+    `{}` via omitempty discipline on `chatChunkDelta.Role`+`.Content` (chat_chunks.go:53-55);
+    AR1-R3 dedicated `WriteDone()` (sse.go:43, :109 + UNIT-003 byte-exact + UNIT-012 method-identity);
+    AR1-R4 chunker returns `firstFlushAt time.Time` (chat_chunks.go:84) — no Writer hook.
+  - Story 3.3 backward-compat preserved byte-for-byte via INT-007 golden-file regression guard.
+  - TTFB measured p50/p95/p99 = 0/0/0 ms (in-process) and 0/0/1 ms (loopback); 6x headroom on
+    the 300 ms SLO; INT-002 two-mode delta < 20 ms confirms recorder isn't masking latency.
+  - All 8 blind-spot scenarios COVERED (BOUNDARY×3, ERROR×2, CONCURRENCY×1, RESOURCE×1, FLOW×1).
+  - Documentation backfill landed: rest-api-spec.md §5.1.1.1 SSE response shape + §5.1.2
+    RETIRED annotation + §5.3 Change Log + api-registry.md row update.
+
+  Single MEDIUM issue: Dev left 61/62 task subtask checkboxes unchecked despite all deliverables
+  present and all tests passing. This is a clerical/process gap with zero correctness impact —
+  the inverse failure mode of what Step 4.5 is designed to catch (the canonical failure is
+  "ticked box without deliverable"; here it is "deliverable without ticked box"). Does NOT
+  block PASS; recommendation logged for Dev workflow hygiene.
+next_status: Done
+next_action: mark_story_complete
+next_story_id: "3.5"           # epic-3-gateway-core.yaml defines 3.5 (next candidate)

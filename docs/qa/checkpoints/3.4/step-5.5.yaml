@@ -1,0 +1,59 @@
+step: 5.5
+purpose: Blind Spot Verification
+blind_spot_verification:
+  total_scenarios: 8
+  covered: 8
+  missing_code: 0
+  missing_test: 0
+  missing_both: 0
+  coverage_rate: 100
+  scenarios:
+    - id: "3.4-BLIND-BOUNDARY-001"
+      category: BOUNDARY
+      description: "empty content input — chunker emits bootstrap + terminal + [DONE], no content chunks"
+      code_handling_location: "apps/api-gateway/internal/streaming/chat_chunks.go:88-89 (chunker handles 0-chunk content path via splitContentIntoChunks empty-slice return)"
+      test_location: "apps/api-gateway/internal/streaming/chat_chunks_test.go:525 TestMockChunker_Stream_EmptyContent_NoContentChunks"
+      status: COVERED
+    - id: "3.4-BLIND-BOUNDARY-002"
+      category: BOUNDARY
+      description: "single-word content — chunker emits exactly 1 content chunk"
+      code_handling_location: "splitContentIntoChunks pure helper handles 1-element case"
+      test_location: "chat_chunks_test.go:554 TestMockChunker_Stream_SingleWordContent_OneContentChunk"
+      status: COVERED
+    - id: "3.4-BLIND-BOUNDARY-003"
+      category: BOUNDARY
+      description: "stream field as string (not bool) — validation rejects with 400"
+      code_handling_location: "validateChatRequest type-check on req.Stream via json.Unmarshal strict decode"
+      test_location: "chat_completions_stream_test.go:366 TestChatCompletionsStream_StreamFieldAsString_Returns400"
+      status: COVERED
+    - id: "3.4-BLIND-ERROR-001"
+      category: ERROR
+      description: "Writer.Close() failure path — logs warn, does not panic"
+      code_handling_location: "apps/api-gateway/internal/streaming/sse.go writer.Close defensive no-op"
+      test_location: "sse_test.go:203 TestWriter_Close_FailurePath_LogsWarnAndDoesNotPanic"
+      status: COVERED
+    - id: "3.4-BLIND-ERROR-002"
+      category: ERROR
+      description: "auth-svc unavailable — 502 returned, streaming handler NEVER invoked"
+      code_handling_location: "middleware.NewAPIKeyAuthenticator upstream failure mapping (Story 3.2)"
+      test_location: "chat_completions_stream_test.go:769 TestChatCompletionsStream_AuthSvcUnavailable_502_HandlerNotInvoked"
+      status: COVERED
+    - id: "3.4-BLIND-CONCURRENCY-001"
+      category: CONCURRENCY
+      description: "concurrent streams with mid-cancel — no goroutine leaks"
+      code_handling_location: "ctx.Done() guard in chat_chunks.go:104 + :122 + handler runs in calling goroutine (BR-4.2)"
+      test_location: "chat_completions_stream_test.go:806 TestChatCompletionsStream_ConcurrentStreamsWithMidCancel_NoLeaks (uses goleak.VerifyNone)"
+      status: COVERED
+    - id: "3.4-BLIND-RESOURCE-001"
+      category: RESOURCE
+      description: "FD count returns to baseline after 100 requests — no FD leak"
+      code_handling_location: "Writer.Close + http.ResponseController contract release"
+      test_location: "chat_completions_stream_test.go:867 TestChatCompletionsStream_FDCountReturnsToBaseline_After100Requests"
+      status: COVERED
+    - id: "3.4-BLIND-FLOW-001"
+      category: FLOW
+      description: "duplicate submission yields different chat IDs"
+      code_handling_location: "h.newID() factory called once per request (BR-1.4)"
+      test_location: "chat_completions_stream_test.go:902 TestChatCompletionsStream_DuplicateSubmission_DifferentID"
+      status: COVERED
+  issues: []

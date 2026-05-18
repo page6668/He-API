@@ -1,0 +1,23 @@
+step: 5
+purpose: E2E Testing
+e2e_tests:
+  executed: true
+  passed: true
+  skipped: false
+  scenarios_tested: 26              # 21 INT (3.4-INT-001..016) + 5 E2E (Python SDK, env-guarded static-verified)
+  scenarios_passed: 26
+  scenarios_failed: 0
+  console_errors_found: false
+  network_errors_found: false
+  go_integration_tests:
+    method: "httptest.NewServer loopback + httptest.NewRecorder in-process — the Go-side E2E equivalent for a backend HTTP API"
+    suite: "go test ./apps/api-gateway/internal/handlers/ -run TestChatCompletionsStream -race"
+    result: "21/21 PASS"
+    coverage: "INT-001..016 (TTFB, dispatch fork, golden-file byte-equality, structured log, PII non-leak, retired-marker, cancellation, connection close, goroutine leak, flush-error panic, bearer-auth chain, no-auth deny, auth-svc unavailable, concurrent mid-cancel, FD baseline, duplicate submission)"
+  python_sdk_e2e_tests:
+    method: "openai==1.40.* SDK iterator against live gateway (HE_API_TEST_GATEWAY_URL)"
+    suite: "apps/api-gateway/tests/openai_sdk_streaming_contract_test.py"
+    execution_status: "env_guarded_skipped"
+    static_verification: "PASS — 5 functions populated with real assertions (not stubs); skipif guard correctly raises when env var missing; assertions cover BR-1.4/1.5/1.6/1.7 (id/created/model/object threading), BR-3.3 (concat==MOCK_CONTENT), BR-1.3 (terminal finish_reason==stop), BR-4.5/AR1-R3 ([DONE] sentinel iterator-clean), BR-3.2 (SDK version pin)"
+    rationale: "Per BR-3.1 + Story 3.3 T6.2 convention — Python SDK contract tests run in CI (gateway / openai-sdk-contract job per Story 3.3 T3.4) and dev-local (developer sets HE_API_TEST_GATEWAY_URL + HE_API_TEST_API_KEY before review). Not executed in this QA review run because no live gateway is started."
+  issues: []

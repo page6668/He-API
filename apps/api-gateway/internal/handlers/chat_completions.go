@@ -146,6 +146,18 @@ func WithIDFactory(f func() string) ChatHandlerOption {
 	}
 }
 
+// WithNow replaces the default time source with f. Story 3.4 AC2 / golden-file
+// regression test (3.4-INT-007) need deterministic created timestamps + TTFB
+// measurements without clock-sourcing variance. Nil is silently ignored —
+// production callers omit this option to get time.Now.
+func WithNow(f func() time.Time) ChatHandlerOption {
+	return func(h *ChatCompletionsHandler) {
+		if f != nil {
+			h.now = f
+		}
+	}
+}
+
 // ChatCompletionsHandler is the concrete handler. Construct once at startup
 // and reuse across all bearer-protected /v1/chat/completions requests.
 type ChatCompletionsHandler struct {
@@ -227,22 +239,19 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 
 	// BR-2.1 ordered validation (steps 3-5). Body-size + JSON parse are
 	// handled above (steps 1-2). validateChatRequest stops on the first
-	// failing rule.
+	// failing rule. Per Story 3.4 T3.4, the stream=true → 501 branch is
+	// REMOVED; stream=true is now a dispatch decision, not a validation
+	// failure.
 	if status, code, msg, valid := validateChatRequest(&req); !valid {
-		// Stream rejection emits a dedicated structured log marker so the
-		// SRE dashboard can count premature stream-client usage and inform
-		// Story 3.4 priority + sequencing.
-		var param *string
-		if code == "501_streaming_not_implemented" {
-			h.logger.InfoContext(
-				ctx, "chat_completions_stream_rejected",
-				slog.String("event", "chat_completions_stream_rejected"),
-				slog.String("api_key_id", apiKeyID),
-			)
-			s := "stream"
-			param = &s
-		}
-		writeChatError(w, status, code, msg, param)
+		writeChatError(w, status, code, msg, nil)
+		return
+	}
+
+	// Story 3.4 BR-1.1 dispatch fork — stream=true requests serve SSE; the
+	// non-streaming path below is preserved byte-for-byte for stream=false
+	// (and stream omitted, which defaults to false via Go's bool zero-value).
+	if req.Stream {
+		h.serveStream(w, r, &req, apiKeyID)
 		return
 	}
 
@@ -313,12 +322,6 @@ func validateChatRequest(req *ChatRequest) (int, string, string, bool) {
 				"Field 'messages' must be a non-empty array (max 256 entries) with each entry having role + string content.",
 				false
 		}
-	}
-	if req.Stream {
-		return http.StatusNotImplemented,
-			"501_streaming_not_implemented",
-			"Streaming chat completions are not yet implemented. Track Story 3.4 for delivery.",
-			false
 	}
 	return 0, "", "", true
 }

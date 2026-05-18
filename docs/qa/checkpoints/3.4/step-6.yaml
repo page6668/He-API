@@ -1,0 +1,17 @@
+step: 6
+purpose: Evidence Collection
+evidence:
+  directory: "docs/qa/evidence/3.4/"
+  files_collected: 0
+  rationale: |
+    Zero critical / zero high issues found. Only 1 MEDIUM issue recorded (Step 4.5 task checkbox
+    hygiene), whose evidence is inline in `docs/qa/checkpoints/3.4/step-4.5.yaml` and references
+    grep counts on the story file. No screenshots / logs / reproduction steps needed because no
+    functional defect was observed — the deliverables match Dev's claims byte-for-byte.
+  test_evidence_summary:
+    - "Independent test execution: 249 PASS / 0 FAIL / 1 SKIP across full apps/api-gateway suite (Step 4)"
+    - "Story 3.3 regression preserved: TestChatCompletions_HappyPath_OpenAIShape + golden-file INT-007 byte-equality both PASS"
+    - "C1 fix invariant verified: go list -deps ./apps/api-gateway/internal/streaming | grep handlers → EMPTY"
+    - "AR1 rulings: R1/R2/R3/R4 all implemented as written and test-anchored"
+    - "TTFB measured: p50/p95/p99 = 0/0/0 ms (in-process), 0/0/1 ms (loopback); SLO is 300 ms → 6x headroom remains"
+  issues_with_evidence: []

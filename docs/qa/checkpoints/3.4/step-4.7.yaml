@@ -1,0 +1,26 @@
+step: 4.7
+purpose: Regression Test Execution
+regression:
+  executed: true
+  passed: true
+  tests_total: 249              # full Go test suite (Step 4) doubles as cross-story regression
+  tests_failed: 0
+  prior_story_regression_checks:
+    story_3_1_cold_start:
+      result: PASS              # TestColdStart + cmd/server suite all pass
+      method: "full go test ./apps/api-gateway/cmd/server suite"
+    story_3_2_auth_middleware:
+      result: PASS              # internal/middleware tests all pass
+      method: "go test ./apps/api-gateway/internal/middleware"
+    story_3_3_non_streaming:
+      result: PASS              # TestChatCompletions_HappyPath_OpenAIShape / _HappyPath_FastUnder10ms / _HappyPathValidationBaseline all PASS
+      method: "go test ./apps/api-gateway/internal/handlers -run TestChatCompletions_HappyPath"
+    story_3_3_byte_equality_guard:
+      result: PASS              # TestChatCompletionsStream_PreservesNonStreamPathByteForByte (INT-007 golden-file)
+      method: "go test -run TestChatCompletionsStream_PreservesNonStreamPathByteForByte — Story 3.3 wire response BYTE-IDENTICAL after Story 3.4 lands"
+      criticality: "load-bearing — this is the primary cross-Story compatibility assertion"
+  note: |
+    Project is Go-backend; the `tests/e2e/story-*.spec.ts` Playwright pattern in the QA task spec is N/A.
+    Cross-story regression is satisfied by the full `go test ./apps/api-gateway/...` invocation already run in Step 4
+    plus INT-007's golden-file byte-equality guard that pins the Story 3.3 non-streaming wire response.
+  issues: []
