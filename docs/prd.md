@@ -387,7 +387,7 @@ He-API 的产品定位是**位于中国境内、面向海外的合规网关层**
 
 | ID | 故事 | 验收标准 |
 |----|------|---------|
-| E3-S1 | 网关 HTTP 框架（Go fiber/echo） + 路由 + 健康检查 | `/health` 返回 200；冷启动 < 1s |
+| E3-S1 | 网关 HTTP 框架（Go net/http + connectrpc, ratify）+ /health + 冷启动基准 | `/health` 返回 200；冷启动 ≤ 1s P95 |
 | E3-S2 | Bearer Token 鉴权 + Key 校验 | 无效 Key 返回 401；有效 Key 通过 |
 | E3-S3 | `/v1/chat/completions` 非流式实现（占位上游） | OpenAI Python SDK 可调通，返回 mock 数据 |
 | E3-S4 | `/v1/chat/completions` 流式（SSE） | 客户端可逐块接收 token；TTFB ≤ 300ms |
@@ -616,3 +616,12 @@ Epic 列表中的 P-1 到 P-15 关键页面，生成 docs/front-end-spec.md。
 ---
 
 > **PRD 终版结束**。等待业务方审阅，确认后转交 UX Expert / Architect / PO 串行处理。
+
+---
+
+## Change Log
+
+| Date | Story | Change |
+|------|-------|--------|
+| 2026-05-18 | Story 3.1 (SM Phil) | Epic 3 / E3-S1 story title rewritten — "Go fiber/echo + 路由 + 健康检查" → "Go net/http + connectrpc, ratify + /health + 冷启动基准". Ratifies the de-facto stdlib stack shipped by Stories 2.2 – 2.6 (see `docs/architecture/14-架构决策记录adr.md` ADR-2 + history block). |
+

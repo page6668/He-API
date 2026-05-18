@@ -60,7 +60,7 @@
     - [13.3 关键测试场景](./testing-strategy.md#133-关键测试场景)
   - [14. 架构决策记录（ADR）](./14-架构决策记录adr.md)
     - [ADR-1: 边缘 TLS 终端用 Cloudflare 但禁用所有缓存](./14-架构决策记录adr.md#adr-1-边缘-tls-终端用-cloudflare-但禁用所有缓存)
-    - [ADR-2: API Gateway 用 Go (Fiber 框架)](./14-架构决策记录adr.md#adr-2-api-gateway-用-go-fiber-框架)
+    - [ADR-2: API Gateway 用 Go (stdlib net/http 1.22+ ServeMux + connectrpc/connect 1.16+)](./14-架构决策记录adr.md#adr-2-api-gateway-用-go-stdlib-nethttp-122-servemux--connectrpcconnect-116)
     - [ADR-9: 模型适配器 plugin 独立 deployment](./14-架构决策记录adr.md#adr-9-模型适配器-plugin-独立-deployment)
     - [ADR-10: 计费引擎"实时扣减 + 异步对账"双轨](./14-架构决策记录adr.md#adr-10-计费引擎实时扣减-异步对账双轨)
   - [15. 实施路线图（Implementation Roadmap）](./15-实施路线图implementation-roadmap.md)

@@ -4,9 +4,9 @@
 
 | 指标 | 目标 | 实现 |
 |------|------|------|
-| 网关 P95 叠加延迟 | ≤ 100ms | Go fasthttp + 同 region gRPC + Redis 缓存 |
+| 网关 P95 叠加延迟 | ≤ 100ms | Go stdlib net/http: P95 ≤ 100 ms observed in Story 3.1 cold-start; sustained-latency benchmark deferred to Epic 9 k6 baseline |
 | 流式 TTFB | ≤ 300ms | 上游连接预热 + 早期 SSE 心跳 |
-| 单实例 QPS | ≥ 5,000 | Go fasthttp benchmark 已达；K8s HPA |
+| 单实例 QPS | ≥ 5,000 | Go stdlib net/http: sustained-QPS benchmark deferred to Epic 9 k6 baseline (Story 3.1 ratified the stdlib stack; the legacy Fiber 5 k QPS claim is no longer load-bearing); K8s HPA |
 | 并发连接 | ≥ 50,000 | 多 pod + LB 长连接 |
 | Token 计费精度 | 误差 < 1% | 实时 Redis + Kafka 异步对账 PG |
 
@@ -50,5 +50,11 @@ Edge 层（Cloudflare Rate Limiting）:
 | ClickHouse 写入 | ~1M rows/s | 已超出预期上限；批量写入 + 分布式表 |
 | Kafka 吞吐 | ~10k msg/s/partition | 多 partition + replication factor 3 |
 | 上游 LLM API 限流 | 厂商不同（Qwen/DeepSeek 单 key 1000+ QPS） | 多 key 池 + 智能 failover |
+
+## 10.5 Change Log
+
+| Date | Story | Change |
+|------|-------|--------|
+| 2026-05-18 | Story 3.1 (SM Phil) | §10.1 网关延迟 / 单实例 QPS 表格的"实现"列由 "Go fasthttp" 改写为 "Go stdlib net/http"；5 k QPS 5,000 QPS 单实例上限以 stdlib 基线在 Epic 9 k6 baseline 重新认证。Original Fiber fasthttp benchmark claim is no longer load-bearing per Story 3.1 ratification (ADR-2). |
 
 ---

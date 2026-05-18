@@ -13,7 +13,7 @@
 | **图表** | Recharts + ECharts | 2.x / 5.x | Dashboard / Benchmark |
 | **代码高亮** | Shiki | 1.x | 文档 / Playground |
 | **网关语言** | Go | 1.22+ | API Gateway |
-| **网关框架** | Fiber | 2.52+ | HTTP server (基于 fasthttp) |
+| **网关框架** | Go stdlib net/http + connectrpc/connect | stdlib (Go 1.22+) / connectrpc 1.16+ | HTTP server (stdlib) + gRPC over HTTP/2 |
 | **内部 RPC** | gRPC + Buf | 1.x | 服务间通信 + protobuf 管理 |
 | **后端 OLTP DB** | PostgreSQL | 16+ | 用户、订单、Key、订阅、配额 |
 | **缓存/限流** | Redis | 7.2+ | 限流计数、Session、热数据缓存 |
@@ -49,5 +49,11 @@
 - **稳定优先**: 选择 LTS 或最近 stable 大版本（如 PostgreSQL 16，避开刚发布的 17）
 - **生态成熟**: 优先选择社区活跃、Stack Overflow 答案多的版本
 - **安全更新**: 至少 24 个月内仍接收安全补丁
+
+## 2.3 Change Log
+
+| Date | Story | Change |
+|------|-------|--------|
+| 2026-05-18 | Story 3.1 (SM Phil) | §2.1 row "网关框架" rewritten from "Fiber 2.52+ (基于 fasthttp)" to "Go stdlib net/http + connectrpc/connect (Go 1.22+ / connectrpc 1.16+)" — ratifies the de-facto stack shipped by Stories 2.2 – 2.6. Original choice preserved under "Original (deprecated 2026-05-18, Story 3.1 ratification)" in `high-level-architecture.md §1.3.1 ADR-2 history`. |
 
 ---

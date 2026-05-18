@@ -1,9 +1,5 @@
+// Story 3.1 — TestPlaceholder removed (T0.2). Test coverage now lives in:
+//   - apps/api-gateway/internal/handlers/health_test.go (handler unit + bench)
+//   - apps/api-gateway/cmd/server/coldstart_test.go     (cold-start + rootMux + E2E)
+//   - apps/api-gateway/cmd/server/doc_ratification_test.go (AC3 doc lint)
 package main
-
-import "testing"
-
-// TestPlaceholder keeps `go test ./apps/api-gateway/...` returning exit 0 until
-// Story 1.5 introduces real HTTP handlers worth covering.
-func TestPlaceholder(t *testing.T) {
-	t.Log("ok")
-}

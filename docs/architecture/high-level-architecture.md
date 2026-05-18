@@ -67,7 +67,7 @@
 | ID | 决策 | 理由 |
 |----|------|------|
 | ADR-1 | 边缘 TLS 终端用 Cloudflare 但**禁用所有缓存** | 合规：数据不出境 |
-| ADR-2 | API Gateway 用 Go（Fiber 框架） | 高并发、低 GC、生态成熟 |
+| ADR-2 | API Gateway 用 Go (stdlib net/http 1.22+ ServeMux + connectrpc/connect 1.16+) | <ul><li>Go 1.22+ ServeMux added method-aware routing (e.g., `mux.HandleFunc("GET /path", ...)`), closing the historical Fiber feature gap</li><li>connectrpc/connect requires `http.Handler` interface — Fiber/fasthttp would require an adapter shim with non-trivial allocation overhead</li><li>Existing Epic 2 stories (2.2 / 2.3 / 2.4 / 2.5 / 2.6) already shipped on net/http; refactoring would regress 5 Done stories</li><li>Cold-start budget (≤ 1s, Story 3.1 AC2) is met by stdlib without Fiber's compile-time generation</li></ul> |
 | ADR-3 | 内部服务间 gRPC（HTTP/2 + protobuf） | 类型安全、性能、双向流 |
 | ADR-4 | 数据库主用 PostgreSQL 16 | 业务关系强、JSONB 灵活、ACID |
 | ADR-5 | 日志/用量/账单事件主用 ClickHouse 24+ | OLAP 高吞吐、压缩比高 |
@@ -76,5 +76,15 @@
 | ADR-8 | 主云阿里云 + 腾讯云容灾 | 备案常见组合、价格谈判优势 |
 | ADR-9 | 模型适配器 plugin 独立 deployment | 单家故障不影响其他；独立扩缩容 |
 | ADR-10 | 计费引擎按"实时扣减 + 异步对账" 双轨 | 实时熔断 + 准确性保障 |
+
+### 1.3.1 ADR-2 history
+
+Original (deprecated 2026-05-18, Story 3.1 ratification):
+
+> API Gateway 用 Go（Fiber 框架） / 高并发、低 GC、生态成熟
+
+Preserved per ADR-7 (architecture style) practice — architectural decisions are appended, not overwritten. See `docs/stories/3.1-gateway-http-framework-health-coldstart.md` for the user-decision date (2026-05-18) and the full ratification rationale.
+
+**Change Log**: Story 3.1 (2026-05-18, SM Phil) — ADR-2 rewritten to ratify the de-facto stdlib net/http + connectrpc stack actually shipped by Stories 2.2 – 2.6.
 
 ---

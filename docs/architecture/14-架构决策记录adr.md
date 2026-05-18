@@ -14,17 +14,27 @@
 - ⚠️ 不能利用 CDN 加速 GET 数据
 - ⚠️ 需法律意见书确认"TLS 终端经过境外 PoP 但内容不持久化"是否构成数据出境（强烈建议在 Beta 上线前完成）
 
-## ADR-2: API Gateway 用 Go (Fiber 框架)
+## ADR-2: API Gateway 用 Go (stdlib net/http 1.22+ ServeMux + connectrpc/connect 1.16+)
 
-**Context**: 网关需高并发、低延迟、易于运维。
+**Context**: 网关需高并发、低延迟、易于运维。Stories 2.2 – 2.6 已在 Go stdlib `net/http` + connectrpc/connect 1.16+ 之上交付（auth signup / signin / 2FA / OAuth / profile / GDPR），原 ADR-2（Fiber 2.x）从未落地实现。Story 3.1（2026-05-18, SM Phil）以"批准既成事实"方式正式追认。
 
-**Decision**: Go 1.22 + Fiber 2.x（基于 fasthttp）。
+**Decision**: Go 1.22+ stdlib `net/http.ServeMux`（方法感知路由，例如 `mux.HandleFunc("GET /path", ...)`）+ connectrpc/connect 1.16+（HTTP/1.1 + HTTP/2，gRPC + Connect 协议双发）。
 
 **Consequences**:
-- ✅ 高并发 5000+ QPS / pod
-- ✅ 单二进制部署简单
-- ✅ 团队 Go 经验成熟
-- ❌ Fiber 不如 net/http 标准库通用（依赖 fasthttp）— 接受此 trade-off
+- ✅ Go 1.22+ ServeMux 已支持方法感知路由（`GET /v1/auth/signin`），关闭了历史上对 Fiber 的特性差距
+- ✅ connectrpc/connect 直接基于 `http.Handler`，零适配层
+- ✅ 与 Stories 2.2 – 2.6 已交付的 SecurityHeaders / CSRF / JWTVerifier 中间件链兼容
+- ✅ 冷启动 ≤ 1s P95（Story 3.1 AC2 实测）— stdlib 已足够
+- ⚠️ 单实例 QPS 基线尚未在 stdlib 之上完成压测；5 k QPS / pod 目标在 Epic 9 通过 k6 baseline 重新认证
+- ⚠️ 如未来 Epic 9 压测证明 stdlib 吞吐不足，再走一次 ADR（如 ADR-2.1）评估 Fiber / fasthttp / 自研 HTTP 框架
+
+### ADR-2 history
+
+Original (deprecated 2026-05-18, Story 3.1 ratification):
+
+> API Gateway 用 Go（Fiber 框架）/ Go 1.22 + Fiber 2.x（基于 fasthttp）/ ❌ Fiber 不如 net/http 标准库通用（依赖 fasthttp）— 接受此 trade-off
+
+Preserved per ADR contract — architectural decisions are appended, not overwritten.
 
 ## ADR-9: 模型适配器 plugin 独立 deployment
 

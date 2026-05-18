@@ -77,7 +77,7 @@
 | ID | 决策 | 理由 |
 |----|------|------|
 | ADR-1 | 边缘 TLS 终端用 Cloudflare 但**禁用所有缓存** | 合规：数据不出境 |
-| ADR-2 | API Gateway 用 Go（Fiber 框架） | 高并发、低 GC、生态成熟 |
+| ADR-2 | API Gateway 用 Go (stdlib net/http 1.22+ ServeMux + connectrpc/connect 1.16+) | Go 1.22+ 方法感知 ServeMux；connectrpc 直接基于 http.Handler；Stories 2.2–2.6 已交付；冷启动 ≤ 1s P95 |
 | ADR-3 | 内部服务间 gRPC（HTTP/2 + protobuf） | 类型安全、性能、双向流 |
 | ADR-4 | 数据库主用 PostgreSQL 16 | 业务关系强、JSONB 灵活、ACID |
 | ADR-5 | 日志/用量/账单事件主用 ClickHouse 24+ | OLAP 高吞吐、压缩比高 |
@@ -104,7 +104,7 @@
 | **图表** | Recharts + ECharts | 2.x / 5.x | Dashboard / Benchmark |
 | **代码高亮** | Shiki | 1.x | 文档 / Playground |
 | **网关语言** | Go | 1.22+ | API Gateway |
-| **网关框架** | Fiber | 2.52+ | HTTP server (基于 fasthttp) |
+| **网关框架** | Go stdlib net/http + connectrpc/connect | stdlib (Go 1.22+) / connectrpc 1.16+ | HTTP server (stdlib) + gRPC over HTTP/2 |
 | **内部 RPC** | gRPC + Buf | 1.x | 服务间通信 + protobuf 管理 |
 | **后端 OLTP DB** | PostgreSQL | 16+ | 用户、订单、Key、订阅、配额 |
 | **缓存/限流** | Redis | 7.2+ | 限流计数、Session、热数据缓存 |
@@ -903,9 +903,9 @@ He-API **不存储任何信用卡数据**：
 
 | 指标 | 目标 | 实现 |
 |------|------|------|
-| 网关 P95 叠加延迟 | ≤ 100ms | Go fasthttp + 同 region gRPC + Redis 缓存 |
+| 网关 P95 叠加延迟 | ≤ 100ms | Go stdlib net/http: P95 ≤ 100 ms observed in Story 3.1 cold-start; sustained-latency benchmark deferred to Epic 9 k6 baseline |
 | 流式 TTFB | ≤ 300ms | 上游连接预热 + 早期 SSE 心跳 |
-| 单实例 QPS | ≥ 5,000 | Go fasthttp benchmark 已达；K8s HPA |
+| 单实例 QPS | ≥ 5,000 | Go stdlib net/http: sustained-QPS benchmark deferred to Epic 9 k6 baseline (Story 3.1 ratified the stdlib stack; the legacy Fiber 5 k QPS claim is no longer load-bearing); K8s HPA |
 | 并发连接 | ≥ 50,000 | 多 pod + LB 长连接 |
 | Token 计费精度 | 误差 < 1% | 实时 Redis + Kafka 异步对账 PG |
 
@@ -1093,17 +1093,26 @@ Edge 层（Cloudflare Rate Limiting）:
 - ⚠️ 不能利用 CDN 加速 GET 数据
 - ⚠️ 需法律意见书确认"TLS 终端经过境外 PoP 但内容不持久化"是否构成数据出境（强烈建议在 Beta 上线前完成）
 
-### ADR-2: API Gateway 用 Go (Fiber 框架)
+### ADR-2: API Gateway 用 Go (stdlib net/http 1.22+ ServeMux + connectrpc/connect 1.16+)
 
-**Context**: 网关需高并发、低延迟、易于运维。
+**Context**: 网关需高并发、低延迟、易于运维。Stories 2.2 – 2.6 已在 Go stdlib `net/http` + connectrpc/connect 1.16+ 之上交付。Story 3.1（2026-05-18, SM Phil）正式追认。
 
-**Decision**: Go 1.22 + Fiber 2.x（基于 fasthttp）。
+**Decision**: Go 1.22+ stdlib `net/http.ServeMux`（方法感知路由）+ connectrpc/connect 1.16+。
 
 **Consequences**:
-- ✅ 高并发 5000+ QPS / pod
-- ✅ 单二进制部署简单
-- ✅ 团队 Go 经验成熟
-- ❌ Fiber 不如 net/http 标准库通用（依赖 fasthttp）— 接受此 trade-off
+- ✅ Go 1.22+ ServeMux 已支持方法感知路由
+- ✅ connectrpc 直接基于 http.Handler；无适配层
+- ✅ 与 Stories 2.2 – 2.6 已交付的中间件链兼容
+- ✅ 冷启动 ≤ 1s P95（Story 3.1 AC2 实测）
+- ⚠️ 单实例 5 k QPS 目标在 Epic 9 k6 baseline 重新认证
+
+#### ADR-2 history
+
+Original (deprecated 2026-05-18, Story 3.1 ratification):
+
+> API Gateway 用 Go（Fiber 框架）/ Go 1.22 + Fiber 2.x（基于 fasthttp）/ ❌ Fiber 不如 net/http 标准库通用（依赖 fasthttp）— 接受此 trade-off
+
+Preserved per ADR contract.
 
 ### ADR-9: 模型适配器 plugin 独立 deployment
 
@@ -1195,3 +1204,12 @@ Edge 层（Cloudflare Rate Limiting）:
 ---
 
 > **架构 v1.0 终版**。等待业务方审阅。审阅通过后转交 PO 做 master validation 与 shard。
+
+---
+
+## Change Log
+
+| Date | Story | Change |
+|------|-------|--------|
+| 2026-05-18 | Story 3.1 (SM Phil) | §1.3 ADR-2 row, §2.1 网关框架 row, §10.1 性能预算行, §14 ADR-2 全节 + ADR-2 history 子块 — 全部由 "Fiber 2.x / fasthttp" 改写为 "Go stdlib net/http + connectrpc/connect (Go 1.22+ / 1.16+)"，追认 Stories 2.2 – 2.6 实际交付的 stdlib 栈。Original Fiber decision preserved under "Original (deprecated 2026-05-18, Story 3.1 ratification)" 注解。 |
+

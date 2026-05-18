@@ -28,9 +28,9 @@ import (
 	"syscall"
 	"time"
 
-	obs "github.com/he-api/he-api/packages/go-observability"
 	"github.com/he-api/he-api/apps/api-gateway/internal/handlers"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
+	obs "github.com/he-api/he-api/packages/go-observability"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1/authv1connect"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/notification/v1/notificationv1connect"
 
@@ -111,6 +111,12 @@ func main() {
 		os.Exit(1)
 	}
 	jwtVerifier := middleware.NewJWTVerifier(rsaPub)
+
+	// Story 3.1 — /health probe handler (AC1). Constructed before the main
+	// mux so it can be mounted on a sibling probeMux that bypasses the
+	// SecurityHeaders + CSRF chain (BR-1.3). The `serviceVersion` const is
+	// the single source of truth for the version string (BR-1.8).
+	health := handlers.NewHealthHandler(serviceVersion)
 
 	mux := http.NewServeMux()
 	// Story 2.2 — /v1/auth/* REST surface (Wright Round 1 Q1 ruling).
@@ -193,9 +199,30 @@ func main() {
 		AllowedOrigins: csrfAllowed,
 	}, mux))
 
+	// Story 3.1 — probeMux carries /health + /healthz on the bypass branch
+	// (BR-1.3). It is dispatched by rootMux BEFORE the SecurityHeaders +
+	// CSRF chain so probes are never rejected by Origin checks and never
+	// pay the CSP / HSTS header bytes (BR-1.3). obs.WrapHTTPHandler at the
+	// edge still wraps probeMux so /health spans land in Tempo (BR-1.4).
+	//
+	// TODO(post-3.2): extract to packages/go-observability/probemux.go once a
+	// second consumer emerges (Wright Round 1 Q4 ruling).
+	probeMux := http.NewServeMux()
+	// Register the bare paths (method-agnostic) so HealthHandler dispatches
+	// GET / HEAD / 405-other itself — preserves the JSON
+	// {"error":"method_not_allowed"} body required by AC1 (Go 1.22 mux's
+	// own 405 would be header-only).
+	probeMux.HandleFunc("/health", health.Serve)
+	probeMux.HandleFunc("/healthz", health.Serve)
+
+	rootMux := http.NewServeMux()
+	rootMux.Handle("/health", probeMux)
+	rootMux.Handle("/healthz", probeMux)
+	rootMux.Handle("/", handler)
+
 	srv := &http.Server{
 		Addr:              listenAddr,
-		Handler:           obs.WrapHTTPHandler(handler, serviceName),
+		Handler:           obs.WrapHTTPHandler(rootMux, serviceName),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

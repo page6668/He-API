@@ -13,7 +13,7 @@ prerequisite_epics: [1]
 unblocks_epics: [4, 6]
 stories:
   - id: "3.1"
-    title: 网关 HTTP 框架（Go fiber/echo）+ 路由 + 健康检查
+    title: 网关 HTTP 框架（Go net/http + connectrpc, ratify）+ /health + 冷启动基准
     acceptance_criteria:
       - /health 返回 200
       - 冷启动 < 1s

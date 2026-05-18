@@ -36,7 +36,11 @@ resources:
     memory: 256Mi
 
 # -----------------------------------------------------------------------------
-# Probes — Story 1.5 will expose /healthz on port 8080
+# Probes — /healthz is kept as a Story 1.5 historical alias; /health is the
+# canonical path per Story 3.1 (2026-05-18). Both resolve to the same
+# handler (apps/api-gateway/internal/handlers/health.go); the gateway
+# registers /health and /healthz on a sibling probeMux that bypasses the
+# SecurityHeaders + CSRF chain (BR-1.3).
 # -----------------------------------------------------------------------------
 probes:
   readiness:

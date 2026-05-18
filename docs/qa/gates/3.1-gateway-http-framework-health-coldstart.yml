@@ -1,0 +1,179 @@
+schema: 1
+story: "3.1"
+story_title: "网关 HTTP 框架（Go net/http + connectrpc, ratify）+ /health + 冷启动基准"
+gate: PASS
+status_reason: |
+  Comprehensive review (Round 1, MEDIUM risk). 96/96 automated tests PASS,
+  3/3 ACs fully verified, 15/15 blind spots covered, cold-start P95 = 285 ms
+  (71.5% headroom under 1000 ms budget), race detector / gofmt / go vet clean.
+  All five Architect Round 1 rulings (MJ-1, MJ-2, mn-1, mn-2, mn-3) verified
+  in code + tests; AC3 doc ratification confirmed via independent docs/ grep.
+reviewer: "Turing (Test Engineer & Quality Architect)"
+updated: "2026-05-18T00:00:00Z"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: MEDIUM
+  cached_review_mode: automated_plus_spot_check
+  cached_project_type: web_backend
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+top_issues: []
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 96
+    passed_count: 96
+    failed_count: 0
+    skipped_count: 1   # TestDocRatification_sameCommitContainsCodeAndDocs — intentional t.Skip per Dev Agent Record (merge-time PR-diff assertion)
+    pass_rate: 100
+    coverage_percentage: 0   # not measured by this review (coverage-profile not part of Step 4 contract)
+    failed_tests: []
+    additional_checks:
+      go_vet: clean
+      gofmt: clean
+      race_detector: clean
+      cold_start_p95_ms: 285
+      cold_start_budget_ms: 1000
+      cold_start_headroom_pct: 71.5
+  e2e:
+    executed: true
+    passed: true
+    skipped: false
+    skip_reason: ""   # E2E for Go backend lives in the same test binary (TestColdStart spawns real production-parity binary on :8080); no Playwright path applicable
+    scenarios_tested: 8   # AC1 E2E-001..003 + AC2 INT-020..028 binary-spawning scenarios + 3 BLIND-RESOURCE
+    scenarios_passed: 8
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+ac_coverage:
+  verification_method: traceability_verification
+  total_acs: 3
+  fully_verified: 3
+  partially_verified: 0
+  not_verified: 0
+  coverage_rate: 100
+  discrepancies: 0
+  details:
+    - ac_id: AC1
+      title: "/health endpoint response contract + probe compatibility"
+      status: VERIFIED
+      code_locations:
+        - apps/api-gateway/internal/handlers/health.go
+        - "apps/api-gateway/cmd/server/main.go:116-225"
+      test_locations:
+        - apps/api-gateway/internal/handlers/health_test.go
+        - apps/api-gateway/cmd/server/coldstart_test.go
+      business_rules_verified:
+        - BR-1.1_no_upstream_deps
+        - BR-1.2_healthz_alias
+        - BR-1.3_probemux_bypass
+        - BR-1.4_otel_wrap
+        - BR-1.5_byte_identical_body
+        - BR-1.6_no_per_request_marshal
+        - BR-1.7_handler_struct_pattern
+        - BR-1.8_version_from_const
+    - ac_id: AC2
+      title: "cold-start ≤ 1000 ms P95 (10 runs)"
+      status: VERIFIED
+      code_locations:
+        - "apps/api-gateway/cmd/server/coldstart_test.go (TestMain + buildGateway + gatewayRun + runOneColdStart + percentile)"
+        - apps/api-gateway/cmd/server/coldstart_bench_test.go
+      test_locations:
+        - apps/api-gateway/cmd/server/coldstart_test.go
+      business_rules_verified:
+        - BR-2.1_gateway_process_only
+        - BR-2.6_production_build_flags
+        - BR-2.7_p95_robust
+        - BR-2.9_buildGateway_overrides_CGO
+      qa_independent_run:
+        runs: 10
+        p95_ms: 285.13
+        max_ms: 507.16
+        budget_ms: 1000
+    - ac_id: AC3
+      title: "ADR-2 + tech-stack + epic-3 YAML + 5-doc straggler ratification"
+      status: VERIFIED
+      code_locations:
+        - "docs/architecture/high-level-architecture.md (§1.3 ADR-2 + §1.3.1 history)"
+        - "docs/architecture/tech-stack.md (§2.1 + Change Log)"
+        - docs/architecture/14-架构决策记录adr.md
+        - "docs/architecture/10-性能与可扩展性performance-scalability.md (§10.1 + Change Log)"
+        - "docs/architecture/index.md (line 63 anchor)"
+        - "docs/architecture.md (monolith: §1.3 + §2.1 + §10.1 + §14 + Change Log)"
+        - "docs/prd.md (line 390 + Change Log)"
+        - "docs/prd/epic-3-gateway-core.yaml (stories[0].title)"
+        - "docs/prd/epics.md (E3-S1 row)"
+      test_locations:
+        - apps/api-gateway/cmd/server/doc_ratification_test.go
+      business_rules_verified:
+        - BR-3.1_user_decision_date_cited
+        - BR-3.2_history_preserved
+        - BR-3.3_change_log_anchored
+        - BR-3.4_grep_scope_expanded
+        - BR-3.5_go_mod_clean
+
+blind_spot:
+  total_scenarios: 15
+  covered: 15
+  coverage_rate: 100
+  by_category:
+    BOUNDARY: { total: 6, covered: 6 }
+    ERROR: { total: 3, covered: 3 }
+    FLOW: { total: 1, covered: 1 }
+    CONCURRENCY: { total: 2, covered: 2 }
+    RESOURCE: { total: 3, covered: 3 }
+
+evidence:
+  directory: ""   # no evidence directory — zero issues found across all severities
+  issues: []
+
+risk_assessment:
+  risk_level: MEDIUM
+  review_mode: automated_plus_spot_check
+  complexity_count: 4
+  security_sensitive: false
+  dev_gate_score: 100
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 0 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "Cold-start headroom check on CI baseline (ubuntu-22.04 2 vCPU / 2 GiB) — QA-local M4 measurement of 285 ms may not transfer 1:1 to CI hardware; the CI run is the authoritative gate"
+      - "If a future Story expands boot-time work (e.g., 3.2 Bearer Token + Redis client init), re-evaluate the 1000 ms budget per Architect Q3 ruling"
+
+architect_round1_followup_status:
+  MJ-1_buildGateway_CGO_override: REFLECTED in coldstart_test.go::buildGateway()
+  MJ-2_9doc_straggler_ratification: REFLECTED across high-level-architecture / tech-stack / sharded ADR / perf §10 / monolith architecture.md / prd.md / index.md / epic-3 yaml / epics.md
+  mn-1_no_otel_disabled_env: REFLECTED — TestMain unsets OTEL_EXPORTER_OTLP_ENDPOINT
+  mn-2_10_run_p95: REFLECTED — coldStartRuns=10, percentile() uses R-7
+  mn-3_otelhttp_default_span_name: REFLECTED — TestRootMux_healthSpanAttributesPresent asserts attrs only, not literal name
+  Q4_inline_probemux_with_todo: REFLECTED — `// TODO(post-3.2): extract to packages/go-observability/probemux.go` at main.go:208
+  Q5_fail_not_warn_on_regression: REFLECTED — TestColdStart uses t.Fatalf on P95 violation
+
+non_blocking_followups:
+  - id: "AC2-BR-2.9-Backfill"
+    severity: low
+    finding: "BR-2.9 is materialised in coldstart_test.go::buildGateway() and documented in Dev Agent Record but not formally listed under AC2 §Business Rules table."
+    suggested_action: "SM may backfill BR-2.9 into AC2 §Business Rules on next epic-grooming pass — informational, not gate-blocking."
+  - id: "Coverage-Profile-Not-Measured"
+    severity: low
+    finding: "QA Step 4 ran `go test -count=1` without `-coverprofile`; coverage_percentage left at 0 in gate file."
+    suggested_action: "If coverage trending becomes part of CI gating later, add a per-package coverprofile pass — informational, not gate-blocking; the health handler is trivially testable, 100% expected."
