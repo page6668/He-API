@@ -1,0 +1,17 @@
+step: 5
+purpose: E2E Testing Decision
+e2e_tests:
+  executed: false
+  skipped: true
+  skip_reason: |
+    Per Step 1 risk_level=MEDIUM + review_mode=automated_only.
+    Story 4.3 is a backend-only Go service (no UI). The live e2e
+    suite (apps/api-gateway/tests/openai_sdk_kimi_live_test.py)
+    is opt-in via HE_API_KIMI_LIVE=1 + requires KIMI_UPSTREAM_API_KEY
+    in the runner environment — neither is present in the QA
+    review environment. The contract-test skeleton runs but
+    skipif's away absent HE_API_TEST_GATEWAY_URL (REUSE Story-4.1/4.2
+    deferred-live-execution posture).
+    Default CI surface (unit + integration via httptest fakes +
+    chaos build-tag) is exercised in Step 4 and is green.
+  issues: []

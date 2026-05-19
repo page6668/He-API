@@ -1,0 +1,13 @@
+step: 1
+purpose: Risk Assessment
+risk_level: MEDIUM
+review_mode: automated_only
+skip_e2e: true
+review_round: 1
+rationale: |
+  complexity_indicators=4 (api_changes + new_patterns + cross_service + three_model_dispatch);
+  security_sensitive=false; no DB schema changes; no UI changes.
+  Backend-only Go adapter, identity-mapping Normaliser, cross-vendor regression surface.
+  Story 4.2 (precursor; N=2) passed QA at 95/100 — this is a verbatim copy + N=3 extension.
+  Live e2e tests are env-gated (HE_API_KIMI_LIVE=1); chaos suite is build-tag-gated (chaos).
+  Default CI surface = unit + integration (httptest fakes) — automated_only is correct mode.

@@ -1,0 +1,138 @@
+schema: 1
+story: "4.3"
+title: "Kimi（Moonshot）适配器"
+gate: PASS
+status_reason: |
+  All 3 ACs covered by passing unit + integration + chaos suites (race-detector clean). Three-model-id endpoint
+  dedup (M2 N=3 scaling) verified via the strengthened assert.Same chain. Architect Round 1 m-1 body-aware
+  Moonshot context-length classifier landed with 4 unit tests + INT-006 + CHAOS-008. Cross-vendor regression
+  preserved (DeepSeek + Qwen co-registered registry, no shadowing). Identity-mapping kimiNormaliser consumes the
+  lifted packages/adapter-usage types verbatim.
+reviewer: "Turing (QA)"
+agent_model_used: claude-opus-4-7 (1M context)
+review_date: 2026-05-19
+review_round: 1
+review_mode: full_review
+risk_level: MEDIUM
+test_design_level: Comprehensive
+risk_profile_required: true
+risk_profile_ref: docs/qa/assessments/4.3-risk-20260519.md
+test_design_ref: docs/qa/assessments/4.3-test-design-20260519.md
+project_type:
+  type: web_backend
+  subtype: go-monorepo-connectrpc
+test_results:
+  verification_method: independent_execution
+  passed: true
+  total_passed: 152
+  skipped: 1   # TestNormalise_Kimi_NativeFieldRename_Skipped — intentional (identity-mapping vendor)
+  failed: 0
+  packages:
+    - apps/adapters/kimi/internal: 16 PASS
+    - apps/adapters/kimi/internal/upstream: 21 PASS
+    - apps/adapters/kimi/internal/usage: 6 PASS / 1 intentional SKIP
+    - apps/adapters/kimi/tests: 15 PASS
+    - apps/adapters/kimi/tests (chaos build-tag): 8 PASS
+    - apps/api-gateway/internal/adapterclient: 19 PASS
+    - apps/api-gateway/internal/handlers: 67 PASS (under -race)
+  race_clean: true
+  chaos_suite: PASS  # 5xx burst, slow loris, mid-stream RST, full timeout, TLS, DNS, 429 rate-limit (Moonshot-flavoured), 400 context-length (Moonshot-flavoured)
+ac_coverage:
+  total: 3
+  passed: 3
+  failed: 0
+  details:
+    AC1_non_streaming_three_sizes: PASS  # 4.3-UNIT-001..007/011..013 + INT-001..006 + INT-016 cross-vendor
+    AC2_streaming_three_sizes: PASS      # 4.3-UNIT-008/009/010 + INT-007..009 + INT-013 parallel
+    AC3_usage_accuracy_three_sizes: PASS # 4.3-UNIT-006(+sub-cases)/014/015 + INT-011/013-tokeniser/014 + E2E skeletons
+task_checkbox:
+  total: 51
+  checked: 51
+  unchecked: 0
+  consistency: PASS
+regression:
+  story_4_1_deepseek: PASS  # registry resolve + handler dispatch unchanged
+  story_4_2_qwen: PASS      # N=2 dedup preserved; co-registration not shadowed
+  cross_vendor_3_handles: PASS  # TestRegistry_AllThreeVendorsCoRegistered_NoCrossVendorShadowing + handler-level cross-vendor subtest matrix
+blind_spot_coverage:
+  total_scenarios: 16
+  covered: 16
+  coverage_rate: 100
+quality_score: 96
+score_breakdown:
+  ac_coverage_completeness: 10
+  test_correctness_under_race: 10
+  risk_mitigation_R1_R12: 10
+  code_quality_slog_pii_defensive_copy: 10
+  documentation_dev_log_secrets_test_design: 10
+  regression_protection_cross_vendor: 10
+  architecture_compliance_M2_N3: 10
+  security_pii_large_prompt_BR_1_9: 10
+  build_static_analysis: 9   # go vet clean; golangci-lint not run by QA (Dev T6.4 claimed clean); -1 for unverified
+  operational_readiness_curl_http2_deferred: 7  # T6.6 records empirical curl --http2 deferred to first live deploy (workstation lacks KIMI_UPSTREAM_API_KEY)
+top_issues: []
+non_blocking_observations:
+  - id: obs-1
+    severity: low
+    title: "Pre-existing flaky regression test in handlers package — TestChatCompletionsStream_ClientDisconnect_ConnectionClose"
+    summary: |
+      Pre-existing flake (last modified Story 3.4; touched 0 times by Story 4.3). Polls slog buffer for
+      `client_disconnected=true` within a 1s deadline after srv.CloseClientConnections() — TCP-FIN propagation
+      timing on the test runner is non-deterministic. Failed ~3/5 times in -count=1 mode but passes consistently
+      under -race (test runs slower → kernel surfaces FIN within deadline). The test exercises Story-3.4 streaming
+      handler + writer disconnect detection — both UNTOUCHED by Story 4.3 (BR-2.1/BR-2.2 REUSE Story-4.1 verbatim).
+      Recommend Story-4.4+ or a dedicated fix story to harden the disconnect-detection assertion (e.g., poll
+      Flush() → Hijack() boundary directly rather than the slog buffer).
+    action: log_only_does_not_block_gate
+  - id: obs-2
+    severity: low
+    title: "Empirical curl --http2 verification of api.moonshot.cn deferred"
+    summary: |
+      T6.6 records that `curl --http2 -v https://api.moonshot.cn/v1/chat/completions` was deferred to first live
+      deployment because the dev workstation lacks KIMI_UPSTREAM_API_KEY. Compensating control: the policy
+      (`ForceAttemptHTTP2: true` + ALPN fallback) is exercised by 4.3-UNIT-004 against a HTTP/1.1-only httptest
+      server in CI, so the fallback branch is verified regardless of upstream H2 posture. No functional risk.
+    action: defer_to_first_live_deploy
+  - id: obs-3
+    severity: low
+    title: "SDK contract + live e2e suites are skeleton-only (env-gated)"
+    summary: |
+      Per Story-4.1/4.2 deferred-live-execution posture, the OpenAI Python SDK contract tests skipif when
+      HE_API_TEST_GATEWAY_URL is unset; the live suite skipif when HE_API_KIMI_LIVE=1 is unset. These run on
+      operator-triggered workflow_dispatch only. No new follow-up story opened — inherits Story 4.1/4.2's
+      already-tracked deferred live-execution checkpoint.
+    action: defer_per_epic_4_posture
+recommendations:
+  immediate: []
+  future_consideration:
+    - "Harden chat_completions_stream_test.go::TestChatCompletionsStream_ClientDisconnect_ConnectionClose disconnect-detection assertion (obs-1 above) — pre-existing flake, owner: Story-4.4+ or dedicated stability fix."
+    - "When Architect cuts the first live `adapter-kimi` deployment, capture `curl --http2 -v https://api.moonshot.cn/v1/chat/completions` output into docs/dev/logs/4.3-dev-log.md per T6.6 + OQ-4.3-3 (obs-2)."
+nfr_validation:
+  security:
+    status: PASS
+    notes: |
+      Auth surface inherited from Story 3.2 (bearer-key validation at gateway entry; adapter trusts the gateway).
+      KIMI_UPSTREAM_API_KEY is a deployment-time Vault secret (path kv/data/he-api/upstream/kimi/ per Story-4.1
+      OQ3 cascade); NO per-request user credential added. PII discipline (BR-1.9) verified incl. large-prompt
+      variant (4.3-UNIT-016 with 100K-character fixture — slog records contain ZERO prompt content).
+  performance:
+    status: PASS
+    notes: |
+      TTFB BR-2.7 invariant inherited from Story-4.1/4.2 (loopback < 500ms); per Architect m-2, per-variant
+      TTFB on live upstream is informational only — defer per-variant perf characterisation to Story 4.7
+      capability matrix + Epic 9 observability. Cold-start ≤ 2s budget inherited from Story-4.1 M5 cascade
+      (operational measurement, not a CI gate per Story-4.1 precedent).
+  reliability:
+    status: PASS
+    notes: |
+      Chaos suite green for 8 fault modes incl. 2 Kimi-specific (CHAOS-007 429 rate-limit + CHAOS-008 400
+      context-length). Mid-stream RST + slow loris + DNS + TLS handshake failure all green. Connection-pool
+      monomorphism verified at N=3 via assert.Same chain.
+  maintainability:
+    status: PASS
+    notes: |
+      Identity-mapping vendor (per Architect OQ-4.3-1) — translate.go is structurally identical to Story-4.2
+      qwen modulo URL + env-var names. Per-vendor errors.go replica (Story-4.2 L2 policy) lets the body-aware
+      classifier live next to the status-only classifier without cross-vendor import. boundModelIDs defensively
+      copied per Story-4.2 precedent (verified by TestBoundModelIDs_Defensive_Copy).
+expires: "2026-08-19"

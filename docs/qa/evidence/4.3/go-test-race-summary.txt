@@ -1,0 +1,7 @@
+?   	github.com/he-api/he-api/apps/adapters/kimi/cmd/server	[no test files]
+ok  	github.com/he-api/he-api/apps/adapters/kimi/internal	3.642s
+ok  	github.com/he-api/he-api/apps/adapters/kimi/internal/upstream	2.576s
+ok  	github.com/he-api/he-api/apps/adapters/kimi/internal/usage	4.050s
+ok  	github.com/he-api/he-api/apps/adapters/kimi/tests	4.914s
+ok  	github.com/he-api/he-api/apps/api-gateway/internal/adapterclient	5.266s
+ok  	github.com/he-api/he-api/apps/api-gateway/internal/handlers	7.100s

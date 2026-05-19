@@ -160,4 +160,22 @@ he-api/                                  (Monorepo, Turborepo)
 >
 > 条目添加来源：Story 4.2 Architect Round 1（OQ-4.2-1..6 + M1-M2 + m1 + L1-L2），2026-05-19。
 
+> **注**: Story 4.3 — Kimi（Moonshot AI）适配器（Epic 4 第三个真实模型适配器；THREE-model-id-per-vendor 拓扑）新增条目：
+>
+> - `apps/adapters/kimi/` — Connect-RPC adapter service hosting ALL THREE `moonshot-v1-8k` + `moonshot-v1-32k` + `moonshot-v1-128k` model ids per BR-1.10 multi-model-id-per-service dispatch extended to N=3 (Story-4.2 OQ-4.2-2 cascade ratification). Sibling of `apps/adapters/deepseek/` and `apps/adapters/qwen/`. The directory was pre-allocated since the pre-Epic-4 source-tree pass.
+>   - `cmd/server/main.go` — Connect-RPC bootstrap; `defaultBoundModelIDs = []string{"moonshot-v1-8k","moonshot-v1-32k","moonshot-v1-128k"}` per BR-1.10.
+>   - `internal/adapter.go` — `AdapterServiceHandler` (copy from qwen template; identical except per-vendor `errors.go` reference and m-1 body-aware classifier wire-up in the HTTP-error path).
+>   - `internal/upstream/{client,translate,sse_decoder,types}.go` — REUSE Story-4.2 qwen patterns byte-for-byte (per Story-4.2 L1 SSE-decoder simplification + L2 per-vendor types replica policy).
+>   - `internal/upstream/errors.go` — per-vendor replica (Story-4.2 L2). Adds `ErrorKindContextLengthExceeded` (BR-4.5 NEW) + new helper `ClassifyMoonshotErrorBody(status, body) ErrorKind` per Architect Round 1 m-1 (body-aware classification for the Moonshot 400 invalid_request_error shape — status alone cannot disambiguate context-length errors from generic 400s).
+>   - `internal/usage/normaliser.go` — identity-mapping `kimiNormaliser` consuming the lifted `packages/adapter-usage` types (NormalisedUsage, ErrUsageConstraintViolation, ValidateInvariants) per Story-4.2 M1 cascade.
+>   - `Dockerfile` — multi-stage build copy from `apps/adapters/qwen/Dockerfile`.
+>   - `tests/{adapter_test.go,chaos_test.go}` — 3-model-parametrised integration suite + Toxiproxy-style chaos suite (build-tag `chaos`); ADDS Kimi-specific CHAOS-007 (Moonshot 429 rate-limit) + CHAOS-008 (NEW Moonshot 400 context-length-exceeded body classification per BR-4.5).
+> - `infra/helm/adapter-kimi/` — Helm chart copy-paste from `infra/helm/adapter-qwen/` with Kimi swaps (image name, env var names including `KIMI_UPSTREAM_API_KEY` per Architect Round 1 OQ-4.3-2 BRAND-name naming, `supportedModels` Helm value listing all three `moonshot-v1-*` sizes per BR-1.10 multi-model-id-per-service N=3). Namespace `he-api-adapters` (M4 inheritance). Cold-start budget ≤ 2s (M5 inheritance).
+> - `infra/argocd/applications/adapter-kimi.yaml` — ArgoCD Application manifest.
+> - `scripts/dev/seed-kimi-key.sh` — dev-mode bootstrap script (gated behind `.env.local` presence — CI never touches it).
+> - `docs/dev/secrets/kimi-upstream.md` — Vault credential runbook (Story-4.1 OQ3 cascade ratified path `kv/data/he-api/upstream/kimi/`, manual rotation — Moonshot does not support API-key auto-rotation). 沿用 Story-1.6 m-4 6-section template.
+> - `apps/api-gateway/internal/adapterclient/registry.go` (MODIFIED): NEW constants `KimiV18kModelID = "moonshot-v1-8k"`, `KimiV132kModelID = "moonshot-v1-32k"`, `KimiV1128kModelID = "moonshot-v1-128k"`, `KimiAdapterEndpointEnv = "KIMI_ADAPTER_ENDPOINT"` per Architect Round 1 OQ-4.3-2 (BRAND-name naming). `LoadFromEnv()` EXTENDED to read `KIMI_ADAPTER_ENDPOINT` and populate ALL THREE model-id entries. The Story-4.2 M2 `NewRegistry` endpoint-dedup branch is UNCHANGED and verified to scale monomorphically from N=2 to N=3 via 4.3-UNIT-011 `assert.Same(h_8k, h_32k); assert.Same(h_32k, h_128k)` chain (Architect Round 1 OQ-4.3-5 policy).
+>
+> 条目添加来源：Story 4.3 Architect Round 1（OQ-4.3-1..6 + m-1 + m-2，cascades from Story-4.2），2026-05-19。
+
 ---

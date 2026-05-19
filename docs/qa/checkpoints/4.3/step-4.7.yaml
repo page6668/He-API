@@ -1,0 +1,25 @@
+step: 4.7
+purpose: Regression Verification (Story 4.1 DeepSeek + Story 4.2 Qwen)
+regression:
+  executed: true
+  passed: true
+  tests_total: 6
+  tests_failed: 0
+  scenarios:
+    - id: TestRegistry_DeepSeekStillResolves_WithQwenCoRegistered
+      result: PASS  # Story-4.1 + Story-4.2 co-registration preserved
+    - id: TestRegistry_QwenMaxAndQwenPlus_ShareSameHandle_M2_EndpointDedup
+      result: PASS  # Story-4.2 N=2 dedup preserved
+    - id: TestRegistry_AllThreeKimi_ShareSameHandle_M2_N3_EndpointDedup
+      result: PASS  # Story-4.3 N=3 — extends N=2 to N=3 monomorphically
+    - id: TestRegistry_DeepSeekAndKimi_DistinctHandles
+      result: PASS
+    - id: TestRegistry_QwenAndKimi_DistinctHandles
+      result: PASS
+    - id: TestRegistry_AllThreeVendorsCoRegistered_NoCrossVendorShadowing
+      result: PASS  # 4.3-INT-016 sibling
+    - id: TestServeNonStream_DeepSeekStillDispatches_WithQwenCoRegistered
+      result: PASS  # Handler-level Story-4.1 regression guard
+    - id: TestServeNonStream_CrossVendorRegression_NoShadowing/deepseek-v3,qwen-max,qwen-plus,moonshot-v1-{8k,32k,128k}
+      result: PASS  # Subtests all-green
+  issues: []

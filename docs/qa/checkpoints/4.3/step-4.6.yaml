@@ -1,0 +1,47 @@
+step: 4.6
+purpose: AC Coverage Verification
+ac_coverage:
+  total_acs: 3
+  verified_acs:
+    AC1:
+      title: Non-streaming for ALL THREE moonshot-v1-{8k,32k,128k}
+      code_locations_verified:
+        - apps/adapters/kimi/internal/adapter.go::chatNonStreaming
+        - apps/adapters/kimi/internal/upstream/translate.go::translateRequest
+        - apps/adapters/kimi/internal/upstream/errors.go::ClassifyMoonshotErrorBody
+        - apps/api-gateway/internal/adapterclient/registry.go (Kimi constants + LoadFromEnv)
+      test_locations_verified:
+        - apps/adapters/kimi/internal/adapter_test.go (UNIT-005/005c/005d/014/016 + INT-006 + 429)
+        - apps/adapters/kimi/internal/upstream/translate_test.go (UNIT-001..003b + 009)
+        - apps/adapters/kimi/internal/upstream/client_test.go (UNIT-004 ALPN)
+        - apps/adapters/kimi/internal/upstream/errors_test.go (UNIT-007 body-aware classifier — observed via TestClassifyMoonshotErrorBody_* runs)
+        - apps/adapters/kimi/tests/adapter_test.go (INT-001..006 + 014 + 016)
+        - apps/api-gateway/internal/adapterclient/registry_test.go (UNIT-011..013 + LoadFromEnv + INT-016)
+        - apps/api-gateway/internal/handlers/chat_completions_adapter_test.go (INT-001..003 three-model + INT-016 cross-vendor)
+      verification_status: PASS
+    AC2:
+      title: Streaming for ALL THREE moonshot-v1-{8k,32k,128k}
+      code_locations_verified:
+        - apps/adapters/kimi/internal/adapter.go::chatStreaming
+        - apps/adapters/kimi/internal/upstream/sse_decoder.go::Decoder.NextChunk
+        - apps/adapters/kimi/internal/upstream/translate.go (BR-2.9 force include_usage — TestTranslate_StreamForcesIncludeUsage_AndAcceptSSE)
+        - apps/api-gateway/internal/streaming/adapter_chunker.go (UNCHANGED Story-4.1; verified untouched)
+      test_locations_verified:
+        - apps/adapters/kimi/internal/adapter_test.go (TestChat_Streaming_EmitsChunksWithTerminalUsage + TestChat_Streaming_MissingTailUsage_IsHardFailure)
+        - apps/adapters/kimi/internal/upstream/sse_decoder_test.go (UNIT-008..008f strict-RFC framing — 6 tests pass)
+        - apps/adapters/kimi/tests/adapter_test.go (INT-007/008/009 streaming × 3 sizes + INT-013 parallel)
+      verification_status: PASS
+    AC3:
+      title: Token-usage accuracy < 1% delta across ALL THREE
+      code_locations_verified:
+        - apps/adapters/kimi/internal/usage/normaliser.go::kimiNormaliser.Normalise (imports github.com/he-api/he-api/packages/adapter-usage)
+        - apps/adapters/kimi/internal/adapter.go (BR-3.6 slog event=adapter_chat_request_end with token counts + upstream_request_id)
+      test_locations_verified:
+        - apps/adapters/kimi/internal/usage/normaliser_test.go (UNIT-006 + identity + zero-prompt + negative-completion + total-not-sum + lifted-import-path)
+        - apps/adapters/kimi/internal/adapter_test.go (TestChat_NonStreaming_CapturesUpstreamRequestID_m1 m1 capture)
+        - apps/adapters/kimi/tests/adapter_test.go (INT_011 oracle invariant + INT_013_TokeniserConsistency + INT_014 missing-usage HARD failure)
+        - apps/api-gateway/tests/openai_sdk_kimi_live_test.py (E2E-001..006 skeleton, HE_API_KIMI_LIVE opt-in)
+      verification_status: PASS
+  failed_acs: []
+  result: PASS
+issues: []

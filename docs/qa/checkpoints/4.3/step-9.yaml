@@ -1,0 +1,19 @@
+step: 9
+purpose: Story Update + HANDOFF
+actions_taken:
+  - Updated story Status: Review → Done
+  - Appended Change Log entry (QA Round 1 PASS 96/100)
+  - Populated QA Results section with full test execution summary + AC coverage + risk outcomes + observations + NFR + score breakdown
+  - Wrote gate file: docs/qa/gates/4.3-kimi-moonshot-adapter.yml
+  - Wrote review doc: docs/qa/reviews/4.3/4.3-review-round-1-pass.md
+  - Captured evidence under docs/qa/evidence/4.3/
+  - Wrote all step checkpoints under docs/qa/checkpoints/4.3/
+git_commit: n/a  # Per Epic-4 precedent (Story 4.1 + Story 4.2), Dev's *finalize-commit pass creates the commit + appends hash to Change Log
+handoff_target_agent: dev
+handoff_command: "*finalize-commit 4.3"
+handoff_reason: |
+  Gate PASS; Status now Done. Dev finalises by creating the commit
+  with the conventional message:
+    feat(story-4.3): Kimi (Moonshot) adapter + M2 N=3 endpoint-dedup + body-aware classifier + QA Round 1 PASS (96/100)
+  ...and appending the resulting commit hash to the Change Log per
+  Story 4.1/4.2 precedent.

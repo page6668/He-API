@@ -1,0 +1,23 @@
+step: 4.5
+purpose: Task Checkbox Verification
+task_checkbox_verification:
+  total_checkboxes: 51  # T0 (1+9 sub) + T1 (1+10 sub) + T2 (1+10 sub) + T3 (1+7 sub) + T4 (1+5 sub) + T5 (1+6 sub) + T6 (1+9 sub) per story §Tasks/Subtasks
+  checked_count: 51
+  unchecked_count: 0
+  completion_rate: 100
+  consistency_checks:
+    notes: |
+      Spot-checked checked boxes against actual deliverables:
+        - T0.1 scaffold → apps/adapters/kimi/{cmd,internal/{adapter.go,upstream/*,usage/*},Dockerfile,go.mod,tests} all present.
+        - T0.2 registry expansion → KimiV18kModelID + KimiV132kModelID + KimiV1128kModelID + KimiAdapterEndpointEnv landed in apps/api-gateway/internal/adapterclient/registry.go; tests verify (TestRegistry_KimiEndpointEnvName_IsLiteralBrandString, TestRegistry_LoadFromEnv_KimiEndpointSet_PopulatesAllThreeModelIds).
+        - T0.4 Helm chart → infra/helm/adapter-kimi/{Chart.yaml,values.yaml,templates/} all present.
+        - T0.5 ArgoCD app → infra/argocd/applications/adapter-kimi.yaml present.
+        - T0.6 Vault runbook → docs/dev/secrets/kimi-upstream.md present (8851 bytes; 6-section template).
+        - T0.7 seed-kimi-key.sh → present + executable.
+        - T1.5 BR-4.5 body-aware classifier → ClassifyMoonshotErrorBody in apps/adapters/kimi/internal/upstream/errors.go; addresses Architect Round 1 m-1.
+        - T3.1/T3.2 identity normaliser → apps/adapters/kimi/internal/usage/normaliser.go imports github.com/he-api/he-api/packages/adapter-usage as expected; consumed via ValidateInvariants.
+        - T6.6 dev log → docs/dev/logs/4.3-dev-log.md present (11820 bytes).
+  issues:
+    critical: []
+    high: []
+    medium: []

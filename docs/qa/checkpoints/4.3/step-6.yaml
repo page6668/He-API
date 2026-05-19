@@ -1,0 +1,12 @@
+step: 6
+purpose: Evidence Collection
+evidence:
+  files_collected: 2
+  collected_at: docs/qa/evidence/4.3/
+  files:
+    - go-test-race-summary.txt
+    - go-test-chaos-summary.txt
+  test_design_doc: docs/qa/assessments/4.3-test-design-20260519.md
+  risk_profile_doc: docs/qa/assessments/4.3-risk-20260519.md
+  dev_log: docs/dev/logs/4.3-dev-log.md
+  issues_with_evidence: []

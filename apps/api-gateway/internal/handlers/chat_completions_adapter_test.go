@@ -352,3 +352,127 @@ func TestServeNonStream_DeepSeekStillDispatches_WithQwenCoRegistered(t *testing.
 		t.Fatalf("qwen handle erroneously called %d times for deepseek-v3 request", qw.called)
 	}
 }
+
+// ============================================================
+// Story 4.3 — Kimi (Moonshot) adapter dispatch (BR-1.2 + BR-1.10 + AC1).
+// ============================================================
+
+// canonicalKimiAdapterChunk is the terminal ChatChunk shape the Kimi
+// adapter would emit for one of moonshot-v1-{8k,32k,128k}.
+func canonicalKimiAdapterChunk(model string) *adapterv1.ChatChunk {
+	role := "assistant"
+	content := "Hello from Kimi adapter."
+	stop := "stop"
+	return &adapterv1.ChatChunk{
+		Id:      "chatcmpl-kimi-real-001",
+		Object:  "chat.completion",
+		Created: 1700000000,
+		Model:   model,
+		Choices: []*adapterv1.Choice{{
+			Index:        0,
+			Delta:        &adapterv1.Delta{Role: &role, Content: &content},
+			FinishReason: &stop,
+		}},
+		Usage:        &adapterv1.Usage{PromptTokens: 7, CompletionTokens: 12, TotalTokens: 19},
+		FinishReason: &stop,
+	}
+}
+
+// 4.3-INT-001..003 (P0) — BR-1.2 + BR-1.10 — adapter dispatch for ALL
+// THREE Kimi model sizes; all three resolve to the SAME handle (M2 N=3).
+func TestServeNonStream_AdapterDispatch_AllThreeKimiSizes(t *testing.T) {
+	cases := []string{"moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"}
+	for _, model := range cases {
+		t.Run(model, func(t *testing.T) {
+			fh := newSingleChunkHandle(canonicalKimiAdapterChunk(model))
+			reg := adapterclient.NewRegistryFromHandles(map[string]adapterclient.ClientHandle{
+				"moonshot-v1-8k":   fh,
+				"moonshot-v1-32k":  fh,
+				"moonshot-v1-128k": fh,
+			})
+			h := handlers.NewChatCompletionsHandler(nil, handlers.WithAdapterRegistry(reg))
+
+			rr := doRequest(t, h, `{"model":"`+model+`","messages":[{"role":"user","content":"Hi"}]}`)
+			if rr.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200; body = %s", rr.Code, rr.Body.String())
+			}
+			if fh.called != 1 {
+				t.Fatalf("kimi adapter handle called %d times, want 1", fh.called)
+			}
+			if fh.lastReq.Model != model {
+				t.Fatalf("adapter received req.Model = %q, want %q (BR-1.10 verbatim)", fh.lastReq.Model, model)
+			}
+			body := decodeBody(t, rr)
+			if got, want := body["model"], model; got != want {
+				t.Fatalf("body.model = %v, want %v", got, want)
+			}
+			if got, want := rr.Header().Get("X-He-Selected-Model"), model; got != want {
+				t.Fatalf("X-He-Selected-Model = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+// 4.3-INT-016 (P0) — cross-vendor regression: registering Kimi entries
+// MUST NOT shadow Story-4.1 deepseek-v3 dispatch OR Story-4.2 qwen-*
+// dispatch. Each vendor's model ids continue to land on the correct
+// adapter when ALL THREE vendors are co-registered. (Validates that the
+// gateway's dispatch is keyed strictly on req.Model, not on registration
+// order.)
+func TestServeNonStream_CrossVendorRegression_NoShadowing(t *testing.T) {
+	cases := []struct {
+		model        string
+		expectVendor string // "deepseek" | "qwen" | "kimi"
+	}{
+		{"deepseek-v3", "deepseek"},
+		{"qwen-max", "qwen"},
+		{"qwen-plus", "qwen"},
+		{"moonshot-v1-8k", "kimi"},
+		{"moonshot-v1-32k", "kimi"},
+		{"moonshot-v1-128k", "kimi"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.model, func(t *testing.T) {
+			// Construct vendor-flavoured single-chunk handles whose terminal
+			// chunk model matches the request so the gateway response body
+			// echoes the right model id.
+			ds := newSingleChunkHandle(canonicalAdapterChunk())
+			qw := newSingleChunkHandle(canonicalQwenAdapterChunk(tc.model))
+			kimi := newSingleChunkHandle(canonicalKimiAdapterChunk(tc.model))
+			reg := adapterclient.NewRegistryFromHandles(map[string]adapterclient.ClientHandle{
+				"deepseek-v3":      ds,
+				"qwen-max":         qw,
+				"qwen-plus":        qw,
+				"moonshot-v1-8k":   kimi,
+				"moonshot-v1-32k":  kimi,
+				"moonshot-v1-128k": kimi,
+			})
+			h := handlers.NewChatCompletionsHandler(nil, handlers.WithAdapterRegistry(reg))
+
+			rr := doRequest(t, h, `{"model":"`+tc.model+`","messages":[{"role":"user","content":"Hi"}]}`)
+			if rr.Code != http.StatusOK {
+				t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+			}
+
+			var expected, others []*fakeHandle
+			switch tc.expectVendor {
+			case "deepseek":
+				expected, others = []*fakeHandle{ds}, []*fakeHandle{qw, kimi}
+			case "qwen":
+				expected, others = []*fakeHandle{qw}, []*fakeHandle{ds, kimi}
+			case "kimi":
+				expected, others = []*fakeHandle{kimi}, []*fakeHandle{ds, qw}
+			}
+			for _, e := range expected {
+				if e.called != 1 {
+					t.Fatalf("expected %s handle called %d times, want 1", tc.expectVendor, e.called)
+				}
+			}
+			for _, o := range others {
+				if o.called != 0 {
+					t.Fatalf("cross-vendor shadowing — non-target handle invoked %d times for %s", o.called, tc.model)
+				}
+			}
+		})
+	}
+}

@@ -1,0 +1,16 @@
+step: 2
+purpose: Project Type Detection
+project_type:
+  type: web_backend
+  subtype: go-monorepo-connectrpc
+test_strategy:
+  primary_tool: bash
+  requires_environment: false
+  test_command: "go test"
+  notes: |
+    Go monorepo using go.work. Story 4.3 lands a new module
+    apps/adapters/kimi (its own go.mod). Tests under
+    apps/adapters/kimi/... + apps/api-gateway/internal/adapterclient/...
+    + apps/api-gateway/internal/handlers/... are runnable via plain
+    `go test` from the repo root (go.work routes module imports).
+    No live server needed for default CI surface.

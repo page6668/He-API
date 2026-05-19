@@ -1,0 +1,25 @@
+apiVersion: v2
+name: adapter-kimi
+description: |
+  Story 4.3 — He-API Kimi (Moonshot AI) model adapter (Connect-RPC server-
+  streaming AdapterService.Chat). Wires upstream
+  `https://api.moonshot.cn/v1/chat/completions`
+  (Moonshot's documented OpenAI-compatible endpoint, ratified by Architect
+  Round 1 OQ-4.3-1) into the He-API gateway↔adapter contract
+  `he.adapter.v1.AdapterService` shared by all six Epic 4 adapter services.
+
+  BR-1.10 multi-model-id-per-service (N=3): this single deployment hosts
+  ALL THREE `moonshot-v1-8k`, `moonshot-v1-32k`, and `moonshot-v1-128k`
+  model ids. The gateway registry routes all three ids to the same
+  Service endpoint per Story-4.2 OQ-4.2-2 cascade ratification.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - he-api
+  - adapter
+  - kimi
+  - moonshot
+  - connect-rpc
+maintainers:
+  - name: He-API Platform Team

@@ -1,0 +1,1 @@
+ok  	github.com/he-api/he-api/apps/adapters/kimi/tests	2.941s

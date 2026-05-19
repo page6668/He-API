@@ -1,0 +1,33 @@
+step: 5.5
+purpose: Blind-Spot Coverage Verification
+blind_spot_verification:
+  design_doc: docs/qa/assessments/4.3-test-design-20260519.md
+  total_scenarios: 16
+  category_breakdown:
+    BOUNDARY: 3
+    ERROR: 3
+    CONCURRENCY: 3
+    DATA: 3
+    RESOURCE: 2
+    FLOW: 2
+  covered_in_implementation:
+    BOUNDARY:
+      - 4.3-UNIT-016 (large-prompt 100K-character PII fixture → TestChat_NonStreaming_PIIsafeLogs_LargePromptKimi128k) PASS
+      - 4.3-BLIND-RESOURCE-002 (scanner buffer bounded) — covered by sse_decoder strict-RFC tests PASS
+    ERROR:
+      - 4.3-UNIT-007 (body-aware Moonshot context-length classifier — TestClassifyMoonshotErrorBody_*) PASS
+      - 4.3-CHAOS-005 (TLS handshake failure) + 4.3-CHAOS-006 (DNS resolution failure) PASS
+    CONCURRENCY:
+      - 4.3-INT-013 (parallel three-stream non-cross-contamination — TestINT_013_ParallelAllThreeKimiSizes_NoCrossContamination) PASS under -race
+      - 4.3-UNIT-011 (N=3 endpoint-dedup `assert.Same` chain) PASS
+      - TestRegistry_Resolve_100ConcurrentReaders_NoRace PASS (gateway-side concurrency invariant carried over from Story-4.2)
+    DATA:
+      - 4.3-INT-013-TokeniserConsistency (BR-3.8 NEW Kimi-specific: bit-identical prompt_tokens across 3 sizes) PASS
+      - 4.3-UNIT-006 + sub-cases (zero-prompt / negative-completion / total-not-sum invariants) PASS
+    RESOURCE:
+      - 4.3-CHAOS-003 (mid-stream RST → no goroutine leak) PASS
+      - TestChat_NonStreaming_ContextDeadlinePropagates PASS
+    FLOW:
+      - 4.3-INT-016 sibling cross-vendor regression (TestRegistry_AllThreeVendorsCoRegistered_NoCrossVendorShadowing + TestServeNonStream_CrossVendorRegression_NoShadowing) PASS
+  coverage_rate: 100  # all 16 blind-spot anchors map to passing tests in the suite
+  issues: []

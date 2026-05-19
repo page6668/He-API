@@ -1,0 +1,57 @@
+step: 4
+purpose: Independent Automated Test Execution
+automated_tests:
+  verification_method: independent_execution
+  test_command: |
+    go test ./apps/adapters/kimi/... -count=1 -race
+    go test ./apps/api-gateway/internal/adapterclient/... -count=1 -race
+    go test ./apps/api-gateway/internal/handlers/... -count=1 -race
+    go test -tags chaos ./apps/adapters/kimi/tests/... -count=1
+  test_runner_type: go
+  exit_codes:
+    kimi_internal: 0
+    kimi_upstream: 0
+    kimi_usage: 0
+    kimi_tests: 0
+    kimi_chaos: 0
+    api_gateway_adapterclient: 0
+    api_gateway_handlers_race: 0
+  pass_counts:
+    kimi_adapter_unit: 16
+    kimi_upstream: 21
+    kimi_usage: 6  # plus 1 native-shape skipped (identity-mapping vendor)
+    kimi_integration: 15
+    kimi_chaos: 8
+    api_gateway_adapterclient: 19
+    api_gateway_handlers_race: 67  # all 4.3 / regression scenarios pass under -race
+  totals:
+    total_passed: 152
+    skipped: 1  # TestNormalise_Kimi_NativeFieldRename_Skipped — intentional: Moonshot is identity-mapping
+    failed: 0  # under -race
+  flaky_pre_existing:
+    - test: TestChatCompletionsStream_ClientDisconnect_ConnectionClose
+      package: apps/api-gateway/internal/handlers
+      last_modified_story: "3.4"
+      story_4_3_touched: false
+      flake_rate_observed: "~60% (3/5 runs in -count=1 mode without -race)"
+      reason: |
+        TCP-FIN propagation timing — test polls slog buffer for
+        `client_disconnected=true` within a 1s deadline after
+        srv.CloseClientConnections(). On the test runner the kernel
+        does not always surface the FIN to the Go http stack within
+        1s, so the next Flush does not error and the disconnect
+        marker is never set. Race-detector adds enough latency that
+        the kernel notice arrives in time → test passes under -race.
+      relation_to_story_4_3: |
+        None. The test uses streamReqBody (model="qwen-max", from
+        Story 3.4) and exercises the gateway-side streaming handler
+        + writer disconnect detection — both UNTOUCHED by Story 4.3.
+        Story 4.3 BR-2.1/BR-2.2 explicitly REUSE Story-4.1 streaming
+        handler + AdapterChunker without edits.
+      action: log_as_pre_existing_regression_watch (does not block gate)
+  integrity_check:
+    dev_evidence_found: true  # docs/dev/logs/4.3-dev-log.md present
+    dev_claimed_pass: true
+    discrepancy: false
+  passed: true  # Story 4.3 scope is green; pre-existing flake noted separately
+  issues: []

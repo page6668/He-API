@@ -50,6 +50,25 @@ const (
 	QwenAdapterEndpointEnv = "QWEN_ADAPTER_ENDPOINT"
 )
 
+// Story 4.3 — Kimi (Moonshot AI) adapter constants.
+//
+// BR-1.10 multi-model-id-per-service dispatch extended to N=3: ALL THREE
+// KimiV18kModelID + KimiV132kModelID + KimiV1128kModelID map to the SAME
+// KIMI_ADAPTER_ENDPOINT and therefore share ONE ClientHandle instance
+// (M2 endpoint-dedup, see NewRegistry — scales monomorphically from N=2
+// Qwen to N=3 Kimi). The adapter receives `req.Model` verbatim and
+// forwards it to upstream's `model` body field.
+//
+// Architect Round 1 OQ-4.3-2 ruling: env-var naming follows the adapter
+// service brand (KIMI_*) NOT the model-id prefix (moonshot-v1-*). Kimi is
+// the consumer-facing product brand; Moonshot is the company.
+const (
+	KimiV18kModelID        = "moonshot-v1-8k"
+	KimiV132kModelID       = "moonshot-v1-32k"
+	KimiV1128kModelID      = "moonshot-v1-128k"
+	KimiAdapterEndpointEnv = "KIMI_ADAPTER_ENDPOINT"
+)
+
 // ClientHandle is the abstraction Stories 4.2-4.6 + the Story 4.1
 // chat-completions handler invoke. The concrete type is a Connect-RPC
 // AdapterServiceClient wrapped to surface Chat as a request/stream pair
@@ -131,15 +150,20 @@ func NewRegistryFromHandles(handles map[string]ClientHandle) *Registry {
 //
 //	DEEPSEEK_ADAPTER_ENDPOINT  (Story 4.1) → deepseek-v3
 //	QWEN_ADAPTER_ENDPOINT      (Story 4.2) → qwen-max AND qwen-plus
+//	KIMI_ADAPTER_ENDPOINT      (Story 4.3) → moonshot-v1-8k + 32k + 128k
 //
 // Empty values omit the entry, which causes the gateway to fall through
 // to the Story-3.3 mock path for that model id.
 func LoadFromEnv() *Registry {
 	qwenEndpoint := os.Getenv(QwenAdapterEndpointEnv)
+	kimiEndpoint := os.Getenv(KimiAdapterEndpointEnv)
 	return NewRegistry(map[string]string{
-		DeepSeekModelID: os.Getenv(DeepSeekEndpointEnv),
-		QwenMaxModelID:  qwenEndpoint,
-		QwenPlusModelID: qwenEndpoint,
+		DeepSeekModelID:   os.Getenv(DeepSeekEndpointEnv),
+		QwenMaxModelID:    qwenEndpoint,
+		QwenPlusModelID:   qwenEndpoint,
+		KimiV18kModelID:   kimiEndpoint,
+		KimiV132kModelID:  kimiEndpoint,
+		KimiV1128kModelID: kimiEndpoint,
 	})
 }
 
