@@ -67,6 +67,17 @@ func (s *stubWriter) Flush() error {
 }
 func (s *stubWriter) Close() error { return nil }
 
+func (s *stubWriter) HeadersFlushed() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, c := range s.calls {
+		if c.method == "WriteEvent" || c.method == "WriteDone" {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *stubWriter) writeEvents() []recordedCall {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -1,0 +1,17 @@
+apiVersion: v2
+name: adapter-deepseek
+description: |
+  Story 4.1 — He-API DeepSeek model adapter (Connect-RPC server-streaming
+  AdapterService.Chat). Wires upstream `https://api.deepseek.com` into the
+  He-API gateway↔adapter contract `he.adapter.v1.AdapterService` shared
+  by all six Epic 4 adapter services.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - he-api
+  - adapter
+  - deepseek
+  - connect-rpc
+maintainers:
+  - name: He-API Platform Team

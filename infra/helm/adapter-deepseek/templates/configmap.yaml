@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: adapter-deepseek-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: adapter-deepseek
+    app.kubernetes.io/part-of: he-api
+data:
+  # Non-secret runtime config. Operators override via Helm values; the
+  # ConfigMap is rendered for environments (e.g., staging vs prod) where
+  # the timeout or upstream URL differs.
+  DEEPSEEK_UPSTREAM_BASE_URL: "{{ .Values.upstream.baseUrl }}"
+  DEEPSEEK_UPSTREAM_TIMEOUT_SECONDS: "{{ .Values.upstream.timeoutSeconds }}"

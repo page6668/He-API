@@ -131,4 +131,20 @@ he-api/                                  (Monorepo, Turborepo)
 
 > **注**: Story 2.1 — `apps/console/messages/` 采用 namespace-split：`messages/{locale}/{namespace}.json`。本 Story 落地 `common.json` × 10 locale（`en/zh-CN/ja/ko/es/fr/de/pt/ru/ar` MVP set）；后续 Story 按需新增 namespace（`auth.json` / `billing.json` / `dashboard.json` / ...）。`packages/i18n-keys/src/` 通过 `scripts/gen-i18n-keys.ts` 从 `messages/en/*.json` 自动生成 union literal types（每个 namespace 一个 `{Namespace}Keys`），CI `console / i18n-keys-completeness` job 跑 `git diff --exit-code packages/i18n-keys/src/` 做 drift 检测 + `scripts/check-i18n-keys.ts` 做 key 集完整性 + ICU plural 分支检测。`apps/console/` Next.js 14 App Router 脚手架（Story 2.1 落地）暴露 `[locale]` 段路由 + `middleware.ts` next-intl cookie-first 协商 + `lib/i18n.ts` (isRtlLocale/resolveLocale/buildLocaleCookieOptions) + `components/LocaleSwitch.tsx`。条目添加来源：Story 2.1 Architect Round 1 Q2 ruling + m-1，2026-05-12。
 
+> **注**: Story 4.1 — DeepSeek 适配器（Epic 4 首个真实模型适配器）新增条目：
+> - `apps/adapters/deepseek/` — DeepSeek adapter K8s service（Go Connect-RPC server, HTTP/2-forced upstream client per OQ7, strict-RFC SSE decoder per OQ6, BR-3.3 token-usage Normaliser）。模板沿用 Story-3.1 api-gateway Dockerfile multi-stage build pattern；后续 Stories 4.2-4.6 在 `apps/adapters/<vendor>/` 复用此模板。
+> - `apps/adapters/deepseek/internal/upstream/` — HTTPS client + translate + sse_decoder + wire-shape types。SSE decoder 严格 RFC 模式（OQ6 Architect Round 2 ratified），CRLF / 缺少 space after `data:` / 非 `data:` 前缀均视为 `ErrMalformedFrame`（no silent coercion）。
+> - `apps/adapters/deepseek/internal/usage/` — `Normaliser` interface（BR-3.2）+ DeepSeek identity-impl + `ErrUsageConstraintViolation`。Stories 4.2-4.6 在 sibling 包内提供 per-vendor normaliser。
+> - `apps/api-gateway/internal/adapterclient/` — gateway-side model-id → adapter-endpoint resolver（OQ4 ratified seam: in-process map + K8s DNS resolution）。`Registry.Resolve(modelID) → (ClientHandle, ok)` is the abstraction boundary Epic 6 routing-svc grafts onto。
+> - `apps/api-gateway/internal/streaming/adapter_chunker.go` — sister to Story-3.4 MockChunker，consumes adapter Connect-RPC server-streaming chunks，emits OpenAI-compatible `data: <json>\n\n` SSE 流；tail-usage chunk 在 `data: [DONE]` 之前发出（BR-2.4 / BR-3.7）。
+> - `apps/api-gateway/internal/streaming.Writer.HeadersFlushed() bool` — 新 Writer 方法（BR-2.5 emit-before-flush boundary）。
+> - `packages/proto/he/adapter/v1/adapter.proto` — `he.adapter.v1.AdapterService.Chat(ChatRequest) returns (stream ChatChunk)` 服务端流式 RPC（OQ1 + OQ2 ratified）。Buf-generated Go stubs vendored 至 `packages/proto/gen/go/he/adapter/v1/`。Stories 4.2-4.6 inherit the proto verbatim。
+> - `packages/go-observability/requestid/` — OQ8 lift: cross-service `he_request_id` accessor（`HeaderName` / `SpanAttributeKey` / `FromContext` / `WithRequestID` / `ContextWith`）。Gateway middleware `apps/api-gateway/internal/middleware/requestid` 转为薄 re-export shim；后续 housekeeping story 删除 shim。
+> - `infra/helm/adapter-deepseek/` — Helm chart（Chart + values + deployment + service + serviceaccount + configmap + externalsecret templates）。Namespace `he-api-adapters`（M4 ratified — 六家 adapter 共享 namespace）。Cold-start budget ≤ 2s（M5 ratified — readiness-probe-gated rollout absorbs adapter start time; api-gateway 1s budget unchanged）。
+> - `infra/argocd/applications/adapter-deepseek.yaml` — ArgoCD Application manifest。
+> - `scripts/dev/seed-deepseek-key.sh` — dev-mode bootstrap script（gated behind `.env.local` presence — CI never touches it）。
+> - `docs/dev/secrets/deepseek-upstream.md` — Vault credential runbook（OQ3 ratified path `kv/data/he-api/upstream/deepseek/`，manual rotation — DeepSeek 不支持 API-key auto-rotation）。沿用 Story-1.6 m-4 6-section template（Topology / Migration Workflow / Credentials & Vault Migration Path / Capacity / Operator Runbook / Decision Lineage）。
+>
+> 条目添加来源：Story 4.1 Architect Round 2（OQ1-OQ8 + M1-M5 + m1-m4），2026-05-19。
+
 ---

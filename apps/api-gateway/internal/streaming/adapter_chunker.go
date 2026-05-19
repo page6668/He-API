@@ -1,0 +1,171 @@
+// Story 4.1 — AdapterChunker: bridges a gateway-side adapter Connect-RPC
+// server-streaming response into the OpenAI-compatible SSE wire shape.
+//
+// Sister to MockChunker (Story 3.4) — same Stream(ctx, w) (chunksEmitted,
+// firstFlushAt, err) signature so chat_completions_stream.go selects one or
+// the other purely by adapter-registry resolution outcome (BR-2.1). The
+// streaming package owns no knowledge of adapterclient — the chunk stream
+// is supplied via the AdapterChunkStream interface so the gateway-internal
+// `adapterclient.Stream` satisfies it implicitly without a cross-package
+// import.
+//
+// BR-2.4 invariant: when the upstream's terminal chunk carries `usage`, the
+// chunker forwards it on the LAST `data: <json>\n\n` event BEFORE the
+// literal `data: [DONE]\n\n` terminator. Non-terminal chunks emit `usage`
+// omitted (json omitempty). Per BR-3.7 the SDK's iterator surfaces
+// `chunk.usage` populated on the last non-DONE iteration.
+package streaming
+
+import (
+	"context"
+	"encoding/json"
+	"time"
+
+	adapterv1 "github.com/he-api/he-api/packages/proto/gen/go/he/adapter/v1"
+)
+
+// AdapterChunkStream is the minimal iterator surface the chunker consumes.
+// Both the production `adapterclient.Stream` (Connect-RPC server-streaming)
+// and the unit-test fake satisfy it implicitly. Keeping the surface here
+// avoids a cross-package import (streaming → adapterclient) that would
+// invert the package layering.
+type AdapterChunkStream interface {
+	Receive() bool
+	Msg() *adapterv1.ChatChunk
+	Err() error
+}
+
+// AdapterChunker iterates an adapter Connect-RPC server-stream and forwards
+// each ChatChunk as a `data: <json>\n\n` SSE event into Writer w.
+type AdapterChunker struct {
+	stream AdapterChunkStream
+	model  string
+}
+
+// NewAdapterChunker builds the chunker. model is the OpenAI-shape `model`
+// field forced onto every outbound JSON chunk — Story 4.1 echoes
+// req.Model verbatim (failover-aware behaviour lands in Epic 6 routing-svc).
+func NewAdapterChunker(stream AdapterChunkStream, model string) *AdapterChunker {
+	return &AdapterChunker{stream: stream, model: model}
+}
+
+// Stream consumes the entire adapter chunk stream and emits the OpenAI SSE
+// wire sequence. Returns:
+//
+//	chunksEmitted   number of completed WriteEvent calls (excludes WriteDone)
+//	firstFlushAt    wall-clock instant captured just before the first Flush
+//	                (zero value if no chunk was emitted; BR-2.7 TTFB anchor)
+//	err             ctx.Err() OR stream.Err() OR underlying writer error
+//
+// On err != nil the handler inspects w.HeadersFlushed() to choose between
+// JSON envelope (BR-2.5 pre-flush boundary) and SSE error frame (BR-2.6
+// post-flush boundary). The chunker itself does NOT emit [DONE] on error —
+// that decision belongs to the handler.
+func (c *AdapterChunker) Stream(ctx context.Context, w Writer) (chunksEmitted int, firstFlushAt time.Time, err error) {
+	for {
+		// Honour cancellation BEFORE the next blocking Receive(). The
+		// underlying connect.ServerStreamForClient.Receive will also exit
+		// on ctx cancellation, but the explicit check keeps the return
+		// path uniform.
+		select {
+		case <-ctx.Done():
+			return chunksEmitted, firstFlushAt, ctx.Err()
+		default:
+		}
+		if !c.stream.Receive() {
+			break
+		}
+		chunk := c.stream.Msg()
+		if chunk == nil {
+			continue
+		}
+		jsonBytes, jerr := marshalAdapterChunk(chunk, c.model)
+		if jerr != nil {
+			return chunksEmitted, firstFlushAt, jerr
+		}
+		if err = w.WriteEvent("", jsonBytes); err != nil {
+			return chunksEmitted, firstFlushAt, err
+		}
+		chunksEmitted++
+		if chunksEmitted == 1 {
+			firstFlushAt = time.Now()
+		}
+		if err = w.Flush(); err != nil {
+			return chunksEmitted, firstFlushAt, err
+		}
+	}
+	if e := c.stream.Err(); e != nil {
+		return chunksEmitted, firstFlushAt, e
+	}
+	if err = w.WriteDone(); err != nil {
+		return chunksEmitted, firstFlushAt, err
+	}
+	return chunksEmitted, firstFlushAt, nil
+}
+
+// adapterChunkJSON is the OpenAI `chat.completion.chunk` wire shape. Drives
+// the JSON output for both content-delta chunks (Usage omitted) and the
+// terminal chunk (Usage populated).
+type adapterChunkJSON struct {
+	ID      string                   `json:"id"`
+	Object  string                   `json:"object"`
+	Created int64                    `json:"created"`
+	Model   string                   `json:"model"`
+	Choices []adapterChunkChoiceJSON `json:"choices"`
+	Usage   *adapterUsageJSON        `json:"usage,omitempty"`
+}
+
+type adapterChunkChoiceJSON struct {
+	Index        int                   `json:"index"`
+	Delta        adapterChunkDeltaJSON `json:"delta"`
+	FinishReason *string               `json:"finish_reason"`
+}
+
+type adapterChunkDeltaJSON struct {
+	Role    string `json:"role,omitempty"`
+	Content string `json:"content,omitempty"`
+}
+
+type adapterUsageJSON struct {
+	PromptTokens     int32 `json:"prompt_tokens"`
+	CompletionTokens int32 `json:"completion_tokens"`
+	TotalTokens      int32 `json:"total_tokens"`
+}
+
+// marshalAdapterChunk renders the proto ChatChunk into the OpenAI-compatible
+// JSON body the SDK's streaming iterator parses. Object is always
+// `chat.completion.chunk`; the model field echoes the gateway-level
+// dispatch decision (Story 4.1 — req.Model verbatim).
+func marshalAdapterChunk(chunk *adapterv1.ChatChunk, model string) ([]byte, error) {
+	choices := make([]adapterChunkChoiceJSON, len(chunk.Choices))
+	for i, c := range chunk.Choices {
+		choice := adapterChunkChoiceJSON{
+			Index:        int(c.Index),
+			FinishReason: c.FinishReason,
+		}
+		if c.Delta != nil {
+			if c.Delta.Role != nil {
+				choice.Delta.Role = *c.Delta.Role
+			}
+			if c.Delta.Content != nil {
+				choice.Delta.Content = *c.Delta.Content
+			}
+		}
+		choices[i] = choice
+	}
+	out := adapterChunkJSON{
+		ID:      chunk.Id,
+		Object:  "chat.completion.chunk",
+		Created: chunk.Created,
+		Model:   model,
+		Choices: choices,
+	}
+	if chunk.Usage != nil {
+		out.Usage = &adapterUsageJSON{
+			PromptTokens:     chunk.Usage.GetPromptTokens(),
+			CompletionTokens: chunk.Usage.GetCompletionTokens(),
+			TotalTokens:      chunk.Usage.GetTotalTokens(),
+		}
+	}
+	return json.Marshal(out)
+}

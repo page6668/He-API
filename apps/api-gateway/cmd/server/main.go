@@ -28,6 +28,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/he-api/he-api/apps/api-gateway/internal/adapterclient"
 	"github.com/he-api/he-api/apps/api-gateway/internal/handlers"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/requestid"
@@ -227,7 +228,15 @@ func main() {
 	// Replaces the Story-3.2 `chatPlaceholder` 501 stub. Bearer-auth wrap
 	// is preserved (BR-1.1); the inner handler swap is the only change to
 	// the route registration.
-	chatCompletions := handlers.NewChatCompletionsHandler(logger)
+	//
+	// Story 4.1 — adapterclient.Registry resolves model="deepseek-v3" to
+	// the DeepSeek adapter Connect-RPC endpoint (env DEEPSEEK_ADAPTER_ENDPOINT).
+	// Empty env → registry omits the entry → all models fall through to
+	// the Story-3.3 mock. Stories 4.2-4.6 add sibling env-var lookups.
+	adapterRegistry := adapterclient.LoadFromEnv()
+	chatCompletions := handlers.NewChatCompletionsHandler(logger,
+		handlers.WithAdapterRegistry(adapterRegistry),
+	)
 	mux.Handle("POST /v1/chat/completions", bearerAuth.RequireAPIKey(chatCompletions))
 
 	// Story 3.5 — /v1/models (static catalogue) + /v1/embeddings (mock

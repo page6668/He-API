@@ -1,0 +1,27 @@
+task_checkbox_verification:
+  total_checkboxes: 60
+  checked_count: 60
+  unchecked_count: 0
+  completion_rate: 100
+  consistency_checks:
+    total: 3  # Round 1 flagged (M1 / M6 / L3)
+    passed: 3
+    failed: 0
+    consistency_rate: 100
+  round1_wording_followups:
+    - id: T4.2
+      round1_severity: MEDIUM
+      round2_resolution: APPLIED (task text reworded to reflect fakeHandle-based equivalent coverage + cross-module test-link constraint rationale; named-file decision explicit per QA Round 1 Option B recommendation)
+      verified_file: apps/api-gateway/internal/handlers/chat_completions_adapter_test.go + chat_completions_stream_adapter_test.go (exists, executed in Step 4)
+    - id: T4.4
+      round1_severity: LOW
+      round2_resolution: APPLIED (task text explicit "skeletons", "env-var-gated `pytest.fail()` placeholders", "deferred to a follow-up Story")
+      verified_file: apps/api-gateway/tests/openai_sdk_deepseek_contract_test.py (exists; skeleton stubs verified via grep)
+    - id: T6.3
+      round1_severity: LOW
+      round2_resolution: APPLIED (task text says "skeletons green via skipif" — no longer claims live execution)
+  issues:
+    critical: []
+    high: []
+    medium: []
+    low: []

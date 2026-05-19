@@ -51,6 +51,15 @@ type Writer interface {
 	// no-op (the HTTP framework owns connection lifecycle); future
 	// streaming Writers MAY hold resources (e.g., per-stream span ctx).
 	Close() error
+
+	// HeadersFlushed reports whether the SSE response headers have been
+	// written to the underlying ResponseWriter yet. Story 4.1 BR-2.5
+	// boundary: if a mid-stream upstream failure happens BEFORE the first
+	// WriteEvent / WriteDone, the gateway MUST emit a JSON envelope
+	// (regular 502 path); AFTER, the gateway MUST emit an SSE error frame.
+	// The handler reads this on the chunker error path to choose the right
+	// envelope shape.
+	HeadersFlushed() bool
 }
 
 // writer is the concrete SSE Writer over an http.ResponseWriter. Use
@@ -126,3 +135,5 @@ func (s *writer) Flush() error {
 }
 
 func (s *writer) Close() error { return nil }
+
+func (s *writer) HeadersFlushed() bool { return s.headersWritten }

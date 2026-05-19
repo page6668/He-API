@@ -1,0 +1,74 @@
+# Story 4.1 — DeepSeek adapter Helm values.
+#
+# Architect Round 2 rulings encoded:
+#   OQ3 — Vault secret-engine path: kv/data/he-api/upstream/deepseek/
+#         (shared `upstream/` prefix scopes the Vault policy across all six
+#         Epic 4 adapter services).
+#   M4  — Namespace `he-api-adapters` is shared across all six adapter
+#         Deployments (blast-radius isolation per ADR-9; NOT one-namespace-
+#         per-adapter, which would be six namespaces).
+#   M5  — Cold-start budget ≤ 2s (operator-side; readiness-probe gated).
+
+replicaCount: 2
+
+image:
+  repository: ghcr.io/he-api/adapter-deepseek
+  tag: 0.1.0
+  pullPolicy: IfNotPresent
+
+namespace: he-api-adapters
+
+service:
+  type: ClusterIP
+  port: 8080
+  # Connect-RPC over plain HTTP/2 cleartext on the in-VPC hop; mTLS
+  # hardening lands in Epic 9 ops.
+  appProtocol: h2c
+
+upstream:
+  # DEEPSEEK_UPSTREAM_BASE_URL — overridable per environment.
+  baseUrl: "https://api.deepseek.com"
+  # DEEPSEEK_UPSTREAM_TIMEOUT_SECONDS — BR-1.8 default 60s.
+  timeoutSeconds: 60
+
+externalSecret:
+  # External Secrets Operator reference. The actual Vault sync infra is
+  # provisioned at Epic 9; this manifest declares the contract.
+  enabled: true
+  secretStoreRef:
+    name: he-api-vault
+    kind: ClusterSecretStore
+  # OQ3 ruling — kv/data/he-api/upstream/deepseek/
+  vaultPath: "kv/data/he-api/upstream/deepseek"
+  remoteKey: "api_key"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+probes:
+  liveness:
+    path: /healthz
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  readiness:
+    path: /healthz
+    # M5 — adapter cold-start budget ≤ 2s; probe takes a few periods.
+    initialDelaySeconds: 2
+    periodSeconds: 5
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  fsGroup: 65532
+
+securityContext:
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL

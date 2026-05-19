@@ -6,27 +6,24 @@ import (
 	"encoding/hex"
 	"net/http"
 
+	sharedrid "github.com/he-api/he-api/packages/go-observability/requestid"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
 
-// HeaderName is the canonical response header carrying the per-request id.
-// Documented in docs/architecture/rest-api-spec.md §5.1.1 ("always present").
-const HeaderName = "X-He-Request-Id"
+// HeaderName is re-exported from the shared accessor package
+// (packages/go-observability/requestid) per Story 4.1 OQ8 Architect Round 2
+// ruling. Existing gateway / openaierr / handler callers continue to
+// reference `requestid.HeaderName` unchanged.
+const HeaderName = sharedrid.HeaderName
 
-// SpanAttributeKey is the OTel span attribute name for the request-id. Per
-// BR-2.8 + T8.9, the `he.` prefix is reserved as the project's span-attribute
-// namespace; OTel semantic conventions own the un-prefixed namespace.
-const SpanAttributeKey = "he.request_id"
+// SpanAttributeKey is re-exported from the shared accessor package per OQ8.
+const SpanAttributeKey = sharedrid.SpanAttributeKey
 
 // sentinelOnRandFailure is the value stamped if crypto/rand.Read fails — unreachable
 // on Linux + Darwin (`/dev/urandom` always succeeds) but the path is defensively
 // closed off so the middleware never short-circuits without an envelope.
 const sentinelOnRandFailure = "req_000000000000"
-
-// requestIDKey is the unexported context key (Go idiom — empty struct types
-// avoid string-key collisions).
-type requestIDKey struct{}
 
 // randRead is a package-level seam for monkey-patching crypto/rand in tests.
 // Production always uses crypto/rand.Read.
@@ -54,7 +51,7 @@ func RequestID(next http.Handler) http.Handler {
 		reqID := deriveRequestID(ctx)
 
 		w.Header().Set(HeaderName, reqID)
-		ctx = context.WithValue(ctx, requestIDKey{}, reqID)
+		ctx = sharedrid.WithRequestID(ctx, reqID)
 
 		if span := trace.SpanFromContext(ctx); span.SpanContext().IsValid() {
 			span.SetAttributes(attribute.String(SpanAttributeKey, reqID))
@@ -64,21 +61,14 @@ func RequestID(next http.Handler) http.Handler {
 	})
 }
 
-// FromContext returns the stamped he_request_id from the request context.
-// Returns ("", false) if no id has been stamped (probe routes, tests without
-// the middleware wired). Per Go convention (commaOK).
-func FromContext(ctx context.Context) (string, bool) {
-	v, ok := ctx.Value(requestIDKey{}).(string)
-	return v, ok
-}
+// FromContext is re-exported from the shared accessor package per OQ8.
+// The variable indirection keeps the public symbol resolved at the same
+// call site (`requestid.FromContext(ctx)`) without forcing every caller
+// to rewrite its import path.
+var FromContext = sharedrid.FromContext
 
-// WithRequestID stamps id onto ctx as the per-request he_request_id. Intended
-// for tests + other packages that need to construct a context as the
-// middleware would. Production handler code MUST NOT call this — the middleware
-// is the single writer (per BR-2.1).
-func WithRequestID(ctx context.Context, id string) context.Context {
-	return context.WithValue(ctx, requestIDKey{}, id)
-}
+// WithRequestID is re-exported from the shared accessor package per OQ8.
+var WithRequestID = sharedrid.WithRequestID
 
 // deriveRequestID computes the per-request he_request_id from the OTel span
 // context or, defensively, from crypto/rand. See BR-2.3 + BR-2.4.

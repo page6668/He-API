@@ -1,0 +1,85 @@
+// adapter.proto — gateway↔adapter Connect-RPC contract for Epic 4 (6 家中国
+// 大模型适配器). Promotes the rest-api-spec.md §5.2 `ModelAdapterService`
+// sketch to a concrete Buf-managed proto under the Story-1.5-ratified layout
+// `packages/proto/he/<domain>/v1/<service>.proto`.
+//
+// Architect Round 2 ruling (Story 4.1 OQ1): package = `he.adapter.v1` — the
+// proto describes the gateway↔adapter contract, NOT model metadata (which is
+// a `he_api.models` table concern owned by Story 4.7). Stories 4.2-4.6
+// consume this proto verbatim — late field-renames / wire-tag shifts AFTER
+// Story 4.2 ships incur breaking-change cost across 5 downstream Stories.
+//
+// Server-streaming RPC: non-streaming requests receive a SINGLE terminal
+// ChatChunk (with `usage` populated + `finish_reason` set); streaming
+// requests receive N>1 chunks with content deltas + a final chunk carrying
+// `usage` (BR-2.4 terminal-chunk convention).
+syntax = "proto3";
+
+package he.adapter.v1;
+
+option go_package = "github.com/he-api/he-api/packages/proto/gen/go/he/adapter/v1;adapterv1";
+
+service AdapterService {
+  rpc Chat(ChatRequest) returns (stream ChatChunk);
+}
+
+// ChatRequest carries the OpenAI-compatible inbound request shape (minus the
+// HTTP-only fields like Authorization, which live on Connect-RPC headers).
+// The three passthrough JSON blobs (tools_json / tool_choice_json /
+// response_format_json) are encoded as `bytes` to sidestep modeling
+// OpenAI's full nested tools schema in proto — Architect Round 2 M3
+// acknowledges the type-safety tradeoff; revisit in Story 4.8 once
+// vendor-specific tool-translation requirements surface.
+message ChatRequest {
+  string model = 1;
+  repeated ChatMessage messages = 2;
+  bool stream = 3;
+  optional double temperature = 4;
+  optional int32 max_tokens = 5;
+  bytes tools_json = 6;             // passthrough — JSON-encoded OpenAI tools array
+  bytes tool_choice_json = 7;       // passthrough
+  bytes response_format_json = 8;   // passthrough
+  string he_request_id = 9;         // propagated from gateway (BR-1.5); also carried on the Connect-RPC X-He-Request-Id header for defence-in-depth (m2 minor — proto-field copy is intentionally redundant for Story 4.1; revisit in Story 4.7)
+  bool stream_include_usage = 10;   // BR-2.9 — adapter forces true on stream=true regardless of request value
+}
+
+message ChatMessage {
+  string role = 1;     // "system" | "user" | "assistant" | "tool"
+  string content = 2;
+}
+
+// ChatChunk is the unit emitted on the Connect-RPC server-stream. Non-
+// streaming requests receive exactly ONE ChatChunk with usage + finish_reason
+// populated; streaming requests receive N>1 chunks where intermediate chunks
+// carry only deltas and the LAST chunk carries usage (BR-2.4).
+message ChatChunk {
+  string id = 1;                     // "chatcmpl-<adapter-suffix>"
+  string object = 2;                 // "chat.completion" (non-streaming) | "chat.completion.chunk" (streaming)
+  int64 created = 3;                 // Unix seconds (UTC)
+  string model = 4;                  // "deepseek-v3" (echo of req.Model)
+  repeated Choice choices = 5;
+  optional Usage usage = 6;          // BR-2.4 — non-nil on terminal chunk; nil on intermediate streaming chunks
+  optional string finish_reason = 7; // mirrored on terminal chunk for non-streaming convenience
+}
+
+message Choice {
+  int32 index = 1;
+  Delta delta = 2;                   // streaming chunks use delta; non-streaming terminal collapses message into delta (role+content set)
+  optional string finish_reason = 3;
+}
+
+message Delta {
+  optional string role = 1;
+  optional string content = 2;
+}
+
+// Usage carries the upstream-reported token counts post-Normaliser (BR-3.2).
+// AC3 requires the values match upstream within < 1% delta; Story 4.1's
+// DeepSeek Normaliser is identity-mapping (DeepSeek API uses OpenAI-canonical
+// JSON keys). Stories 4.2-4.6 supply non-identity Normalisers (e.g., Qwen
+// maps input_tokens → prompt_tokens).
+message Usage {
+  int32 prompt_tokens = 1;
+  int32 completion_tokens = 2;
+  int32 total_tokens = 3;
+}

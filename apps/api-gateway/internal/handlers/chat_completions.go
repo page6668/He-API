@@ -22,6 +22,7 @@
 package handlers
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -30,8 +31,13 @@ import (
 	"net/http"
 	"time"
 
+	"connectrpc.com/connect"
+
+	"github.com/he-api/he-api/apps/api-gateway/internal/adapterclient"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
+	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/requestid"
 	"github.com/he-api/he-api/apps/api-gateway/internal/openaierr"
+	adapterv1 "github.com/he-api/he-api/packages/proto/gen/go/he/adapter/v1"
 )
 
 // MockContent is the literal assistant-message content the mock returns.
@@ -159,12 +165,32 @@ func WithNow(f func() time.Time) ChatHandlerOption {
 	}
 }
 
+// WithAdapterRegistry wires the model-id → adapter-endpoint resolver. When
+// a request's req.Model resolves via the registry (Story 4.1 — only
+// "deepseek-v3"), the handler dispatches to the real adapter Connect-RPC
+// instead of writing the Story-3.3 mock response. Models that miss the
+// registry continue to receive the mock (until Stories 4.2-4.6 register
+// their entries; Story 4.7 cuts over the capability matrix and retires
+// the mock-fallback path).
+//
+// Nil is silently ignored — production wires a non-nil registry from
+// adapterclient.LoadFromEnv() at startup; tests may pass nil to exercise
+// the pure mock path.
+func WithAdapterRegistry(reg *adapterclient.Registry) ChatHandlerOption {
+	return func(h *ChatCompletionsHandler) {
+		if reg != nil {
+			h.adapterRegistry = reg
+		}
+	}
+}
+
 // ChatCompletionsHandler is the concrete handler. Construct once at startup
 // and reuse across all bearer-protected /v1/chat/completions requests.
 type ChatCompletionsHandler struct {
-	logger *slog.Logger
-	newID  func() string // injected via WithIDFactory; production default newMockCompletionID
-	now    func() time.Time
+	logger          *slog.Logger
+	newID           func() string // injected via WithIDFactory; production default newMockCompletionID
+	now             func() time.Time
+	adapterRegistry *adapterclient.Registry
 }
 
 // NewChatCompletionsHandler builds the handler. logger may be nil — falls
@@ -256,6 +282,18 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Story 4.1 BR-1.2 adapter-dispatch fork — BEFORE the existing mock-
+	// write block, check the model-id resolver. Hit → real adapter; miss
+	// → fall through to the Story-3.3 mock path. Phase A only covers
+	// non-streaming; streaming adapter dispatch lands in Phase B
+	// (serveStream is patched separately).
+	if h.adapterRegistry != nil {
+		if handle, ok := h.adapterRegistry.Resolve(req.Model); ok {
+			h.serveAdapterNonStream(w, r, &req, apiKeyID, handle)
+			return
+		}
+	}
+
 	// BR-1.8 structured log — emitted exactly once per accepted request.
 	// PII (messages[].content) is intentionally NOT logged.
 	h.logger.InfoContext(
@@ -268,6 +306,224 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 
 	resp := mockChatCompletionResponse(&req, h.newID(), h.now())
 	writeChatJSON(w, http.StatusOK, resp)
+}
+
+// serveAdapterNonStream dispatches a stream=false request to the adapter
+// Connect-RPC client, collects the single terminal chunk, and writes the
+// OpenAI chat.completion response body. Errors map per BR-1.4.
+func (h *ChatCompletionsHandler) serveAdapterNonStream(w http.ResponseWriter, r *http.Request, req *ChatRequest, apiKeyID string, handle adapterclient.ClientHandle) {
+	ctx := r.Context()
+	heRequestID, _ := requestid.FromContext(ctx)
+
+	adapterReq := buildAdapterRequest(req, heRequestID)
+	headers := http.Header{}
+	if heRequestID != "" {
+		// BR-1.5 — propagate to the adapter Connect-RPC as a header AND
+		// inside the proto field (defence-in-depth per m2; redundancy is
+		// intentional for Story 4.1, may be tightened in Story 4.7).
+		headers.Set("X-He-Request-Id", heRequestID)
+	}
+
+	stream, err := handle.Chat(ctx, adapterReq, headers)
+	if err != nil {
+		h.writeAdapterError(w, ctx, req, apiKeyID, err, 0)
+		return
+	}
+	defer func() { _ = stream.Close() }()
+
+	if !stream.Receive() {
+		// No chunk emitted — treat as upstream invalid response per BR-1.4.
+		if e := stream.Err(); e != nil {
+			h.writeAdapterError(w, ctx, req, apiKeyID, e, 0)
+			return
+		}
+		_ = openaierr.Write(w, ctx, http.StatusBadGateway,
+			"502_upstream_unavailable",
+			"Upstream model service returned an invalid response.", nil)
+		return
+	}
+	chunk := stream.Msg()
+	// Drain any subsequent chunks defensively — non-streaming path expects
+	// exactly one chunk. Stream.Err() surfaces mid-iteration errors.
+	for stream.Receive() {
+		// ignore extras
+	}
+	if e := stream.Err(); e != nil {
+		h.writeAdapterError(w, ctx, req, apiKeyID, e, 0)
+		return
+	}
+	if chunk == nil || chunk.Usage == nil || len(chunk.Choices) == 0 {
+		_ = openaierr.Write(w, ctx, http.StatusBadGateway,
+			"502_upstream_unavailable",
+			"Upstream model service returned an invalid response.", nil)
+		return
+	}
+
+	resp := adapterChunkToResponse(chunk, req.Model, h.now())
+
+	// BR-1.6 — gateway sets X-He-Selected-Model on success.
+	w.Header().Set("X-He-Selected-Model", req.Model)
+	writeChatJSON(w, http.StatusOK, resp)
+
+	h.logger.InfoContext(
+		ctx, "chat_completions_adapter",
+		slog.String("event", "chat_completions_adapter"),
+		slog.String("model", req.Model),
+		slog.String("api_key_id", apiKeyID),
+		slog.Int("messages_count", len(req.Messages)),
+		slog.Int("prompt_tokens", int(chunk.Usage.GetPromptTokens())),
+		slog.Int("completion_tokens", int(chunk.Usage.GetCompletionTokens())),
+		slog.Int("total_tokens", int(chunk.Usage.GetTotalTokens())),
+	)
+}
+
+// buildAdapterRequest translates the OpenAI-shape ChatRequest into the
+// proto-shape adapterv1.ChatRequest. JSON passthrough fields are forwarded
+// verbatim (BR-1.7 (f) identity-mapping at the gateway boundary).
+func buildAdapterRequest(req *ChatRequest, heRequestID string) *adapterv1.ChatRequest {
+	messages := make([]*adapterv1.ChatMessage, len(req.Messages))
+	for i := range req.Messages {
+		messages[i] = &adapterv1.ChatMessage{
+			Role:    req.Messages[i].Role,
+			Content: req.Messages[i].Content,
+		}
+	}
+	adapterReq := &adapterv1.ChatRequest{
+		Model:       req.Model,
+		Messages:    messages,
+		Stream:      false, // non-streaming branch
+		HeRequestId: heRequestID,
+	}
+	if len(req.Temperature) > 0 {
+		var v float64
+		if err := json.Unmarshal(req.Temperature, &v); err == nil {
+			adapterReq.Temperature = &v
+		}
+	}
+	if len(req.MaxTokens) > 0 {
+		var v int32
+		if err := json.Unmarshal(req.MaxTokens, &v); err == nil {
+			adapterReq.MaxTokens = &v
+		}
+	}
+	if len(req.Tools) > 0 {
+		adapterReq.ToolsJson = []byte(req.Tools)
+	}
+	if len(req.ToolChoice) > 0 {
+		adapterReq.ToolChoiceJson = []byte(req.ToolChoice)
+	}
+	if len(req.ResponseFormat) > 0 {
+		adapterReq.ResponseFormatJson = []byte(req.ResponseFormat)
+	}
+	return adapterReq
+}
+
+// adapterChunkToResponse converts the terminal ChatChunk emitted by the
+// adapter into the OpenAI chat.completion response body the SDK expects.
+func adapterChunkToResponse(chunk *adapterv1.ChatChunk, model string, now time.Time) *ChatResponse {
+	choices := make([]ChatChoice, len(chunk.Choices))
+	for i, c := range chunk.Choices {
+		var (
+			role    string
+			content string
+		)
+		if c.Delta != nil {
+			if c.Delta.Role != nil {
+				role = *c.Delta.Role
+			}
+			if c.Delta.Content != nil {
+				content = *c.Delta.Content
+			}
+		}
+		if role == "" {
+			role = "assistant"
+		}
+		finish := ""
+		if c.FinishReason != nil {
+			finish = *c.FinishReason
+		} else if chunk.FinishReason != nil {
+			finish = *chunk.FinishReason
+		}
+		choices[i] = ChatChoice{
+			Index:        int(c.Index),
+			Message:      ChatMessage{Role: role, Content: content},
+			FinishReason: finish,
+		}
+	}
+	id := chunk.Id
+	if id == "" {
+		id = "chatcmpl-" + hex.EncodeToString([]byte{0, 0, 0, 0, 0, 0})
+	}
+	created := chunk.Created
+	if created == 0 {
+		created = now.UTC().Unix()
+	}
+	return &ChatResponse{
+		ID:      id,
+		Object:  "chat.completion",
+		Created: created,
+		Model:   model,
+		Choices: choices,
+		Usage: ChatUsage{
+			PromptTokens:     int(chunk.Usage.GetPromptTokens()),
+			CompletionTokens: int(chunk.Usage.GetCompletionTokens()),
+			TotalTokens:      int(chunk.Usage.GetTotalTokens()),
+		},
+	}
+}
+
+// writeAdapterError maps an adapter Connect-RPC failure to the gateway-side
+// OpenAI §5.1.2 envelope per BR-1.4. The mapping:
+//
+//	Code.DeadlineExceeded → 504 + 504_upstream_timeout
+//	Code.Unavailable      → 502 + 502_upstream_unavailable
+//	Code.Internal         → 502 + 502_upstream_unavailable
+//	(any other / dial error / nil-Connect-Error) → 502 + 502_upstream_unavailable
+//
+// The user-facing collapse of 4xx/5xx → 502 is intentional: upstream auth
+// failures are OUR misconfig (operator rotates DEEPSEEK_UPSTREAM_API_KEY),
+// NOT the user's, so we never surface 401/403/etc as such to the SDK.
+func (h *ChatCompletionsHandler) writeAdapterError(w http.ResponseWriter, ctx context.Context, req *ChatRequest, apiKeyID string, err error, fallbackStatus int) {
+	status, code, message := classifyAdapterError(err)
+	h.logger.LogAttrs(ctx, slog.LevelWarn, "chat_completions_adapter_error",
+		slog.String("event", "chat_completions_adapter_error"),
+		slog.String("model", req.Model),
+		slog.String("api_key_id", apiKeyID),
+		slog.Int("messages_count", len(req.Messages)),
+		slog.String("error_code", code),
+		slog.String("error", adapterErrString(err)),
+	)
+	_ = openaierr.Write(w, ctx, status, code, message, nil)
+}
+
+func adapterErrString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
+// classifyAdapterError implements the BR-1.4 canonical mapping table.
+func classifyAdapterError(err error) (status int, code, message string) {
+	if err == nil {
+		return http.StatusBadGateway, "502_upstream_unavailable", "Upstream model service is unavailable, please retry."
+	}
+	var connectErr *connect.Error
+	if errors.As(err, &connectErr) {
+		switch connectErr.Code() {
+		case connect.CodeDeadlineExceeded:
+			return http.StatusGatewayTimeout, "504_upstream_timeout", "Upstream model service did not respond within the deadline."
+		case connect.CodeUnavailable:
+			return http.StatusBadGateway, "502_upstream_unavailable", "Upstream model service is unavailable, please retry."
+		case connect.CodeInternal:
+			return http.StatusBadGateway, "502_upstream_unavailable", "Upstream model service is unavailable, please retry."
+		default:
+			return http.StatusBadGateway, "502_upstream_unavailable", "Upstream model service is unavailable, please retry."
+		}
+	}
+	// Non-Connect error (typically a dial / TCP failure) — treat as
+	// adapter-unreachable per BR-1.4.
+	return http.StatusBadGateway, "502_upstream_unavailable", "Upstream model service is unavailable, please retry."
 }
 
 // mockChatCompletionResponse builds the deterministic mock body. Per
