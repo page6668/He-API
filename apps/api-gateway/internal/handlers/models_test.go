@@ -256,15 +256,16 @@ func Test_ModelsHandler_emits_exactly_one_log_line_per_request(t *testing.T) {
 		t.Fatalf("len(records) = %d, want 1", got)
 	}
 	rec := rh.records[0]
-	if rec.Message != "models_list" {
-		t.Errorf("record.Message = %q, want \"models_list\"", rec.Message)
+	// Story-4.7 BR-1.9 — event renamed `models_list` → `models_list_v1`.
+	if rec.Message != "models_list_v1" {
+		t.Errorf("record.Message = %q, want \"models_list_v1\"", rec.Message)
 	}
 	gotAttrs := map[string]any{}
 	for _, a := range flatAttrs(rec) {
 		gotAttrs[a.Key] = a.Value.Any()
 	}
-	if v, _ := gotAttrs["event"].(string); v != "models_list" {
-		t.Errorf("attr event = %v, want \"models_list\"", gotAttrs["event"])
+	if v, _ := gotAttrs["event"].(string); v != "models_list_v1" {
+		t.Errorf("attr event = %v, want \"models_list_v1\"", gotAttrs["event"])
 	}
 	if v, _ := gotAttrs["api_key_id"].(string); v != modelsTestAPIKeyID {
 		t.Errorf("attr api_key_id = %v, want %q", gotAttrs["api_key_id"], modelsTestAPIKeyID)
@@ -581,6 +582,218 @@ func Test_ModelsHandler_response_mutation_does_not_affect_package_slice(t *testi
 	if resp2.Data[0].Created != fixed.Unix() {
 		t.Errorf("resp2.Data[0].Created = %d, want %d (mutation leaked into package slice)",
 			resp2.Data[0].Created, fixed.Unix())
+	}
+}
+
+// ============================================================
+// Story 4.7 — Capability extension on /v1/models
+// ============================================================
+
+// Scenario: 4.7-UNIT-001
+// Priority: P0  ·  Level: unit
+//
+// Bearer-authed GET /v1/models returns a `capabilities` object on every
+// entry (non-null, present on each of the 11 rows). BR-1.1 load-bearing.
+func Test_ModelsHandler_response_carries_capabilities_field_on_every_entry(t *testing.T) {
+	t.Parallel()
+	h := NewModelsHandler(silentLogger())
+	rr := doModelsGet(h, modelsAuthedCtx(context.Background()))
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+	// Parse as raw JSON so a stray `null` or omission can be detected
+	// without the Go-side struct silently defaulting it to a zero-value
+	// ModelCapabilities{}.
+	var envelope struct {
+		Object string                   `json:"object"`
+		Data   []map[string]interface{} `json:"data"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("unmarshal: %v\nbody=%s", err, rr.Body.String())
+	}
+	if got, want := len(envelope.Data), 11; got != want {
+		t.Fatalf("len(data) = %d, want %d", got, want)
+	}
+	for i, e := range envelope.Data {
+		v, present := e["capabilities"]
+		if !present {
+			t.Errorf("data[%d] (id=%v) missing `capabilities` field", i, e["id"])
+			continue
+		}
+		obj, ok := v.(map[string]interface{})
+		if !ok || obj == nil {
+			t.Errorf("data[%d] (id=%v) capabilities = %v (%T), want non-null JSON object",
+				i, e["id"], v, v)
+		}
+	}
+}
+
+// Scenario: 4.7-UNIT-002
+// Priority: P0  ·  Level: unit
+//
+// Table-driven across the 11 catalogue IDs: each entry's capabilities
+// deep-equals the BR-1.3 golden struct verbatim. The 11-row table is the
+// load-bearing precedent Story 4.8 contract tests will cascade.
+func Test_ModelsHandler_capabilities_match_BR_1_3_verbatim(t *testing.T) {
+	t.Parallel()
+	golden := map[string]ModelCapabilities{
+		"qwen-max":          {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 32768, MaxOutputTokens: 8192},
+		"qwen-plus":         {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 32768, MaxOutputTokens: 8192},
+		"deepseek-v3":       {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 65536, MaxOutputTokens: 8192},
+		"moonshot-v1-128k":  {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 131072, MaxOutputTokens: 8192},
+		"glm-4":             {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 32768, MaxOutputTokens: 8192},
+		"doubao-pro":        {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: false, ContextWindowTokens: 32768, MaxOutputTokens: 8192},
+		"doubao-lite":       {Chat: true, Streaming: true, FunctionCalling: false, Vision: false, JSONMode: false, ContextWindowTokens: 32768, MaxOutputTokens: 4096},
+		"ernie-4.0":         {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 8192, MaxOutputTokens: 2048},
+		"he-router-cost":    {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 131072, MaxOutputTokens: 8192},
+		"he-router-quality": {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 131072, MaxOutputTokens: 8192},
+		"he-router-latency": {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 131072, MaxOutputTokens: 8192},
+	}
+
+	h := NewModelsHandler(silentLogger())
+	rr := doModelsGet(h, modelsAuthedCtx(context.Background()))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+	var resp ModelsResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.Data) != len(golden) {
+		t.Fatalf("len(data) = %d, want %d", len(resp.Data), len(golden))
+	}
+	for _, entry := range resp.Data {
+		want, ok := golden[entry.ID]
+		if !ok {
+			t.Errorf("unexpected model id %q in response", entry.ID)
+			continue
+		}
+		if entry.Capabilities != want {
+			t.Errorf("id=%s capabilities = %#v, want %#v",
+				entry.ID, entry.Capabilities, want)
+		}
+	}
+}
+
+// Scenario: 4.7-UNIT-003
+// Priority: P0  ·  Level: unit
+//
+// Field-order regression guard. encoding/json marshals struct fields in
+// declaration order; a future contributor alphabetising or reordering
+// fields would silently break SDK consumers using strict-order parsers.
+func Test_ModelEntry_JSON_field_order_is_canonical_BR_1_4(t *testing.T) {
+	t.Parallel()
+	entry := ModelEntry{
+		ID:      "qwen-max",
+		Object:  "model",
+		Created: 1700000000,
+		OwnedBy: "alibaba",
+		Capabilities: ModelCapabilities{
+			Chat: true, Streaming: true, FunctionCalling: true,
+			Vision: false, JSONMode: true,
+			ContextWindowTokens: 32768, MaxOutputTokens: 8192,
+		},
+	}
+	buf, err := json.Marshal(entry)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	// id → object → created → owned_by → capabilities (LAST). The capabilities
+	// object's own internal order is also asserted: BR-1.2.
+	re := regexp.MustCompile(`^\{"id":"qwen-max","object":"model","created":1700000000,"owned_by":"alibaba","capabilities":\{"chat":true,"streaming":true,"function_calling":true,"vision":false,"json_mode":true,"context_window_tokens":32768,"max_output_tokens":8192\}\}$`)
+	if !re.Match(buf) {
+		t.Errorf("marshalled ModelEntry violates BR-1.4 field order\n  got: %s", buf)
+	}
+}
+
+// Scenario: 4.7-UNIT-004
+// Priority: P0  ·  Level: unit
+//
+// Story-3.5 BR-1.7 defence-in-depth regression check after the Capabilities
+// extension. The unwired-middleware 500 envelope path MUST still fire
+// unchanged.
+func Test_ModelsHandler_unwired_middleware_returns_500_after_capabilities_extension(t *testing.T) {
+	t.Parallel()
+	h := NewModelsHandler(silentLogger())
+	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil) // bare ctx, no APIKeyID
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", rr.Code)
+	}
+	var env map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &env); err != nil {
+		t.Fatalf("body unmarshal: %v\nbody=%s", err, rr.Body.String())
+	}
+	errMap, _ := env["error"].(map[string]any)
+	if errMap == nil {
+		t.Fatalf("body missing error envelope: %s", rr.Body.String())
+	}
+	if got, _ := errMap["code"].(string); got != "500_gateway_misconfigured" {
+		t.Errorf("error.code = %q, want %q", got, "500_gateway_misconfigured")
+	}
+}
+
+// Scenario: 4.7-UNIT-005
+// Priority: P0  ·  Level: unit
+//
+// BR-1.9 — slog test double asserts the renamed event and required attrs.
+func Test_ModelsHandler_emits_models_list_v1_event(t *testing.T) {
+	t.Parallel()
+	rh := &recordingHandler{}
+	h := NewModelsHandler(slog.New(rh))
+	rr := doModelsGet(h, modelsAuthedCtx(context.Background()))
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+	if got := len(rh.records); got != 1 {
+		t.Fatalf("len(records) = %d, want 1", got)
+	}
+	rec := rh.records[0]
+	if rec.Message != "models_list_v1" {
+		t.Errorf("record.Message = %q, want \"models_list_v1\"", rec.Message)
+	}
+	gotAttrs := map[string]any{}
+	for _, a := range flatAttrs(rec) {
+		gotAttrs[a.Key] = a.Value.Any()
+	}
+	if v, _ := gotAttrs["event"].(string); v != "models_list_v1" {
+		t.Errorf("attr event = %v, want \"models_list_v1\"", gotAttrs["event"])
+	}
+	if v, _ := gotAttrs["api_key_id"].(string); v != modelsTestAPIKeyID {
+		t.Errorf("attr api_key_id = %v, want %q", gotAttrs["api_key_id"], modelsTestAPIKeyID)
+	}
+	if v, _ := gotAttrs["catalogue_size"].(int64); v != 11 {
+		t.Errorf("attr catalogue_size = %v, want 11", gotAttrs["catalogue_size"])
+	}
+}
+
+// Scenario: 4.7-UNIT-010
+// Priority: P0  ·  Level: unit
+//
+// 1:1 invariant test (mirrors the init() panic) — if T0.4 init() is ever
+// removed (e.g., during refactor) this test surfaces the same drift.
+func Test_capabilitiesByModelID_1to1_with_modelsCatalogue(t *testing.T) {
+	t.Parallel()
+	if got, want := len(capabilitiesByModelID), len(modelsCatalogue); got != want {
+		t.Errorf("len(capabilitiesByModelID) = %d, want %d (BR-1.3 1:1 invariant)",
+			got, want)
+	}
+	for _, m := range modelsCatalogue {
+		caps, ok := capabilitiesByModelID[m.ID]
+		if !ok {
+			t.Errorf("capabilitiesByModelID missing row for catalogue id %q", m.ID)
+			continue
+		}
+		// Reject the zero-value ModelCapabilities{} sentinel — every catalogue
+		// id has at least Chat=true per BR-1.3.
+		zero := ModelCapabilities{}
+		if caps == zero {
+			t.Errorf("capabilitiesByModelID[%q] = zero value — likely uninitialised", m.ID)
+		}
 	}
 }
 

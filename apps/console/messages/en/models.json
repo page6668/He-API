@@ -1,0 +1,54 @@
+{
+  "page": {
+    "title": "Model Capability Matrix — He-API",
+    "description": "Compare context window, function calling, and JSON mode support across 11 He-API models. Public capability data for OpenAI-compatible chat models from Alibaba, DeepSeek, Moonshot, Zhipu, ByteDance, Baidu, and He-API routers.",
+    "heading": "Model Capability Matrix",
+    "subheading": "Compare 11 models across 7 capability dimensions"
+  },
+  "table": {
+    "caption": "Capabilities of the 11 chat models advertised by the He-API gateway.",
+    "column": {
+      "model": "Model",
+      "vendor": "Vendor",
+      "chat": "Chat",
+      "streaming": "Streaming",
+      "functionCalling": "Function Calling",
+      "vision": "Vision",
+      "jsonMode": "JSON Mode",
+      "contextWindow": "Context Window",
+      "maxOutput": "Max Output"
+    }
+  },
+  "vendor": {
+    "alibaba": "Alibaba",
+    "deepseek": "DeepSeek",
+    "moonshot": "Moonshot",
+    "zhipu": "Zhipu",
+    "bytedance": "ByteDance",
+    "baidu": "Baidu",
+    "he-api": "He-API"
+  },
+  "capability": {
+    "chat": "Chat",
+    "streaming": "Streaming",
+    "functionCalling": "Function Calling",
+    "vision": "Vision",
+    "jsonMode": "JSON Mode",
+    "contextWindow": "Context Window (tokens)",
+    "maxOutput": "Max Output (tokens)",
+    "value": {
+      "yes": "Supported",
+      "no": "Not supported"
+    }
+  },
+  "tokensUnit": "{count, number} tokens",
+  "error": {
+    "unavailable": "Capability data temporarily unavailable; check back shortly.",
+    "partial": "Capability data partially unavailable; some models may be missing.",
+    "generic": "Something went wrong while loading the capability matrix."
+  },
+  "nav": {
+    "models": "Models",
+    "home": "He-API"
+  }
+}

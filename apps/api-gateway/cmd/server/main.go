@@ -31,6 +31,7 @@ import (
 	"github.com/he-api/he-api/apps/api-gateway/internal/adapterclient"
 	"github.com/he-api/he-api/apps/api-gateway/internal/handlers"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
+	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/cors"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/requestid"
 	obs "github.com/he-api/he-api/packages/go-observability"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1/authv1connect"
@@ -249,6 +250,21 @@ func main() {
 	mux.Handle("GET /v1/models", bearerAuth.RequireAPIKey(modelsHandler))
 	mux.Handle("POST /v1/embeddings", bearerAuth.RequireAPIKey(embeddingsHandler))
 
+	// Story 4.7 — unauthenticated mirror of /v1/models. Mounted OUTSIDE
+	// the bearer middleware chain; both handlers share a snapshot built
+	// from the same modelsCatalogue + capabilitiesByModelID so the bodies
+	// are byte-identical (4.7-INT-001 verifies). OQ-4.7-5 ratified the
+	// constructor-injection sharing mechanism. The startedAt anchor is
+	// pulled from the bearer-gated handler so the `created` value on the
+	// public mirror matches the bearer endpoint within the same process.
+	publicSnapshot := handlers.BuildPublicModelsSnapshot(modelsHandler.StartedAt())
+	publicModelsHandler := handlers.NewPublicModelsHandler(logger, publicSnapshot)
+	// Bare-path registration — OPTIONS preflight is handled by the
+	// PublicCORS middleware wrapping the mux; method-not-allowed for
+	// non-GET is emitted by the handler itself (canonical
+	// 405_method_not_allowed envelope per OQ-4.7-6).
+	mux.Handle("/public/models", publicModelsHandler)
+
 	// Middleware chain (outer → inner): RequestID → SecurityHeaders → CSRF → mux.
 	// Story 3.6 BR-2.7: requestid.RequestID is the OUTERMOST user-traffic wrap
 	// so every response (success + error, including ones emitted by
@@ -257,9 +273,13 @@ func main() {
 	// obs.WrapHTTPHandler stays the absolute outermost wrap so requestid
 	// can read the OTel SpanContext that WrapHTTPHandler creates.
 	csrfAllowed := csrfAllowlistFor(deployEnv)
+	// Story 4.7 — cors.PublicCORS wraps the mux INNERMOST so the OQ-4.7-7
+	// wildcard CORS policy is scoped strictly to `/public/*` paths and
+	// the OPTIONS preflight short-circuits before reaching downstream
+	// handlers. Non-`/public/*` requests flow through untouched.
 	handler := requestid.RequestID(middleware.SecurityHeaders(middleware.CSRF(middleware.CSRFConfig{
 		AllowedOrigins: csrfAllowed,
-	}, mux)))
+	}, cors.PublicCORS(mux))))
 
 	// Story 3.1 — probeMux carries /health + /healthz on the bypass branch
 	// (BR-1.3). It is dispatched by rootMux BEFORE the SecurityHeaders +

@@ -1,0 +1,54 @@
+{
+  "page": {
+    "title": "[en-pending] Model Capability Matrix — He-API",
+    "description": "[en-pending] Compare context window, function calling, and JSON mode support across 11 He-API models.",
+    "heading": "[en-pending] Model Capability Matrix",
+    "subheading": "[en-pending] Compare 11 models across 7 capability dimensions"
+  },
+  "table": {
+    "caption": "[en-pending] Capabilities of the 11 chat models advertised by the He-API gateway.",
+    "column": {
+      "model": "[en-pending] Model",
+      "vendor": "[en-pending] Vendor",
+      "chat": "[en-pending] Chat",
+      "streaming": "[en-pending] Streaming",
+      "functionCalling": "[en-pending] Function Calling",
+      "vision": "[en-pending] Vision",
+      "jsonMode": "[en-pending] JSON Mode",
+      "contextWindow": "[en-pending] Context Window",
+      "maxOutput": "[en-pending] Max Output"
+    }
+  },
+  "vendor": {
+    "alibaba": "[en-pending] Alibaba",
+    "deepseek": "[en-pending] DeepSeek",
+    "moonshot": "[en-pending] Moonshot",
+    "zhipu": "[en-pending] Zhipu",
+    "bytedance": "[en-pending] ByteDance",
+    "baidu": "[en-pending] Baidu",
+    "he-api": "[en-pending] He-API"
+  },
+  "capability": {
+    "chat": "[en-pending] Chat",
+    "streaming": "[en-pending] Streaming",
+    "functionCalling": "[en-pending] Function Calling",
+    "vision": "[en-pending] Vision",
+    "jsonMode": "[en-pending] JSON Mode",
+    "contextWindow": "[en-pending] Context Window (tokens)",
+    "maxOutput": "[en-pending] Max Output (tokens)",
+    "value": {
+      "yes": "[en-pending] Supported",
+      "no": "[en-pending] Not supported"
+    }
+  },
+  "tokensUnit": "{count, number} tokens",
+  "error": {
+    "unavailable": "[en-pending] Capability data temporarily unavailable; check back shortly.",
+    "partial": "[en-pending] Capability data partially unavailable; some models may be missing.",
+    "generic": "[en-pending] Something went wrong while loading the capability matrix."
+  },
+  "nav": {
+    "models": "[en-pending] Models",
+    "home": "[en-pending] He-API"
+  }
+}

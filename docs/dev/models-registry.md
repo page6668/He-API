@@ -34,8 +34,10 @@
 
 | Type | Story | Notes |
 |------|-------|-------|
-| `handlers.ModelEntry` | 3.5 | One row in the `/v1/models` response data array. Fields: `ID`/`Object`/`Created`/`OwnedBy` (snake_case JSON tags per OpenAI canonical). Promoted to a shared package if Epic 4 adapters need to import it. |
-| `handlers.ModelsResponse` | 3.5 | Top-level `/v1/models` wrapper (`object="list"` + `data []ModelEntry`). |
+| `handlers.ModelEntry` | 3.5 / **4.7** (extended) | One row in the `/v1/models` response data array. Fields: `ID`/`Object`/`Created`/`OwnedBy`/`Capabilities` (snake_case JSON tags per OpenAI canonical + He-API extension LAST per Story-4.7 BR-1.4). Promoted to a shared package if Epic 4 adapters need to import it. |
+| `handlers.ModelCapabilities` | 4.7 | He-API extension surfaced on every `ModelEntry`. Fields in BR-1.2 declaration order: `Chat bool` / `Streaming bool` / `FunctionCalling bool` / `Vision bool` / `JSONMode bool` / `ContextWindowTokens int` / `MaxOutputTokens int`. NOT a `map[string]any` (BR-1.5) — typed struct lets `golangci-lint` catch missing-field omissions at compile time. |
+| `handlers.PublicModelsHandler` | 4.7 | Unauthenticated handler for `GET /public/models` mirroring `/v1/models` body bytes. Constructed via `NewPublicModelsHandler(logger, snapshot []ModelEntry)`; snapshot built ONCE at boot via `BuildPublicModelsSnapshot(startedAt int64)`. Method gate: GET/HEAD allowed; other methods emit `405_method_not_allowed` envelope + `Allow: GET`. |
+| `handlers.ModelsResponse` | 3.5 | Top-level `/v1/models` + `/public/models` wrapper (`object="list"` + `data []ModelEntry`). Reused by Story 4.7's unauthenticated mirror — same canonical envelope shape. |
 | `handlers.ModelsHandler` | 3.5 | Handler struct (`logger` + `now` + `startedAt`). Constructed via `NewModelsHandler(logger, opts...)`; `WithModelsNow(f)` injects a deterministic clock for the BR-1.6 stable-`created` test. |
 | `handlers.ModelsHandlerOption` | 3.5 | Option-function type for `ModelsHandler` (Architect Round 1 OQ4 ratified pattern; mirrors `ChatHandlerOption`). |
 | `handlers.EmbeddingRequest` | 3.5 | Inbound `/v1/embeddings` JSON body. Critical: `Input json.RawMessage` for BR-2.8 dual-shape parsing (string OR array). |
@@ -170,3 +172,22 @@
     - `LoadFromEnv()` EXTENDED to read `ERNIE_ADAPTER_ENDPOINT` and populate the SINGLE `ernie-4.0` entry (RESTORES the Story-4.4 N=1 degenerate pattern after Story-4.5's N=2 RESTORATION).
     - The Story-4.2 M2 `NewRegistry` endpoint-dedup branch is a clean NO-OP at N=1 (byEndpoint map has one entry; no `assert.Same` chain to verify — 4.6-UNIT-011 documents the SKIPPED-branch test explicitly per Story-4.4 R9 ratification cascade).
     - Story-4.1/4.2/4.3/4.4/4.5 constants UNCHANGED; SIX-vendor cross-vendor regression verified at 4.6-INT-009 (`TestRegistry_AllSixVendorsCoRegistered_NoCrossVendorShadowing` — the FIRST integration test that exercises ALL ten model-id entries without shadowing; closes the Epic-4 vendor matrix).
+
+- **4.7** — Capability matrix + public page:
+  - **New Go types** (`apps/api-gateway/internal/handlers/`):
+    - `ModelCapabilities` (7 fields per BR-1.2 declaration order; non-pointer per BR-1.1 compile-time non-null guarantee; typed struct over `map[string]any` per BR-1.5).
+    - `ModelEntry` EXTENDED with `Capabilities ModelCapabilities` appended LAST (BR-1.4 He-API extension placement convention).
+    - `PublicModelsHandler` (constructor injection per OQ-4.7-5; emits the same `ModelsResponse` envelope as bearer-gated `/v1/models` from a pre-built snapshot).
+    - `BuildPublicModelsSnapshot(startedAt int64) []ModelEntry` helper — single source of truth shared between bearer + public handlers.
+    - `capabilitiesByModelID` package-private 11-row map per OQ-4.7-3 ratification (in-memory; OQ-4.7-2 option B — DB seed deferred).
+  - **New TypeScript types** (`apps/console/lib/api/public-models.ts`):
+    - `ModelCapabilitiesSchema` / `ModelCapabilities` — Zod schema mirroring the Go-side struct verbatim.
+    - `ModelEntrySchema` / `ModelEntry` — Zod schema with `capabilities` as the trailing field (BR-1.4 convention preserved on the frontend).
+    - `PublicModelsResponseSchema` / `PublicModelsResponse` — Top-level envelope schema.
+    - `fetchPublicModels()` — never-throws fetcher; failures collapse to an empty matrix for the fallback banner path.
+  - **New React component prop types**:
+    - `CapabilityMatrix(props: { models: ModelEntry[] })` — desktop table + mobile card layout via Tailwind `md:` breakpoint.
+    - `CapabilityBadge(props: { present: boolean; label: string })` — ✓/✗ with paired `sr-only` text for WCAG 2.1 AA.
+  - **New i18n union** (`packages/i18n-keys/src/models.ts`): `ModelsKeys` literal union covering 36 keys in the `models` namespace.
+  - **New envelope code**: `openaierr.CodeMetadata["405_method_not_allowed"] = {HTTPStatus: 405, ErrorType: "invalid_request_error"}` per OQ-4.7-6 ratification.
+  - **New middleware package**: `apps/api-gateway/internal/middleware/cors/` exports `cors.PublicCORS(next)` + `cors.PublicPathPrefix` + `cors.PublicOriginWildcard` + `cors.PublicAllowedMethods` constants.

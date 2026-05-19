@@ -1,0 +1,54 @@
+{
+  "page": {
+    "title": "模型能力矩阵 — He-API",
+    "description": "对比 11 个 He-API 模型的上下文窗口、函数调用与 JSON 模式支持。来自阿里巴巴、DeepSeek、月之暗面、智谱、字节跳动、百度以及 He-API 路由的 OpenAI 兼容聊天模型公开能力数据。",
+    "heading": "模型能力矩阵",
+    "subheading": "对比 11 个模型在 7 个能力维度上的差异"
+  },
+  "table": {
+    "caption": "He-API 网关公开的 11 个聊天模型的能力一览。",
+    "column": {
+      "model": "模型",
+      "vendor": "厂商",
+      "chat": "对话",
+      "streaming": "流式输出",
+      "functionCalling": "函数调用",
+      "vision": "视觉",
+      "jsonMode": "JSON 模式",
+      "contextWindow": "上下文窗口",
+      "maxOutput": "最大输出"
+    }
+  },
+  "vendor": {
+    "alibaba": "阿里巴巴",
+    "deepseek": "DeepSeek",
+    "moonshot": "月之暗面",
+    "zhipu": "智谱",
+    "bytedance": "字节跳动",
+    "baidu": "百度",
+    "he-api": "He-API"
+  },
+  "capability": {
+    "chat": "对话",
+    "streaming": "流式输出",
+    "functionCalling": "函数调用",
+    "vision": "视觉",
+    "jsonMode": "JSON 模式",
+    "contextWindow": "上下文窗口（tokens）",
+    "maxOutput": "最大输出（tokens）",
+    "value": {
+      "yes": "支持",
+      "no": "不支持"
+    }
+  },
+  "tokensUnit": "{count, number} tokens",
+  "error": {
+    "unavailable": "能力数据暂时不可用，请稍后再试。",
+    "partial": "部分能力数据不可用，可能缺少某些模型。",
+    "generic": "加载能力矩阵时发生错误。"
+  },
+  "nav": {
+    "models": "模型",
+    "home": "He-API"
+  }
+}

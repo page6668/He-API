@@ -26,6 +26,10 @@ var CodeMetadata = map[string]struct {
 	"400_invalid_request":        {400, "invalid_request_error"},
 	"401_invalid_api_key":        {401, "invalid_request_error"},
 	"402_balance_insufficient":   {402, "invalid_request_error"},
+	// Story 4.7 OQ-4.7-6 ratified — NEW envelope code for the 405 path
+	// introduced by the unauthenticated GET /public/models endpoint
+	// (Story-3.6 §5.1.2 "one envelope code per HTTP scenario" precedent).
+	"405_method_not_allowed":     {405, "invalid_request_error"},
 	"402_quota_exhausted":        {402, "invalid_request_error"},
 	"403_ip_not_whitelisted":     {403, "invalid_request_error"},
 	"403_model_not_in_scope":     {403, "invalid_request_error"},
