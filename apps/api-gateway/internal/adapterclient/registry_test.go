@@ -53,6 +53,7 @@ func TestRegistry_LoadFromEnv_PicksUpDeepseekEndpointWhenSet(t *testing.T) {
 	t.Setenv("QWEN_ADAPTER_ENDPOINT", "")
 	t.Setenv("KIMI_ADAPTER_ENDPOINT", "")
 	t.Setenv("GLM_ADAPTER_ENDPOINT", "")
+	t.Setenv("DOUBAO_ADAPTER_ENDPOINT", "")
 	reg := LoadFromEnv()
 	if h, ok := reg.Resolve("deepseek-v3"); !ok || h == nil {
 		t.Fatalf("env-loaded registry missing deepseek-v3 entry: ok=%v h=%v", ok, h)
@@ -64,6 +65,7 @@ func TestRegistry_LoadFromEnv_EmptyEnv_OmitsEntry(t *testing.T) {
 	t.Setenv("QWEN_ADAPTER_ENDPOINT", "")
 	t.Setenv("KIMI_ADAPTER_ENDPOINT", "")
 	t.Setenv("GLM_ADAPTER_ENDPOINT", "")
+	t.Setenv("DOUBAO_ADAPTER_ENDPOINT", "")
 	reg := LoadFromEnv()
 	if _, ok := reg.Resolve("deepseek-v3"); ok {
 		t.Fatalf("empty DEEPSEEK_ADAPTER_ENDPOINT should result in no deepseek-v3 registration")
@@ -81,6 +83,12 @@ func TestRegistry_LoadFromEnv_EmptyEnv_OmitsEntry(t *testing.T) {
 	}
 	if _, ok := reg.Resolve("glm-4"); ok {
 		t.Fatalf("empty GLM_ADAPTER_ENDPOINT should result in no glm-4 registration")
+	}
+	if _, ok := reg.Resolve("doubao-pro"); ok {
+		t.Fatalf("empty DOUBAO_ADAPTER_ENDPOINT should result in no doubao-pro registration")
+	}
+	if _, ok := reg.Resolve("doubao-lite"); ok {
+		t.Fatalf("empty DOUBAO_ADAPTER_ENDPOINT should result in no doubao-lite registration")
 	}
 }
 
@@ -415,6 +423,152 @@ func TestRegistry_LoadFromEnv_GLMEndpointSet_PopulatesGLM4(t *testing.T) {
 	// Other vendors with empty endpoints stay omitted.
 	if _, ok := reg.Resolve("deepseek-v3"); ok {
 		t.Fatalf("empty DEEPSEEK_ADAPTER_ENDPOINT must not register deepseek-v3")
+	}
+}
+
+// 4.5-UNIT-013 (P0) — R9 N=2 RESTORATION: Story-4.2 M2 `NewRegistry`
+// byEndpoint endpoint-dedup branch returns to actually-executing form
+// after Story-4.4's N=1 degenerate. BOTH doubao-pro AND doubao-lite
+// pointing to the SAME DOUBAO_ADAPTER_ENDPOINT MUST resolve to the
+// IDENTICAL ClientHandle (assert.Same chain — REUSE Story-4.2
+// 4.2-UNIT-013 pattern verbatim per OQ-4.3-5 cascade-locked policy).
+func TestRegistry_DoubaoProAndLite_ShareSameHandle_M2_N2_RESTORATION(t *testing.T) {
+	const endpoint = "https://adapter-doubao.he-api-adapters.svc.cluster.local:8080"
+	reg := NewRegistry(map[string]string{
+		DoubaoProModelID:  endpoint,
+		DoubaoLiteModelID: endpoint,
+	})
+	hPro, okPro := reg.Resolve(DoubaoProModelID)
+	hLite, okLite := reg.Resolve(DoubaoLiteModelID)
+	if !okPro || !okLite {
+		t.Fatalf("both doubao entries must resolve: okPro=%v okLite=%v", okPro, okLite)
+	}
+	if hPro != hLite {
+		t.Fatalf("doubao-pro and doubao-lite must return the IDENTICAL ClientHandle (M2 endpoint-dedup N=2 RESTORATION); got hPro=%p hLite=%p", hPro, hLite)
+	}
+}
+
+// 4.5-UNIT-012 (P0) — OQ-4.5-2 ratification lock-in: env-var naming
+// follows the adapter service BRAND (`DOUBAO_*`), NOT the platform name
+// (`VOLCENGINE_*`) or company name (`BYTEDANCE_*`). Constants must be
+// literal strings.
+func TestRegistry_DoubaoConstants_BrandPrefix(t *testing.T) {
+	if DoubaoProModelID != "doubao-pro" {
+		t.Fatalf("DoubaoProModelID = %q, want \"doubao-pro\"", DoubaoProModelID)
+	}
+	if DoubaoLiteModelID != "doubao-lite" {
+		t.Fatalf("DoubaoLiteModelID = %q, want \"doubao-lite\"", DoubaoLiteModelID)
+	}
+	if DoubaoAdapterEndpointEnv != "DOUBAO_ADAPTER_ENDPOINT" {
+		t.Fatalf("DoubaoAdapterEndpointEnv = %q, want literal \"DOUBAO_ADAPTER_ENDPOINT\" (OQ-4.5-2 brand-wins)", DoubaoAdapterEndpointEnv)
+	}
+}
+
+// 4.5-UNIT-014 — LoadFromEnv reads DOUBAO_ADAPTER_ENDPOINT correctly:
+// (a) when set → both pro+lite entries populated; (b) when unset → both
+// entries absent (registry gateway-startup proceeds; all doubao-* traffic
+// falls back to mock per Story-3.3/3.4/3.5).
+func TestRegistry_LoadFromEnv_DoubaoEndpointSet_PopulatesBothEntries(t *testing.T) {
+	t.Setenv("DEEPSEEK_ADAPTER_ENDPOINT", "")
+	t.Setenv("QWEN_ADAPTER_ENDPOINT", "")
+	t.Setenv("KIMI_ADAPTER_ENDPOINT", "")
+	t.Setenv("GLM_ADAPTER_ENDPOINT", "")
+	t.Setenv("DOUBAO_ADAPTER_ENDPOINT", "https://adapter-doubao.test:8080")
+	reg := LoadFromEnv()
+	hPro, okPro := reg.Resolve(DoubaoProModelID)
+	hLite, okLite := reg.Resolve(DoubaoLiteModelID)
+	if !okPro || !okLite {
+		t.Fatalf("LoadFromEnv with DOUBAO_ADAPTER_ENDPOINT must populate both doubao entries: okPro=%v okLite=%v", okPro, okLite)
+	}
+	if hPro != hLite {
+		t.Fatalf("LoadFromEnv must produce identical handles for doubao-pro + doubao-lite (M2 N=2)")
+	}
+	// Empty siblings stay omitted.
+	if _, ok := reg.Resolve(DeepSeekModelID); ok {
+		t.Fatalf("empty DEEPSEEK_ADAPTER_ENDPOINT must not register deepseek-v3")
+	}
+}
+
+func TestRegistry_LoadFromEnv_DoubaoEndpointUnset_OmitsEntries(t *testing.T) {
+	t.Setenv("DEEPSEEK_ADAPTER_ENDPOINT", "")
+	t.Setenv("QWEN_ADAPTER_ENDPOINT", "")
+	t.Setenv("KIMI_ADAPTER_ENDPOINT", "")
+	t.Setenv("GLM_ADAPTER_ENDPOINT", "")
+	t.Setenv("DOUBAO_ADAPTER_ENDPOINT", "")
+	reg := LoadFromEnv()
+	if _, ok := reg.Resolve(DoubaoProModelID); ok {
+		t.Fatalf("empty DOUBAO_ADAPTER_ENDPOINT must not register doubao-pro")
+	}
+	if _, ok := reg.Resolve(DoubaoLiteModelID); ok {
+		t.Fatalf("empty DOUBAO_ADAPTER_ENDPOINT must not register doubao-lite")
+	}
+}
+
+// 4.5-INT-009 (P0) — FIVE-vendor cross-vendor regression (R8 + R9):
+// registering the doubao entries MUST NOT shadow Stories-4.1/4.2/4.3/4.4
+// entries. Each vendor's model ids continue to resolve to their own
+// DISTINCT handle. M2 dedup invariant verified across N=3 + N=2 + N=1 +
+// N=2 mix (kimi + qwen + glm + doubao).
+func TestRegistry_AllFiveVendorsCoRegistered_NoCrossVendorShadowing(t *testing.T) {
+	reg := NewRegistry(map[string]string{
+		DeepSeekModelID:   "https://adapter-deepseek.test:8080",
+		QwenMaxModelID:    "https://adapter-qwen.test:8080",
+		QwenPlusModelID:   "https://adapter-qwen.test:8080",
+		KimiV18kModelID:   "https://adapter-kimi.test:8080",
+		KimiV132kModelID:  "https://adapter-kimi.test:8080",
+		KimiV1128kModelID: "https://adapter-kimi.test:8080",
+		GLMModelID:        "https://adapter-glm.test:8080",
+		DoubaoProModelID:  "https://adapter-doubao.test:8080",
+		DoubaoLiteModelID: "https://adapter-doubao.test:8080",
+	})
+	hDS, okDS := reg.Resolve(DeepSeekModelID)
+	hQwen, okQwen := reg.Resolve(QwenMaxModelID)
+	hQwenPlus, _ := reg.Resolve(QwenPlusModelID)
+	hKimi8k, okKimi8k := reg.Resolve(KimiV18kModelID)
+	hKimi32k, _ := reg.Resolve(KimiV132kModelID)
+	hKimi128k, _ := reg.Resolve(KimiV1128kModelID)
+	hGLM, okGLM := reg.Resolve(GLMModelID)
+	hDoubaoPro, okDP := reg.Resolve(DoubaoProModelID)
+	hDoubaoLite, okDL := reg.Resolve(DoubaoLiteModelID)
+	if !okDS || !okQwen || !okKimi8k || !okGLM || !okDP || !okDL {
+		t.Fatalf("co-registered registry missing entries: okDS=%v okQwen=%v okKimi8k=%v okGLM=%v okDoubaoPro=%v okDoubaoLite=%v",
+			okDS, okQwen, okKimi8k, okGLM, okDP, okDL)
+	}
+	// Story-4.2 N=2 invariant preserved.
+	if hQwen != hQwenPlus {
+		t.Fatalf("qwen-max and qwen-plus must share handle (Story-4.2 N=2 dedup preserved)")
+	}
+	// Story-4.3 N=3 invariant preserved.
+	if hKimi8k != hKimi32k || hKimi32k != hKimi128k {
+		t.Fatalf("kimi sizes must share handle (Story-4.3 N=3 dedup preserved)")
+	}
+	// Story-4.5 N=2 RESTORATION invariant.
+	if hDoubaoPro != hDoubaoLite {
+		t.Fatalf("doubao-pro and doubao-lite must share handle (Story-4.5 N=2 RESTORATION)")
+	}
+	// All cross-vendor pairs must use DISTINCT handles.
+	if hDS == hQwen || hDS == hKimi8k || hDS == hGLM || hDS == hDoubaoPro ||
+		hQwen == hKimi8k || hQwen == hGLM || hQwen == hDoubaoPro ||
+		hKimi8k == hGLM || hKimi8k == hDoubaoPro ||
+		hGLM == hDoubaoPro {
+		t.Fatalf("cross-vendor handles must be DISTINCT; got hDS=%p hQwen=%p hKimi8k=%p hGLM=%p hDoubao=%p",
+			hDS, hQwen, hKimi8k, hGLM, hDoubaoPro)
+	}
+}
+
+// TestRegistry_UnknownDoubaoSibling_NotShadowed — regression test verifying
+// that an obvious typo (`doubao-max` like qwen) does NOT accidentally
+// resolve to the doubao handle (case-sensitive miss path).
+func TestRegistry_UnknownDoubaoSibling_ReturnsOkFalse(t *testing.T) {
+	const endpoint = "https://adapter-doubao.test:8080"
+	reg := NewRegistry(map[string]string{
+		DoubaoProModelID:  endpoint,
+		DoubaoLiteModelID: endpoint,
+	})
+	for _, typo := range []string{"doubao-max", "doubao-plus", "Doubao-Pro", "DOUBAO-PRO"} {
+		if _, ok := reg.Resolve(typo); ok {
+			t.Fatalf("Resolve(%q) ok=true; expected miss (case-sensitive + no fuzzy match)", typo)
+		}
 	}
 }
 

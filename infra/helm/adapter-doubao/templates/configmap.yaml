@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: adapter-doubao-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: adapter-doubao
+    app.kubernetes.io/part-of: he-api
+data:
+  # Non-secret runtime config.
+  DOUBAO_UPSTREAM_BASE_URL: "{{ .Values.upstream.baseUrl }}"
+  DOUBAO_UPSTREAM_TIMEOUT_SECONDS: "{{ .Values.upstream.timeoutSeconds }}"
+  # BR-1.10 N=2 RESTORATION — model ids this deployment hosts.
+  SUPPORTED_MODELS: "{{ join "," .Values.supportedModels }}"
+---
+# Story 4.5 NEW (OQ-4.5-4): endpoint-id ConfigMap mounted via
+# `envFrom: configMapRef` on the Deployment. Endpoint ids identify
+# resources, not authorise access — keeping them in ConfigMap (vs. Vault)
+# matches the operator-rotation model: per-environment values land in
+# dev / staging / prod values overlays; rotation = ConfigMap edit +
+# kubectl rollout restart (env-var snapshot is read at process init per
+# the Story-4.5 endpoint_map.New(env) refactor).
+#
+# Architect Round 1 OQ-4.5-4 rollover behaviour note: the env-var
+# snapshot is read at process init, so ConfigMap edits without a pod
+# restart are silently ignored. T5.4 runbook documents the
+# `kubectl rollout restart deployment/adapter-doubao -n he-api-adapters`
+# step; the adapter's startup-validation slog
+# (event=adapter_startup_validation) helps catch the drift.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: doubao-endpoint-ids
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: adapter-doubao
+    app.kubernetes.io/part-of: he-api
+    he-api/concern: endpoint-id-translate
+data:
+  # OQ-4.5-3 outbound translate source. BR-1.12 fail-fast triggers if
+  # either value is empty.
+  DOUBAO_PRO_ENDPOINT_ID: "{{ .Values.endpointIDs.pro }}"
+  DOUBAO_LITE_ENDPOINT_ID: "{{ .Values.endpointIDs.lite }}"

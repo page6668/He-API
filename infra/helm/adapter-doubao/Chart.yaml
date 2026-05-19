@@ -1,0 +1,37 @@
+apiVersion: v2
+name: adapter-doubao
+description: |
+  Story 4.5 — He-API Doubao (Volcengine Ark v3) model adapter (Connect-RPC
+  server-streaming AdapterService.Chat). Wires upstream
+  `https://ark.cn-beijing.volces.com/api/v3/chat/completions`
+  (Volcengine's documented OpenAI-compatible Ark v3 endpoint, ratified by
+  Architect Round 1 OQ-4.5-1) into the He-API gateway↔adapter contract
+  `he.adapter.v1.AdapterService` shared by all six Epic 4 adapter services.
+
+  BR-1.10 multi-model-id-per-service (N=2 RESTORATION from Story-4.4's N=1
+  degenerate): this single deployment hosts BOTH `doubao-pro` AND `doubao-lite`.
+  The gateway registry routes both ids to this Service endpoint via the
+  Story-4.2 M2 endpoint-dedup branch (assert.Same(h_pro, h_lite) chain
+  per 4.5-UNIT-013 REUSE of Story-4.2 4.2-UNIT-013 pattern).
+
+  NEW for Story 4.5 (OQ-4.5-3): the FIRST Epic-4 non-identity translate.
+  The adapter rewrites the `model` body field bidirectionally — outbound
+  friendly id (`doubao-pro` / `doubao-lite`) → Volcengine endpoint id
+  (`ep-20240xxx-xxxx`-shaped); inbound endpoint id → friendly id per
+  BR-1.11. Endpoint ids are sourced from a ConfigMap `doubao-endpoint-ids`
+  (per OQ-4.5-4 ratification — endpoint ids identify resources, not
+  authorise access; the API key is the authorisation gate and remains
+  in Vault).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - he-api
+  - adapter
+  - doubao
+  - volcengine
+  - bytedance
+  - ark
+  - connect-rpc
+maintainers:
+  - name: He-API Platform Team

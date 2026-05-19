@@ -1,0 +1,116 @@
+# Story 4.5 — Doubao (Volcengine Ark v3) adapter Helm values.
+#
+# Architect Round 1 (Story 4.5) rulings encoded:
+#   OQ-4.5-1 — Volcengine Ark v3 OpenAI-compatible endpoint
+#              (https://ark.cn-beijing.volces.com — request path is
+#              `/api/v3/chat/completions`; the adapter appends the path).
+#              Plain `Authorization: Bearer` auth at Ark v3 (NOT
+#              HMAC-SHA256-signed legacy Maas scheme).
+#   OQ-4.5-2 — Env-var naming follows the adapter service BRAND
+#              (DOUBAO_*) per Story-4.2 OQ-4.2-6 cascade text (brand wins
+#              over platform name `volcengine` and company name `bytedance`).
+#   OQ-4.5-3 — NEW non-identity translate: bidirectional `model`-field
+#              rewrite (friendly id ↔ endpoint id) via static lookup map
+#              (in code; no values knob beyond the env-var sources).
+#   OQ-4.5-4 — Endpoint-id env vars sourced from ConfigMap (NOT Vault) —
+#              `doubao-endpoint-ids` mounted via `envFrom: configMapRef`.
+#              Rationale: endpoint ids identify resources (parameter-like
+#              metadata), not authorise access. API key remains in Vault.
+#   OQ-4.5-5 — stream_options.include_usage=true honoured (in code; no
+#              values knob).
+#   OQ-4.5-6 — HTTP/2-preferred + ALPN HTTP/1.1 fallback cascade-default
+#              from Story-4.2 OQ-4.2-5; verbatim REUSE of Story-4.2 BR-4.4
+#              + Story-4.1 BR-1.4 upstream-error mapping; NEW error kind
+#              `endpoint_id_not_configured` per BR-4.6 for the BR-1.12
+#              fail-fast path (in code).
+#
+# Inherited from Story 4.1:
+#   OQ3 — Vault path: kv/data/he-api/upstream/doubao/
+#   M4  — Namespace `he-api-adapters` shared across all six adapters.
+#   M5  — Cold-start budget ≤ 2s (readiness-probe gated).
+
+replicaCount: 2
+
+image:
+  repository: ghcr.io/he-api/adapter-doubao
+  tag: 0.1.0
+  pullPolicy: IfNotPresent
+
+namespace: he-api-adapters
+
+# BR-1.10 N=2 RESTORATION — both bound model ids hosted by this Deployment.
+# Grafana per-model breakdown can group-by the `model` slog attribute (back-
+# translated to the consumer-facing friendly id, NEVER the endpoint id per
+# BR-1.9 expanded).
+supportedModels:
+  - doubao-pro
+  - doubao-lite
+
+service:
+  type: ClusterIP
+  port: 8080
+  # Connect-RPC over h2c on the in-VPC hop; mTLS hardening lands in Epic 9.
+  appProtocol: h2c
+
+upstream:
+  # DOUBAO_UPSTREAM_BASE_URL — overridable per environment. The adapter
+  # appends /api/v3/chat/completions per OQ-4.5-1.
+  baseUrl: "https://ark.cn-beijing.volces.com"
+  # DOUBAO_UPSTREAM_TIMEOUT_SECONDS — BR-1.8 default 60s.
+  timeoutSeconds: 60
+
+# OQ-4.5-3 + OQ-4.5-4 — Volcengine endpoint ids for the two friendly model
+# ids. Operator-provisioned per Volcengine console; rotate via ConfigMap
+# update + `kubectl rollout restart` (the env-var snapshot is read at
+# process init per Architect Round 1 OQ-4.5-4 rollover note + the
+# Story-4.5 Architect m-1 refactor — `endpoint_map.New(env)` reads
+# at startup; mid-flight rotation drift is operator-visible only via
+# slog `event=adapter_startup_validation`).
+endpointIDs:
+  # NOTE: per-environment values land in dev / staging / prod values
+  # overlays. The defaults below are sentinel test values for the helm
+  # template test pass — operators replace before staging deploy.
+  pro: "ep-replace-with-real-pro-endpoint-id"
+  lite: "ep-replace-with-real-lite-endpoint-id"
+
+externalSecret:
+  # External Secrets Operator reference. The actual Vault sync infra is
+  # provisioned in Epic 9; this manifest declares the contract.
+  enabled: true
+  secretStoreRef:
+    name: he-api-vault
+    kind: ClusterSecretStore
+  # Story-4.1 OQ3 cascade — kv/data/he-api/upstream/doubao/
+  vaultPath: "kv/data/he-api/upstream/doubao"
+  remoteKey: "api_key"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+probes:
+  liveness:
+    path: /healthz
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  readiness:
+    path: /healthz
+    # M5 — adapter cold-start budget ≤ 2s; probe takes a few periods.
+    initialDelaySeconds: 2
+    periodSeconds: 5
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  fsGroup: 65532
+
+securityContext:
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL

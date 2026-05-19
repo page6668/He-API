@@ -1,0 +1,172 @@
+schema: 1
+story: '4.5'
+story_title: 'Doubao（豆包）适配器'
+gate: PASS
+status_reason: |
+  Round 2 incremental re-review verifies H-1 remediation from Round 1
+  is complete and clean. Dev (Linus) executed the mechanical checkbox
+  sweep exactly as the Round 1 gate prescribed:
+    - All 59 Tasks / Subtasks checkboxes (7 parent + 52 child) now
+      `[x]`; 0 unchecked remaining (verified via grep audit).
+    - No source edits — the Round 1 implementation (33 File List
+      deliverables, 5-vendor regression chain, bidirectional
+      `model`-field translate via BR-1.11 / BR-1.12 / BR-3.8, NEW
+      `endpoint_map.go` lookup, NEW BR-4.6 `endpoint_id_not_configured`
+      error kind, Architect Round 1 m-1/l-1/m-2 refinements) is
+      preserved byte-for-byte.
+    - Re-execution of test suites under `-race -count=1` is clean:
+      5 packages PASS (107 individual subtests across
+      `./apps/adapters/doubao/...` + `./apps/api-gateway/internal/
+      adapterclient/...`); chaos suite (`-tags chaos`) PASS;
+      `go vet` clean.
+
+  L-1 (pre-existing `TestColdStart` first-iteration flake) remains
+  out-of-scope per the Round 1 gate's `recommendations.should_improve`
+  — unrelated to Story 4.5 surface area.
+
+reviewer: Turing
+agent_model: 'Claude Opus 4.7 (1M context)'
+updated: '2026-05-19T00:00:00Z'
+
+story_status_after_review: Done
+
+review_round: 2
+risk_level: HIGH
+review_mode: automated_only
+
+incremental_context:
+  cached_risk_level: HIGH
+  cached_review_mode: automated_only
+  cached_project_type: web_backend
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []  # Round 1 H-1 RESOLVED
+
+test_results:
+  automated_tests:
+    verification_method: 'independent_execution'
+    test_command: 'go test -race -count=1 ./apps/adapters/doubao/... ./apps/api-gateway/internal/adapterclient/...'
+    exit_code: 0
+    passed: true
+    pass_rate: 100
+    notes: |
+      Round 2 re-execution (post-checkbox-sweep):
+        apps/adapters/doubao/internal           → PASS (3.449s)
+        apps/adapters/doubao/internal/upstream  → PASS (3.908s)
+        apps/adapters/doubao/internal/usage     → PASS (4.685s)
+        apps/adapters/doubao/tests              → PASS (5.731s)
+        apps/api-gateway/internal/adapterclient → PASS (6.201s)
+      5 packages green; 107 PASS subtests across packages (verbose run);
+      chaos suite (`-tags chaos`) PASS on adapter-doubao tests. Identical
+      surface to Round 1's 85-test baseline — no source touched.
+    integrity_check:
+      dev_evidence_found: true
+      dev_claimed_pass: true
+      discrepancy: false
+
+  task_checkbox_verification:
+    total_checkboxes: 59
+    checked_count: 59
+    unchecked_count: 0
+    completion_rate: 100
+    consistency_rate: 100
+    notes: |
+      Round 1 H-1 RESOLVED. Audit:
+        $ grep -cE '^- \[x\] \*\*T'   docs/stories/4.5-*.md → 7  (parents)
+        $ grep -cE '^  - \[x\] T'      docs/stories/4.5-*.md → 52 (children)
+        $ grep -cE '^\s*- \[ \]'       docs/stories/4.5-*.md → 0  (unchecked)
+      All 33 File List deliverables remain on disk; no source / test /
+      body-text edits.
+
+  ac_coverage:
+    coverage_rate: 100
+    passed: true
+    blocking_issues_count: 0
+    acs_fully_verified: 3
+    acs_not_verified: 0
+    ac_traceability_found: true
+    ac_discrepancies_count: 0
+    notes: |
+      Inherited from Round 1 (cached). AC1/AC2/AC3 all verified end-to-end
+      including BR-1.11 bidirectional model rewrite, BR-1.12
+      endpoint-id-not-configured fail-fast, BR-3.1 oracle invariant,
+      BR-4.6 NEW error kind, 20-cell round-trip oracle, and CHAOS-008
+      fail-fast.
+
+  regression:
+    executed: true
+    passed: true
+    tests_total: 5
+    tests_failed: 0
+    notes: |
+      Re-ran TestRegistry_AllFiveVendorsCoRegistered_NoCrossVendorShadowing
+      in adapterclient package — PASS. N=1 deepseek + N=2 qwen + N=3 kimi
+      + N=1 glm + N=2 doubao all preserve dedup invariants; all 5
+      cross-vendor handle pairs DISTINCT.
+
+  e2e_tests:
+    executed: false
+    skipped: true
+    skip_reason: 'review_mode = automated_only (backend Go service, no browser UI)'
+
+  blind_spot_verification:
+    executed: false
+    skip_reason: 'Blind-spot overlay scenarios folded into per-package tests per Story File Locations table; all green. Reference: docs/qa/assessments/4.5-test-design-20260519.md.'
+
+evidence:
+  story_path: 'docs/stories/4.5-doubao-volcano-adapter.md'
+  test_commands:
+    - 'go test -race -count=1 ./apps/adapters/doubao/... ./apps/api-gateway/internal/adapterclient/...'
+    - 'go test -race -count=1 -tags=chaos ./apps/adapters/doubao/tests/...'
+    - 'go vet ./apps/adapters/doubao/... ./apps/api-gateway/internal/adapterclient/...'
+  test_logs: '(stdout captured during Round 2 review; all suites exited 0)'
+  files_collected: 0
+  issues_with_evidence: []
+
+issues:
+  critical: []
+  high: []   # H-1 RESOLVED in Round 2
+  medium: []
+  low:
+    - id: L-1
+      severity: LOW
+      finding: |
+        Pre-existing flake observed at Round 1 in
+        `apps/api-gateway/cmd/server::TestColdStart` (5s `/health`
+        cold-start budget). Re-confirmed out-of-scope at Round 2 —
+        Story 4.5 only added 2 registry entries + 3 constants + a
+        `LoadFromEnv` augmentation on the gateway side.
+      remediation: 'Carried over from Round 1 — tracked separately as pre-existing infra flake; not blocking on Story 4.5.'
+
+recommendations:
+  must_fix: []
+  should_improve:
+    - 'L-1 (carried over): Investigate TestColdStart first-iteration flake on heavy-parallel runs (out of scope for Story 4.5).'
+
+quality_score: 100
+quality_score_breakdown:
+  base_score: 100
+  deductions: []
+  notes: |
+    Round 2 PASS at 100/100. Round 1's `-5` deduction for stale
+    checkboxes has been earned back via the mechanical sweep. The
+    implementation surface (1 NEW K8s service + 33 File List
+    deliverables + bidirectional model translate + NEW BR-4.6 error
+    kind + Architect Round 1 m-1/l-1/m-2 refinements + 5-vendor
+    cross-vendor regression) remains exemplary; all bindings verified
+    Round 1 and re-confirmed clean at Round 2.
+
+post_review_workflow:
+  workflow_action: finalize_commit
+  requires_git_commit: true
+  handoff_target: sm
+  next_command: '*draft 4.6'
+  reasoning: |
+    gate=PASS + status_after=Done → finalise Story 4.5 with a git
+    commit and hand off to SM (Phil) for Story 4.6 draft (Ernie / Baidu
+    Qianfan — the SIXTH and FINAL Epic-4 adapter; inherits Story-4.5's
+    NEW non-identity translate precedent while diverging on the
+    specific transform shape per the Story 4.5 SM/Architect notes:
+    Baidu Qianfan maps the model identifier to a URL path segment,
+    not a body field).

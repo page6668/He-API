@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adapter-doubao
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: adapter-doubao
+    app.kubernetes.io/part-of: he-api
+    he-api/epic: "4"
+    he-api/story: "4.5"
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: adapter-doubao
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: adapter-doubao
+        app.kubernetes.io/part-of: he-api
+    spec:
+      serviceAccountName: adapter-doubao
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: adapter-doubao
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: connect
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: PORT
+              value: "8080"
+            - name: DOUBAO_UPSTREAM_BASE_URL
+              value: "{{ .Values.upstream.baseUrl }}"
+            - name: DOUBAO_UPSTREAM_TIMEOUT_SECONDS
+              value: "{{ .Values.upstream.timeoutSeconds }}"
+            - name: DOUBAO_BOUND_MODEL_IDS
+              value: "{{ join "," .Values.supportedModels }}"
+            - name: DOUBAO_UPSTREAM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: adapter-doubao-upstream-api-key
+                  key: api_key
+          # Story 4.5 NEW (OQ-4.5-4) — mount the endpoint-id ConfigMap as
+          # env vars. This injects DOUBAO_PRO_ENDPOINT_ID +
+          # DOUBAO_LITE_ENDPOINT_ID at pod startup. ConfigMap edits
+          # require a `kubectl rollout restart` to pick up — the env-var
+          # snapshot is read at process init per BR-1.12 + Architect
+          # Round 1 m-1 endpoint_map.New(env) refactor.
+          envFrom:
+            - configMapRef:
+                name: doubao-endpoint-ids
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.liveness.path }}
+              port: connect
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readiness.path }}
+              port: connect
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}

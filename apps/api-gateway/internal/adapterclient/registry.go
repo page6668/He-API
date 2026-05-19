@@ -29,8 +29,8 @@ import (
 
 // DeepSeekEndpointEnv is the env-var the startup-loader reads for the
 // DeepSeek adapter's gRPC endpoint. Stories 4.2-4.6 add sibling env vars
-// (QWEN_ADAPTER_ENDPOINT below; KIMI_, GLM_, DOUBAO_, ERNIE_ in later
-// Epic 4 Stories) following the same pattern.
+// (QWEN_/KIMI_/GLM_/DOUBAO_ already landed; ERNIE_ in Story 4.6)
+// following the same pattern.
 const DeepSeekEndpointEnv = "DEEPSEEK_ADAPTER_ENDPOINT"
 
 // DeepSeekModelID is the canonical model identifier the gateway accepts
@@ -84,6 +84,27 @@ const (
 const (
 	GLMModelID            = "glm-4"
 	GLMAdapterEndpointEnv = "GLM_ADAPTER_ENDPOINT"
+)
+
+// Story 4.5 — Doubao (Volcengine Ark v3) adapter constants.
+//
+// BR-1.10 multi-model-id-per-service dispatch N=2 case: BOTH
+// DoubaoProModelID and DoubaoLiteModelID map to the SAME
+// DOUBAO_ADAPTER_ENDPOINT and therefore share ONE ClientHandle instance
+// (M2 endpoint-dedup, see NewRegistry — RESTORES the Story-4.2 N=2
+// pattern after Story-4.4's N=1 degenerate). The adapter receives
+// `req.Model` (= friendly id `doubao-pro` / `doubao-lite`) and rewrites
+// it adapter-side to the Volcengine endpoint id via
+// `apps/adapters/doubao/internal/upstream.EndpointMap.Lookup` per
+// OQ-4.5-3 — this is the FIRST Epic-4 non-identity translate.
+//
+// Architect Round 1 OQ-4.5-2 ruling: env-var naming follows the adapter
+// service brand (DOUBAO_*) per Story-4.2 OQ-4.2-6 cascade text (brand
+// wins over platform name `volcengine` and company name `bytedance`).
+const (
+	DoubaoProModelID         = "doubao-pro"
+	DoubaoLiteModelID        = "doubao-lite"
+	DoubaoAdapterEndpointEnv = "DOUBAO_ADAPTER_ENDPOINT"
 )
 
 // ClientHandle is the abstraction Stories 4.2-4.6 + the Story 4.1
@@ -169,12 +190,14 @@ func NewRegistryFromHandles(handles map[string]ClientHandle) *Registry {
 //	QWEN_ADAPTER_ENDPOINT      (Story 4.2) → qwen-max AND qwen-plus
 //	KIMI_ADAPTER_ENDPOINT      (Story 4.3) → moonshot-v1-8k + 32k + 128k
 //	GLM_ADAPTER_ENDPOINT       (Story 4.4) → glm-4 (N=1 degenerate)
+//	DOUBAO_ADAPTER_ENDPOINT    (Story 4.5) → doubao-pro AND doubao-lite (N=2)
 //
 // Empty values omit the entry, which causes the gateway to fall through
 // to the Story-3.3 mock path for that model id.
 func LoadFromEnv() *Registry {
 	qwenEndpoint := os.Getenv(QwenAdapterEndpointEnv)
 	kimiEndpoint := os.Getenv(KimiAdapterEndpointEnv)
+	doubaoEndpoint := os.Getenv(DoubaoAdapterEndpointEnv)
 	return NewRegistry(map[string]string{
 		DeepSeekModelID:   os.Getenv(DeepSeekEndpointEnv),
 		QwenMaxModelID:    qwenEndpoint,
@@ -183,6 +206,8 @@ func LoadFromEnv() *Registry {
 		KimiV132kModelID:  kimiEndpoint,
 		KimiV1128kModelID: kimiEndpoint,
 		GLMModelID:        os.Getenv(GLMAdapterEndpointEnv),
+		DoubaoProModelID:  doubaoEndpoint,
+		DoubaoLiteModelID: doubaoEndpoint,
 	})
 }
 
