@@ -66,6 +66,7 @@ func TestRegistry_LoadFromEnv_EmptyEnv_OmitsEntry(t *testing.T) {
 	t.Setenv("KIMI_ADAPTER_ENDPOINT", "")
 	t.Setenv("GLM_ADAPTER_ENDPOINT", "")
 	t.Setenv("DOUBAO_ADAPTER_ENDPOINT", "")
+	t.Setenv("ERNIE_ADAPTER_ENDPOINT", "")
 	reg := LoadFromEnv()
 	if _, ok := reg.Resolve("deepseek-v3"); ok {
 		t.Fatalf("empty DEEPSEEK_ADAPTER_ENDPOINT should result in no deepseek-v3 registration")
@@ -89,6 +90,9 @@ func TestRegistry_LoadFromEnv_EmptyEnv_OmitsEntry(t *testing.T) {
 	}
 	if _, ok := reg.Resolve("doubao-lite"); ok {
 		t.Fatalf("empty DOUBAO_ADAPTER_ENDPOINT should result in no doubao-lite registration")
+	}
+	if _, ok := reg.Resolve("ernie-4.0"); ok {
+		t.Fatalf("empty ERNIE_ADAPTER_ENDPOINT should result in no ernie-4.0 registration")
 	}
 }
 
@@ -568,6 +572,172 @@ func TestRegistry_UnknownDoubaoSibling_ReturnsOkFalse(t *testing.T) {
 	for _, typo := range []string{"doubao-max", "doubao-plus", "Doubao-Pro", "DOUBAO-PRO"} {
 		if _, ok := reg.Resolve(typo); ok {
 			t.Fatalf("Resolve(%q) ok=true; expected miss (case-sensitive + no fuzzy match)", typo)
+		}
+	}
+}
+
+// 4.6-UNIT-011 (P0) — Architect Round 1 R9 anchor (Story-4.4 cascade):
+// the Story-4.2 M2 `NewRegistry` byEndpoint endpoint-dedup branch
+// handles the N=1 degenerate case CLEANLY for Story 4.6 as well —
+// `ernie-4.0` maps to `ERNIE_ADAPTER_ENDPOINT`, the byEndpoint map has
+// exactly one entry, the `if !ok { newConnectClientHandle }` branch
+// executes once, and no `assert.Same` chain is triggered. SKIPPED-
+// branch documentation test verbatim REUSE of 4.4-UNIT-011 pattern per
+// Story-4.4 R9 ratification cascade.
+func TestRegistry_Ernie40_M2_EndpointDedup_N1_NoOp_R9(t *testing.T) {
+	const endpoint = "https://adapter-ernie.he-api-adapters.svc.cluster.local:8080"
+	reg := NewRegistry(map[string]string{
+		ErnieModelID: endpoint,
+	})
+	h, ok := reg.Resolve(ErnieModelID)
+	if !ok {
+		t.Fatalf("Resolve(ernie-4.0) ok=false, want true")
+	}
+	if h == nil {
+		t.Fatalf("Resolve returned nil handle")
+	}
+	// SKIPPED-branch documentation: at N=1 the byEndpoint map has size 1,
+	// the dedup branch fires once, and there is no second handle to
+	// compare against. The Story-4.2 M2 mechanism is therefore a
+	// well-behaved no-op for N=1 single-model-id vendors (RESTORATION
+	// of Story-4.4 N=1 after Story-4.5 N=2).
+	t.Logf("N=1 endpoint-dedup no-op verified — Resolve(ernie-4.0) returned a single handle without dedup work")
+}
+
+// 4.6-UNIT-012 (P0) — basic resolution path: Resolve(ernie-4.0) returns
+// a non-nil handle; Resolve of a non-registered id returns (nil, false).
+func TestRegistry_Ernie40_Resolve(t *testing.T) {
+	reg := NewRegistry(map[string]string{
+		ErnieModelID: "https://adapter-ernie.he-api-adapters.svc.cluster.local:8080",
+	})
+	if h, ok := reg.Resolve(ErnieModelID); !ok || h == nil {
+		t.Fatalf("Resolve(ernie-4.0) returned (%v,%v); want (non-nil,true)", h, ok)
+	}
+	if h, ok := reg.Resolve("not-in-registry"); ok {
+		t.Fatalf("Resolve(\"not-in-registry\") ok=true (h=%v), want false", h)
+	}
+}
+
+// 4.6-UNIT-013 (P0) — OQ-4.6-2 ratification lock-in: env-var naming
+// follows the adapter service BRAND (`ERNIE_*`), NOT the family name
+// (`WENXIN_*`) or company name (`BAIDU_*`). Constants must be literal
+// strings.
+func TestRegistry_ErnieEndpointEnvName_IsLiteralBrandString(t *testing.T) {
+	if ErnieAdapterEndpointEnv != "ERNIE_ADAPTER_ENDPOINT" {
+		t.Fatalf("ErnieAdapterEndpointEnv = %q, want literal \"ERNIE_ADAPTER_ENDPOINT\" (OQ-4.6-2 brand-wins)", ErnieAdapterEndpointEnv)
+	}
+	if ErnieModelID != "ernie-4.0" {
+		t.Fatalf("ErnieModelID = %q, want \"ernie-4.0\"", ErnieModelID)
+	}
+}
+
+// 4.6-UNIT-014 — `LoadFromEnv` reads `ERNIE_ADAPTER_ENDPOINT` correctly +
+// falls back gracefully on unset.
+func TestRegistry_LoadFromEnv_ErnieEndpointSet_PopulatesErnie40(t *testing.T) {
+	t.Setenv("DEEPSEEK_ADAPTER_ENDPOINT", "")
+	t.Setenv("QWEN_ADAPTER_ENDPOINT", "")
+	t.Setenv("KIMI_ADAPTER_ENDPOINT", "")
+	t.Setenv("GLM_ADAPTER_ENDPOINT", "")
+	t.Setenv("DOUBAO_ADAPTER_ENDPOINT", "")
+	t.Setenv("ERNIE_ADAPTER_ENDPOINT", "https://adapter-ernie.test:8080")
+	reg := LoadFromEnv()
+	if h, ok := reg.Resolve("ernie-4.0"); !ok || h == nil {
+		t.Fatalf("LoadFromEnv with ERNIE_ADAPTER_ENDPOINT must populate ernie-4.0: ok=%v h=%v", ok, h)
+	}
+	// Other vendors with empty endpoints stay omitted.
+	if _, ok := reg.Resolve("deepseek-v3"); ok {
+		t.Fatalf("empty DEEPSEEK_ADAPTER_ENDPOINT must not register deepseek-v3")
+	}
+}
+
+func TestRegistry_LoadFromEnv_ErnieEndpointUnset_OmitsEntry(t *testing.T) {
+	t.Setenv("DEEPSEEK_ADAPTER_ENDPOINT", "")
+	t.Setenv("QWEN_ADAPTER_ENDPOINT", "")
+	t.Setenv("KIMI_ADAPTER_ENDPOINT", "")
+	t.Setenv("GLM_ADAPTER_ENDPOINT", "")
+	t.Setenv("DOUBAO_ADAPTER_ENDPOINT", "")
+	t.Setenv("ERNIE_ADAPTER_ENDPOINT", "")
+	reg := LoadFromEnv()
+	if _, ok := reg.Resolve(ErnieModelID); ok {
+		t.Fatalf("empty ERNIE_ADAPTER_ENDPOINT must not register ernie-4.0")
+	}
+}
+
+// 4.6-INT-009 (P0) — SIX-vendor cross-vendor regression matrix (R8 +
+// R9 — closes the Epic-4 vendor matrix): registering the ernie entry
+// MUST NOT shadow Stories-4.1/4.2/4.3/4.4/4.5 entries. Each vendor's
+// model ids continue to resolve to their own DISTINCT handle. M2 dedup
+// invariant verified across N=3 (kimi) + N=2 (qwen) + N=1 (glm) + N=2
+// (doubao) + N=1 (ernie) mix.
+func TestRegistry_AllSixVendorsCoRegistered_NoCrossVendorShadowing(t *testing.T) {
+	reg := NewRegistry(map[string]string{
+		DeepSeekModelID:   "https://adapter-deepseek.test:8080",
+		QwenMaxModelID:    "https://adapter-qwen.test:8080",
+		QwenPlusModelID:   "https://adapter-qwen.test:8080",
+		KimiV18kModelID:   "https://adapter-kimi.test:8080",
+		KimiV132kModelID:  "https://adapter-kimi.test:8080",
+		KimiV1128kModelID: "https://adapter-kimi.test:8080",
+		GLMModelID:        "https://adapter-glm.test:8080",
+		DoubaoProModelID:  "https://adapter-doubao.test:8080",
+		DoubaoLiteModelID: "https://adapter-doubao.test:8080",
+		ErnieModelID:      "https://adapter-ernie.test:8080",
+	})
+	hDS, okDS := reg.Resolve(DeepSeekModelID)
+	hQwen, okQwen := reg.Resolve(QwenMaxModelID)
+	hQwenPlus, _ := reg.Resolve(QwenPlusModelID)
+	hKimi8k, okKimi8k := reg.Resolve(KimiV18kModelID)
+	hKimi32k, _ := reg.Resolve(KimiV132kModelID)
+	hKimi128k, _ := reg.Resolve(KimiV1128kModelID)
+	hGLM, okGLM := reg.Resolve(GLMModelID)
+	hDoubaoPro, okDP := reg.Resolve(DoubaoProModelID)
+	hDoubaoLite, okDL := reg.Resolve(DoubaoLiteModelID)
+	hErnie, okErnie := reg.Resolve(ErnieModelID)
+	if !okDS || !okQwen || !okKimi8k || !okGLM || !okDP || !okDL || !okErnie {
+		t.Fatalf("co-registered registry missing entries: okDS=%v okQwen=%v okKimi8k=%v okGLM=%v okDoubaoPro=%v okDoubaoLite=%v okErnie=%v",
+			okDS, okQwen, okKimi8k, okGLM, okDP, okDL, okErnie)
+	}
+	// Story-4.2 N=2 invariant preserved.
+	if hQwen != hQwenPlus {
+		t.Fatalf("qwen-max and qwen-plus must share handle (Story-4.2 N=2 dedup preserved)")
+	}
+	// Story-4.3 N=3 invariant preserved.
+	if hKimi8k != hKimi32k || hKimi32k != hKimi128k {
+		t.Fatalf("kimi sizes must share handle (Story-4.3 N=3 dedup preserved)")
+	}
+	// Story-4.5 N=2 RESTORATION invariant.
+	if hDoubaoPro != hDoubaoLite {
+		t.Fatalf("doubao-pro and doubao-lite must share handle (Story-4.5 N=2 RESTORATION)")
+	}
+	// All cross-vendor pairs (including the new ernie entry) must use
+	// DISTINCT handles.
+	if hDS == hQwen || hDS == hKimi8k || hDS == hGLM || hDS == hDoubaoPro || hDS == hErnie ||
+		hQwen == hKimi8k || hQwen == hGLM || hQwen == hDoubaoPro || hQwen == hErnie ||
+		hKimi8k == hGLM || hKimi8k == hDoubaoPro || hKimi8k == hErnie ||
+		hGLM == hDoubaoPro || hGLM == hErnie ||
+		hDoubaoPro == hErnie {
+		t.Fatalf("cross-vendor handles must be DISTINCT; got hDS=%p hQwen=%p hKimi8k=%p hGLM=%p hDoubao=%p hErnie=%p",
+			hDS, hQwen, hKimi8k, hGLM, hDoubaoPro, hErnie)
+	}
+}
+
+// 4.6-INT-009-loadfromenv — SIX-vendor LoadFromEnv shape: every endpoint
+// env-var set → each vendor's entries registered + their dedup invariants
+// preserved + Ernie added.
+func TestRegistry_LoadFromEnv_AllSixVendorsSet_PopulatesAllEntries(t *testing.T) {
+	t.Setenv("DEEPSEEK_ADAPTER_ENDPOINT", "https://adapter-deepseek.test:8080")
+	t.Setenv("QWEN_ADAPTER_ENDPOINT", "https://adapter-qwen.test:8080")
+	t.Setenv("KIMI_ADAPTER_ENDPOINT", "https://adapter-kimi.test:8080")
+	t.Setenv("GLM_ADAPTER_ENDPOINT", "https://adapter-glm.test:8080")
+	t.Setenv("DOUBAO_ADAPTER_ENDPOINT", "https://adapter-doubao.test:8080")
+	t.Setenv("ERNIE_ADAPTER_ENDPOINT", "https://adapter-ernie.test:8080")
+	reg := LoadFromEnv()
+	for _, id := range []string{
+		"deepseek-v3", "qwen-max", "qwen-plus",
+		"moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k",
+		"glm-4", "doubao-pro", "doubao-lite", "ernie-4.0",
+	} {
+		if h, ok := reg.Resolve(id); !ok || h == nil {
+			t.Fatalf("LoadFromEnv must populate %s: ok=%v h=%v", id, ok, h)
 		}
 	}
 }

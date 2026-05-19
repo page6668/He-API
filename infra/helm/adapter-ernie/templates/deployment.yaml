@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adapter-ernie
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: adapter-ernie
+    app.kubernetes.io/part-of: he-api
+    he-api/epic: "4"
+    he-api/story: "4.6"
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: adapter-ernie
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: adapter-ernie
+        app.kubernetes.io/part-of: he-api
+    spec:
+      serviceAccountName: adapter-ernie
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: adapter-ernie
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: connect
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: PORT
+              value: "8080"
+            - name: ERNIE_UPSTREAM_BASE_URL
+              value: "{{ .Values.upstream.baseUrl }}"
+            - name: ERNIE_UPSTREAM_TIMEOUT_SECONDS
+              value: "{{ .Values.upstream.timeoutSeconds }}"
+            - name: ERNIE_BOUND_MODEL_IDS
+              value: "{{ join "," .Values.supportedModels }}"
+            - name: ERNIE_UPSTREAM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: adapter-ernie-upstream-api-key
+                  key: api_key
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.liveness.path }}
+              port: connect
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readiness.path }}
+              port: connect
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}

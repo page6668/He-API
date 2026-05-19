@@ -29,8 +29,8 @@ import (
 
 // DeepSeekEndpointEnv is the env-var the startup-loader reads for the
 // DeepSeek adapter's gRPC endpoint. Stories 4.2-4.6 add sibling env vars
-// (QWEN_/KIMI_/GLM_/DOUBAO_ already landed; ERNIE_ in Story 4.6)
-// following the same pattern.
+// (QWEN_/KIMI_/GLM_/DOUBAO_/ERNIE_) following the same pattern; Epic-4
+// brand-prefix cascade closes at Story 4.6.
 const DeepSeekEndpointEnv = "DEEPSEEK_ADAPTER_ENDPOINT"
 
 // DeepSeekModelID is the canonical model identifier the gateway accepts
@@ -105,6 +105,31 @@ const (
 	DoubaoProModelID         = "doubao-pro"
 	DoubaoLiteModelID        = "doubao-lite"
 	DoubaoAdapterEndpointEnv = "DOUBAO_ADAPTER_ENDPOINT"
+)
+
+// Story 4.6 — Ernie (Baidu Qianfan v2 OpenAI-compat) adapter constants.
+//
+// BR-1.10 multi-model-id-per-service dispatch DEGENERATE N=1 case:
+// `ernie-4.0` is the SOLE model id hosted by adapter-ernie — restores
+// the Story-4.4 N=1 degenerate after Story-4.5's N=2 RESTORATION. The
+// Story-4.2 M2 endpoint-dedup branch in NewRegistry handles N=1 cleanly
+// (byEndpoint map has one entry, no dedup occurs — 4.6-UNIT-011
+// SKIPPED-branch documentation test per Story-4.4 R9 ratification
+// cascade).
+//
+// Architect Round 1 OQ-4.6-1 ratification: option (a) Qianfan v2
+// OpenAI-compat endpoint (`https://qianfan.baidubce.com/v2/chat/completions`)
+// — collapses Story 4.6 to a pure REUSE of Story-4.4 glm N=1 template
+// (`glm`→`ernie` substitution + Helm chart + ArgoCD app). Identity-
+// mapping translate per OQ-4.6-3.
+//
+// Architect Round 1 OQ-4.6-2 ruling: env-var naming follows the adapter
+// service brand (ERNIE_*) per Story-4.2 OQ-4.2-6 cascade text (brand
+// wins over family marketing name `wenxin` / 文心 and company name
+// `baidu`; final Epic-4 cascade closure).
+const (
+	ErnieModelID            = "ernie-4.0"
+	ErnieAdapterEndpointEnv = "ERNIE_ADAPTER_ENDPOINT"
 )
 
 // ClientHandle is the abstraction Stories 4.2-4.6 + the Story 4.1
@@ -191,6 +216,8 @@ func NewRegistryFromHandles(handles map[string]ClientHandle) *Registry {
 //	KIMI_ADAPTER_ENDPOINT      (Story 4.3) → moonshot-v1-8k + 32k + 128k
 //	GLM_ADAPTER_ENDPOINT       (Story 4.4) → glm-4 (N=1 degenerate)
 //	DOUBAO_ADAPTER_ENDPOINT    (Story 4.5) → doubao-pro AND doubao-lite (N=2)
+//	ERNIE_ADAPTER_ENDPOINT     (Story 4.6) → ernie-4.0 (N=1 degenerate;
+//	                                          closes the six-vendor matrix)
 //
 // Empty values omit the entry, which causes the gateway to fall through
 // to the Story-3.3 mock path for that model id.
@@ -208,6 +235,7 @@ func LoadFromEnv() *Registry {
 		GLMModelID:        os.Getenv(GLMAdapterEndpointEnv),
 		DoubaoProModelID:  doubaoEndpoint,
 		DoubaoLiteModelID: doubaoEndpoint,
+		ErnieModelID:      os.Getenv(ErnieAdapterEndpointEnv),
 	})
 }
 

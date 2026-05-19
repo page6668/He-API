@@ -1,0 +1,282 @@
+# Story 4.6 — Wenxin (Baidu) ERNIE adapter — QA Gate File
+schema: 1
+story: '4.6'
+story_title: '文心（百度）适配器 — Ernie / Baidu Qianfan v2 OpenAI-compat'
+gate: PASS
+status_reason: |
+  Round 2 incremental review: H-1 (Round 1 HIGH process defect — 58/58
+  unchecked Tasks/Subtasks checkboxes) RESOLVED via Dev (Linus) mechanical
+  sweep. Post-fix audit:
+    grep -cE '^- \[ \]|^  - \[ \]'   → 4   (option-(b) SKIPPED rows)
+    grep -cE '^- \[x\]|^  - \[x\]'   → 54  (delivered subtasks)
+    total 58, consistency 100% — the 4 unchecked rows are the four
+    option-(b)-dropped tasks (T1.6 endpoint_path_map.go, T1.7 token_cache.go,
+    T3.3 URL-path-segment translate property tests, T3.4 token-cache refresh
+    property tests) all annotated inline `**(SKIPPED — OQ-4.6-1 option (b)
+    REJECTED per Architect Round 1; N/A under option (a))**` per the
+    Round 1 gate remediation rule "≤ 4 (option-b tasks if left visible)".
+    Identical fix shape to Story 4.5 H-1 Round 1 → Round 2 PASS precedent.
+
+  Independent test re-execution (defensive) confirms substantive
+  correctness remains uniformly green — no regression from the Round 1
+  baseline:
+    apps/adapters/ernie/internal             → PASS (4.729s, -race)
+    apps/adapters/ernie/internal/upstream    → PASS (5.891s, -race)
+    apps/adapters/ernie/internal/usage       → PASS (2.979s, -race)
+    apps/adapters/ernie/tests                → PASS (3.684s, -race)
+    apps/adapters/ernie/tests (-tags=chaos)  → PASS (2.858s, 7 CHAOS scenarios)
+    apps/api-gateway/internal/adapterclient  → PASS (5.175s, -race)
+    go vet                                   → clean
+    gofmt -l                                 → empty diff
+
+  Six-vendor cross-vendor regression `TestRegistry_AllSixVendorsCoRegistered_NoCrossVendorShadowing`
+  PASSES — Epic-4 DoD line 1 six-vendor matrix close-out CONFIRMED
+  (deepseek-v3 + qwen-max + qwen-plus + moonshot-v1-8k/32k/128k + glm-4
+  + doubao-pro + doubao-lite + ernie-4.0 = 10 model-id entries dispatch
+  without shadowing).
+
+  All five sibling adapter modules still pass:
+    apps/adapters/deepseek/...   → PASS (4 packages)
+    apps/adapters/qwen/...       → PASS (4 packages)
+    apps/adapters/kimi/...       → PASS (4 packages)
+    apps/adapters/glm/...        → PASS (4 packages)
+    apps/adapters/doubao/...     → PASS (4 packages)
+  Total 20 sibling packages PASS — no regression introduced by Story 4.6.
+
+  Five MEDIUM blind-spot test gaps (BLIND-ERROR-003 panic recovery,
+  BLIND-CONCURRENCY-002 sustained-load goroutine leak, BLIND-DATA-001
+  three-way request-id equality, BLIND-DATA-002 1000-tuple property test,
+  BLIND-RESOURCE-001 connection-release exit-path matrix) carried over
+  from Round 1 as non-blocking follow-ups — code handling exists; explicit
+  tests deferred per Story-4.4 PASS precedent.
+
+  One LOW carried-over pre-existing flake (TestColdStart in
+  apps/api-gateway/cmd/server) — passes in isolation, fails only under
+  heavy parallel `-race` load. Out of scope for Story 4.6 (which did NOT
+  touch cmd/server); same posture as Story-4.5 L-1.
+
+  Round 1 deduction of -10 (H-1) restored. Quality Score 90 → 100. Same
+  Round-1 CONCERNS → Round-2 PASS shape as Story 4.5.
+
+reviewer: 'Turing (QA Engineer)'
+agent_model_used: 'Claude Opus 4.7 (1M context)'
+updated: '2026-05-19T00:00:00Z'
+
+story_status_after_review: Done
+
+review_round: 2
+review_mode: full_testing
+risk_level: MEDIUM
+quality_score: 100
+expires: '2026-08-19T00:00:00Z'
+
+incremental_context:
+  cached_risk_level: MEDIUM
+  cached_review_mode: full_testing
+  cached_project_type: web_backend
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots:
+    - id: '4.6-BLIND-ERROR-003'
+      category: ERROR
+      description: 'Adapter panic recovery — non-blocking; Connect-RPC default middleware coverage; deferred per Story-4.4 PASS precedent.'
+    - id: '4.6-BLIND-CONCURRENCY-002'
+      category: CONCURRENCY
+      description: 'Sustained-load goroutine leak guard — non-blocking; deferred to ops smoke-test cohort.'
+    - id: '4.6-BLIND-DATA-001'
+      category: DATA
+      description: 'Three-way request-id equality assertion — non-blocking; INT-005 verifies propagation but not strict three-string equality.'
+    - id: '4.6-BLIND-DATA-002'
+      category: DATA
+      description: '1000-tuple property test — non-blocking; owned by shared packages/adapter-usage (Story-4.2 M1 lift).'
+    - id: '4.6-BLIND-RESOURCE-001'
+      category: RESOURCE
+      description: 'Connection-release exit-path matrix — non-blocking; defer-Close coverage accepted per Story-4.4 cascade.'
+  checkbox_issues: []  # H-1 RESOLVED Round 2
+
+test_results:
+  automated_tests:
+    verification_method: 'independent_execution'
+    test_command: 'go test -race -count=1 ./apps/adapters/ernie/... ./apps/api-gateway/internal/adapterclient/...'
+    exit_code: 0
+    passed: true
+    pass_rate: 100
+    notes: |
+      Round 2 re-execution (defensive — no code changes Round 1 → Round 2,
+      only Tasks/Subtasks checkbox sweep + Change Log append):
+        apps/adapters/ernie/internal           → PASS (4.729s)
+        apps/adapters/ernie/internal/upstream  → PASS (5.891s)
+        apps/adapters/ernie/internal/usage     → PASS (2.979s)
+        apps/adapters/ernie/tests              → PASS (3.684s)
+        apps/api-gateway/internal/adapterclient → PASS (5.175s)
+      chaos suite (`-tags chaos`) → PASS (2.858s) — 7 CHAOS scenarios (CHAOS-001..007).
+      go vet clean; gofmt -l empty diff.
+    integrity_check:
+      dev_evidence_found: true
+      dev_claimed_pass: true
+      discrepancy: false
+
+  task_checkbox_verification:
+    total_checkboxes: 58
+    checked_count: 54
+    unchecked_count: 4
+    completion_rate: 93
+    consistency_rate: 100  # 4 unchecked are option-(b)-dropped SKIPPED rows per Round-1 remediation rule
+    notes: |
+      H-1 RESOLVED. Round 2 audit:
+        $ grep -cE '^- \[ \]|^  - \[ \]' docs/stories/4.6-wenxin-baidu-ernie-adapter.md → 4
+        $ grep -cE '^- \[x\]|^  - \[x\]' docs/stories/4.6-wenxin-baidu-ernie-adapter.md → 54
+      The 4 unchecked entries (T1.6, T1.7, T3.3, T3.4) are the option-(b)-dropped
+      tasks all annotated inline `**(SKIPPED — OQ-4.6-1 option (b) REJECTED per
+      Architect Round 1; N/A under option (a))**` — matches the Round 1 gate's
+      "≤ 4 (option-b tasks if left visible)" verification rule. Spot check of
+      File List deliverables: all 27 delivered files exist on-disk (cmd/server,
+      internal/{adapter,upstream/*,usage/*}.go + tests/{adapter_test,chaos_test}.go
+      + adapter_test.go siblings + Helm chart all templates + ArgoCD app +
+      seed-ernie-key.sh + ernie-upstream.md + 4.6-dev-log.md). Consistency 100%.
+
+  ac_coverage:
+    coverage_rate: 100
+    passed: true
+    blocking_issues_count: 0
+    acs_fully_verified: 3
+    acs_not_verified: 0
+    ac_traceability_found: true
+    ac_discrepancies_count: 0
+    notes: |
+      Incremental skip per Round 1 verdict (AC1/AC2/AC3 all VERIFIED with
+      every code+test location in the AC Traceability Matrix resolving to
+      a real file:line range; no code changes Round 1 → Round 2).
+
+  regression:
+    executed: true
+    passed: true
+    tests_total: 20
+    tests_failed: 0
+    scope: epic
+    notes: |
+      Round 2 sibling adapter regression (Step 4.7):
+      `go test -race -count=1 ./apps/adapters/{deepseek,qwen,kimi,glm,doubao}/...`
+      → ALL 20 packages PASS. Stories 4.1-4.5 unaffected by Story 4.6.
+      Six-vendor co-registration test at registry_test.go (TestRegistry_AllSixVendorsCoRegistered_NoCrossVendorShadowing)
+      verifies ALL 10 model-id entries dispatch without shadowing — Epic-4
+      DoD line 1 six-vendor matrix close-out CONFIRMED.
+
+  e2e_tests:
+    executed: false
+    skipped: true
+    skip_reason: |
+      Backend-only Go service. E2E surface for /v1/chat/completions over
+      Connect-RPC is covered by Go integration tests (4.6-INT-001..009 +
+      4.6-INT-012) executed in Step 4. OpenAI Python SDK contract tests
+      at apps/api-gateway/tests/openai_sdk_ernie_contract_test.py remain
+      SKELETON-only per Stories-4.1..4.5 posture; live deferred until a
+      running-gateway CI lane is provisioned. Live tests gated by
+      HE_API_ERNIE_LIVE=1 also deferred per Architect Recommendation.
+
+  blind_spot_verification:
+    executed: true
+    total_scenarios: 14
+    covered_explicit: 6
+    covered_via_reuse: 3
+    partial_or_gaps: 5
+    coverage_rate: 64
+    notes: |
+      Carried over from Round 1 — same coverage as Story 4.4 PASS precedent
+      (54% coverage_rate, 6 MEDIUM gaps accepted as non-blocking). All 5
+      Story-4.6 MEDIUM gaps are observation-overlay items rather than
+      correctness defects; code handling exists for each.
+
+evidence:
+  story_path: 'docs/stories/4.6-wenxin-baidu-ernie-adapter.md'
+  test_commands:
+    - 'go test -race -count=1 ./apps/adapters/ernie/... ./apps/api-gateway/internal/adapterclient/...'
+    - 'go test -race -count=1 -tags=chaos ./apps/adapters/ernie/tests/...'
+    - 'go vet ./apps/adapters/ernie/... ./apps/api-gateway/internal/adapterclient/...'
+    - 'gofmt -l apps/adapters/ernie/'
+    - 'go test -race -count=1 ./apps/adapters/{deepseek,qwen,kimi,glm,doubao}/...'
+    - "go test -race -count=1 -v -run 'TestRegistry_AllSixVendorsCoRegistered_NoCrossVendorShadowing' ./apps/api-gateway/internal/adapterclient/..."
+  test_logs: '(stdout captured during Round 2 review; all suites exited 0; chaos suite confirmed all 7 CHAOS scenarios PASS)'
+  files_collected: 0
+  issues_with_evidence: []  # H-1 closed Round 2; remaining MEDIUM gaps are non-blocking carryovers
+
+issues:
+  critical: []
+  high: []      # H-1 RESOLVED
+  medium:
+    - id: BLIND-ERROR-003
+      severity: MEDIUM
+      finding: '4.6-BLIND-ERROR-003 — adapter panic recovery: no dedicated test verifying panic stacks do NOT leak via error.message. Code handling exists via Connect-RPC default panic-recovery middleware; same gap accepted at Story-4.4 PASS precedent.'
+      remediation: 'Defer to Story 4.7 follow-up or skip per Story-4.4 cascade.'
+      blocking: false
+    - id: BLIND-CONCURRENCY-002
+      severity: MEDIUM
+      finding: '4.6-BLIND-CONCURRENCY-002 — sustained-load goroutine leak guard: no NumGoroutine before/after assertion. Same gap accepted at Story-4.4 PASS precedent (infrastructure-heavy soak tests typically deferred to ops smoke tests).'
+      remediation: 'Defer to ops smoke-test cohort.'
+      blocking: false
+    - id: BLIND-DATA-001
+      severity: MEDIUM
+      finding: '4.6-BLIND-DATA-001 — three-way request-id equality (gateway header == adapter slog == upstream-receive) not strictly asserted. TestINT_005_RequestId_Propagation_Ernie40 verifies propagation but does not assert all-three-strings-equal.'
+      remediation: 'Tighten INT-005 assertion in a follow-up Story or accept observation-overlay coverage.'
+      blocking: false
+    - id: BLIND-DATA-002
+      severity: MEDIUM
+      finding: '4.6-BLIND-DATA-002 — 1000-tuple property test for ValidateInvariants not present in ernie/internal/usage/normaliser_test.go. Coverage is at deterministic-rule level (4 sub-cases 006a/006b/006c/006-zero-completion-permitted). The shared packages/adapter-usage owns the property-test obligation per Story-4.2 M1 lift.'
+      remediation: 'Add the property test to packages/adapter-usage (single source) or accept rule-level coverage per Story-4.4 PASS precedent.'
+      blocking: false
+    - id: BLIND-RESOURCE-001
+      severity: MEDIUM
+      finding: '4.6-BLIND-RESOURCE-001 — connection-release exit-path matrix not explicitly tested. Code uses `defer httpResp.Body.Close()` at adapter.go:148 (non-streaming) and adapter.go:226 (streaming) on every exit path. Pool baseline assertion before/after not made. Same gap accepted at Story-4.4 PASS precedent.'
+      remediation: 'Add pool-baseline assertions or accept defer-Close coverage per Story-4.4 cascade.'
+      blocking: false
+
+  low:
+    - id: L-1
+      severity: LOW
+      finding: |
+        Pre-existing flake observed at Round 1 (carried over) in
+        `apps/api-gateway/cmd/server::TestColdStart` (5s `/health`
+        cold-start budget). Reproduces under heavy parallel `-race` load
+        (full ./apps/api-gateway/... run); passes in isolation (twice
+        confirmed). Story 4.6 did NOT touch cmd/server — same posture
+        as Story-4.5 L-1 (carried-over flake).
+      remediation: 'Out of scope for Story 4.6. Track as pre-existing infrastructure flake; investigate alongside Story-4.5 L-1 in a dedicated infra-cleanup Story.'
+      blocking: false
+
+recommendations:
+  must_fix: []  # PASS gate; H-1 closed
+  should_improve:
+    - 'BLIND-ERROR-003: defer panic-recovery test to Story 4.7 or accept Connect-RPC default coverage.'
+    - 'BLIND-CONCURRENCY-002: defer sustained-load goroutine leak test to ops smoke-test cohort.'
+    - 'BLIND-DATA-001: tighten INT-005 three-way request-id equality assertion in a follow-up.'
+    - 'BLIND-DATA-002: 1000-tuple property test → packages/adapter-usage single-source or accept rule-level coverage.'
+    - 'BLIND-RESOURCE-001: defer pool-baseline assertions or accept defer-Close coverage per Story-4.4 cascade.'
+    - 'L-1 (carried over): Investigate TestColdStart first-iteration flake on heavy-parallel runs (pre-existing infra; out of scope for Story 4.6).'
+
+quality_score: 100
+quality_score_breakdown:
+  base_score: 100
+  deductions: []  # Round 1 -10 (H-1) restored after Round 2 fix
+  notes: |
+    Round 2 PASS at 100/100. Round 1 deduction of -10 (H-1 unchecked
+    Tasks/Subtasks) restored after Dev's mechanical sweep — 54 delivered
+    subtasks → [x], 4 option-(b)-dropped subtasks left as [ ] with inline
+    SKIPPED annotation per Round-1 gate remediation rule. Substantive
+    correctness remains exemplary: every test green under -race + chaos,
+    all bindings verified, AC Traceability Matrix faithfully populated,
+    six-vendor cross-vendor regression closes the Epic-4 DoD line 1 final
+    precondition. Identical Round-1-CONCERNS → Round-2-PASS shape as
+    Story 4.5 (precedent established).
+
+post_review_workflow:
+  workflow_action: finalize_commit
+  requires_git_commit: true
+  handoff_target: sm
+  next_command: '*draft 4.7'
+  reasoning: |
+    gate=PASS + status_after=Done → execute finalize-story-commit.md to
+    create the bundled feature commit; handoff to SM for next story
+    draft. Story 4.6 closes the Epic-4 DoD line 1 six-vendor cross-vendor
+    regression matrix (10 model-id entries dispatch without shadowing).
+    next_story_id=4.7 confirmed via docs/prd/epic-4-model-adapters.yaml
+    (stories 4.7 and 4.8 still defined in the epic).

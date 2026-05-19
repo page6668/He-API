@@ -3,6 +3,7 @@ go 1.25.0
 use (
 	./apps/adapters/deepseek
 	./apps/adapters/doubao
+	./apps/adapters/ernie
 	./apps/adapters/glm
 	./apps/adapters/kimi
 	./apps/adapters/qwen

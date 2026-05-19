@@ -1,0 +1,94 @@
+# Story 4.6 — Ernie (Baidu Qianfan v2 OpenAI-compat) adapter Helm values.
+#
+# Architect Round 1 (Story 4.6) rulings encoded:
+#   OQ-4.6-1 — Qianfan v2 OpenAI-compatible endpoint
+#              (https://qianfan.baidubce.com — request path is
+#              `/v2/chat/completions`; the adapter appends the path).
+#              Plain `Authorization: Bearer` auth (Qianfan IAM key —
+#              NOT api_key+secret_key→access_token legacy scheme).
+#   OQ-4.6-2 — Env-var naming follows the adapter service BRAND
+#              (ERNIE_*) per Story-4.2 OQ-4.2-6 cascade text (brand wins
+#              over family name `wenxin` / 文心 and company name `baidu`;
+#              final Epic-4 cascade closure).
+#   OQ-4.6-3 — Identity-mapping translate.go (Qianfan v2 OpenAI drop-in;
+#              in code, no values knob).
+#   OQ-4.6-4 — stream_options.include_usage=true honoured (in code; no
+#              values knob).
+#   OQ-4.6-5 — HTTP/2-preferred + ALPN HTTP/1.1 fallback cascade-default
+#              from Story-4.2 OQ-4.2-5 (in code; no values knob).
+#   OQ-4.6-6 — Verbatim REUSE of Story-4.2 BR-4.4 + Story-4.1 BR-1.4
+#              upstream-error mapping (no Baidu-specific carve-outs).
+#
+# Inherited from Story 4.1:
+#   OQ3 — Vault path: kv/data/he-api/upstream/ernie/
+#   M4  — Namespace `he-api-adapters` shared across all six adapters.
+#   M5  — Cold-start budget ≤ 2s (readiness-probe gated).
+
+replicaCount: 2
+
+image:
+  repository: ghcr.io/he-api/adapter-ernie
+  tag: 0.1.0
+  pullPolicy: IfNotPresent
+
+namespace: he-api-adapters
+
+# BR-1.10 N=1 — single bound model id hosted by this Deployment.
+# Grafana per-model breakdown can group-by the `model` slog attribute.
+supportedModels:
+  - ernie-4.0
+
+service:
+  type: ClusterIP
+  port: 8080
+  # Connect-RPC over h2c on the in-VPC hop; mTLS hardening lands in Epic 9.
+  appProtocol: h2c
+
+upstream:
+  # ERNIE_UPSTREAM_BASE_URL — overridable per environment. The adapter
+  # appends /v2/chat/completions per OQ-4.6-1.
+  baseUrl: "https://qianfan.baidubce.com"
+  # ERNIE_UPSTREAM_TIMEOUT_SECONDS — BR-1.8 default 60s.
+  timeoutSeconds: 60
+
+externalSecret:
+  # External Secrets Operator reference. The actual Vault sync infra is
+  # provisioned in Epic 9; this manifest declares the contract.
+  enabled: true
+  secretStoreRef:
+    name: he-api-vault
+    kind: ClusterSecretStore
+  # Story-4.1 OQ3 cascade — kv/data/he-api/upstream/ernie/
+  vaultPath: "kv/data/he-api/upstream/ernie"
+  remoteKey: "api_key"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+probes:
+  liveness:
+    path: /healthz
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  readiness:
+    path: /healthz
+    # M5 — adapter cold-start budget ≤ 2s; probe takes a few periods.
+    initialDelaySeconds: 2
+    periodSeconds: 5
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  fsGroup: 65532
+
+securityContext:
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL

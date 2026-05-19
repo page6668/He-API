@@ -1,0 +1,31 @@
+apiVersion: v2
+name: adapter-ernie
+description: |
+  Story 4.6 — He-API Ernie (Baidu Qianfan v2 OpenAI-compat) model adapter
+  (Connect-RPC server-streaming AdapterService.Chat). Wires upstream
+  `https://qianfan.baidubce.com/v2/chat/completions` (Baidu's documented
+  Qianfan v2 OpenAI-compatible endpoint, ratified by Architect Round 1
+  OQ-4.6-1 option (a) over legacy aip.baidubce.com path-segment endpoint)
+  into the He-API gateway↔adapter contract `he.adapter.v1.AdapterService`
+  shared by all six Epic 4 adapter services.
+
+  BR-1.10 single-model-id-per-service (N=1 degenerate case): this single
+  deployment hosts ONLY `ernie-4.0`. The gateway registry routes the id
+  to this Service endpoint via the Story-4.2 M2 endpoint-dedup branch
+  (a clean no-op at N=1).
+
+  Closes the Epic-4 six-vendor cross-vendor regression matrix (after
+  Story-4.1 DeepSeek + 4.2 Qwen + 4.3 Kimi + 4.4 GLM + 4.5 Doubao).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - he-api
+  - adapter
+  - ernie
+  - baidu
+  - qianfan
+  - wenxin
+  - connect-rpc
+maintainers:
+  - name: He-API Platform Team
