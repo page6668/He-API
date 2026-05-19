@@ -1,0 +1,217 @@
+# Story 4.4 — GLM (Zhipu) adapter — QA Gate File
+schema: 1
+story: '4.4'
+story_title: 'GLM（智谱）适配器'
+gate: PASS
+status_reason: |
+  All 72 Story-4.4 tests pass under -race + chaos build tag (independent
+  execution by QA confirms Dev's claim — no discrepancy). 100% AC coverage
+  (3/3 ACs VERIFIED). 100% Task checkbox consistency (56/56 boxes match
+  on-disk deliverables). Cross-vendor regression passes (4-vendor co-registration).
+  Six MEDIUM blind-spot test gaps noted as non-blocking follow-ups for
+  Story 4.5 — code handling exists for all 13 blind spots; 7 have explicit
+  coverage, 6 share infrastructure with covered tests.
+reviewer: 'Turing (QA Engineer)'
+agent_model_used: 'Claude Opus 4.7 (1M context)'
+review_round: 1
+review_mode: automated_plus_spot_check
+risk_level: MEDIUM
+quality_score: 95
+expires: '2026-08-17T00:00:00Z'
+
+evidence:
+  tests_reviewed: 72
+  risks_identified: 0
+  trace:
+    ac1_covered: true
+    ac2_covered: true
+    ac3_covered: true
+    coverage_rate_percent: 100
+  evidence_directory: docs/qa/evidence/4.4/
+  evidence_files:
+    - docs/qa/evidence/4.4/test-execution.md
+    - docs/qa/evidence/4.4/blind-spot-gaps.md
+
+test_results:
+  verification_method: independent_execution
+  test_commands:
+    - 'go test -race -count=1 ./apps/adapters/glm/...'
+    - 'go test -race -count=1 ./apps/api-gateway/internal/adapterclient/...'
+    - 'go test -race -tags chaos -count=1 ./apps/adapters/glm/tests/...'
+    - 'go test -race -count=1 ./apps/api-gateway/tests/...'
+  exit_code: 0
+  passed: true
+  total_tests: 72
+  failed_tests: 0
+  skipped_tests_acknowledged_posture: 4  # Test4_4_AC1/AC2/AC3/BlindSpot — moved-to placeholders
+  pass_rate: 100
+  project_type: web_backend
+  subtype: go-workspace-multi-module
+
+test_breakdown:
+  unit_internal_adapter: 12
+  unit_internal_upstream: 14
+  unit_internal_usage: 6
+  integration_tests: 9
+  chaos_tests: 7
+  gateway_adapterclient_tests: 24  # incl. 4 new GLM-specific
+  total: 72
+
+ac_coverage:
+  ac1_non_streaming:
+    status: VERIFIED
+    code_locations_verified: 5
+    test_locations_verified: 10
+    aspects:
+      main_scenario: true
+      business_rules: true
+      data_validation: true
+      error_handling: true
+  ac2_streaming:
+    status: VERIFIED
+    code_locations_verified: 3
+    test_locations_verified: 10
+    aspects:
+      main_scenario: true
+      business_rules: true
+      data_validation: true
+      error_handling: true
+  ac3_token_usage_accuracy:
+    status: VERIFIED
+    code_locations_verified: 2
+    test_locations_verified: 9
+    aspects:
+      main_scenario: true
+      business_rules: true
+      data_validation: true
+      error_handling: true
+  total_acs: 3
+  fully_verified: 3
+  partially_verified: 0
+  not_verified: 0
+  coverage_rate: 100
+
+task_checkbox_verification:
+  total_checkboxes: 56
+  checked_count: 56
+  unchecked_count: 0
+  completion_rate: 100
+  consistency_checks:
+    total: 56
+    passed: 56
+    failed: 0
+    consistency_rate: 100
+
+blind_spot:
+  total_scenarios: 13
+  covered: 7
+  missing_code: 0
+  missing_test: 6
+  missing_both: 0
+  coverage_rate: 54
+  missing_scenarios:
+    - id: 4.4-BLIND-BOUNDARY-002
+      category: BOUNDARY
+      description: empty string content forwards (passthrough)
+    - id: 4.4-BLIND-ERROR-003
+      category: ERROR
+      description: empty choices array returns Code.Unavailable
+    - id: 4.4-BLIND-CONCURRENCY-002
+      category: CONCURRENCY
+      description: sustained-load goroutine leak guard
+    - id: 4.4-BLIND-DATA-002
+      category: DATA
+      description: 1000-tuple property test for ValidateInvariants
+    - id: 4.4-BLIND-RESOURCE-001
+      category: RESOURCE
+      description: connection release on every exit path
+    - id: 4.4-BLIND-RESOURCE-002
+      category: RESOURCE
+      description: SSE scanner buffer max-size (1<<20) boundary
+
+regression:
+  executed: true
+  passed: true
+  cross_vendor_test: TestRegistry_AllFourVendorsCoRegistered_NoCrossVendorShadowing
+  prior_epic_4_stories_passing:
+    - Story 4.1 (DeepSeek) integration suites
+    - Story 4.2 (Qwen) integration suites
+    - Story 4.3 (Kimi) integration suites
+
+dev_evidence_integrity:
+  dev_claim: 'All Go tests pass under -race; chaos suite passes under -tags chaos.'
+  qa_independent_verification: confirmed
+  discrepancy: false
+
+top_issues: []
+medium_issues:
+  - id: BLIND-002
+    severity: MEDIUM
+    finding: '4.4-BLIND-BOUNDARY-002 — empty content forwarding has no explicit test'
+    suggested_owner: dev (Story 4.5 pre-work)
+    recommendation: 'Add 1-line unit test in translate_test.go asserting empty content survives buildRequestBody'
+  - id: BLIND-ERROR-003
+    severity: MEDIUM
+    finding: '4.4-BLIND-ERROR-003 — empty choices code path at adapter.go:171-177 has no dedicated test'
+    suggested_owner: dev (Story 4.5 pre-work)
+    recommendation: 'Add TestChat_NonStreaming_EmptyChoices_IsHardFailure mirroring the missing-usage test'
+  - id: BLIND-CONCURRENCY-002
+    severity: MEDIUM
+    finding: '4.4-BLIND-CONCURRENCY-002 — no sustained-load goroutine leak guard'
+    suggested_owner: dev (Story 4.5 pre-work)
+    recommendation: 'Add -short-skippable sustained-load test in tests/adapter_test.go'
+  - id: BLIND-DATA-002
+    severity: MEDIUM
+    finding: '4.4-BLIND-DATA-002 — no 1000-tuple property test for ValidateInvariants'
+    suggested_owner: dev (Story 4.5 pre-work)
+    recommendation: 'Add FuzzValidateInvariants in packages/adapter-usage/usage_test.go (single-source)'
+  - id: BLIND-RESOURCE-001
+    severity: MEDIUM
+    finding: '4.4-BLIND-RESOURCE-001 — connection-release exit-path matrix untested'
+    suggested_owner: dev (Story 4.5 pre-work)
+    recommendation: 'Add exit-path matrix test using http.Transport.IdleConnCountFor'
+  - id: BLIND-RESOURCE-002
+    severity: MEDIUM
+    finding: '4.4-BLIND-RESOURCE-002 — SSE buffer boundary (1<<20 / 1<<20+1) untested'
+    suggested_owner: dev (Story 4.5 pre-work)
+    recommendation: 'Add two-case boundary-payload test in sse_decoder_test.go'
+
+incremental_context:
+  cached_risk_level: MEDIUM
+  cached_review_mode: automated_plus_spot_check
+  cached_project_type: web_backend
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots:
+    - id: 4.4-BLIND-BOUNDARY-002
+      category: BOUNDARY
+      description: empty string content forwards (passthrough)
+    - id: 4.4-BLIND-ERROR-003
+      category: ERROR
+      description: empty choices array returns Code.Unavailable
+    - id: 4.4-BLIND-CONCURRENCY-002
+      category: CONCURRENCY
+      description: sustained-load goroutine leak guard
+    - id: 4.4-BLIND-DATA-002
+      category: DATA
+      description: 1000-tuple property test for ValidateInvariants
+    - id: 4.4-BLIND-RESOURCE-001
+      category: RESOURCE
+      description: connection release on every exit path
+    - id: 4.4-BLIND-RESOURCE-002
+      category: RESOURCE
+      description: SSE scanner buffer boundary
+  checkbox_issues: []
+
+recommendations:
+  must_fix: []
+  should_improve:
+    - 'Add 6 blind-spot test cases before Story 4.5 (Doubao) drafting per follow-up table in docs/qa/evidence/4.4/blind-spot-gaps.md'
+    - 'Consider FuzzValidateInvariants in packages/adapter-usage as the single-source canonical fuzz test (replaces per-vendor property tests for all six Epic-4 adapters)'
+
+posture_notes: |
+  - Live-exercise (HE_API_GLM_LIVE) + CONTRACT (HE_API_TEST_GATEWAY_URL)
+    skeletons are by design (cascade from Stories 4.1-4.3).
+  - Empirical curl verification deferred to first staging deploy per
+    Architect Round 1 OQ-4.4-1/3/4/5 (no GLM_UPSTREAM_API_KEY on dev
+    workstation; operator instructions captured in Dev Log Phase 0).

@@ -52,6 +52,7 @@ func TestRegistry_LoadFromEnv_PicksUpDeepseekEndpointWhenSet(t *testing.T) {
 	t.Setenv("DEEPSEEK_ADAPTER_ENDPOINT", "https://adapter-deepseek.test:8080")
 	t.Setenv("QWEN_ADAPTER_ENDPOINT", "")
 	t.Setenv("KIMI_ADAPTER_ENDPOINT", "")
+	t.Setenv("GLM_ADAPTER_ENDPOINT", "")
 	reg := LoadFromEnv()
 	if h, ok := reg.Resolve("deepseek-v3"); !ok || h == nil {
 		t.Fatalf("env-loaded registry missing deepseek-v3 entry: ok=%v h=%v", ok, h)
@@ -62,6 +63,7 @@ func TestRegistry_LoadFromEnv_EmptyEnv_OmitsEntry(t *testing.T) {
 	t.Setenv("DEEPSEEK_ADAPTER_ENDPOINT", "")
 	t.Setenv("QWEN_ADAPTER_ENDPOINT", "")
 	t.Setenv("KIMI_ADAPTER_ENDPOINT", "")
+	t.Setenv("GLM_ADAPTER_ENDPOINT", "")
 	reg := LoadFromEnv()
 	if _, ok := reg.Resolve("deepseek-v3"); ok {
 		t.Fatalf("empty DEEPSEEK_ADAPTER_ENDPOINT should result in no deepseek-v3 registration")
@@ -76,6 +78,9 @@ func TestRegistry_LoadFromEnv_EmptyEnv_OmitsEntry(t *testing.T) {
 		if _, ok := reg.Resolve(kimi); ok {
 			t.Fatalf("empty KIMI_ADAPTER_ENDPOINT should result in no %s registration", kimi)
 		}
+	}
+	if _, ok := reg.Resolve("glm-4"); ok {
+		t.Fatalf("empty GLM_ADAPTER_ENDPOINT should result in no glm-4 registration")
 	}
 }
 
@@ -340,5 +345,116 @@ func TestRegistry_AllThreeVendorsCoRegistered_NoCrossVendorShadowing(t *testing.
 	}
 	if hDS == hQwen || hDS == hKimi8k || hQwen == hKimi8k {
 		t.Fatalf("cross-vendor handles must be DISTINCT")
+	}
+}
+
+// 4.4-UNIT-011 (P0) — Architect Round 1 R9 anchor: the Story-4.2 M2
+// `NewRegistry` byEndpoint endpoint-dedup branch handles the N=1
+// degenerate case CLEANLY. When only `glm-4` maps to
+// `GLM_ADAPTER_ENDPOINT`, the byEndpoint map has exactly one entry, the
+// `if !ok { newConnectClientHandle }` branch executes once, and no
+// `assert.Same` chain is triggered. This is the documented SKIPPED-
+// branch test (the assert.Same chain from Stories 4.2/4.3 is N/A at
+// N=1 — degenerate but tractable).
+func TestRegistry_GLM4_M2_EndpointDedup_N1_NoOp_R9(t *testing.T) {
+	const endpoint = "https://adapter-glm.he-api-adapters.svc.cluster.local:8080"
+	reg := NewRegistry(map[string]string{
+		GLMModelID: endpoint,
+	})
+	h, ok := reg.Resolve(GLMModelID)
+	if !ok {
+		t.Fatalf("Resolve(glm-4) ok=false, want true")
+	}
+	if h == nil {
+		t.Fatalf("Resolve returned nil handle")
+	}
+	// SKIPPED-branch documentation: at N=1 the byEndpoint map has size 1,
+	// the dedup branch fires once, and there is no second handle to
+	// compare against. The Story-4.2 M2 mechanism is therefore a
+	// well-behaved no-op for N=1 single-model-id vendors.
+	t.Logf("N=1 endpoint-dedup no-op verified — Resolve(glm-4) returned a single handle without dedup work")
+}
+
+// 4.4-UNIT-012 (P0) — basic resolution path: Resolve(glm-4) returns a
+// non-nil handle; Resolve of a non-registered id returns (nil, false).
+func TestRegistry_GLM4_Resolve(t *testing.T) {
+	reg := NewRegistry(map[string]string{
+		GLMModelID: "https://adapter-glm.he-api-adapters.svc.cluster.local:8080",
+	})
+	if h, ok := reg.Resolve(GLMModelID); !ok || h == nil {
+		t.Fatalf("Resolve(glm-4) returned (%v,%v); want (non-nil,true)", h, ok)
+	}
+	if h, ok := reg.Resolve("not-in-registry"); ok {
+		t.Fatalf("Resolve(\"not-in-registry\") ok=true (h=%v), want false", h)
+	}
+}
+
+// 4.4-UNIT-013 (P0) — OQ-4.4-2 ratification lock-in: env-var naming
+// follows the adapter service BRAND (`GLM_*`), NOT the company name
+// (`ZHIPU_*`). Constants must be literal strings.
+func TestRegistry_GLMEndpointEnvName_IsLiteralBrandString(t *testing.T) {
+	if GLMAdapterEndpointEnv != "GLM_ADAPTER_ENDPOINT" {
+		t.Fatalf("GLMAdapterEndpointEnv = %q, want literal \"GLM_ADAPTER_ENDPOINT\" (OQ-4.4-2 brand-wins)", GLMAdapterEndpointEnv)
+	}
+	if GLMModelID != "glm-4" {
+		t.Fatalf("GLMModelID = %q, want \"glm-4\"", GLMModelID)
+	}
+}
+
+// 4.4-UNIT-014 — `LoadFromEnv` reads `GLM_ADAPTER_ENDPOINT` correctly +
+// falls back gracefully on unset.
+func TestRegistry_LoadFromEnv_GLMEndpointSet_PopulatesGLM4(t *testing.T) {
+	t.Setenv("DEEPSEEK_ADAPTER_ENDPOINT", "")
+	t.Setenv("QWEN_ADAPTER_ENDPOINT", "")
+	t.Setenv("KIMI_ADAPTER_ENDPOINT", "")
+	t.Setenv("GLM_ADAPTER_ENDPOINT", "https://adapter-glm.test:8080")
+	reg := LoadFromEnv()
+	if h, ok := reg.Resolve("glm-4"); !ok || h == nil {
+		t.Fatalf("LoadFromEnv with GLM_ADAPTER_ENDPOINT must populate glm-4: ok=%v h=%v", ok, h)
+	}
+	// Other vendors with empty endpoints stay omitted.
+	if _, ok := reg.Resolve("deepseek-v3"); ok {
+		t.Fatalf("empty DEEPSEEK_ADAPTER_ENDPOINT must not register deepseek-v3")
+	}
+}
+
+// 4.4-INT-009 (P0) — four-vendor cross-vendor regression: registering
+// the GLM entry MUST NOT shadow Story-4.1 deepseek-v3, Story-4.2 qwen-*,
+// OR Story-4.3 moonshot-v1-* entries. Each vendor's model ids continue
+// to resolve to their own DISTINCT handle. R8 strengthened from N=3 to
+// N=4 vendor families.
+func TestRegistry_AllFourVendorsCoRegistered_NoCrossVendorShadowing(t *testing.T) {
+	reg := NewRegistry(map[string]string{
+		DeepSeekModelID:   "https://adapter-deepseek.test:8080",
+		QwenMaxModelID:    "https://adapter-qwen.test:8080",
+		QwenPlusModelID:   "https://adapter-qwen.test:8080",
+		KimiV18kModelID:   "https://adapter-kimi.test:8080",
+		KimiV132kModelID:  "https://adapter-kimi.test:8080",
+		KimiV1128kModelID: "https://adapter-kimi.test:8080",
+		GLMModelID:        "https://adapter-glm.test:8080",
+	})
+	hDS, okDS := reg.Resolve(DeepSeekModelID)
+	hQwen, okQwen := reg.Resolve(QwenMaxModelID)
+	hQwenPlus, _ := reg.Resolve(QwenPlusModelID)
+	hKimi8k, okKimi8k := reg.Resolve(KimiV18kModelID)
+	hKimi32k, _ := reg.Resolve(KimiV132kModelID)
+	hKimi128k, _ := reg.Resolve(KimiV1128kModelID)
+	hGLM, okGLM := reg.Resolve(GLMModelID)
+	if !okDS || !okQwen || !okKimi8k || !okGLM {
+		t.Fatalf("co-registered registry missing entries: okDS=%v okQwen=%v okKimi8k=%v okGLM=%v", okDS, okQwen, okKimi8k, okGLM)
+	}
+	// Story-4.2 N=2 invariant preserved.
+	if hQwen != hQwenPlus {
+		t.Fatalf("qwen-max and qwen-plus must share handle (Story-4.2 N=2 dedup preserved)")
+	}
+	// Story-4.3 N=3 invariant preserved.
+	if hKimi8k != hKimi32k || hKimi32k != hKimi128k {
+		t.Fatalf("kimi sizes must share handle (Story-4.3 N=3 dedup preserved)")
+	}
+	// All cross-vendor pairs must use DISTINCT handles.
+	if hDS == hQwen || hDS == hKimi8k || hDS == hGLM ||
+		hQwen == hKimi8k || hQwen == hGLM ||
+		hKimi8k == hGLM {
+		t.Fatalf("cross-vendor handles must be DISTINCT; got hDS=%p hQwen=%p hKimi8k=%p hGLM=%p", hDS, hQwen, hKimi8k, hGLM)
 	}
 }

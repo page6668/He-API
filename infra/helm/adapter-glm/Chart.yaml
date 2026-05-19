@@ -1,0 +1,25 @@
+apiVersion: v2
+name: adapter-glm
+description: |
+  Story 4.4 — He-API GLM (Zhipu AI) model adapter (Connect-RPC server-
+  streaming AdapterService.Chat). Wires upstream
+  `https://open.bigmodel.cn/api/paas/v4/chat/completions`
+  (Zhipu's documented OpenAI-compatible v4 endpoint, ratified by
+  Architect Round 1 OQ-4.4-1) into the He-API gateway↔adapter contract
+  `he.adapter.v1.AdapterService` shared by all six Epic 4 adapter services.
+
+  BR-1.10 single-model-id-per-service (N=1 degenerate case): this single
+  deployment hosts ONLY `glm-4`. The gateway registry routes the id to
+  this Service endpoint via the Story-4.2 M2 endpoint-dedup branch (a
+  clean no-op at N=1).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - he-api
+  - adapter
+  - glm
+  - zhipu
+  - connect-rpc
+maintainers:
+  - name: He-API Platform Team

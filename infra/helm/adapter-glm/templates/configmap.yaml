@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: adapter-glm-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: adapter-glm
+    app.kubernetes.io/part-of: he-api
+data:
+  # Non-secret runtime config.
+  GLM_UPSTREAM_BASE_URL: "{{ .Values.upstream.baseUrl }}"
+  GLM_UPSTREAM_TIMEOUT_SECONDS: "{{ .Values.upstream.timeoutSeconds }}"
+  # BR-1.10 N=1 documentation — the model ids this single deployment
+  # hosts. Grafana per-model breakdown groups by the `model` slog
+  # attribute on each request log; the supportedModels list is the
+  # schema-side anchor for those dashboards (degenerate single-value
+  # group for GLM until future sizes land).
+  SUPPORTED_MODELS: "{{ join "," .Values.supportedModels }}"

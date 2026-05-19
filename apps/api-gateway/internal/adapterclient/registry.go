@@ -69,6 +69,23 @@ const (
 	KimiAdapterEndpointEnv = "KIMI_ADAPTER_ENDPOINT"
 )
 
+// Story 4.4 — GLM (Zhipu AI) adapter constants.
+//
+// BR-1.10 multi-model-id-per-service dispatch DEGENERATE N=1 case:
+// `glm-4` is the SOLE model id hosted by adapter-glm — collapses from
+// Story-4.3's N=3 back to Story-4.1's N=1. The Story-4.2 M2 endpoint-
+// dedup branch in NewRegistry handles N=1 cleanly (byEndpoint map has
+// one entry, no dedup occurs).
+//
+// Architect Round 1 OQ-4.4-2 ruling: env-var naming follows the adapter
+// service brand (GLM_*) per Story-4.2 OQ-4.2-6 cascade text (brand wins
+// over company name `zhipu`; cascades to Stories 4.5-4.6 DOUBAO_* +
+// ERNIE_*).
+const (
+	GLMModelID            = "glm-4"
+	GLMAdapterEndpointEnv = "GLM_ADAPTER_ENDPOINT"
+)
+
 // ClientHandle is the abstraction Stories 4.2-4.6 + the Story 4.1
 // chat-completions handler invoke. The concrete type is a Connect-RPC
 // AdapterServiceClient wrapped to surface Chat as a request/stream pair
@@ -151,6 +168,7 @@ func NewRegistryFromHandles(handles map[string]ClientHandle) *Registry {
 //	DEEPSEEK_ADAPTER_ENDPOINT  (Story 4.1) → deepseek-v3
 //	QWEN_ADAPTER_ENDPOINT      (Story 4.2) → qwen-max AND qwen-plus
 //	KIMI_ADAPTER_ENDPOINT      (Story 4.3) → moonshot-v1-8k + 32k + 128k
+//	GLM_ADAPTER_ENDPOINT       (Story 4.4) → glm-4 (N=1 degenerate)
 //
 // Empty values omit the entry, which causes the gateway to fall through
 // to the Story-3.3 mock path for that model id.
@@ -164,6 +182,7 @@ func LoadFromEnv() *Registry {
 		KimiV18kModelID:   kimiEndpoint,
 		KimiV132kModelID:  kimiEndpoint,
 		KimiV1128kModelID: kimiEndpoint,
+		GLMModelID:        os.Getenv(GLMAdapterEndpointEnv),
 	})
 }
 

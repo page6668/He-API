@@ -178,4 +178,22 @@ he-api/                                  (Monorepo, Turborepo)
 >
 > 条目添加来源：Story 4.3 Architect Round 1（OQ-4.3-1..6 + m-1 + m-2，cascades from Story-4.2），2026-05-19。
 
+> **注**: Story 4.4 — GLM（智谱）适配器（Epic 4 第四个真实模型适配器；SINGLE-model-id-per-vendor N=1 degenerate case — relaxes back to Story-4.1 pattern while the Story-4.2 M2 endpoint-dedup branch is a clean no-op at N=1）新增条目：
+>
+> - `apps/adapters/glm/` — Connect-RPC adapter service hosting ONLY `glm-4` per BR-1.10 N=1 degenerate case (Story-4.2 OQ-4.2-2 multi-model-id pattern collapsed back to Story-4.1 single-id pattern; future GLM sizes would extend `boundModelIDs` without code changes). Sibling of `apps/adapters/deepseek/`, `apps/adapters/qwen/`, and `apps/adapters/kimi/`. The directory was pre-allocated since the pre-Epic-4 source-tree pass.
+>   - `cmd/server/main.go` — Connect-RPC bootstrap; `defaultBoundModelIDs = []string{"glm-4"}` per BR-1.10.
+>   - `internal/adapter.go` — `AdapterServiceHandler` (copy from kimi template; identical except status-only classification on the HTTP-error path — Story-4.3 m-1 body-aware classifier is NOT cascaded per Architect Round 1 OQ-4.4-6 verbatim REUSE).
+>   - `internal/upstream/{client,translate,sse_decoder,types}.go` — REUSE Story-4.3 kimi patterns byte-for-byte (per Story-4.2 L1 SSE-decoder simplification + L2 per-vendor types replica policy). URL path `/api/paas/v4/chat/completions` per OQ-4.4-1.
+>   - `internal/upstream/errors.go` — per-vendor replica (Story-4.2 L2). REUSE Story-4.2 enum set verbatim — Story-4.3 `ErrorKindContextLengthExceeded` + `ClassifyMoonshotErrorBody` are NOT cascaded per OQ-4.4-6. Additive entries permitted without Architect Round 2 should Zhipu-specific failure shapes surface (Story-4.3 m-1 precedent).
+>   - `internal/usage/normaliser.go` — identity-mapping `glmNormaliser` consuming the lifted `packages/adapter-usage` types (NormalisedUsage, ErrUsageConstraintViolation, ValidateInvariants) per Story-4.2 M1 cascade.
+>   - `Dockerfile` — multi-stage build copy from `apps/adapters/kimi/Dockerfile`.
+>   - `tests/{adapter_test.go,chaos_test.go}` — N=1 integration suite + Toxiproxy-style chaos suite (build-tag `chaos`); seven CHAOS scenarios (5xx burst / slow loris / mid-stream RST / full timeout / TLS / DNS / Zhipu 429 rate-limit). NO CHAOS-008 — Story-4.3 body-aware context-length test is NOT cascaded per OQ-4.4-6.
+> - `infra/helm/adapter-glm/` — Helm chart copy-paste from `infra/helm/adapter-kimi/` with GLM swaps (image name, env var names including `GLM_UPSTREAM_API_KEY` per Architect Round 1 OQ-4.4-2 BRAND-name naming cascade, `supportedModels: [glm-4]` Helm value per BR-1.10 N=1). Namespace `he-api-adapters` (M4 inheritance). Cold-start budget ≤ 2s (M5 inheritance).
+> - `infra/argocd/applications/adapter-glm.yaml` — ArgoCD Application manifest.
+> - `scripts/dev/seed-glm-key.sh` — dev-mode bootstrap script (gated behind `.env.local` presence — CI never touches it).
+> - `docs/dev/secrets/glm-upstream.md` — Vault credential runbook (Story-4.1 OQ3 cascade ratified path `kv/data/he-api/upstream/glm/`, manual rotation — Zhipu does not support API-key auto-rotation). 沿用 Story-1.6 m-4 6-section template.
+> - `apps/api-gateway/internal/adapterclient/registry.go` (MODIFIED): NEW constants `GLMModelID = "glm-4"`, `GLMAdapterEndpointEnv = "GLM_ADAPTER_ENDPOINT"` per Architect Round 1 OQ-4.4-2 (BRAND-name naming per Story-4.2 OQ-4.2-6 cascade). `LoadFromEnv()` EXTENDED to read `GLM_ADAPTER_ENDPOINT` and populate the SINGLE `glm-4` entry. The Story-4.2 M2 `NewRegistry` endpoint-dedup branch is UNCHANGED — at N=1 the byEndpoint map has one entry and the dedup branch is a clean NO-OP (4.4-UNIT-011 SKIPPED-branch documentation test per Architect Round 1 R9 ratification).
+>
+> 条目添加来源：Story 4.4 Architect Round 1（OQ-4.4-1..6 + cascade-locked confirmations，cascades from Stories 4.2/4.3），2026-05-19。
+
 ---
