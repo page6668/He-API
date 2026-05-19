@@ -1,0 +1,25 @@
+apiVersion: v2
+name: adapter-qwen
+description: |
+  Story 4.2 — He-API Qwen (通义千问) model adapter (Connect-RPC server-
+  streaming AdapterService.Chat). Wires upstream
+  `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions`
+  (DashScope compat-mode endpoint, ratified by Architect Round 1 OQ-4.2-1)
+  into the He-API gateway↔adapter contract `he.adapter.v1.AdapterService`
+  shared by all six Epic 4 adapter services.
+
+  BR-1.10 multi-model-id-per-service: this single deployment hosts BOTH
+  `qwen-max` and `qwen-plus` model ids. The gateway registry routes both
+  ids to the same Service endpoint per Architect Round 1 OQ-4.2-2.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - he-api
+  - adapter
+  - qwen
+  - dashscope
+  - alibaba
+  - connect-rpc
+maintainers:
+  - name: He-API Platform Team

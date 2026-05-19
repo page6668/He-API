@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: adapter-qwen-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: adapter-qwen
+    app.kubernetes.io/part-of: he-api
+data:
+  # Non-secret runtime config.
+  QWEN_UPSTREAM_BASE_URL: "{{ .Values.upstream.baseUrl }}"
+  QWEN_UPSTREAM_TIMEOUT_SECONDS: "{{ .Values.upstream.timeoutSeconds }}"
+  # BR-1.10 documentation — the model ids this single deployment hosts.
+  # Grafana per-model breakdown groups by the `model` slog attribute on
+  # each request log; the supportedModels list is the schema-side anchor
+  # for those dashboards.
+  SUPPORTED_MODELS: "{{ join "," .Values.supportedModels }}"

@@ -1,9 +1,0 @@
-project_type:
-  type: web_backend
-  subtype: connect_rpc_go
-test_strategy:
-  primary_tool: bash
-  requires_environment: false
-  startup_command: ""
-  expected_port: 0
-note: "Cached from Round 1 gate file project_type=web_backend; Go services tested via `go test`; no HTTP server needed for QA verification (handler tests use httptest)."

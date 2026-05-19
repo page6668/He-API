@@ -9,9 +9,12 @@
 //	Stories 4.2-4.6 only register entries in the same Registry — they do
 //	not invent a parallel resolution mechanism.
 //
-// Story 4.1 only registers `deepseek-v3` → DEEPSEEK_ADAPTER_ENDPOINT (env
-// var). All other models fall through to the Story-3.3 / 3.4 / 3.5 mock
-// path, which retires progressively as Stories 4.2-4.6 land.
+// Story 4.1 registers `deepseek-v3` → DEEPSEEK_ADAPTER_ENDPOINT.
+// Story 4.2 registers `qwen-max` AND `qwen-plus` → QWEN_ADAPTER_ENDPOINT
+// (BOTH model ids share ONE underlying ClientHandle per BR-1.10 +
+// Architect Round 1 M2 endpoint-dedup ruling). The dedup refactor in
+// NewRegistry preserves Story-4.1 single-endpoint behaviour bit-for-bit
+// (one modelID → one handle).
 package adapterclient
 
 import (
@@ -25,15 +28,27 @@ import (
 )
 
 // DeepSeekEndpointEnv is the env-var the startup-loader reads for the
-// DeepSeek adapter's gRPC endpoint. Stories 4.2-4.6 will add sibling env
-// vars (QWEN_ADAPTER_ENDPOINT, KIMI_ADAPTER_ENDPOINT, ...) following the
-// same pattern.
+// DeepSeek adapter's gRPC endpoint. Stories 4.2-4.6 add sibling env vars
+// (QWEN_ADAPTER_ENDPOINT below; KIMI_, GLM_, DOUBAO_, ERNIE_ in later
+// Epic 4 Stories) following the same pattern.
 const DeepSeekEndpointEnv = "DEEPSEEK_ADAPTER_ENDPOINT"
 
-// DeepSeekModelID is the canonical model identifier the gateway accepts for
-// the DeepSeek adapter. The same string lives in the upstream-vendor's
-// model-name space + the seed row for he_api.models (Story 4.7).
+// DeepSeekModelID is the canonical model identifier the gateway accepts
+// for the DeepSeek adapter.
 const DeepSeekModelID = "deepseek-v3"
+
+// Story 4.2 — Qwen (Alibaba DashScope) adapter constants.
+//
+// BR-1.10 multi-model-id-per-service dispatch: BOTH QwenMaxModelID and
+// QwenPlusModelID map to the SAME QWEN_ADAPTER_ENDPOINT and therefore
+// share ONE ClientHandle instance (M2 endpoint-dedup, see NewRegistry).
+// The adapter receives `req.Model` verbatim and forwards it to
+// upstream's `model` body field.
+const (
+	QwenMaxModelID         = "qwen-max"
+	QwenPlusModelID        = "qwen-plus"
+	QwenAdapterEndpointEnv = "QWEN_ADAPTER_ENDPOINT"
+)
 
 // ClientHandle is the abstraction Stories 4.2-4.6 + the Story 4.1
 // chat-completions handler invoke. The concrete type is a Connect-RPC
@@ -49,9 +64,7 @@ type ClientHandle interface {
 // context.Context values satisfy this surface transparently.
 type contextLike = ctxAlias
 
-// Stream is the iterator surface a ClientHandle returns. Phase A only uses
-// the terminal-chunk path (one Recv + one Close); Phase B extends with the
-// streaming-Recv loop.
+// Stream is the iterator surface a ClientHandle returns.
 type Stream interface {
 	Receive() bool
 	Msg() *adapterv1.ChatChunk
@@ -69,13 +82,32 @@ type Registry struct {
 // NewRegistry constructs a Registry from a model-id → endpoint map. Empty
 // endpoint values are silently skipped (so callers can pass `os.Getenv(...)`
 // without pre-filtering).
+//
+// Architect Round 1 M2 endpoint-dedup (Story 4.2): when MULTIPLE model ids
+// point to the SAME endpoint URL (e.g., qwen-max + qwen-plus both → the
+// QWEN_ADAPTER_ENDPOINT single-service-per-vendor topology ratified by
+// OQ-4.2-2), share the underlying ClientHandle instance instead of
+// constructing one per modelID. This is mandatory for BR-1.10's "the same
+// `adapter-qwen` Connect-RPC client handle was used" assertion AND lets
+// the underlying *http.Client + HTTP/2 connection pool be reused across
+// model-id dispatches to the same vendor.
+//
+// Story-4.1 single-endpoint behaviour (one modelID per endpoint) is
+// preserved bit-for-bit — the dedup branch is a no-op for one-modelID-
+// per-endpoint cases.
 func NewRegistry(endpoints map[string]string) *Registry {
 	r := &Registry{handles: make(map[string]ClientHandle, len(endpoints))}
+	byEndpoint := make(map[string]ClientHandle, len(endpoints))
 	for modelID, endpoint := range endpoints {
 		if endpoint == "" {
 			continue
 		}
-		r.handles[modelID] = newConnectClientHandle(endpoint)
+		h, ok := byEndpoint[endpoint]
+		if !ok {
+			h = newConnectClientHandle(endpoint)
+			byEndpoint[endpoint] = h
+		}
+		r.handles[modelID] = h
 	}
 	return r
 }
@@ -95,13 +127,19 @@ func NewRegistryFromHandles(handles map[string]ClientHandle) *Registry {
 	return r
 }
 
-// LoadFromEnv is the startup-time entry point. Reads DEEPSEEK_ADAPTER_ENDPOINT
-// (Story 4.1) and (in future Stories) QWEN/KIMI/GLM/DOUBAO/ERNIE siblings.
-// Empty values omit the entry, which causes the gateway to fall through to
-// the Story-3.3 mock path for that model id.
+// LoadFromEnv is the startup-time entry point. Reads:
+//
+//	DEEPSEEK_ADAPTER_ENDPOINT  (Story 4.1) → deepseek-v3
+//	QWEN_ADAPTER_ENDPOINT      (Story 4.2) → qwen-max AND qwen-plus
+//
+// Empty values omit the entry, which causes the gateway to fall through
+// to the Story-3.3 mock path for that model id.
 func LoadFromEnv() *Registry {
+	qwenEndpoint := os.Getenv(QwenAdapterEndpointEnv)
 	return NewRegistry(map[string]string{
 		DeepSeekModelID: os.Getenv(DeepSeekEndpointEnv),
+		QwenMaxModelID:  qwenEndpoint,
+		QwenPlusModelID: qwenEndpoint,
 	})
 }
 
@@ -153,7 +191,7 @@ type connectStreamAdapter struct {
 	stream *connect.ServerStreamForClient[adapterv1.ChatChunk]
 }
 
-func (s *connectStreamAdapter) Receive() bool        { return s.stream.Receive() }
+func (s *connectStreamAdapter) Receive() bool             { return s.stream.Receive() }
 func (s *connectStreamAdapter) Msg() *adapterv1.ChatChunk { return s.stream.Msg() }
-func (s *connectStreamAdapter) Err() error           { return s.stream.Err() }
-func (s *connectStreamAdapter) Close() error         { return s.stream.Close() }
+func (s *connectStreamAdapter) Err() error                { return s.stream.Err() }
+func (s *connectStreamAdapter) Close() error              { return s.stream.Close() }

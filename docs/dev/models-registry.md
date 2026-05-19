@@ -6,8 +6,8 @@
 ## Registry Metadata
 
 **Last Updated**: 2026-05-19
-**Total Stories Tracked**: 3
-**Total Models**: 16
+**Total Stories Tracked**: 4
+**Total Models**: 17
 **Repository**: He-API
 **Mode**: monolith
 
@@ -96,3 +96,19 @@
     - `apps/api-gateway/internal/streaming.Writer.HeadersFlushed() bool` (new method, BR-2.5) — reports whether the SSE response headers have been written. Handler-level boundary check that drives the BR-2.5 pre-flush JSON envelope vs BR-2.6 post-flush SSE error frame decision.
   - **New gateway constructor option**: `handlers.WithAdapterRegistry(reg *adapterclient.Registry)` — mirrors `WithIDFactory` / `WithNow` pattern.
   - **Promotion rule (Architect Round 2 ratified)**: Stories 4.2-4.6 add ENTRIES to the same `adapterclient.Registry` and supply per-vendor `Normaliser` implementations; they DO NOT invent parallel mechanisms.
+- **4.2** — Qwen (通义千问) adapter (second real model adapter):
+  - **NEW shared Go module** `packages/adapter-usage/` (top-level — sibling to `packages/go-observability/`). Exports: `NormalisedUsage` struct (`PromptTokens` / `CompletionTokens` / `TotalTokens`), `ErrUsageConstraintViolation` sentinel, `ValidateInvariants(prompt, completion, total int) error` helper. Architect Round 1 OQ-4.2-3a partial-lift: the `Normaliser` INTERFACE itself stays vendor-local (parametric on each vendor's `RawUsage`). Story-4.1 `apps/adapters/deepseek/internal/usage/` is back-compat-retrofit: `NormalisedUsage` is now a type-alias and `ErrUsageConstraintViolation` is a re-export of the shared symbols — existing callers compile unchanged.
+  - **New adapter packages** (`apps/adapters/qwen/`):
+    - `internal.Service` — `AdapterServiceHandler` implementing `Chat` (server-streaming) with `NewService(client, logger, boundModelIDs []string) *Service` constructor accepting the BR-1.10 multi-model-id list (`["qwen-max", "qwen-plus"]` default). Non-streaming branch emits ONE terminal chunk; streaming branch emits N chunks with LAST carrying `usage` (BR-2.4 REUSE Story-4.1). New helper `Service.BoundModelIDs() []string` returns a defensive copy. Architect Round 1 m1: log records carry `upstream_request_id` (DashScope-generated) when the response header is present.
+    - `internal/upstream.Client` — HTTP/2-preferred (`net/http.Transport{ForceAttemptHTTP2: true}`) HTTPS client over `https://dashscope.aliyuncs.com` per Architect Round 1 OQ-4.2-5 (Qwen-specific divergence from Story-4.1 OQ7 forced-HTTP/2 — allows ALPN HTTP/1.1 fallback for Aliyun gateway endpoints that lack h2). `NewClient(baseURL, apiKey, timeout)` constructor; default timeout 60s (BR-1.8 REUSE).
+    - `internal/upstream.ErrorKind` enum — REUSE Story-4.1 enum + `rate_limit_throttle` (NEW per BR-4.4 + OQ-4.2-4) replacing DeepSeek's `quota_exhausted` for the upstream-429 case so oncall paging routes DashScope rate-limit incidents distinctly from other 4xx.
+    - `internal/upstream.ClassifyError(err)` / `ClassifyHTTPStatus(status)` / `UpstreamError{Kind, Status, Cause}` — per-vendor replicas of Story-4.1's classifier (Architect Round 1 L2 ratification — `internal/` packages are NOT cross-importable across `apps/adapters/<vendor>/` module boundaries; acceptable code duplication).
+    - `internal/upstream.Decoder` — strict-RFC SSE decoder REUSING Story-4.1 pattern byte-for-byte (Architect Round 1 L1 simplification — DashScope compat-mode SSE matches OpenAI shape; no Qwen-native heartbeat carve-out needed).
+    - `internal/upstream.{RawUsage, ChatRequestJSON, StreamOptionsJSON, ChatMessage, ChatChoiceJSON, ChatDeltaJSON, ChatResponseJSON, ChatChunkJSON}` — wire-shape types (compat-mode == OpenAI shape).
+    - `internal/usage.Normaliser` — vendor-local interface `Normalise(raw upstream.RawUsage) (NormalisedUsage, error)`. The Qwen implementation `qwenNormaliser` is identity-mapping (OQ-4.2-3 cascade) consuming the lifted `packages/adapter-usage.ValidateInvariants` helper. `NormalisedUsage` is type-aliased to the shared package; `ErrUsageConstraintViolation` is re-exported.
+  - **Gateway registry expansion** (`apps/api-gateway/internal/adapterclient/`):
+    - NEW constants `QwenMaxModelID = "qwen-max"`, `QwenPlusModelID = "qwen-plus"`, `QwenAdapterEndpointEnv = "QWEN_ADAPTER_ENDPOINT"` (Architect Round 1 OQ-4.2-6 ratification — model-family naming).
+    - `LoadFromEnv()` EXTENDED to read `QWEN_ADAPTER_ENDPOINT` and populate BOTH `qwen-max` AND `qwen-plus` entries.
+    - `NewRegistry` REFACTORED per Architect Round 1 M2 endpoint-dedup ruling — model ids pointing to the same endpoint URL share a single underlying `connectClientHandle` (preserves Story-4.1 single-endpoint behaviour bit-for-bit; enables HTTP/2 connection pool reuse for multi-model-id-per-service dispatches).
+    - Story-4.1 `DeepSeekModelID` / `DeepSeekEndpointEnv` constants + `Resolve(modelID) (ClientHandle, ok)` signature + `connectClientHandle` type UNCHANGED.
+  - **Promotion rule (Architect Round 1 ratified)**: Stories 4.3-4.6 add ENTRIES to the same `adapterclient.Registry`, supply per-vendor `Normaliser` implementations, and consume the lifted `packages/adapter-usage/` shape; they DO NOT invent parallel mechanisms.

@@ -1,42 +1,42 @@
 // Package usage owns the BR-3.2 Normaliser interface that converts an
 // upstream-reported RawUsage shape into the proto-canonical NormalisedUsage
-// shape the gateway threads through to the SDK response. Story 4.1 ships
+// shape the gateway threads through to the SDK response. Story 4.1 shipped
 // the DeepSeek identity-mapping implementation; Stories 4.2-4.6 supply
 // non-identity per-vendor implementations.
 //
+// Story 4.2 retrofit (Architect Round 1 OQ-4.2-3a partial-lift, M1):
+//
+//	NormalisedUsage + ErrUsageConstraintViolation + the BR-3.3 invariant
+//	check have been LIFTED to packages/adapter-usage so all six Epic 4
+//	adapters share a single canonical post-Normaliser shape. The lift is
+//	back-compat: this package re-exports the types as aliases, so all
+//	existing Story 4.1 consumers (apps/adapters/deepseek/internal/adapter.go)
+//	continue to compile and reference the same underlying type.
+//
 // BR-3.1 oracle rule: upstream IS the billing oracle. The adapter MUST NOT
 // re-tokenise the request or response to "verify" or "correct" upstream's
-// reported counts — re-tokenisation introduces our own tokeniser as a
-// source of drift. The Normaliser only enforces shape invariants (BR-3.3:
-// positive prompt_tokens; non-negative completion_tokens; total == prompt +
-// completion), never recomputes values.
+// reported counts.
 package usage
 
 import (
-	"errors"
-
 	"github.com/he-api/he-api/apps/adapters/deepseek/internal/upstream"
+	sharedusage "github.com/he-api/he-api/packages/adapter-usage"
 )
 
-// ErrUsageConstraintViolation indicates the upstream-reported RawUsage
-// violates BR-3.3 invariants (positive prompt; non-negative completion;
-// total == prompt + completion). The adapter surfaces this as Connect-RPC
-// Code.Unavailable with slog `validation_failure=usage_constraint_violation`
-// per the Story 4.1 AC1 Error Handling table.
-var ErrUsageConstraintViolation = errors.New("usage: BR-3.3 invariant violated")
+// ErrUsageConstraintViolation is re-exported from the shared package so
+// existing callers (Story 4.1 adapter.go) continue to reference the same
+// sentinel without import churn.
+var ErrUsageConstraintViolation = sharedusage.ErrUsageConstraintViolation
 
-// NormalisedUsage is the post-normalisation shape (proto-canonical OpenAI
-// field names). DeepSeek's NormalisedUsage == its RawUsage by definition
-// (identity-mapping); Stories 4.2-4.6 produce a NormalisedUsage from a
-// vendor-shaped RawUsage where field names differ.
-type NormalisedUsage struct {
-	PromptTokens     int
-	CompletionTokens int
-	TotalTokens      int
-}
+// NormalisedUsage is a type-alias to the shared post-Normaliser shape.
+// Story 4.1 code that builds a `usage.NormalisedUsage{...}` literal
+// continues to compile unchanged (alias = same underlying type).
+type NormalisedUsage = sharedusage.NormalisedUsage
 
-// Normaliser is the BR-3.2 seam Stories 4.2-4.6 inherit. Each adapter
-// service supplies one implementation.
+// Normaliser is the BR-3.2 seam Stories 4.2-4.6 inherit. The interface
+// stays vendor-local (parametric on the vendor RawUsage type) per
+// Architect Round 1 ruling — Go structural typing handles cross-vendor
+// consistency without forcing generics.
 type Normaliser interface {
 	Normalise(raw upstream.RawUsage) (NormalisedUsage, error)
 }
@@ -48,19 +48,11 @@ type deepseekNormaliser struct{}
 // NewDeepSeek constructs a Normaliser for the DeepSeek upstream API.
 func NewDeepSeek() Normaliser { return deepseekNormaliser{} }
 
-// Normalise enforces the BR-3.3 invariants and identity-maps the raw shape.
+// Normalise enforces the BR-3.3 invariants (via the shared helper) and
+// identity-maps the raw shape.
 func (deepseekNormaliser) Normalise(raw upstream.RawUsage) (NormalisedUsage, error) {
-	if raw.PromptTokens <= 0 {
-		return NormalisedUsage{}, ErrUsageConstraintViolation
-	}
-	if raw.CompletionTokens < 0 {
-		return NormalisedUsage{}, ErrUsageConstraintViolation
-	}
-	if raw.TotalTokens < 0 {
-		return NormalisedUsage{}, ErrUsageConstraintViolation
-	}
-	if raw.TotalTokens != raw.PromptTokens+raw.CompletionTokens {
-		return NormalisedUsage{}, ErrUsageConstraintViolation
+	if err := sharedusage.ValidateInvariants(raw.PromptTokens, raw.CompletionTokens, raw.TotalTokens); err != nil {
+		return NormalisedUsage{}, err
 	}
 	return NormalisedUsage{
 		PromptTokens:     raw.PromptTokens,

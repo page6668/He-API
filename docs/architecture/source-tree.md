@@ -147,4 +147,17 @@ he-api/                                  (Monorepo, Turborepo)
 >
 > 条目添加来源：Story 4.1 Architect Round 2（OQ1-OQ8 + M1-M5 + m1-m4），2026-05-19。
 
+> **注**: Story 4.2 — Qwen（通义千问）适配器（Epic 4 第二个真实模型适配器）新增条目：
+> - `apps/adapters/qwen/` — Qwen adapter K8s service（Go Connect-RPC server, HTTP/2-preferred upstream client per OQ-4.2-5（`http.Transport{ForceAttemptHTTP2: true}` + ALPN HTTP/1.1 fallback — Qwen-specific divergence from Story-4.1 OQ7 forced-HTTP/2 to accommodate Aliyun gateway variability）, strict-RFC SSE decoder per OQ6（REUSE Story-4.1 pattern verbatim per Round 1 L1 simplification — DashScope compat-mode SSE matches OpenAI byte-for-byte）, identity-mapping `qwenNormaliser` per OQ-4.2-3 cascade）。
+> - `apps/adapters/qwen/internal/upstream/` — HTTPS client + translate + sse_decoder + wire-shape types + errors (per-vendor classifier replica per Round 1 L2 ratification — `internal/` packages not cross-importable across `apps/adapters/<vendor>/` module boundaries; acceptable duplication)。BR-4.4 addition: `ErrorKindRateLimitThrottle` replaces DeepSeek's `quota_exhausted` for upstream 429 (Round 1 OQ-4.2-4 ratification — distinct slog disambiguation for oncall paging).
+> - `apps/adapters/qwen/internal/usage/` — Qwen identity-mapping Normaliser implementation consuming the lifted `packages/adapter-usage` types (Round 1 OQ-4.2-3a partial-lift ratification — `NormalisedUsage` + `ErrUsageConstraintViolation` + `ValidateInvariants` lifted; the `Normaliser` interface stays vendor-local).
+> - `packages/adapter-usage/` — **NEW top-level Go module** (sibling to `packages/go-observability/`). Hosts `NormalisedUsage` struct + `ErrUsageConstraintViolation` sentinel + `ValidateInvariants(prompt, completion, total) error` helper. Story-4.1 `apps/adapters/deepseek/internal/usage/normaliser.go` is back-compat-retrofit (type-aliases + variable re-exports preserve existing call-sites unchanged). Stories 4.3-4.6 inherit this shared shape.
+> - `infra/helm/adapter-qwen/` — Helm chart copy-paste from `infra/helm/adapter-deepseek/` with Qwen swaps (image name, env var names including `QWEN_UPSTREAM_API_KEY` per Round 1 OQ-4.2-6 model-family naming, `supportedModels` Helm value listing `[qwen-max, qwen-plus]` per BR-1.10 single-service-per-vendor + Round 1 OQ-4.2-2 ratification). Namespace `he-api-adapters` (M4 inheritance). Cold-start budget ≤ 2s (M5 inheritance).
+> - `infra/argocd/applications/adapter-qwen.yaml` — ArgoCD Application manifest.
+> - `scripts/dev/seed-qwen-key.sh` — dev-mode bootstrap script (gated behind `.env.local` presence — CI never touches it).
+> - `docs/dev/secrets/qwen-upstream.md` — Vault credential runbook (Round 1 OQ3 inheritance ratified path `kv/data/he-api/upstream/qwen/`, manual rotation — DashScope 不支持 API-key auto-rotation). 沿用 Story-1.6 m-4 6-section template.
+> - `apps/api-gateway/internal/adapterclient/registry.go` (MODIFIED): NEW constants `QwenMaxModelID = "qwen-max"`, `QwenPlusModelID = "qwen-plus"`, `QwenAdapterEndpointEnv = "QWEN_ADAPTER_ENDPOINT"` per Round 1 OQ-4.2-6. `LoadFromEnv()` EXTENDED to read `QWEN_ADAPTER_ENDPOINT` and populate BOTH model-id entries. `NewRegistry` REFACTORED per Round 1 M2 endpoint-dedup — model ids sharing one endpoint URL share one underlying `connectClientHandle` (preserves Story-4.1 single-endpoint behaviour bit-for-bit).
+>
+> 条目添加来源：Story 4.2 Architect Round 1（OQ-4.2-1..6 + M1-M2 + m1 + L1-L2），2026-05-19。
+
 ---

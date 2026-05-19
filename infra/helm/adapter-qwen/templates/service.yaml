@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: adapter-qwen
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: adapter-qwen
+    app.kubernetes.io/part-of: he-api
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app.kubernetes.io/name: adapter-qwen
+  ports:
+    - name: connect
+      port: {{ .Values.service.port }}
+      targetPort: connect
+      protocol: TCP
+      # h2c on the in-VPC hop per Story-4.1 OQ2 ruling.
+      appProtocol: {{ .Values.service.appProtocol }}

@@ -1,0 +1,90 @@
+# Story 4.2 — Qwen adapter Helm values.
+#
+# Architect Round 1 (Story 4.2) rulings encoded:
+#   OQ-4.2-1 — DashScope compat-mode endpoint
+#              (https://dashscope.aliyuncs.com — request path is
+#              `/compatible-mode/v1/chat/completions`; the adapter
+#              appends the path).
+#   OQ-4.2-2 — Single-service-per-vendor: ONE adapter-qwen Deployment
+#              hosts BOTH `qwen-max` and `qwen-plus`. The
+#              `supportedModels` ConfigMap key documents the binding
+#              for operator observability + Grafana per-model breakdown.
+#   OQ-4.2-3 — Compat-mode body shape == OpenAI; translate.go identity-
+#              mapping (in code, not values).
+#   OQ-4.2-5 — HTTP/2-preferred + ALPN HTTP/1.1 fallback (in code; no
+#              values knob).
+#   OQ-4.2-6 — Env var QWEN_UPSTREAM_API_KEY (model-family naming).
+#
+# Inherited from Story 4.1:
+#   OQ3 — Vault path: kv/data/he-api/upstream/qwen/
+#   M4  — Namespace `he-api-adapters` shared across all six adapters.
+#   M5  — Cold-start budget ≤ 2s (readiness-probe gated).
+
+replicaCount: 2
+
+image:
+  repository: ghcr.io/he-api/adapter-qwen
+  tag: 0.1.0
+  pullPolicy: IfNotPresent
+
+namespace: he-api-adapters
+
+# BR-1.10 — bound model ids hosted by this single Deployment.
+supportedModels:
+  - qwen-max
+  - qwen-plus
+
+service:
+  type: ClusterIP
+  port: 8080
+  # Connect-RPC over h2c on the in-VPC hop; mTLS hardening lands in Epic 9.
+  appProtocol: h2c
+
+upstream:
+  # QWEN_UPSTREAM_BASE_URL — overridable per environment. The adapter
+  # appends /compatible-mode/v1/chat/completions per OQ-4.2-1.
+  baseUrl: "https://dashscope.aliyuncs.com"
+  # QWEN_UPSTREAM_TIMEOUT_SECONDS — BR-1.8 default 60s.
+  timeoutSeconds: 60
+
+externalSecret:
+  # External Secrets Operator reference. The actual Vault sync infra is
+  # provisioned in Epic 9; this manifest declares the contract.
+  enabled: true
+  secretStoreRef:
+    name: he-api-vault
+    kind: ClusterSecretStore
+  # OQ3 (Story 4.1 inheritance) — kv/data/he-api/upstream/qwen/
+  vaultPath: "kv/data/he-api/upstream/qwen"
+  remoteKey: "api_key"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+probes:
+  liveness:
+    path: /healthz
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  readiness:
+    path: /healthz
+    # M5 — adapter cold-start budget ≤ 2s; probe takes a few periods.
+    initialDelaySeconds: 2
+    periodSeconds: 5
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  fsGroup: 65532
+
+securityContext:
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
