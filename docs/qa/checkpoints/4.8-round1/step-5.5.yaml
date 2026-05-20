@@ -1,0 +1,80 @@
+step: 5.5
+purpose: Blind-spot verification (MED-5 + determinism + cascading invariants)
+blind_spot_verification:
+  total_scenarios: 5
+  covered: 5
+  coverage_rate: 100
+  scenarios:
+    - id: BS-1
+      category: contract_doc_drift
+      description: 'MED-5 (Architect Round-2 advisory) fold-in: did helper accept terminal-without-usage AND did story BR-2.3(i) text get updated?'
+      result: PARTIAL
+      detail: |
+        Helper-side fold-in CONFIRMED at apps/api-gateway/tests/_protocol_invariants.py:198-206 —
+        `elif is_terminal: assert finish_reason == "stop"; if usage is not None: _assert_usage_triple(...)`
+        matches Architect Round-2 Recommendation Option (a) verbatim. Meta-test
+        `test_chunk_helper_terminal_without_usage_med_5_fold_in` PASSES.
+        BUT story BR-2.3(i) text at line 245 still reads
+        '...AND `chunk.usage is not None` AND the usage triple satisfies BR-2.2(j)'
+        without the MED-5 conditional. Story file Change Log line 651
+        acknowledges the fold-in; BR-2.3 rule row was not synchronized.
+        This is a MEDIUM doc-drift issue — the canonical helper diverges from
+        the canonical BR-2.3 row.
+    - id: BS-2
+      category: determinism
+      description: BR-1.10 every fake-upstream response MUST be deterministic (no time.Now / no rand)
+      result: PASS
+      detail: |
+        grep -nE "time\.Now|rand\.Int|math/rand|crypto/rand" across all six
+        apps/adapters/{vendor}/cmd/fake-upstream/main.go files returns ZERO
+        production-code matches (only the comment line in deepseek/main.go:11
+        explicitly documenting the constraint). Determinism honored.
+    - id: BS-3
+      category: production_isolation
+      description: OQ-4.8-3 m-1 add-on — every fake-upstream main.go MUST carry the CI-only header comment
+      result: PASS
+      detail: |
+        All six fake-upstream main.go files start with
+        `// CI-only adapter-fake upstream — DO NOT package in production images.`
+        as their FIRST line. Production-image isolation guarantee documented in-source.
+    - id: BS-4
+      category: dry_enforcement
+      description: BR-2.10 — all per-vendor + cross-cutting _contract_test.py files MUST import the shared library
+      result: PASS
+      detail: |
+        11/11 contract test files contain `from _protocol_invariants import`:
+        deepseek, qwen, kimi, glm, doubao, ernie (×6 per-vendor) +
+        streaming, models, embeddings, error, public_models (×5 cross-cutting).
+        DRY refactor complete.
+    - id: BS-5
+      category: m2_compensating_control
+      description: M-2 ratification — T0.4 conftest expected_vendor_models_present fixture replaces dropped BR-1.4 hard-panic
+      result: PASS
+      detail: |
+        apps/api-gateway/tests/conftest.py defines
+        EXPECTED_VENDOR_MODELS = (10 vendor ids) and session-scoped
+        `expected_vendor_models_present()` fixture pre-flight-probes /v1/models
+        and surfaces missing vendors as pytest.skip messages (not assertion
+        errors), letting T7.1's EXACTLY-9 skip-count guard fail the CI lane
+        when more than 9 skips accumulate.
+  issues:
+    - id: 4.8-BLIND-001
+      severity: MEDIUM
+      finding: |
+        BR-2.3 story row (line 245) is out of sync with the helper at
+        _protocol_invariants.py:198-206. Story still asserts the original
+        unconditional `chunk.usage is not None AND usage triple matches` while
+        helper correctly implements the MED-5 Architect Round-2 recommended
+        conditional-on-presence form. The Architect explicitly noted
+        Recommendation 1 (story revision) vs Recommendation 2 (helper-side
+        fix) were equally acceptable — Dev chose Recommendation 2 but the
+        story file was not retroactively updated to reflect the implemented
+        contract. Future readers reconciling BR-2.3 against the helper will
+        encounter a contradiction.
+      required_action: |
+        SM updates BR-2.3(i) row to read approximately:
+        '(i) on terminal chunk (`is_terminal=True`) `chunk.choices[0].finish_reason == "stop"`;
+        when `chunk.usage is not None` ALSO assert the BR-2.2(j) additivity triple
+        (the usage clause is conditional to support Story-3.4 mock-chunker callers
+        that do not set `stream_options.include_usage=True`).'
+        No code change required.

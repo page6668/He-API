@@ -23,6 +23,14 @@ import pytest
 from openai import OpenAI
 
 pytestmark = [
+    # Story 4.8 T4.13 / M-1 Path (ii) — wholesale-skip the legacy live-test
+    # modules. The Story-4.8 live-lane workflow (.github/workflows/contract-
+    # tests-live.yml) runs the SAME `_contract_test.py` bodies against real
+    # vendor base URLs; these `_live_test.py` modules are pending deletion
+    # in a separate post-Epic-5 housekeeping pass.
+    pytest.mark.skip(
+        reason="folded into contract suite under Story 4.8 — pending deletion in housekeeping"
+    ),
     pytest.mark.skipif(
         os.environ.get("HE_API_TEST_GATEWAY_URL") is None,
         reason="HE_API_TEST_GATEWAY_URL not set",

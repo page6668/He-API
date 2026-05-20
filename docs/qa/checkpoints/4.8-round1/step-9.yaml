@@ -1,0 +1,15 @@
+step: 9
+purpose: Output and Handoff
+story_status_after_review: ReviewWithConcerns
+change_log_entry_appended: true
+qa_results_section_filled: true
+gate_file_written: true
+finalize_commit:
+  executed: false
+  skip_reason: 'Status != Done AND Gate != PASS — finalize-commit.md skip per its precondition.'
+next_story_id: null   # only computed when gate=PASS AND status=Done
+handoff:
+  target_agent: dev
+  command: '*develop 4.8'
+  args: '(chore patch: 67-checkbox flip + BR-2.3(i) text sync)'
+checkpoint_cleanup_deferred: true   # checkpoints retained as evidence for Round-2 incremental review

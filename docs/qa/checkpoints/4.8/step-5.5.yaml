@@ -1,0 +1,45 @@
+blind_spot_verification:
+  mode: incremental_focus_on_BS_1
+  executed: true
+  total_scenarios: 5
+  covered_explicit: 5
+  covered_via_reuse: 0
+  partial_or_gaps: 0
+  coverage_rate: 100
+  delta_vs_round2: 'BS-1 PARTIAL → PASS (SM correction-pass synced story BR-2.3(i) to conditional form)'
+  spots:
+    - id: BS-1
+      category: 'MED-5 fold-in coverage (doc/code sync)'
+      previous_status: PARTIAL
+      current_status: PASS
+      evidence:
+        helper_lines: 'apps/api-gateway/tests/_protocol_invariants.py:198-206'
+        helper_form: 'CONDITIONAL — `if usage is not None: _assert_usage_triple(usage, allow_zero_completion=True)`'
+        story_line: 'docs/stories/4.8-adapter-contract-tests-regression-prevention.md:245'
+        story_form: 'CONDITIONAL — "WHEN `chunk.usage is not None` ALSO assert the BR-2.2(j) additivity triple"'
+        meta_test: 'test_chunk_helper_terminal_without_usage_med_5_fold_in PASSED (Round 3 re-execution)'
+        change_log_entry: 'line 655 (SM Phil correction-pass entry, 2026-05-20)'
+    - id: BS-2
+      category: 'BR-1.10 determinism (zero time.Now / rand in matrix)'
+      status: PASS
+      evidence: 'carry-forward from Round 1+2 verification — no SM patch impact'
+    - id: BS-3
+      category: 'OQ-4.8-3 m-1 CI-only build-tag header on all 6 fake-upstream files'
+      status: PASS
+      evidence: 'carry-forward from Round 1+2 verification — no SM patch impact'
+    - id: BS-4
+      category: 'BR-2.10 DRY enforcement — 11/11 contract files import shared lib'
+      status: PASS
+      evidence: 'carry-forward from Round 1+2 verification — no SM patch impact'
+    - id: BS-5
+      category: 'M-2 compensating control — conftest expected_vendor_models_present fixture'
+      status: PASS
+      evidence: 'carry-forward from Round 1+2 verification — no SM patch impact'
+  notes: |
+    BS-1 was the SOLE open blind-spot from Round 2 (PARTIAL — doc/code
+    drift). SM correction-pass (Change Log line 655) rewrote story
+    BR-2.3(i) line 245 from UNCONDITIONAL → CONDITIONAL form. Round 3
+    re-verification confirms doc text now matches helper implementation
+    verbatim. BS-1 promoted from PARTIAL → PASS. Coverage rate 5/5 =
+    100% (was 4/5 = 80% in Round 2).
+  issues: []

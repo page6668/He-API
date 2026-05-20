@@ -1,0 +1,28 @@
+review_mode_type: incremental
+current_round: 3
+previous_round: 2
+previous_gate:
+  gate: CONCERNS
+  quality_score: 95
+  risk_level: MEDIUM
+  review_mode: automated_plus_spot_check
+  project_type: fullstack_go_monorepo_with_python_contract_tests
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots:
+    - id: BS-1
+      category: MED-5 fold-in coverage (doc/code sync)
+      description: Story BR-2.3(i) text was unsynced with helper conditional form
+  checkbox_issues: []
+  open_doc_drift_issues:
+    - id: 4.8-BLIND-001
+      ownership: SM
+      finding: 'BR-2.3(i) text unconditional; helper conditional per MED-5'
+sm_correction_applied:
+  detected_via: Change Log line 655 (SM Phil correction-pass entry)
+  patch_target: 'docs/stories/4.8-adapter-contract-tests-regression-prevention.md:245'
+  patch_nature: 'unconditional → conditional BR-2.3(i) form (per MED-5 Architect Round 2 ratification)'
+  status_transition: 'ReviewWithConcerns → Review'
+log: |
+  Mode: INCREMENTAL REVIEW (Round 3) — 1 previous MEDIUM issue to verify
+  SM correction-pass detected; BR-2.3(i) line 245 now in CONDITIONAL form

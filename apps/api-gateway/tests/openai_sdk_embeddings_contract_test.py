@@ -17,6 +17,8 @@ import httpx
 import openai
 import pytest
 
+from _protocol_invariants import assert_embedding_shape  # Story 4.8 T4.9 rewire
+
 GATEWAY_URL_ENV = "HE_API_TEST_GATEWAY_URL"
 API_KEY_ENV = "HE_API_TEST_API_KEY"
 
@@ -49,20 +51,15 @@ def test_embeddings_create_single_input():
         model="text-embedding-3-small",
         input="Hello, He-API.",
     )
-    assert resp.object == "list"
-    assert len(resp.data) == 1
+    # Story 4.8 T4.9 — shared shape helper. Vendor-specific layer: 128-dim
+    # mock vector + L2-norm ≈ 1.0 (Story 3.5 OQ3 non-canonical mock signal).
+    assert_embedding_shape(resp, expected_model="text-embedding-3-small")
     item = resp.data[0]
-    assert item.object == "embedding"
-    assert item.index == 0
     assert len(item.embedding) == MOCK_EMBEDDING_DIM, (
         f"len={len(item.embedding)}, want {MOCK_EMBEDDING_DIM} (Architect OQ3)"
     )
     norm = math.sqrt(sum(x * x for x in item.embedding))
     assert 0.99 <= norm <= 1.01, f"‖v‖₂={norm}, want ∈ [0.99, 1.01]"
-    assert resp.model == "text-embedding-3-small"
-    assert resp.usage.total_tokens == resp.usage.prompt_tokens, (
-        "BR-2.5: usage.total_tokens MUST equal usage.prompt_tokens for embeddings"
-    )
 
 
 # Scenario: 3.5-E2E-004

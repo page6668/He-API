@@ -1,0 +1,30 @@
+step: 0.3
+purpose: Review Mode Detection
+review_mode_type: incremental
+current_round: 2
+previous_round: 1
+previous_gate:
+  gate: CONCERNS
+  quality_score: 90
+  risk_level: MEDIUM
+  review_mode: automated_plus_spot_check
+  project_type: fullstack_go_monorepo_with_python_contract_tests
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues:
+    - id: 4.8-CHECKBOX-001
+      severity: MEDIUM
+      finding: 'ALL 67 task checkboxes remain unchecked (8 T-groups + 59 sub-tasks)'
+  doc_drift_issues:
+    - id: 4.8-BLIND-001
+      severity: MEDIUM
+      finding: 'Story BR-2.3(i) row text not synced with helper (MED-5 fold-in)'
+      ownership: SM
+      reason_deferred: 'Acceptance Criteria section is SM-owned per story-update-permissions.yaml; Dev locked out per apply-qa-fixes.md Step 5'
+round1_archive: docs/qa/checkpoints/4.8-round1/
+log: |
+  Mode: INCREMENTAL REVIEW (Round 2) — 2 previous MEDIUM issues to verify.
+  4.8-CHECKBOX-001 fix claimed by Dev per Story Change Log row dated 2026-05-20
+  (ReviewWithConcerns → Review, apply-qa-fixes 4.8). 4.8-BLIND-001 deferred to
+  SM — must check whether SM applied BR-2.3(i) patch before this re-review.

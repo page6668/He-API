@@ -1,0 +1,49 @@
+step: 5.5
+purpose: Blind Spot Verification (Round 2 — incremental focus on previously flagged BS-1 / 4.8-BLIND-001)
+mode: incremental
+blind_spot_verification:
+  executed: true
+  total_scenarios: 5
+  covered_explicit: 4
+  partial_or_gaps: 1
+  coverage_rate: 80
+  status:
+    BS-1: PARTIAL  # MED-5 fold-in — helper conditional, story BR-2.3(i) still unconditional
+    BS-2: PASS     # BR-1.10 determinism (zero time.Now/rand in 6 fake-upstream)
+    BS-3: PASS     # OQ-4.8-3 m-1 CI-only header on all 6 binaries
+    BS-4: PASS     # BR-2.10 DRY enforcement (11/11 contract files import shared lib)
+    BS-5: PASS     # M-2 compensating control (conftest expected_vendor_models_present fixture)
+  notes: |
+    Round 2 re-verification of 4.8-BLIND-001 (story BR-2.3(i) sync to helper).
+    Helper at apps/api-gateway/tests/_protocol_invariants.py:198-206 implements the
+    MED-5 Architect-Round-2-ratified CONDITIONAL form:
+        elif is_terminal:
+            assert finish_reason == "stop", ...
+            usage = _get(chunk, "usage")
+            if usage is not None:
+                _assert_usage_triple(usage, allow_zero_completion=True)
+    Story BR-2.3(i) text at line 245 STILL reads the UNCONDITIONAL form:
+        '(i) on terminal chunk (is_terminal=True) chunk.choices[0].finish_reason == "stop"
+         AND chunk.usage is not None AND the usage triple satisfies BR-2.2(j).'
+    No change observed since Round 1.
+    Dev apply-qa-fixes change-log entry explicitly DEFERRED this to SM:
+      "BR-2.3(i) doc drift at line 245 sits inside ## Acceptance Criteria which is
+       SM-owned per story-update-permissions.yaml ... requires SM intervention; no
+       code change required ... Next: SM patches BR-2.3(i) text per QA Round 1
+       remediation guidance, THEN QA re-runs *review 4.8 for Round 2 closure."
+    SM has not yet applied that patch — verification was requested before SM acted.
+issues_unresolved_from_round1:
+  - id: 4.8-BLIND-001
+    severity_round1: MEDIUM
+    severity_round2: MEDIUM
+    status: STILL_OPEN
+    ownership: SM
+    remediation: |
+      SM patches BR-2.3(i) row at docs/stories/4.8-adapter-contract-tests-regression-prevention.md:245
+      to the conditional form:
+        '(i) on terminal chunk (is_terminal=True) chunk.choices[0].finish_reason MUST be "stop";
+         WHEN chunk.usage is not None ALSO assert the BR-2.2(j) additivity triple. The usage
+         clause is conditional to support Story-3.4 mock-chunker callers that do not set
+         stream_options.include_usage=True (per MED-5 Architect Round 2 ratification).'
+      No code change required. After SM applies, QA can re-run *review 4.8 for Round 3 PASS.
+issues: []

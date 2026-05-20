@@ -14,13 +14,18 @@ import re
 
 import pytest
 
+# Story 4.8 T4.10 — rewire to shared invariants library + reuse REQUEST_ID_RE
+# canonical constant so envelope-regex drift surfaces in one place.
+from _protocol_invariants import REQUEST_ID_RE as _SHARED_REQUEST_ID_RE
+from _protocol_invariants import assert_error_envelope_shape
+
 try:
     import openai
 except ImportError:  # pragma: no cover — SDK is optional in local dev
     openai = None
 
 
-REQUEST_ID_RE = re.compile(r"^req_[a-f0-9]{12}$")
+REQUEST_ID_RE = _SHARED_REQUEST_ID_RE  # re-export for backwards compat
 
 
 def _gateway_url() -> str:
@@ -42,18 +47,28 @@ def _require_sdk():
         pytest.skip("openai SDK not installed — skipping SDK contract test")
 
 
-def _assert_envelope(exc, *, expected_code: str, expected_type: str = "invalid_request_error"):
-    """Common assertions on an openai.APIError subclass."""
-    # SDK attribute names mirror the envelope 1-to-1.
+def _assert_envelope(exc, *, expected_code: str, expected_status: int,
+                     expected_type: str = "invalid_request_error"):
+    """Common assertions on an openai.APIError subclass.
+
+    Story 4.8 T4.10 — delegates the body-shape clauses to the shared
+    `assert_error_envelope_shape` helper. The SDK exception's `body`
+    attribute carries the parsed full envelope; when only the inner
+    `error` dict is exposed we wrap it back into the canonical envelope.
+    """
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict) and "error" not in body:
+        # SDK normalises some shapes to only the inner error dict.
+        body = {"error": body}
+    if isinstance(body, dict):
+        assert_error_envelope_shape(body, expected_code=expected_code, expected_status=expected_status)
+    # SDK attribute lens (preserved from Story 3.6 — independent of body shape).
     assert getattr(exc, "code", None) == expected_code, (
         f"exc.code: got={getattr(exc, 'code', None)!r} want={expected_code!r}"
     )
-    msg = getattr(exc, "message", "")
-    assert isinstance(msg, str), f"exc.message type: {type(msg)}"
     assert getattr(exc, "type", None) == expected_type, (
         f"exc.type: got={getattr(exc, 'type', None)!r} want={expected_type!r}"
     )
-    # exc.param should be None for envelopes without a per-field parameter.
     assert getattr(exc, "param", None) is None, (
         f"exc.param: got={getattr(exc, 'param', None)!r} want=None"
     )
@@ -78,7 +93,7 @@ def test_sdk_invalid_bearer_chat_completions_raises_authentication_error():
             model="qwen-max",
             messages=[{"role": "user", "content": "hi"}],
         )
-    _assert_envelope(exc_info.value, expected_code="401_invalid_api_key")
+    _assert_envelope(exc_info.value, expected_code="401_invalid_api_key", expected_status=401)
 
 
 def test_sdk_oversized_body_raises_api_error_413():
@@ -93,7 +108,7 @@ def test_sdk_oversized_body_raises_api_error_413():
             model="qwen-max",
             messages=[{"role": "user", "content": huge}],
         )
-    _assert_envelope(exc_info.value, expected_code="413_payload_too_large")
+    _assert_envelope(exc_info.value, expected_code="413_payload_too_large", expected_status=413)
 
 
 def test_sdk_invalid_bearer_models_list_raises_authentication_error():
@@ -103,7 +118,7 @@ def test_sdk_invalid_bearer_models_list_raises_authentication_error():
     client = openai.OpenAI(api_key="bad-key-xxxxx", base_url=url + "/v1")
     with pytest.raises(openai.AuthenticationError) as exc_info:
         client.models.list()
-    _assert_envelope(exc_info.value, expected_code="401_invalid_api_key")
+    _assert_envelope(exc_info.value, expected_code="401_invalid_api_key", expected_status=401)
 
 
 def test_sdk_invalid_bearer_embeddings_raises_authentication_error():
@@ -113,7 +128,7 @@ def test_sdk_invalid_bearer_embeddings_raises_authentication_error():
     client = openai.OpenAI(api_key="bad-key-xxxxx", base_url=url + "/v1")
     with pytest.raises(openai.AuthenticationError) as exc_info:
         client.embeddings.create(model="text-embedding-3-small", input="hi")
-    _assert_envelope(exc_info.value, expected_code="401_invalid_api_key")
+    _assert_envelope(exc_info.value, expected_code="401_invalid_api_key", expected_status=401)
 
 
 def test_sdk_success_path_carries_x_he_request_id_header():

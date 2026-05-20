@@ -20,7 +20,7 @@
 |------|------|------|
 | 单元测试 | 业务逻辑、工具函数 | Go testing / Vitest |
 | 集成测试 | 服务 + DB / Redis 联动 | testcontainers-go |
-| 契约测试 | Adapter 协议合规 | 自建 fixtures + golden files |
+| 契约测试 | Adapter 协议合规 | 自建 fixtures + golden files + 共享协议不变量库 `apps/api-gateway/tests/_protocol_invariants.py`（Story 4.8）+ adapter-fake CI lane（Story 4.8） |
 | E2E | 核心用户旅程（注册→调用→计费） | Playwright |
 | 压测 | 网关性能 | k6 |
 | 混沌测试 | 上游模型故障注入 | Toxiproxy |
@@ -34,5 +34,12 @@
 - 内容过滤流式拦截不漏检
 - 多语言文案完整性（CI 检测缺失 i18n key）
 - 5 个支付通道沙箱集成测试
+- Adapter contract anti-regression matrix runs on every PR (`.github/workflows/test.yml::gateway-openai-sdk-contract` — 20-cell matrix × 10 vendor model ids × stream={false, true}; live-vendor verification runs nightly via `.github/workflows/contract-tests-live.yml`; Story 4.8 closes Epic 4)
+
+## 13.4 变更记录
+
+| 日期 | Story / 作者 | 变更摘要 |
+|------|-------------|---------|
+| 2026-05-20 | Story 4.8 (SM Phil + Dev Linus) | §13.2 契约测试工具列扩展为「自建 fixtures + golden files + 共享协议不变量库 + adapter-fake CI lane」；§13.3 新增 anti-regression matrix 关键场景项。 |
 
 ---

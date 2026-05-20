@@ -191,3 +191,16 @@
   - **New i18n union** (`packages/i18n-keys/src/models.ts`): `ModelsKeys` literal union covering 36 keys in the `models` namespace.
   - **New envelope code**: `openaierr.CodeMetadata["405_method_not_allowed"] = {HTTPStatus: 405, ErrorType: "invalid_request_error"}` per OQ-4.7-6 ratification.
   - **New middleware package**: `apps/api-gateway/internal/middleware/cors/` exports `cors.PublicCORS(next)` + `cors.PublicPathPrefix` + `cors.PublicOriginWildcard` + `cors.PublicAllowedMethods` constants.
+
+## Test Infrastructure Types (Story 4.8)
+
+Story 4.8 introduces test-only shared types under `apps/api-gateway/tests/`. These are NOT runtime types — they live in the pytest collection root only. Stories 4.9+ adding vendors update the listed constants (BR-2.8 single-source-of-truth) without touching runtime code.
+
+- **Module `_protocol_invariants`** (`apps/api-gateway/tests/_protocol_invariants.py`):
+  - Constants: `CHATCMPL_ID_RE` (compiled `^chatcmpl-`), `REQUEST_ID_RE` (compiled `^req_[0-9a-f]{12}$`), `CANONICAL_FINISH_REASONS` (frozenset of `{stop, length, tool_calls, content_filter}`), `CANONICAL_ERROR_TYPES` (frozenset of `{invalid_request_error, server_error}`).
+  - Helpers (5): `assert_chat_completion_shape(response, expected_model)` / `assert_chat_completion_chunk_shape(chunk, expected_model, *, is_bootstrap=False, is_terminal=False)` (MED-2 three-way, MED-5 conditional usage) / `assert_model_entry_shape(entry, *, expected_id_set=None)` (MED-3 lifted) / `assert_embedding_shape(response, expected_model)` / `assert_error_envelope_shape(response_body, expected_code, expected_status)`.
+- **Module `conftest`** (`apps/api-gateway/tests/conftest.py`):
+  - Constant: `EXPECTED_VENDOR_MODELS` — 10-tuple of vendor model ids the M-2 compensating-control fixture probes for in the `/v1/models` catalogue.
+  - Fixtures: `gateway_url` / `api_key` / `openai_client` (function-scoped per cross-vendor independence rule) / `httpx_client` / `expected_vendor_models_present` (session-scoped probe).
+- **Module `openai_sdk_protocol_completeness_test`** (`apps/api-gateway/tests/openai_sdk_protocol_completeness_test.py`):
+  - Constants: `MATRIX_MODELS: list[str]` (10 entries — BR-2.8 single-source-of-truth; appending here auto-grows the matrix), `MATRIX_STREAM: list[bool] = [False, True]`, `MATRIX_CELLS: list[tuple[str, bool]]` (20 entries), `VIRTUAL_HE_ROUTER_MODELS` (3-tuple of `he-router-*` ids EXCLUDED per OQ-4.8-6).

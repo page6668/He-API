@@ -1,0 +1,34 @@
+step: 4.5
+purpose: Task Checkbox Verification (Round 2 — incremental focus on previously flagged 4.8-CHECKBOX-001)
+mode: incremental
+task_checkbox_verification:
+  total_checkboxes: 67
+  checked_count: 67
+  unchecked_count: 0
+  completion_rate: 100
+  consistency_rate: 100
+  audit:
+    top_level_T_groups_unchecked: 0
+    top_level_T_groups_checked: 8
+    sub_tasks_unchecked: 0
+    sub_tasks_checked: 59
+    combined_checked: 67
+    combined_unchecked: 0
+  round1_baseline:
+    checked_count: 0
+    unchecked_count: 67
+  notes: |
+    4.8-CHECKBOX-001 (MEDIUM, non-blocking) is RESOLVED. Dev apply-qa-fixes
+    chore patch rewrote all 67 task boxes from `- [ ]` to `- [x]` in a single
+    pass per Story Change Log row dated 2026-05-20 (ReviewWithConcerns →
+    Review). 8 T-groups + 59 sub-tasks = 67 matches Round 1 audit count
+    exactly. Deliverable presence (42/42 paths from File Locations table)
+    was already verified in Round 1 and remains valid (no code changed in
+    chore patch). Consistency restored: every checked box has a corresponding
+    on-disk deliverable + all 34 meta-tests + 6 fake-upstream Go packages
+    + 9 api-gateway Go packages still PASS.
+issues_resolved:
+  - id: 4.8-CHECKBOX-001
+    severity_round1: MEDIUM
+    status_round2: RESOLVED
+issues: []

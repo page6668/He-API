@@ -1,0 +1,31 @@
+step: 9
+purpose: Output and Handoff (Round 2)
+story_status_after_review: ReviewWithConcerns
+story_status_metadata_yaml_synced: true   # Story Metadata `status:` field also updated
+change_log_entry_appended: true
+qa_results_section_appended: 'QA Results — Round 2'
+gate_file_written: true   # docs/qa/gates/4.8-adapter-contract-tests-regression-prevention.yml overwritten with Round 2 result
+round1_checkpoint_archive: docs/qa/checkpoints/4.8-round1/
+finalize_commit:
+  executed: false
+  skip_reason: 'Status != Done AND Gate != PASS — finalize-commit.md skip per its precondition.'
+next_story_id: null   # only computed when gate=PASS AND status=Done
+final_test_process_cleanup:
+  executed: true
+  stray_pids: 0
+  temp_files_removed: true
+checkpoint_cleanup:
+  policy: retain
+  reason: 'Retained as evidence for Round 3 incremental review (mirrors Round 1 precedent; archive when Round 3 PASSes).'
+handoff:
+  source_agent: qa
+  target_agent: sm
+  command: '*correct-course 4.8'
+  args: '(BR-2.3(i) doc-drift — apply Round-1 remediation: conditional `if usage is not None` per MED-5 Architect Round 2)'
+  reasoning: |
+    Standard CONCERNS-routing table (gate_result: CONCERNS → dev: *apply-qa-fixes)
+    does not apply here because Dev formally DEFERRED the one open issue
+    (4.8-BLIND-001) in their Round 1 chore patch and documented SM as the
+    responsible role per story-update-permissions.yaml. The fix is a single-row
+    text edit inside `## Acceptance Criteria` that Dev is locked out of.
+    Routing to SM via *correct-course is the only viable path to PASS.

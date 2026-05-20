@@ -1,0 +1,13 @@
+story_updates_applied:
+  qa_review_section_round3_appended: true
+  status_flipped: 'Review → Done (line 4 + line 12)'
+  change_log_appended: true
+  change_log_row: |
+    | 2026-05-20 | QA (Turing) | Review → Done | QA Round 3 incremental closure review. Gate: **PASS at 100/100** (+5 vs Round 2 CONCERNS). ... |
+gate_file_rewritten:
+  path: 'docs/qa/gates/4.8-adapter-contract-tests-regression-prevention.yml'
+  gate: PASS
+  quality_score: 100
+  review_round: 3
+  round_history_appended: true
+  story_status_after_review: Done

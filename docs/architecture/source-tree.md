@@ -261,4 +261,32 @@ he-api/                                  (Monorepo, Turborepo)
 >
 > 条目添加来源：Story 4.7 Architect Round 1（OQ-4.7-1..10 + m-1/m-2/m-3 advisories），2026-05-20. **Epic-4 DoD line 3 ("能力矩阵公布") CLOSED**; Story 4.8 contract-tests anti-regression remains as the final Epic-4 closure.
 
+> **注**: Story 4.8 — adapter-fake CI-only binary annotation. Each of the six
+> per-vendor `apps/adapters/{vendor}/cmd/fake-upstream/main.go` binaries is
+> a TEST-ONLY HTTP server that replaces the real vendor upstream in the
+> `gateway-openai-sdk-contract` CI lane (`.github/workflows/test.yml`). Per
+> OQ-4.8-3 m-1 ratification each `main.go` MUST carry the top-of-file
+> comment `// CI-only adapter-fake upstream — DO NOT package in production
+> images`. The production Dockerfile copies ONLY the `cmd/server/` output;
+> fake-upstream binaries are NEVER deployed. The pattern carries forward
+> to Stories 4.9+ adding vendors — append `apps/adapters/<new-vendor>/cmd/
+> fake-upstream/main.go` alongside the production `cmd/server/main.go`.
+> Sibling pattern precedent: Story 1.4 `apps/sample-otel-app/cmd/server/`
+> ratifies the "test-only reference implementation under apps/" convention.
+> Entry added by Story 4.8 (LOW-1 Architect Round 1), 2026-05-20.
+
+> **注**: Story 4.8 — shared protocol invariants library + matrix test.
+> `apps/api-gateway/tests/_protocol_invariants.py` (single module, leading-
+> underscore pytest "not a test module" convention per OQ-4.8-1) is the
+> FIRST shared pytest helper module in the gateway test root. Five exported
+> assertion helpers (`assert_chat_completion_shape` / `_chunk_shape` /
+> `assert_model_entry_shape` / `_embedding_shape` / `_error_envelope_shape`)
+> codify the §5.1.1/5.1.1.1/5.1.2 spec invariants. Imported by EVERY
+> per-vendor + per-endpoint `_contract_test.py`. Companion meta-tests live
+> at `_protocol_invariants_test.py` (4.8-UNIT-001..020). The matrix test
+> `openai_sdk_protocol_completeness_test.py` parametrises across 10 vendor
+> model-ids × stream={False, True} = 20 cells per BR-2.6. Stories 4.9+
+> adding vendors append one entry to `MATRIX_MODELS` (BR-2.8 single-source-
+> of-truth) and the matrix auto-grows. Entry added by Story 4.8, 2026-05-20.
+
 ---

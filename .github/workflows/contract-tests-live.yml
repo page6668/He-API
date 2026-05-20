@@ -1,0 +1,237 @@
+# Story 4.8 T5 — Adapter contract tests against REAL vendor APIs.
+#
+# Live lane — consumes real vendor API keys. SKIPPED on PRs by design.
+# Manual trigger:  gh workflow run contract-tests-live.yml --ref <branch>
+# Nightly cron:    02:00 UTC (per OQ-4.8-5 ratification — early detection
+#                  of vendor-side API regressions within 24h).
+#
+# Secret provisioning runbook: docs/dev/secrets/{vendor}-upstream.md
+# (per-vendor runbooks established Stories 4.1-4.6).
+#
+# M-1 Path (ii): this workflow runs the SAME `_contract_test.py` test
+# bodies as the PR lane — the ONLY difference is `{vendor}_UPSTREAM_BASE_URL`
+# (real vendor endpoints vs fake-upstream loopback). The legacy
+# `_live_test.py` modules remain wholesale-skipped (T4.13).
+
+name: contract-tests-live
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 2 * * *'  # 02:00 UTC daily — OQ-4.8-5
+
+permissions:
+  contents: read
+
+jobs:
+  gateway-contract-live:
+    name: gateway / contract-live
+    runs-on: ubuntu-22.04
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: he_api
+          POSTGRES_PASSWORD: he_api
+          POSTGRES_DB: he_api
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U he_api"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7.2-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      HE_API_DATABASE_URL: postgres://he_api:he_api@localhost:5432/he_api?sslmode=disable
+      HE_API_REDIS_URL: redis://localhost:6379/0
+      HE_API_AUTH_SVC_URL: http://localhost:9090
+      HE_API_JWT_PUBLIC_KEY_PATH: /tmp/he-api/public_key.pem
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install Python deps
+        run: pip install -r apps/api-gateway/tests/requirements.txt
+
+      - name: Generate RSA test keypair
+        run: |
+          mkdir -p /tmp/he-api
+          openssl genrsa -out /tmp/he-api/private_key.pem 2048
+          openssl rsa -in /tmp/he-api/private_key.pem -pubout -out /tmp/he-api/public_key.pem
+
+      - name: Apply migrations
+        run: ./scripts/db-migrate.sh apply
+
+      - name: Seed test user
+        id: seed-user
+        env:
+          PGPASSWORD: he_api
+        run: |
+          USER_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+          psql -h localhost -U he_api -d he_api -c "INSERT INTO he_api.users \
+            (id, email, password_hash, email_verified_at, locale, status) VALUES \
+            ('$USER_ID', 'live-contract@example.com', '\\x00', NOW(), 'en', 'active');"
+          echo "user_id=$USER_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Issue test API key
+        id: issue-key
+        env:
+          HE_API_TEST_USER_ID: ${{ steps.seed-user.outputs.user_id }}
+        run: |
+          KEY=$(./scripts/issue-test-key.sh)
+          echo "::add-mask::$KEY"
+          echo "api_key=$KEY" >> "$GITHUB_OUTPUT"
+
+      - name: Build adapter binaries
+        run: |
+          mkdir -p bin
+          for v in deepseek qwen kimi glm doubao ernie; do
+            go build -o "bin/${v}-adapter" "./apps/adapters/${v}/cmd/server"
+          done
+
+      # M-1 Path (ii) — the live lane DOES NOT start fake-upstream processes.
+      # Adapter binaries connect directly to real vendor production endpoints.
+      # Secrets resolve only inside this workflow file (BR-1.6 `secrets: inherit`
+      # discipline — repo-level secrets are not exposed to test.yml's PR lane).
+      - name: Start six adapter processes (background — live upstreams)
+        env:
+          DEEPSEEK_UPSTREAM_BASE_URL: https://api.deepseek.com
+          DEEPSEEK_UPSTREAM_API_KEY:  ${{ secrets.HE_API_DEEPSEEK_UPSTREAM_KEY }}
+          QWEN_UPSTREAM_BASE_URL:     https://dashscope.aliyuncs.com
+          QWEN_UPSTREAM_API_KEY:      ${{ secrets.HE_API_QWEN_UPSTREAM_KEY }}
+          KIMI_UPSTREAM_BASE_URL:     https://api.moonshot.cn
+          KIMI_UPSTREAM_API_KEY:      ${{ secrets.HE_API_KIMI_UPSTREAM_KEY }}
+          GLM_UPSTREAM_BASE_URL:      https://open.bigmodel.cn
+          GLM_UPSTREAM_API_KEY:       ${{ secrets.HE_API_GLM_UPSTREAM_KEY }}
+          DOUBAO_UPSTREAM_BASE_URL:   https://ark.cn-beijing.volces.com
+          DOUBAO_UPSTREAM_API_KEY:    ${{ secrets.HE_API_DOUBAO_UPSTREAM_KEY }}
+          DOUBAO_PRO_ENDPOINT_ID:     ${{ secrets.HE_API_DOUBAO_PRO_ENDPOINT_ID }}
+          DOUBAO_LITE_ENDPOINT_ID:    ${{ secrets.HE_API_DOUBAO_LITE_ENDPOINT_ID }}
+          ERNIE_UPSTREAM_BASE_URL:    https://qianfan.baidubce.com
+          ERNIE_UPSTREAM_API_KEY:     ${{ secrets.HE_API_ERNIE_UPSTREAM_KEY }}
+        run: |
+          set -e
+          mkdir -p /tmp/he-api/logs
+          for entry in \
+              "deepseek 19001" \
+              "qwen     19011" \
+              "kimi     19021" \
+              "glm      19031" \
+              "doubao   19041" \
+              "ernie    19051"; do
+            # shellcheck disable=SC2086
+            set -- $entry
+            vendor="$1"; port="$2"
+            PORT="${port}" "./bin/${vendor}-adapter" \
+              > "/tmp/he-api/logs/${vendor}-adapter.log" 2>&1 &
+            echo "$(echo "${vendor}" | tr '[:lower:]' '[:upper:]')_ADAPTER_PID=$!" >> "$GITHUB_ENV"
+          done
+
+      - name: Wait for adapter readiness
+        run: |
+          set -e
+          for port in 19001 19011 19021 19031 19041 19051; do
+            for i in $(seq 1 60); do
+              if nc -z localhost "$port" 2>/dev/null; then
+                echo "port $port ready"; break
+              fi
+              if [ "$i" = 60 ]; then
+                echo "::error::port $port did not ready within 60s"
+                for log in /tmp/he-api/logs/*.log; do
+                  echo "::group::$log"
+                  tail -n 50 "$log" || true
+                  echo "::endgroup::"
+                done
+                exit 1
+              fi
+              sleep 1
+            done
+          done
+
+      - name: Start auth-svc (background)
+        env:
+          HE_API_DB_POSTGRES_URI: ${{ env.HE_API_DATABASE_URL }}
+          HE_API_DB_REDIS_URI: ${{ env.HE_API_REDIS_URL }}
+          HE_API_JWT_PRIVATE_KEY_PATH: /tmp/he-api/private_key.pem
+          HE_API_JWT_PUBLIC_KEY_PATH: /tmp/he-api/public_key.pem
+        run: |
+          go run ./apps/auth-svc/cmd/server > /tmp/he-api/logs/auth-svc.log 2>&1 &
+          echo "AUTH_SVC_PID=$!" >> "$GITHUB_ENV"
+          for i in $(seq 1 30); do
+            if nc -z localhost 9090 2>/dev/null; then echo "auth-svc up"; break; fi
+            sleep 1
+          done
+
+      - name: Start api-gateway (background)
+        env:
+          HE_API_DEPLOY_ENV: development
+          DEEPSEEK_ADAPTER_ENDPOINT: http://localhost:19001
+          QWEN_ADAPTER_ENDPOINT: http://localhost:19011
+          KIMI_ADAPTER_ENDPOINT: http://localhost:19021
+          GLM_ADAPTER_ENDPOINT: http://localhost:19031
+          DOUBAO_ADAPTER_ENDPOINT: http://localhost:19041
+          ERNIE_ADAPTER_ENDPOINT: http://localhost:19051
+        run: |
+          go run ./apps/api-gateway/cmd/server > /tmp/he-api/logs/gateway.log 2>&1 &
+          echo "GATEWAY_PID=$!" >> "$GITHUB_ENV"
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/health >/dev/null 2>&1; then echo "gateway up"; break; fi
+            sleep 1
+          done
+
+      - name: Run contract tests (LIVE vendor upstreams)
+        env:
+          HE_API_TEST_GATEWAY_URL: http://localhost:8080
+          HE_API_TEST_API_KEY: ${{ steps.issue-key.outputs.api_key }}
+        run: pytest apps/api-gateway/tests/ -v --junitxml=/tmp/he-api/pytest-report.xml
+
+      # T5.3 — Operator-readable summary for the nightly health check.
+      - name: Emit live-lane summary
+        if: always()
+        run: |
+          {
+            echo "## Story 4.8 Live-Lane Run"
+            echo ""
+            echo "- Workflow: \`${{ github.workflow }}\`"
+            echo "- Trigger: \`${{ github.event_name }}\`"
+            echo "- Ref: \`${{ github.ref }}\`"
+            echo "- Wall-time: ${SECONDS}s"
+            echo ""
+            echo "_Per-test outcomes are in the JUnit XML artifact below._"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload live-lane artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-tests-live-artifacts
+          path: |
+            /tmp/he-api/logs/*.log
+            /tmp/he-api/pytest-report.xml
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Stop background services
+        if: always()
+        run: |
+          for v in GATEWAY AUTH_SVC DEEPSEEK_ADAPTER QWEN_ADAPTER KIMI_ADAPTER GLM_ADAPTER DOUBAO_ADAPTER ERNIE_ADAPTER; do
+            var="${v}_PID"
+            pid="${!var:-}"
+            [ -n "$pid" ] && kill "$pid" || true
+          done

@@ -20,6 +20,8 @@ import os
 import openai
 import pytest
 
+from _protocol_invariants import assert_model_entry_shape  # Story 4.8 T4.8 / MED-3
+
 GATEWAY_URL_ENV = "HE_API_TEST_GATEWAY_URL"
 API_KEY_ENV = "HE_API_TEST_API_KEY"
 
@@ -78,9 +80,12 @@ def test_models_list_canonical_catalogue():
     ids = {m.id for m in models}
     missing = CANONICAL_MODEL_IDS - ids
     assert not missing, f"canonical IDs missing from /v1/models: {missing}"
+    # Story 4.8 T4.8 — per-entry assertions delegated to the LIFTED shared
+    # helper from _protocol_invariants (MED-3 ratification). The Story 3.5
+    # closed-set `owned_by` discipline stays inline below — it's narrower
+    # than the helper's "non-empty string" check.
     for m in models:
-        assert m.object == "model", f"{m.id}: object={m.object!r}"
-        assert m.created > 0, f"{m.id}: created={m.created}"
+        assert_model_entry_shape(m, expected_id_set=ids)
         assert m.owned_by in CANONICAL_OWNED_BY, (
             f"{m.id}: owned_by={m.owned_by!r} not in BR-1.5 closed-set"
         )

@@ -41,6 +41,7 @@
 | **基础设施即代码** | Terraform | 1.7+ | 云资源 |
 | **测试 - 后端** | Go testing + testify + ginkgo | - | 单元 + 集成 |
 | **测试 - 前端** | Vitest + Playwright | - | 单元 + E2E |
+| **测试 - 网关合约** | pytest + openai SDK + httpx | 8.* / 1.40.* / 0.27.* | OpenAI Python SDK 合约测试 + 原始 HTTP 公共端点测试 (Story 3.3 引入，Story 4.8 扩展为跨厂商防回归矩阵) |
 | **压测** | k6 | 0.50+ | 性能基准 |
 | **API 文档** | Mintlify 或 Docusaurus | - | docs.he-api.com |
 
@@ -55,5 +56,6 @@
 | Date | Story | Change |
 |------|-------|--------|
 | 2026-05-18 | Story 3.1 (SM Phil) | §2.1 row "网关框架" rewritten from "Fiber 2.52+ (基于 fasthttp)" to "Go stdlib net/http + connectrpc/connect (Go 1.22+ / connectrpc 1.16+)" — ratifies the de-facto stack shipped by Stories 2.2 – 2.6. Original choice preserved under "Original (deprecated 2026-05-18, Story 3.1 ratification)" in `high-level-architecture.md §1.3.1 ADR-2 history`. |
+| 2026-05-20 | Story 4.8 (SM Phil + Dev Linus) | §2.1 adds row "测试 - 网关合约" (Python toolchain `pytest + openai + httpx` 8.* / 1.40.* / 0.27.*) — closes the pre-existing Story 3.3 documentation oversight (per LOW-2 Architect Round 1) so the OpenAI Python SDK contract-test toolchain is discoverable from the tech-stack canonical reference. |
 
 ---

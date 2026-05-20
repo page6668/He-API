@@ -1,0 +1,253 @@
+# Story 4.8 — Adapter Contract Tests (防回归) — QA Gate File (Round 3 — CLOSURE)
+schema: 1
+story: '4.8'
+story_title: '适配器契约测试（防回归）— gateway-openai-sdk-contract CI extension + shared protocol invariants library + 20-cell matrix test + opt-in live lane (Epic-4 anti-regression closure)'
+gate: PASS
+status_reason: |
+  Round 3 closure verdict: PASS at 100/100 (+5 over Round 2 CONCERNS).
+  4.8-BLIND-001 RESOLVED by SM correction-pass at story line 245
+  (Change Log 2026-05-20 by SM Phil) — BR-2.3(i) text rewritten from
+  UNCONDITIONAL → CONDITIONAL form matching the helper implementation
+  at `apps/api-gateway/tests/_protocol_invariants.py:198-206`. Doc/code
+  parity now achieved; meta-test test_chunk_helper_terminal_without_usage_med_5_fold_in
+  PASSED in Round 3 re-execution.
+
+  Independent test re-execution (Round 3 — all green, identical to Round 1+2):
+    DYLD_LIBRARY_PATH=/opt/homebrew/opt/expat/lib /tmp/qa48-venv/bin/pytest \
+      apps/api-gateway/tests/_protocol_invariants_test.py -v
+      → 34/34 PASS in 0.03s
+    pytest apps/api-gateway/tests/ --collect-only -q
+      → 147 tests collected, 0 errors
+    pytest apps/api-gateway/tests/ -q
+      → 36 passed + 111 skipped + 0 failed in 0.13s
+    go test ./apps/adapters/{6 vendors}/cmd/fake-upstream/...
+      → 6/6 packages PASS (cached — SM correction-pass touched zero Go)
+    go test ./apps/api-gateway/...
+      → 9/9 packages PASS (cached — including cross-vendor regression
+        Test_4_6_INT_009)
+
+  Round 3 verification of the previously-open BR-2.3(i) issue:
+    helper (apps/api-gateway/tests/_protocol_invariants.py:198-206):
+        elif is_terminal:
+            assert finish_reason == "stop", ...
+            usage = _get(chunk, "usage")
+            if usage is not None:                ← CONDITIONAL
+                _assert_usage_triple(usage, allow_zero_completion=True)
+
+    story BR-2.3(i) (docs/stories/4.8-...md:245) — POST SM PATCH:
+        '(i) on terminal chunk (is_terminal=True) chunk.choices[0].
+         finish_reason MUST be "stop"; WHEN chunk.usage is not None
+         ALSO assert the BR-2.2(j) additivity triple. The usage clause
+         is conditional to support Story-3.4 mock-chunker callers that
+         do not set stream_options.include_usage=True (per MED-5
+         Architect Round 2 ratification — helper at _protocol_invariants.py:198-206
+         implements this conditional form).'                  ← CONDITIONAL
+
+    Both sides CONDITIONAL — parity achieved. BS-1 promoted PARTIAL → PASS.
+
+  Cumulative coverage (all rounds aggregated):
+    - AC1 (CI runs contract tests) — 100% VERIFIED
+    - AC2 (OpenAI protocol field completeness library + matrix test) — 100% VERIFIED
+    - Task checkboxes — 67/67 = 100%
+    - Blind spot coverage — 5/5 = 100% (↑ from 4/5 in Round 2)
+    - Test counts — 34/34 meta + 6/6 fake-upstream Go + 9/9 api-gateway
+      Go + 36 passed/111 skipped pytest
+    - Documentation cascade (T6) — complete
+    - Architect Round-1 + Round-2 ratifications — all materialise in code
+    - SM correction-pass — applied verbatim per QA Round 2 remediation
+
+  Epic 4 Definition-of-Done — anti-regression closure (line 48-49) NOW CLOSED.
+
+reviewer: 'Turing (QA Engineer)'
+agent_model_used: 'Claude Opus 4.7 (1M context)'
+updated: '2026-05-20T00:00:00Z'
+
+story_status_after_review: Done
+
+review_round: 3
+review_mode: automated_plus_spot_check
+risk_level: MEDIUM
+quality_score: 100
+expires: '2026-08-20T00:00:00Z'
+
+round_history:
+  - round: 1
+    gate: CONCERNS
+    quality_score: 90
+    issues_critical: 0
+    issues_high: 0
+    issues_medium: 2
+    handoff_target: dev
+    handoff_command: '*apply-qa-fixes 4.8'
+  - round: 2
+    gate: CONCERNS
+    quality_score: 95
+    issues_critical: 0
+    issues_high: 0
+    issues_medium: 1
+    delta: 'CHECKBOX-001 RESOLVED; BLIND-001 carry-forward (Dev deferred to SM per AC permissions)'
+    handoff_target: sm
+    handoff_command: '*correct-course 4.8'
+  - round: 3
+    gate: PASS
+    quality_score: 100
+    issues_critical: 0
+    issues_high: 0
+    issues_medium: 0
+    delta: 'BLIND-001 RESOLVED (SM correction-pass landed line-245 conditional form)'
+    handoff_target: sm
+    handoff_command: '*draft {next_story_id}'
+
+incremental_context:
+  cached_risk_level: MEDIUM
+  cached_review_mode: automated_plus_spot_check
+  cached_project_type: fullstack_go_monorepo_with_python_contract_tests
+
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+  doc_drift_issues: []
+
+test_results:
+  automated_tests:
+    verification_method: 'independent_execution'
+    test_commands:
+      - 'DYLD_LIBRARY_PATH=/opt/homebrew/opt/expat/lib /tmp/qa48-venv/bin/pytest apps/api-gateway/tests/_protocol_invariants_test.py -v'
+      - 'DYLD_LIBRARY_PATH=/opt/homebrew/opt/expat/lib /tmp/qa48-venv/bin/pytest apps/api-gateway/tests/ --collect-only -q'
+      - 'DYLD_LIBRARY_PATH=/opt/homebrew/opt/expat/lib /tmp/qa48-venv/bin/pytest apps/api-gateway/tests/ -q'
+      - 'go test ./apps/adapters/{deepseek,qwen,kimi,glm,doubao,ernie}/cmd/fake-upstream/...'
+      - 'go test ./apps/api-gateway/...'
+    exit_code: 0
+    passed: true
+    pass_rate: 100
+    notes: |
+      Python meta-tests: 34/34 PASS in 0.03s.
+      Python collection: 147 collected, 0 errors.
+      Python execution (HE_API_TEST_GATEWAY_URL unset, expected): 36 passed
+      + 111 skipped + 0 failed in 0.13s.
+      Go fake-upstream: 6/6 packages PASS (cached).
+      Go api-gateway: 9/9 packages PASS (cached — including cross-vendor
+      regression Test_4_6_INT_009 at apps/api-gateway/tests).
+      Cache observation: All 15 Go packages cached confirms SM correction-pass
+      touched zero Go code (consistent with Change Log line 655: line-245
+      docstring edit only).
+    integrity_check:
+      dev_evidence_found: true
+      dev_claimed_pass: true
+      discrepancy: false
+
+  task_checkbox_verification:
+    total_checkboxes: 67
+    checked_count: 67
+    unchecked_count: 0
+    completion_rate: 100
+    consistency_rate: 100
+    notes: |
+      Round 3 re-audit (incremental — Round 2 checkbox_issues was [];
+      defensive re-audit confirms zero regression):
+        top-level T-groups checked (- [x]):    8
+        sub-tasks checked (^  - [x]):          59
+        combined checked:                      67
+        combined unchecked:                    0
+      Matches Round 1 + Round 2 audit counts exactly. Deliverable
+      presence (42/42 paths from File Locations table) unchanged.
+
+  ac_coverage:
+    coverage_rate: 100
+    passed: true
+    blocking_issues_count: 0
+    acs_fully_verified: 2
+    acs_not_verified: 0
+    ac_traceability_found: true
+    ac_discrepancies_count: 0
+    notes: |
+      Incremental mode — Round 2 failed_acs was []; no AC-level re-verification
+      triggered. AC1 + AC2 coverage carried forward from Round 1 (full
+      verification, 100% coverage). SM correction-pass at AC2 BR-2.3(i)
+      brought the AC text into line with the helper that already implemented
+      the Architect-Round-2 MED-5 ratification.
+
+  regression:
+    executed: true
+    passed: true
+    tests_total: 15  # 9 api-gateway Go packages + 6 fake-upstream Go packages
+    tests_failed: 0
+    scope: epic + cross-package
+    notes: |
+      Re-executed Go test sweep: 9/9 api-gateway packages PASS (cached;
+      includes Test_4_6_INT_009 six-vendor cross-vendor regression);
+      6/6 fake-upstream packages PASS (cached). Cache hits confirm SM
+      correction-pass did not perturb runtime or test code.
+
+  e2e_tests:
+    executed: false
+    skipped: true
+    skip_reason: |
+      Incremental mode — Round 2 skip_e2e=true under
+      review_mode=automated_plus_spot_check (MEDIUM risk, no UI surface).
+      Round 2 failed_e2e_scenarios was []; no E2E re-test required.
+
+  blind_spot_verification:
+    executed: true
+    total_scenarios: 5
+    covered_explicit: 5
+    covered_via_reuse: 0
+    partial_or_gaps: 0
+    coverage_rate: 100
+    delta_vs_round2: 'BS-1 PARTIAL → PASS (SM correction-pass synced story BR-2.3(i) to conditional form)'
+    notes: |
+      BS-1 (MED-5 fold-in coverage)         → PASS (helper ✓; story BR-2.3(i) now CONDITIONAL — doc/code parity achieved)
+      BS-2 (BR-1.10 determinism)            → PASS (zero time.Now/rand)
+      BS-3 (OQ-4.8-3 m-1 CI-only header)    → PASS (all 6 files)
+      BS-4 (BR-2.10 DRY enforcement)        → PASS (11/11 contract files import shared lib)
+      BS-5 (M-2 compensating control)       → PASS (conftest expected_vendor_models_present fixture)
+
+evidence:
+  story_path: 'docs/stories/4.8-adapter-contract-tests-regression-prevention.md'
+  test_design_path: 'docs/qa/assessments/4.8-test-design-20260520.md'
+  round1_archive: 'docs/qa/checkpoints/4.8-round1/'
+  round2_archive: 'docs/qa/checkpoints/4.8-round2/'
+  round3_checkpoints: 'docs/qa/checkpoints/4.8/'
+  test_commands:
+    - 'pytest apps/api-gateway/tests/_protocol_invariants_test.py -v'
+    - 'pytest apps/api-gateway/tests/ --collect-only -q'
+    - 'pytest apps/api-gateway/tests/ -q'
+    - 'go test ./apps/adapters/{deepseek,qwen,kimi,glm,doubao,ernie}/cmd/fake-upstream/...'
+    - 'go test ./apps/api-gateway/...'
+    - "awk '/^## Tasks \\/ Subtasks/{flag=1;next} /^## /{flag=0} flag' docs/stories/4.8-*.md | grep -cE '^- \\[x\\] \\*\\*T[0-9]|^  - \\[x\\]'"
+    - 'sed -n 245p docs/stories/4.8-adapter-contract-tests-regression-prevention.md'
+    - 'sed -n 198,208p apps/api-gateway/tests/_protocol_invariants.py'
+  files_collected: 0
+  issues_with_evidence: []
+
+issues:
+  critical: []
+  high: []
+  medium: []
+  low: []
+
+recommendations:
+  must_fix: []
+  should_improve:
+    - 'Deferred housekeeping (unchanged from Round 1+2): the six _live_test.py modules are wholesale-skipped pending deletion per T4.13 ratification — track in Epic-5 backlog.'
+
+quality_score: 100
+quality_score_breakdown:
+  base_score: 100
+  deductions: []
+  notes: |
+    Round 3 PASS at 100/100 (+5 vs Round 2). All carry-forward issues
+    from Round 1 + Round 2 fully resolved:
+      - 4.8-CHECKBOX-001 closed in Round 2 via Dev chore patch
+      - 4.8-BLIND-001 closed in Round 3 via SM correction-pass
+    Independent test execution confirms substantive correctness intact:
+    34/34 meta + 6/6 fake-upstream Go + 9/9 api-gateway Go + 36 passed
+    + 111 skipped + 0 failed pytest, all green. Doc/code parity at
+    BR-2.3(i) achieved. Story is ready for finalize-commit.
+
+epic_4_dod_closure:
+  line_1_six_vendor_chat_completions: 'CLOSED (Stories 4.1-4.6); cross-vendor regression Test_4_6_INT_009 still PASSES under Story-4.8 changes.'
+  line_2_token_usage_under_1_percent: 'CLOSED (Stories 4.1-4.6 packages/adapter-usage); Story-4.8 BR-2.2(j) reinforces additivity at contract-test layer.'
+  line_3_capability_matrix_published: 'CLOSED (Story 4.7).'
+  anti_regression_closure: 'CLOSED by Story-4.8 — gateway-openai-sdk-contract CI extension + adapter-fake harness lifecycle + 20-cell protocol completeness matrix + shared _protocol_invariants.py library + opt-in live lane all landed and verified in Round 3 closure.'

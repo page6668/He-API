@@ -1,0 +1,31 @@
+gate_decision:
+  gate_result: PASS
+  quality_score: 100
+  reasoning: |
+    Round 3 closure verdict: PASS at 100/100 (+5 over Round 2 CONCERNS).
+    The sole open issue from Round 2 (4.8-BLIND-001, MEDIUM doc-drift)
+    was closed by SM's correction-pass at story line 245 (Change Log
+    line 655, 2026-05-20). Round 3 verification:
+      - helper at _protocol_invariants.py:198-206 — CONDITIONAL form ✓
+      - story BR-2.3(i) at line 245           — CONDITIONAL form ✓
+      - meta-test test_chunk_helper_terminal_without_usage_med_5_fold_in
+        — PASSED (Round 3 re-execution)
+    All other Round-1/Round-2 verdicts carry forward: 67/67 checkboxes,
+    2/2 ACs at 100% coverage, 9/9 + 6/6 Go packages PASS, 34/34 meta
+    pytest PASS, 36 passed + 111 skipped + 0 failed across the full
+    apps/api-gateway/tests/ suite. Cross-vendor regression
+    Test_4_6_INT_009 still PASSES. Zero issues open at any severity.
+  next_status: Done
+  next_action: 'finalize_commit'
+  handoff_target: sm
+  handoff_command: '*draft {next_story_id}'
+  issues:
+    critical: []
+    high: []
+    medium: []
+    low: []
+  epic_4_dod_closure:
+    line_1_six_vendor_chat_completions: CLOSED
+    line_2_token_usage_under_1_percent:  CLOSED
+    line_3_capability_matrix_published:  CLOSED
+    anti_regression_closure:             CLOSED  # this story (4.8) closes the line

@@ -1,0 +1,19 @@
+step: 1
+purpose: Risk Assessment
+risk_level: MEDIUM
+review_mode: automated_plus_spot_check
+skip_e2e: true   # Pure test-infrastructure story; no UI; no API surface changes; no user-facing deliverable
+review_round: 1
+rationale: |
+  complexity_indicators: 2 (new_patterns + core_docs)
+  security_sensitive: false
+  api_changes: false
+  db_schema: false
+  has_ui_changes: false
+  has_user_facing_deliverable: false
+  dev_gate_score: 95+ (Dev claims all 8 task groups complete + final verification passed)
+  test_coverage_level: comprehensive (Epic-4 epic-level directive)
+  Story is Epic-4 closure for anti-regression contract tests.
+  new_patterns risk: the shared invariants library + adapter-fake binary pattern will cascade
+  to Stories 4.9+ vendor additions + Epic 9 observability + Epic 10 SDK tests, so precedent
+  fidelity matters. Hence MEDIUM (not LOW) despite zero production surface change.

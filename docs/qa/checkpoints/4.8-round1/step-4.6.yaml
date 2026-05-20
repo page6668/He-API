@@ -1,0 +1,31 @@
+step: 4.6
+purpose: AC Coverage Verification
+ac_coverage:
+  AC1:
+    title: CI runs contract tests
+    result: PASS
+    evidence:
+      - '.github/workflows/test.yml lines 257-360: TLS cert generation + build adapter+fake binaries + start six fake-upstreams (ports 19000-19050) + start six adapters (19001-19051) + readiness gates + per-vendor *_ADAPTER_ENDPOINT env vars on gateway start'
+      - 'Six adapter-fake binaries exist: apps/adapters/{deepseek,qwen,kimi,glm,doubao,ernie}/cmd/fake-upstream/main.go'
+      - 'Each fake-upstream main.go carries `// CI-only` top-of-file comment (OQ-4.8-3 m-1 add-on)'
+      - 'Log artifact upload step at line 424 (BR-1.8)'
+      - '.github/workflows/contract-tests-live.yml exists with `on: workflow_dispatch + schedule: cron 0 2 * * *` (OQ-4.8-5)'
+      - 'Per-vendor _live_test.py files (×6) carry `pytestmark = [pytest.mark.skip(...)]` (T4.13 / M-1 Path (ii))'
+      - 'Six fake-upstream Go test packages PASS (4.8-INFRA-001..006)'
+  AC2:
+    title: OpenAI protocol field completeness verification
+    result: PASS
+    evidence:
+      - 'apps/api-gateway/tests/_protocol_invariants.py defines 5 helpers + 4 constants (stdlib-only)'
+      - '34 meta-tests PASS in 0.02s including MED-5 fold-in test (test_chunk_helper_terminal_without_usage_med_5_fold_in)'
+      - 'openai_sdk_protocol_completeness_test.py defines MATRIX_MODELS (10) × MATRIX_STREAM (2) = MATRIX_CELLS (20 cells); VIRTUAL_HE_ROUTER_MODELS placeholder for 3 he-router-* per BR-2.9'
+      - 'Matrix tests 001..009 cover BR-2.6 (parametrize), BR-2.7 (step-summary), BR-2.8 (single source MATRIX_MODELS constant), BR-2.9 (3 skip placeholders), BR-2.3b assert_model_entry_shape'
+      - 'BR-2.10 DRY enforcement: all 11 per-vendor + cross-cutting _contract_test.py files import `from _protocol_invariants import ...`'
+      - 'conftest.py exports 5 fixtures (gateway_url, api_key, openai_client, httpx_client, expected_vendor_models_present) — last is M-2 compensating control'
+  failed_acs: []
+  partial_acs: []
+  notes: |
+    Comprehensive test design level per Epic-4 directive — both ACs implemented
+    end-to-end. Documentation updates (T6) verified: testing-strategy.md §13.2/13.3
+    + Change Log; source-tree.md two new Story-4.8 annotation paragraphs (LOW-1);
+    tech-stack.md §2.1 Python row + Change Log (LOW-2); 4.8-dev-log.md (191 lines).

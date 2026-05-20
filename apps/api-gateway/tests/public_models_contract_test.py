@@ -35,6 +35,10 @@ import os
 import httpx
 import pytest
 
+# Story 4.8 T4.11 — rewire per-entry shape to shared helper. Keep the
+# byte-identity test (CONTRACT-005) inline since it's test-specific.
+from _protocol_invariants import assert_model_entry_shape
+
 GATEWAY_URL = os.environ.get("HE_API_TEST_GATEWAY_URL")
 API_KEY = os.environ.get("HE_API_TEST_API_KEY")
 
@@ -82,12 +86,12 @@ def test_4_7_contract_003_public_models_unauthenticated_get_returns_well_shaped_
     assert isinstance(data, list), f"data is {type(data)!r}"
     assert len(data) == 11, f"len(data)={len(data)}"
 
-    required_top = {"id", "object", "created", "owned_by", "capabilities"}
+    # Story 4.8 T4.11 — per-entry shape delegated to the shared helper. The
+    # Story 4.7 capability sub-key typing (bool × 5 + int × 2) stays inline
+    # because it's narrower than the helper's generic dict assertion.
     for entry in data:
-        missing = required_top - set(entry.keys())
-        assert not missing, f"entry {entry.get('id')!r} missing keys {missing}"
+        assert_model_entry_shape(entry)
         caps = entry["capabilities"]
-        assert isinstance(caps, dict), f"capabilities is {type(caps)!r}"
         for k in CAPABILITY_BOOL_KEYS:
             assert k in caps, f"{entry['id']}: capabilities missing {k!r}"
             assert isinstance(caps[k], bool), (

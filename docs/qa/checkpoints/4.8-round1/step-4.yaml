@@ -1,0 +1,49 @@
+step: 4
+purpose: Independent Automated Test Execution
+automated_tests:
+  verification_method: independent_execution
+  python_meta_tests:
+    test_command: 'pytest apps/api-gateway/tests/_protocol_invariants_test.py -v'
+    exit_code: 0
+    passed: true
+    total: 34
+    passed_count: 34
+    failed_count: 0
+    skipped_count: 0
+    execution_time_seconds: 0.02
+  python_full_suite_collect_only:
+    test_command: 'pytest apps/api-gateway/tests/ --collect-only -q'
+    exit_code: 0
+    collected_total: 147
+    collection_errors: 0
+  python_full_suite_no_gateway:
+    test_command: 'pytest apps/api-gateway/tests/ -q   (HE_API_TEST_GATEWAY_URL unset)'
+    exit_code: 0
+    passed: 36
+    skipped: 111   # All contract-needing-gateway tests skip via skipif; live tests skip via pytestmark; expected.
+    failed: 0
+  go_fake_upstream_tests:
+    test_command: 'go test ./apps/adapters/{6 vendors}/cmd/fake-upstream/...'
+    exit_code: 0
+    packages_passed: 6
+    packages_failed: 0
+    notes: 'Each per-vendor main_test.go covers 4.8-INFRA-00{1..6}'
+  go_fake_upstream_build:
+    test_command: 'go build ./apps/adapters/{6 vendors}/cmd/fake-upstream/'
+    exit_code: 0
+    binaries_built: 6
+  go_api_gateway_regression:
+    test_command: 'go test ./apps/api-gateway/...'
+    exit_code: 0
+    packages_passed: 9
+    packages_failed: 0
+    notes: |
+      cmd/server (3.509s), adapterclient (0.738s), handlers (1.112s),
+      middleware (0.955s), middleware/cors (0.992s), middleware/requestid (cached),
+      openaierr (0.607s), streaming (cached), tests (0.888s — cross-vendor regression).
+  integrity_check:
+    dev_evidence_found: true
+    dev_claimed_pass: true
+    discrepancy: false
+  issues: []
+verdict: PASS

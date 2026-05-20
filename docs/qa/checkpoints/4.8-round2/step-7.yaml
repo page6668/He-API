@@ -1,0 +1,55 @@
+step: 7
+purpose: Gate Decision (Round 2)
+gate_result: CONCERNS
+quality_score: 95
+review_round: 2
+risk_level: MEDIUM
+review_mode: automated_plus_spot_check
+final_status: ReviewWithConcerns
+score_delta_vs_round1: +5  # 90 → 95 (CHECKBOX-001 -5 closed; BLIND-001 -5 retained)
+issues_by_severity:
+  critical: 0
+  high: 0
+  major: 0
+  medium: 1
+  low: 0
+issues_resolved_this_round:
+  - id: 4.8-CHECKBOX-001
+    round1_severity: MEDIUM
+    round2_status: RESOLVED
+    verification: '8 T-groups checked + 59 sub-tasks checked = 67/67 (matches Round 1 audit count); deliverable presence unchanged (42/42)'
+issues_unresolved_from_round1:
+  - id: 4.8-BLIND-001
+    severity: MEDIUM
+    blocking: false
+    ownership: SM
+    finding: 'Story BR-2.3(i) row at line 245 still reads UNCONDITIONAL `chunk.usage is not None`; helper correctly implements CONDITIONAL form per MED-5 Architect Round 2 ratification'
+    remediation: |
+      SM applies the BR-2.3(i) text patch documented in Round 1 gate file
+      recommendations.should_improve[1]. Pure documentation edit; no code or
+      test change required. Helper at _protocol_invariants.py:198-206 already
+      conforms to MED-5 (meta-test test_chunk_helper_terminal_without_usage_med_5_fold_in
+      PASSES). Dev was locked out of the AC section per story-update-permissions.yaml.
+gate_file: docs/qa/gates/4.8-adapter-contract-tests-regression-prevention.yml
+test_design_doc: docs/qa/assessments/4.8-test-design-20260520.md
+test_summary:
+  python_meta_tests: '34/34 PASS in 0.02s (unchanged vs Round 1)'
+  python_full_run: '36 passed + 111 skipped + 0 failed (unchanged vs Round 1)'
+  go_fake_upstream: '6/6 PASS (cached — no code changed)'
+  go_api_gateway: '9/9 PASS (cached — no code changed)'
+  task_checkboxes: '67/67 checked (was 0/67 in Round 1)'
+post_review_workflow:
+  workflow_action: handoff_sm
+  requires_git_commit: false   # Status != Done OR Gate != PASS → finalize-commit will SKIP
+  handoff_target: sm
+  next_command: '*correct-course 4.8'
+  reasoning: |
+    Gate=CONCERNS with one non-blocking MEDIUM issue (4.8-BLIND-001) that
+    Dev cannot fix — it lives in `## Acceptance Criteria` which is SM-owned
+    per story-update-permissions.yaml and explicitly locked from Dev per
+    apply-qa-fixes.md Step 5. Standard CONCERNS-routing table (gate_result:
+    CONCERNS → dev: *apply-qa-fixes) does NOT apply here because Dev already
+    formally DEFERRED this exact issue in their Round 1 chore patch and
+    documented SM as the responsible role. Routing to SM via *correct-course
+    is the only viable path to PASS. On Round 3 verification of the BR-2.3(i)
+    text patch, gate flips to PASS at 100/100 → status Done → finalize-commit.

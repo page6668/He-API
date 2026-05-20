@@ -254,6 +254,17 @@ jobs:
           openssl genrsa -out /tmp/he-api/private_key.pem 2048
           openssl rsa -in /tmp/he-api/private_key.pem -pubout -out /tmp/he-api/public_key.pem
 
+      # Story 4.8 T2 — Self-signed TLS cert for the six adapter-fake upstreams.
+      # Adapter binaries connect over HTTPS; SSL_CERT_FILE points them at this
+      # bundle so the production-code trust path stays unchanged.
+      - name: Generate adapter-fake TLS cert
+        run: |
+          openssl req -x509 -newkey rsa:2048 -nodes \
+            -keyout /tmp/he-api/fake-tls.key \
+            -out    /tmp/he-api/fake-tls.crt \
+            -days 1 -subj "/CN=localhost" \
+            -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+
       - name: Apply migrations
         run: ./scripts/db-migrate.sh apply
 
@@ -277,6 +288,92 @@ jobs:
           echo "::add-mask::$KEY"
           echo "api_key=$KEY" >> "$GITHUB_OUTPUT"
 
+      # Story 4.8 T2.1 — Build the six adapter-fake binaries + six adapter
+      # binaries side-by-side. Cache is enabled at the setup-go step above so
+      # the per-vendor builds reuse module compilation.
+      - name: Build adapter binaries + adapter-fake upstreams
+        run: |
+          mkdir -p bin
+          for v in deepseek qwen kimi glm doubao ernie; do
+            go build -o "bin/${v}-fake" "./apps/adapters/${v}/cmd/fake-upstream"
+            go build -o "bin/${v}-adapter" "./apps/adapters/${v}/cmd/server"
+          done
+
+      # Story 4.8 T2.2 — Start the six fake-upstreams on the BR-1.2 port map
+      # (19000/19010/19020/19030/19040/19050). Captures PIDs for the cleanup
+      # step. The TLS cert generated above is shared across all six.
+      - name: Start six adapter-fake processes (background)
+        run: |
+          set -e
+          mkdir -p /tmp/he-api/logs
+          for entry in "deepseek 19000" "qwen 19010" "kimi 19020" "glm 19030" "doubao 19040" "ernie 19050"; do
+            v="${entry% *}"
+            port="${entry#* }"
+            "./bin/${v}-fake" -listen ":${port}" \
+              -cert /tmp/he-api/fake-tls.crt \
+              -key  /tmp/he-api/fake-tls.key \
+              > "/tmp/he-api/logs/${v}-fake.log" 2>&1 &
+            pid_var="$(echo "${v}" | tr '[:lower:]' '[:upper:]')_FAKE_PID"
+            echo "${pid_var}=$!" >> "$GITHUB_ENV"
+          done
+
+      # Story 4.8 T2.3 — Start the six adapter Connect-RPC binaries on the
+      # paired ports (19001/19011/.../19051). Each adapter's UPSTREAM_BASE_URL
+      # points at the matching fake-upstream HTTPS port. SSL_CERT_FILE makes
+      # the adapter trust the self-signed cert without modifying production code.
+      - name: Start six adapter processes (background)
+        env:
+          SSL_CERT_FILE: /tmp/he-api/fake-tls.crt
+        run: |
+          set -e
+          # Brief settle before connecting; per-process readiness loop below.
+          for entry in \
+              "deepseek 19001 19000 DEEPSEEK" \
+              "qwen     19011 19010 QWEN" \
+              "kimi     19021 19020 KIMI" \
+              "glm      19031 19030 GLM" \
+              "doubao   19041 19040 DOUBAO" \
+              "ernie    19051 19050 ERNIE"; do
+            # shellcheck disable=SC2086
+            set -- $entry
+            vendor="$1"; port="$2"; fake_port="$3"; prefix="$4"
+            env \
+              PORT="${port}" \
+              "${prefix}_UPSTREAM_BASE_URL=https://localhost:${fake_port}" \
+              "${prefix}_UPSTREAM_API_KEY=test-stub" \
+              DOUBAO_PRO_ENDPOINT_ID=ep-test-doubao-pro \
+              DOUBAO_LITE_ENDPOINT_ID=ep-test-doubao-lite \
+              "./bin/${vendor}-adapter" \
+              > "/tmp/he-api/logs/${vendor}-adapter.log" 2>&1 &
+            pid_var="${prefix}_ADAPTER_PID"
+            echo "${pid_var}=$!" >> "$GITHUB_ENV"
+          done
+
+      # Story 4.8 T2.6 / BR-1.3 — Readiness checks for the twelve adapter-
+      # related processes BEFORE starting auth-svc / api-gateway. Total budget
+      # ≤ 60s (per-port `nc -z` poll inherited from Story-3.3 pattern).
+      - name: Wait for adapter mesh readiness
+        run: |
+          set -e
+          for port in 19000 19010 19020 19030 19040 19050 19001 19011 19021 19031 19041 19051; do
+            for i in $(seq 1 60); do
+              if nc -z localhost "$port" 2>/dev/null; then
+                echo "port $port ready"
+                break
+              fi
+              if [ "$i" = 60 ]; then
+                echo "::error::port $port did not ready within 60s"
+                for log in /tmp/he-api/logs/*.log; do
+                  echo "::group::$log"
+                  tail -n 50 "$log" || true
+                  echo "::endgroup::"
+                done
+                exit 1
+              fi
+              sleep 1
+            done
+          done
+
       - name: Start auth-svc (background)
         env:
           HE_API_DB_POSTGRES_URI: ${{ env.HE_API_DATABASE_URL }}
@@ -284,7 +381,7 @@ jobs:
           HE_API_JWT_PRIVATE_KEY_PATH: /tmp/he-api/private_key.pem
           HE_API_JWT_PUBLIC_KEY_PATH: /tmp/he-api/public_key.pem
         run: |
-          go run ./apps/auth-svc/cmd/server &
+          go run ./apps/auth-svc/cmd/server > /tmp/he-api/logs/auth-svc.log 2>&1 &
           echo "AUTH_SVC_PID=$!" >> "$GITHUB_ENV"
           # crude readiness wait
           for i in $(seq 1 30); do
@@ -292,11 +389,20 @@ jobs:
             sleep 1
           done
 
+      # Story 4.8 T2.4 — Story-4.1..4.6 *_ADAPTER_ENDPOINT env vars wire the
+      # gateway's adapterclient.Registry to the six adapter processes started
+      # above; the registry then resolves ALL 10 vendor model-ids.
       - name: Start api-gateway (background)
         env:
           HE_API_DEPLOY_ENV: development
+          DEEPSEEK_ADAPTER_ENDPOINT: http://localhost:19001
+          QWEN_ADAPTER_ENDPOINT: http://localhost:19011
+          KIMI_ADAPTER_ENDPOINT: http://localhost:19021
+          GLM_ADAPTER_ENDPOINT: http://localhost:19031
+          DOUBAO_ADAPTER_ENDPOINT: http://localhost:19041
+          ERNIE_ADAPTER_ENDPOINT: http://localhost:19051
         run: |
-          go run ./apps/api-gateway/cmd/server &
+          go run ./apps/api-gateway/cmd/server > /tmp/he-api/logs/gateway.log 2>&1 &
           echo "GATEWAY_PID=$!" >> "$GITHUB_ENV"
           for i in $(seq 1 30); do
             if curl -fsS http://localhost:8080/health >/dev/null 2>&1; then echo "gateway up"; break; fi
@@ -307,10 +413,35 @@ jobs:
         env:
           HE_API_TEST_GATEWAY_URL: http://localhost:8080
           HE_API_TEST_API_KEY: ${{ steps.issue-key.outputs.api_key }}
-        run: pytest apps/api-gateway/tests/ -v
+        run: pytest apps/api-gateway/tests/ -v --junitxml=/tmp/he-api/pytest-report.xml
+
+      # Story 4.8 T2.7 / BR-1.8 — Upload process logs + JUnit XML on failure
+      # so operators can correlate contract violations to specific processes.
+      - name: Upload contract-test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gateway-openai-sdk-contract-artifacts
+          path: |
+            /tmp/he-api/logs/*.log
+            /tmp/he-api/pytest-report.xml
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Stop background services
         if: always()
         run: |
-          [ -n "${GATEWAY_PID:-}" ] && kill "$GATEWAY_PID" || true
-          [ -n "${AUTH_SVC_PID:-}" ] && kill "$AUTH_SVC_PID" || true
+          [ -n "${GATEWAY_PID:-}" ]         && kill "$GATEWAY_PID"         || true
+          [ -n "${AUTH_SVC_PID:-}" ]        && kill "$AUTH_SVC_PID"        || true
+          [ -n "${DEEPSEEK_ADAPTER_PID:-}" ] && kill "$DEEPSEEK_ADAPTER_PID" || true
+          [ -n "${QWEN_ADAPTER_PID:-}" ]     && kill "$QWEN_ADAPTER_PID"     || true
+          [ -n "${KIMI_ADAPTER_PID:-}" ]     && kill "$KIMI_ADAPTER_PID"     || true
+          [ -n "${GLM_ADAPTER_PID:-}" ]      && kill "$GLM_ADAPTER_PID"      || true
+          [ -n "${DOUBAO_ADAPTER_PID:-}" ]   && kill "$DOUBAO_ADAPTER_PID"   || true
+          [ -n "${ERNIE_ADAPTER_PID:-}" ]    && kill "$ERNIE_ADAPTER_PID"    || true
+          [ -n "${DEEPSEEK_FAKE_PID:-}" ]    && kill "$DEEPSEEK_FAKE_PID"    || true
+          [ -n "${QWEN_FAKE_PID:-}" ]        && kill "$QWEN_FAKE_PID"        || true
+          [ -n "${KIMI_FAKE_PID:-}" ]        && kill "$KIMI_FAKE_PID"        || true
+          [ -n "${GLM_FAKE_PID:-}" ]         && kill "$GLM_FAKE_PID"         || true
+          [ -n "${DOUBAO_FAKE_PID:-}" ]      && kill "$DOUBAO_FAKE_PID"      || true
+          [ -n "${ERNIE_FAKE_PID:-}" ]       && kill "$ERNIE_FAKE_PID"       || true

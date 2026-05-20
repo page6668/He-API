@@ -1,0 +1,30 @@
+step: 7
+purpose: Gate Decision
+gate_result: CONCERNS
+quality_score: 90
+review_round: 1
+risk_level: MEDIUM
+review_mode: automated_plus_spot_check
+final_status: ReviewWithConcerns
+issues_by_severity:
+  critical: 0
+  high: 0
+  major: 0
+  medium: 2
+  low: 0
+issues:
+  - 4.8-CHECKBOX-001  # Dev hand-off-hygiene drift (Tasks section)
+  - 4.8-BLIND-001     # BR-2.3(i) doc drift vs helper after MED-5 fold-in
+gate_file: docs/qa/gates/4.8-adapter-contract-tests-regression-prevention.yml
+test_design_doc: docs/qa/assessments/4.8-test-design-20260520.md
+post_review_workflow:
+  workflow_action: handoff_dev
+  requires_git_commit: false   # Status != Done OR Gate != PASS → finalize-commit will SKIP
+  handoff_target: dev
+  next_command: '*develop 4.8'
+  reasoning: |
+    Gate=CONCERNS with two non-blocking MEDIUM issues, both auto-fixable in
+    a small chore patch. Routing to Dev for the patch (flip 67 task
+    checkboxes + sync BR-2.3(i) row text to the implemented helper);
+    on re-submission QA Round-2 verifies the patch and converts to PASS
+    → Done. No code rework required.

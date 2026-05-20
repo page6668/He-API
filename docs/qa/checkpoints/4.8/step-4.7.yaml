@@ -1,0 +1,14 @@
+regression:
+  executed: true
+  passed: true
+  tests_total: 15
+  tests_failed: 0
+  scope: 'epic + cross-package (api-gateway + 6 fake-upstream packages)'
+  notes: |
+    Round 3 incremental — Round 2 regression passed cleanly; per spec
+    incremental mode allows skip when previous round passed. Defensive
+    re-run executed anyway: go test ./apps/api-gateway/... + go test
+    ./apps/adapters/{6 vendors}/cmd/fake-upstream/... → 9/9 + 6/6 PASS
+    (all cached — confirms SM patch touched zero Go code). Cross-vendor
+    regression Test_4_6_INT_009 (six-vendor co-registration) PASSES.
+  issues: []

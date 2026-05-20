@@ -1,0 +1,18 @@
+step: 2
+purpose: Project Type Detection
+project_type:
+  type: fullstack
+  subtype: go_monorepo_with_python_contract_tests
+test_strategy:
+  primary_tool: bash
+  requires_environment: false   # Story 4.8 review focus = independent unit + meta tests; full E2E workflow runs in CI; QA does not stand up 12 background processes locally
+  startup_command: 'N/A (independent test execution only)'
+  expected_port: null
+rationale: |
+  Repo is a Go monolith (apps/api-gateway + apps/adapters/{vendor}) + Python contract tests
+  (apps/api-gateway/tests/). For Story 4.8 review, the testable deliverables are:
+  (a) Python meta-tests _protocol_invariants_test.py (pytest)
+  (b) Six fake-upstream Go binaries + their main_test.go (go test)
+  (c) The api-gateway Go test suite (go test) — sanity check that we did not regress
+  Live E2E gateway-openai-sdk-contract workflow execution is GitHub Actions territory;
+  QA verifies via T7.2/T7.3 evidence + workflow YAML lint.

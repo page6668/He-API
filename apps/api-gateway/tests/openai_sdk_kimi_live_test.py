@@ -42,6 +42,10 @@ import pytest
 from openai import OpenAI
 
 pytestmark = [
+    # Story 4.8 T4.13 / M-1 Path (ii) — see deepseek_live_test.py header.
+    pytest.mark.skip(
+        reason="folded into contract suite under Story 4.8 — pending deletion in housekeeping"
+    ),
     pytest.mark.skipif(
         os.environ.get("HE_API_TEST_GATEWAY_URL") is None,
         reason="HE_API_TEST_GATEWAY_URL not set",

@@ -1,0 +1,29 @@
+step: 4
+purpose: Independent Automated Test Execution (Round 2)
+automated_tests:
+  verification_method: 'independent_execution'
+  test_commands:
+    - 'DYLD_LIBRARY_PATH=/opt/homebrew/opt/expat/lib /tmp/qa48-venv/bin/pytest apps/api-gateway/tests/_protocol_invariants_test.py -v'
+    - 'DYLD_LIBRARY_PATH=/opt/homebrew/opt/expat/lib /tmp/qa48-venv/bin/pytest apps/api-gateway/tests/ --collect-only -q'
+    - 'DYLD_LIBRARY_PATH=/opt/homebrew/opt/expat/lib /tmp/qa48-venv/bin/pytest apps/api-gateway/tests/ -q'
+    - 'go test ./apps/adapters/{deepseek,qwen,kimi,glm,doubao,ernie}/cmd/fake-upstream/...'
+    - 'go test ./apps/api-gateway/...'
+  exit_code: 0
+  passed: true
+  pass_rate: 100
+  totals:
+    python_meta_tests: '34/34 PASS in 0.02s'
+    python_collection: '147 tests collected, 0 errors'
+    python_full_run: '36 passed + 111 skipped + 0 failed in 0.14s'
+    go_fake_upstream_packages: '6/6 PASS (cached)'
+    go_api_gateway_packages: '9/9 PASS (cached)'
+  cache_observation: |
+    All Go packages cached vs Round 1 — confirms Dev chore patch touched ONLY
+    docs/stories/4.8-*.md (zero changes to apps/, .github/workflows/, packages/).
+    Python full suite re-run produced identical 36+111+0 outcome.
+  failed_test_names: []
+  integrity_check:
+    dev_evidence_found: true
+    dev_claimed_pass: true
+    discrepancy: false
+  issues: []

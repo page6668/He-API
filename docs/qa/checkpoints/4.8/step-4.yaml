@@ -1,0 +1,31 @@
+automated_tests:
+  verification_method: 'independent_execution'
+  test_commands:
+    - 'DYLD_LIBRARY_PATH=/opt/homebrew/opt/expat/lib /tmp/qa48-venv/bin/pytest apps/api-gateway/tests/_protocol_invariants_test.py -v'
+    - 'DYLD_LIBRARY_PATH=/opt/homebrew/opt/expat/lib /tmp/qa48-venv/bin/pytest apps/api-gateway/tests/ --collect-only -q'
+    - 'DYLD_LIBRARY_PATH=/opt/homebrew/opt/expat/lib /tmp/qa48-venv/bin/pytest apps/api-gateway/tests/ -q'
+    - 'go test ./apps/adapters/{deepseek,qwen,kimi,glm,doubao,ernie}/cmd/fake-upstream/...'
+    - 'go test ./apps/api-gateway/...'
+  exit_code: 0
+  passed: true
+  pass_rate: 100
+  totals:
+    meta_tests:    {passed: 34, total: 34}
+    pytest_all:    {collected: 147, passed: 36, skipped: 111, failed: 0}
+    go_fake_upstream: {packages: 6, ok: 6}
+    go_api_gateway:   {packages: 9, ok: 9}
+  execution_time_seconds:
+    meta_tests: 0.03
+    pytest_all: 0.13
+  notes: |
+    Round 3 independent re-execution. Identical to Round 2 outcome.
+    Go test sweep shows cache hits across all 15 packages — confirms
+    SM's correction-pass touched zero Go code (consistent with Change Log
+    line 655: pure docstring edit at story BR-2.3(i) line 245).
+    The meta-test test_chunk_helper_terminal_without_usage_med_5_fold_in
+    PASSED, confirming helper's CONDITIONAL form remains intact.
+  integrity_check:
+    dev_evidence_found: true
+    dev_claimed_pass: true
+    discrepancy: false
+  issues: []
