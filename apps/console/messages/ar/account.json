@@ -7,6 +7,32 @@
       "data": "البيانات"
     }
   },
+  "keys": {
+    "empty": {
+      "title": "[en-pending] No API keys yet",
+      "cta": "[en-pending] Create your first API key"
+    },
+    "errors": {
+      "name": {
+        "missing": "[en-pending] Key name is required.",
+        "too_short": "[en-pending] Key name is too short.",
+        "too_long": "[en-pending] Key name must be at most 100 characters.",
+        "invalid_chars": "[en-pending] Key name contains characters that aren't allowed."
+      },
+      "generic": "[en-pending] Something went wrong. Please try again.",
+      "plaintext_one_time": "[en-pending] This plaintext is shown ONCE. Store it now — it cannot be retrieved later.",
+      "rate_limited": "[en-pending] Too many key creations. Please wait and try again."
+    },
+    "revoke": {
+      "confirm": {
+        "title": "[en-pending] Revoke this API key?",
+        "cta": "[en-pending] Revoke"
+      },
+      "success": "[en-pending] API key revoked.",
+      "already_revoked": "[en-pending] This key was already revoked.",
+      "not_found": "[en-pending] API key not found or already removed."
+    }
+  },
   "profile": {
     "title": "إعدادات الملف الشخصي",
     "display_name": {

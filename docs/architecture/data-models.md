@@ -215,8 +215,10 @@ ratelimit:user:{user_id}:qps                    INCR + EXPIRE 1
 ratelimit:user:{user_id}:rpm                    INCR + EXPIRE 60
 ratelimit:user:{user_id}:tpm                    INCRBY + EXPIRE 60
 ratelimit:key:{api_key_id}:qps                  同上
+ratelimit:apikey:create:{user_id}               INCR + EXPIRE 3600, 上限 10  # Story 5.1 (BR-1.10 anti-abuse on POST /v1/me/keys)
 session:{session_id}                            JSON, TTL 7 days
 auth:apikey:{sha256_hex(plaintext_key)}         缓存 user_id + scope, TTL 5min  # Story 3.2 (T6.5 §4.5 Change Log)
+auth:apikey:revoked:{api_key_id}                SET value="1" TTL 300s         # Story 5.1 BR-3.8 cross-pod cache-invalidation sentinel; gateway bearer_auth.go EXISTS-checks on positive cache hit
 balance:user:{user_id}:realtime                 实时余额, 跟 PG 对账
 flag:beta_mode                                  bool, 实时 Feature Flag
 ```
@@ -227,7 +229,7 @@ flag:beta_mode                                  bool, 实时 Feature Flag
 |-------|--------|-------|------|
 | `usage.recorded` | UsageEvent (proto) | billing-svc, audit-svc, analytics-svc | 7 天 |
 | `payment.completed` | PaymentEvent | billing-svc, notification-svc | 30 天 |
-| `audit.event` | AuditEvent | audit-svc | 30 天 |
+| `audit.event` | AuditEvent (Story 5.1 adds `event_type ∈ {api_key.created, api_key.revoked}`) | audit-svc | 30 天 |
 | `notification.queued` | NotificationEvent | notification-svc | 7 天 |
 | `safety.violation` | SafetyEvent | audit-svc, ops 告警 | 90 天 |
 
@@ -237,5 +239,10 @@ flag:beta_mode                                  bool, 实时 Feature Flag
 |------|-------|--------|--------|
 | 2026-05-18 | 3.2 | Dev (Linus) | **§4.3 Redis Key 规范**: Updated `auth:apikey:{key_hash}` → `auth:apikey:{sha256_hex(plaintext_key)}`. Rationale: the bcrypt `key_hash` cannot be derived from incoming plaintext without a pre-cache DB lookup (bcrypt is one-way; you'd need to bcrypt-compare against candidate hashes — defeating the cache the entry is meant to serve). SHA-256 of plaintext is the only design achieving O(1) cache-key derivation while preserving defence in depth (a Redis-dump compromise cannot reverse to plaintext). Architect Round 1 M4 (2026-05-18) ruled IN FAVOUR of the Story's design. |
 | 2026-05-18 | 3.2 | Dev (Linus) | **§4.1 `api_keys.team_id` FK deferral**: Story 3.2's migration `0006_create_api_keys.sql` lands `team_id UUID` (nullable, no REFERENCES clause) because `he_api.teams` table does not exist yet (created in Epic 5). `ALTER TABLE he_api.api_keys ADD CONSTRAINT fk_api_keys_team FOREIGN KEY (team_id) REFERENCES he_api.teams(id) ON DELETE CASCADE` to land in Epic 5 alongside the `he_api.teams` table creation (Architect Round 1 OQ4 ruling, 2026-05-18). |
+| 2026-05-25 | 5.1 | Dev (Linus) | **§4.1 `he_api.api_keys` is now WRITTEN** (Story 3.2 was read-only — `LookupAPIKeysByPrefix` + fire-and-forget `last_used_at` UPDATE). Story 5.1 adds INSERT (CreateApiKey RPC) + UPDATE `revoked_at=NOW()` (RevokeApiKey RPC) + omit-`key_hash` SELECT (ListApiKeys RPC, BR-2.5 defence-in-depth). No DDL change (`cumulative_context_impact.db_schema=false`). |
+| 2026-05-25 | 5.1 | Dev (Linus) | **§4.1 `api_keys.team_id` FK — confirmed defer (Architect Q3 ratified)**: Story 5.1 issues USER-scoped keys only (`team_id=NULL`); `he_api.teams` table creation + FK ALTER both DEFERRED to Epic 6+ when team-collaboration becomes a deliverable. The pre-flag from 2026-05-18 row above remains accurate. |
+| 2026-05-25 | 5.1 | Dev (Linus) | **§4.3 NEW Redis keys**: `ratelimit:apikey:create:{user_id}` (TTL 3600s, ceiling 10 per BR-1.10 anti-abuse on POST /v1/me/keys); `auth:apikey:revoked:{api_key_id}` (TTL 300s, BR-3.8 cross-pod cache-invalidation sentinel — Architect Q2 ratified option-c; gateway bearer_auth.go EXISTS-checks on positive cache hit). The 300s TTL is chosen to outlive the Story-3.2 positive-cache TTL (300s) so stale positives can't survive sentinel-driven invalidation. |
+| 2026-05-25 | 5.1 | Dev (Linus) | **§4.4 NEW `audit.event` event_type values**: `api_key.created` (BR-3.5 — payload `{api_key_id, user_id, key_prefix, name, client_ip_hash, user_agent_hash, ts}`); `api_key.revoked` (BR-3.6 — adds `revoked_at`). PII-safe: NEVER plaintext, NEVER bcrypt hash. The audit-svc consumer routes by `event_type` and requires NO code changes for Story 5.1. |
+| 2026-05-25 | 5.1 | Dev (Linus) | **§4.4 NEW canonical money-field serialization** (Architect Q-Spec-4 ratified — Stripe precedent): NUMERIC(10,2) + NUMERIC(12,4) columns surface on the He-API OpenAPI surface as **string-decimals** (e.g., `"50.00"`) — NOT JSON numbers. Rationale: a JSON number is IEEE 754 binary float; round-trip would lose NUMERIC precision (`0.1 + 0.2 != 0.3`). FIRST money field on the API surface (`monthly_cost_cap_usd` + `current_month_cost_usd` via Story 5.1 GET /v1/me/keys). Future money-field stories (5.4 monthly-cap, billing-svc) MUST cascade-lock. |
 
 ---

@@ -78,6 +78,28 @@ service AuthService {
   // revoked. Plaintext key MUST NOT appear in logs, span attributes, or
   // errors — AC2 BR-2.6 + docs/architecture/coding-standards.md §12.3.
   rpc ValidateApiKey(ValidateApiKeyRequest) returns (ValidateApiKeyResponse);
+
+  // Story 5.1 — API Key management surface (Create / List / Revoke).
+  //
+  // CreateApiKey: crypto/rand 32B → base62 → "he-" prefix → bcrypt(cost=12)
+  // hash → INSERT he_api.api_keys → Kafka audit.event api_key.created.
+  // Response carries the plaintext key ONCE (BR-1.5). user_id is gateway-
+  // populated from JWT sub (BR-1.3 IDOR defence); client-supplied values
+  // REJECTED.
+  //
+  // ListApiKeys: SELECT user-bound keys (LIMIT 100; ORDER BY created_at
+  // DESC, id ASC). key_hash explicitly OMITTED from SELECT (BR-2.5 defence-
+  // in-depth at the SQL boundary).
+  //
+  // RevokeApiKey: idempotent terminal-state UPDATE SET revoked_at=NOW();
+  // sentinel SET auth:apikey:revoked:{api_key_id} EX 300 for cross-pod
+  // cache-invalidation (BR-3.8; Architect Q2 ratified option-c). Returns
+  // historical revoked_at + was_already_revoked on idempotent re-revoke.
+  // Anti-enumeration: cross-user / not-found collapse to same NotFound
+  // (BR-3.2; Architect Q4 ratified collapse).
+  rpc CreateApiKey(CreateApiKeyRequest) returns (CreateApiKeyResponse);
+  rpc ListApiKeys(ListApiKeysRequest) returns (ListApiKeysResponse);
+  rpc RevokeApiKey(RevokeApiKeyRequest) returns (RevokeApiKeyResponse);
 }
 
 // --- RegisterUser --------------------------------------------------------
@@ -493,4 +515,70 @@ enum ApiKeyValidationReason {
   API_KEY_VALIDATION_REASON_UNSPECIFIED = 0;  // ok=true path
   API_KEY_VALIDATION_REASON_NOT_FOUND = 1;    // no matching prefix / no bcrypt match / regex reject
   API_KEY_VALIDATION_REASON_REVOKED = 2;      // match found but revoked_at IS NOT NULL
+}
+
+// --- Story 5.1 — Create / List / Revoke API Key --------------------------
+
+// CreateApiKeyRequest. user_id is the gateway-extracted JWT sub claim — the
+// client request body MUST NOT carry it (BR-1.3). name is NFC-normalized
+// + trimmed; 1-100 runes; allowed code-point classes L/M/N/P/Sc + ASCII
+// space (BR-1.7). Client-attribution metadata for audit payload only.
+message CreateApiKeyRequest {
+  string user_id = 1;
+  string name = 2;
+  string client_ip = 3;
+  string user_agent = 4;
+}
+
+// CreateApiKeyResponse. plaintext is set ONCE (BR-1.5) — NEVER persisted,
+// NEVER re-fetchable, NEVER logged. key_prefix is the first 12 chars of
+// plaintext (security.md §8.2 step 4) and is surfaced on subsequent ListApiKeys
+// calls so users can identify keys without seeing the secret.
+message CreateApiKeyResponse {
+  string api_key_id = 1;
+  string key_prefix = 2;
+  string name = 3;
+  google.protobuf.Timestamp created_at = 4;
+  string plaintext = 5;
+}
+
+message ListApiKeysRequest {
+  string user_id = 1;
+}
+
+message ListApiKeysResponse {
+  repeated ApiKeyEntry keys = 1;
+}
+
+// ApiKeyEntry intentionally OMITS key_hash (BR-2.5 defence-in-depth at the
+// proto boundary). monthly_cost_cap_usd + current_month_cost_usd are string-
+// decimal (BR-2.10 / Architect Q-Spec-4 — Stripe precedent; JSON number
+// would lose NUMERIC(10,2) / NUMERIC(12,4) precision on round-trip).
+message ApiKeyEntry {
+  string api_key_id = 1;
+  string name = 2;
+  string key_prefix = 3;
+  string scope = 4;                                    // JSON-encoded scope JSONB
+  optional string monthly_cost_cap_usd = 5;            // null when DB NULL
+  string current_month_cost_usd = 6;                   // "0" default
+  optional google.protobuf.Timestamp last_used_at = 7;
+  optional google.protobuf.Timestamp revoked_at = 8;
+  google.protobuf.Timestamp created_at = 9;
+}
+
+message RevokeApiKeyRequest {
+  string user_id = 1;
+  string api_key_id = 2;
+  string client_ip = 3;
+  string user_agent = 4;
+}
+
+// RevokeApiKeyResponse. was_already_revoked = true on idempotent re-revoke
+// (BR-3.3); revoked_at carries the HISTORICAL timestamp in that case so the
+// UI can show "Revoked on YYYY-MM-DD" without a re-SELECT (Architect Q-Spec-1
+// upgrade of rest-api-spec.md §5.2 sketch).
+message RevokeApiKeyResponse {
+  string api_key_id = 1;
+  google.protobuf.Timestamp revoked_at = 2;
+  bool was_already_revoked = 3;
 }

@@ -39,9 +39,22 @@ const fireForgetTimeout = 1 * time.Second
 // Repository is the narrow surface the service needs from the repository
 // package. Defined here (not at the call site) so tests can substitute a
 // pgxmock-backed fake without dragging the full repository.Querier in.
+//
+// Story-5.1 extends this interface additively (LookupAPIKeysByPrefix +
+// TouchAPIKeyLastUsed remain unchanged for the Validate hot path). The
+// owner-status lookup `GetUserStatus` underpins the Q9 pending_deletion
+// gate on CreateApiKey.
 type Repository interface {
+	// Story 3.2 — Validate hot path
 	LookupAPIKeysByPrefix(ctx context.Context, prefix string) ([]repository.ApiKeyRow, error)
 	TouchAPIKeyLastUsed(ctx context.Context, apiKeyID uuid.UUID) error
+
+	// Story 5.1 — Create / List / Revoke management surface
+	InsertAPIKey(ctx context.Context, userID uuid.UUID, name, keyPrefix, keyHash string) (uuid.UUID, time.Time, error)
+	ListAPIKeysByUser(ctx context.Context, userID uuid.UUID) ([]repository.ApiKeyRow, error)
+	SelectAPIKeyForUpdate(ctx context.Context, apiKeyID uuid.UUID) (repository.ApiKeyRow, error)
+	UpdateAPIKeyRevokedAt(ctx context.Context, apiKeyID uuid.UUID) (time.Time, error)
+	GetUserStatus(ctx context.Context, userID uuid.UUID) (string, error)
 }
 
 // QuerierRepository adapts a repository.Querier into the Repository
@@ -61,12 +74,55 @@ func (a QuerierRepository) TouchAPIKeyLastUsed(ctx context.Context, apiKeyID uui
 	return repository.TouchAPIKeyLastUsed(ctx, a.Q, apiKeyID)
 }
 
-// Service implements the AC2 Validate path. Concurrency-safe; one instance
-// is constructed at startup and reused across all RPC requests.
+// InsertAPIKey delegates the Story-5.1 CreateApiKey INSERT.
+func (a QuerierRepository) InsertAPIKey(ctx context.Context, userID uuid.UUID, name, keyPrefix, keyHash string) (uuid.UUID, time.Time, error) {
+	return repository.InsertAPIKey(ctx, a.Q, userID, name, keyPrefix, keyHash)
+}
+
+// ListAPIKeysByUser delegates the Story-5.1 ListApiKeys SELECT.
+func (a QuerierRepository) ListAPIKeysByUser(ctx context.Context, userID uuid.UUID) ([]repository.ApiKeyRow, error) {
+	return repository.ListAPIKeysByUser(ctx, a.Q, userID)
+}
+
+// SelectAPIKeyForUpdate delegates the Story-5.1 RevokeApiKey SELECT (FOR
+// UPDATE). Used outside an explicit tx in production — see Service.Revoke's
+// comment on the lock-degradation tradeoff (Story-5.1 BR-3.x serialization
+// is best-effort; idempotency makes concurrent revoke-of-same-id safe).
+func (a QuerierRepository) SelectAPIKeyForUpdate(ctx context.Context, apiKeyID uuid.UUID) (repository.ApiKeyRow, error) {
+	return repository.SelectAPIKeyForUpdate(ctx, a.Q, apiKeyID)
+}
+
+// UpdateAPIKeyRevokedAt delegates the Story-5.1 RevokeApiKey UPDATE.
+func (a QuerierRepository) UpdateAPIKeyRevokedAt(ctx context.Context, apiKeyID uuid.UUID) (time.Time, error) {
+	return repository.UpdateAPIKeyRevokedAt(ctx, a.Q, apiKeyID)
+}
+
+// GetUserStatus returns the user's status column ('active' /
+// 'pending_deletion' / etc) for the Story-5.1 Q9 gate. Returns
+// repository.ErrUserNotFound on no-such-user (caller maps to gRPC
+// FailedPrecondition `account_pending_deletion` per the same surface).
+func (a QuerierRepository) GetUserStatus(ctx context.Context, userID uuid.UUID) (string, error) {
+	u, err := repository.GetUserByID(ctx, a.Q, userID)
+	if err != nil {
+		return "", err
+	}
+	return u.Status, nil
+}
+
+// Service implements the AC2 Validate path AND the Story-5.1 Create / List
+// / Revoke management surface. Concurrency-safe; one instance is constructed
+// at startup and reused across all RPC requests.
+//
+// Audit + Sentinel are OPTIONAL — Story-3.2 deployments that ship before
+// Story-5.1 wire only Repo + Tracer + Logger; Create/List/Revoke will
+// surface CodeInternal if invoked without those deps wired. Production
+// post-Story-5.1 wires all 5 dependencies via NewServiceWithMgmt.
 type Service struct {
-	Repo   Repository
-	Tracer trace.Tracer
-	Logger *slog.Logger
+	Repo     Repository
+	Tracer   trace.Tracer
+	Logger   *slog.Logger
+	Audit    AuditPublisher // Story 5.1 — nil-safe; Create/Revoke fail gracefully (WARN log) when nil
+	Sentinel SentinelStore  // Story 5.1 — nil-safe; Revoke logs WARN per BR-3.13 fail-open
 	// Clock is injectable for deterministic tests; production wires time.Now.
 	Clock func() time.Time
 }
@@ -74,11 +130,24 @@ type Service struct {
 // NewService constructs a Service with sensible defaults applied to any nil
 // optional field (Clock → time.Now, Logger → slog.Default, Tracer →
 // no-op tracer via otel global). Repo is required.
+//
+// Story-5.1 callers MAY set s.Audit + s.Sentinel post-construction or use
+// NewServiceWithMgmt for one-shot wiring.
 func NewService(repo Repository, tracer trace.Tracer, logger *slog.Logger) *Service {
 	s := &Service{Repo: repo, Tracer: tracer, Logger: logger, Clock: time.Now}
 	if s.Logger == nil {
 		s.Logger = slog.Default()
 	}
+	return s
+}
+
+// NewServiceWithMgmt constructs a Service wired for both Story-3.2 Validate
+// AND Story-5.1 Create/List/Revoke. Production cmd/server uses this; tests
+// that exercise only Validate may continue using NewService.
+func NewServiceWithMgmt(repo Repository, tracer trace.Tracer, logger *slog.Logger, auditPub AuditPublisher, sentinel SentinelStore) *Service {
+	s := NewService(repo, tracer, logger)
+	s.Audit = auditPub
+	s.Sentinel = sentinel
 	return s
 }
 
@@ -118,7 +187,8 @@ func (s *Service) Validate(ctx context.Context, req *authv1.ValidateApiKeyReques
 			attribute.String("auth.outcome", "unavailable"),
 			attribute.Bool("auth.matched", false),
 		)
-		s.Logger.WarnContext(ctx, "api_keys lookup failed",
+		s.Logger.WarnContext(
+			ctx, "api_keys lookup failed",
 			slog.String("key_prefix", prefix),
 			slog.String("error", err.Error()),
 		)
@@ -131,7 +201,8 @@ func (s *Service) Validate(ctx context.Context, req *authv1.ValidateApiKeyReques
 	// BR-2.3 candidate-count cap. SELECT LIMIT was 101 so len(rows) > 100
 	// signals the overflow branch without an extra COUNT(*).
 	if len(rows) > repository.MaxAPIKeyCandidates {
-		s.Logger.WarnContext(ctx, "api_keys candidate count exceeded cap",
+		s.Logger.WarnContext(
+			ctx, "api_keys candidate count exceeded cap",
 			slog.String("key_prefix", prefix),
 			slog.Int("count", len(rows)),
 		)
@@ -157,7 +228,8 @@ func (s *Service) Validate(ctx context.Context, req *authv1.ValidateApiKeyReques
 		row := &rows[i]
 		if err := bcrypt.CompareHashAndPassword([]byte(row.KeyHash), plaintextBytes); err != nil {
 			if !errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
-				s.Logger.WarnContext(ctx, "bcrypt compare error",
+				s.Logger.WarnContext(
+					ctx, "bcrypt compare error",
 					slog.String("key_prefix", prefix),
 					slog.String("error", err.Error()),
 				)
@@ -196,7 +268,8 @@ func (s *Service) fireAndForgetTouch(apiKeyID uuid.UUID) {
 		ctx, cancel := context.WithTimeout(context.Background(), fireForgetTimeout)
 		defer cancel()
 		if err := s.Repo.TouchAPIKeyLastUsed(ctx, apiKeyID); err != nil {
-			s.Logger.Debug("api_keys.last_used_at fire-and-forget UPDATE failed",
+			s.Logger.Debug(
+				"api_keys.last_used_at fire-and-forget UPDATE failed",
 				slog.String("api_key_id", apiKeyID.String()),
 				slog.String("error", err.Error()),
 			)
@@ -238,11 +311,11 @@ func okResponse(row *repository.ApiKeyRow) *authv1.ValidateApiKeyResponse {
 		teamID = uuid.UUID(row.TeamID.Bytes).String()
 	}
 	return &authv1.ValidateApiKeyResponse{
-		Ok:        true,
-		ApiKeyId:  row.ID.String(),
-		UserId:    row.UserID.String(),
-		TeamId:    teamID,
-		Scope:     string(row.Scope),
-		Reason:    authv1.ApiKeyValidationReason_API_KEY_VALIDATION_REASON_UNSPECIFIED,
+		Ok:       true,
+		ApiKeyId: row.ID.String(),
+		UserId:   row.UserID.String(),
+		TeamId:   teamID,
+		Scope:    string(row.Scope),
+		Reason:   authv1.ApiKeyValidationReason_API_KEY_VALIDATION_REASON_UNSPECIFIED,
 	}
 }

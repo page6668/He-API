@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/alicebob/miniredis/v2"
@@ -210,7 +211,7 @@ func TestStripBearer_CaseInsensitive(t *testing.T) {
 		{"Bearer\the-ABC", "he-ABC"},  // tab tolerance
 		{"Basic he-ABC", ""},
 		{"", ""},
-		{"Bearer", ""},  // no token after scheme
+		{"Bearer", ""},       // no token after scheme
 		{"Bearerhe-ABC", ""}, // scheme not followed by whitespace
 	}
 	for _, c := range cases {
@@ -556,26 +557,176 @@ func BenchmarkBearerAuthCacheHit(b *testing.B) {
 	}
 }
 
+// --- Story 5.1 UNIT-028..030 — sentinel-check additive branch ---------------
+//
+// The Story-5.1 BR-3.8 modification: on positive cache-hit, the gateway
+// EXISTS-checks `auth:apikey:revoked:{api_key_id}`; presence purges the
+// cache + falls through to RPC (which returns REVOKED → 401).
+
+// errInjectHook implements redis.Hook to inject a configurable error on a
+// specific command name. Other commands pass through to the underlying
+// Redis. Used by UNIT-030 to isolate the sentinel-EXISTS failure path.
+type errInjectHook struct {
+	cmdName string
+	err     error
+}
+
+func (h errInjectHook) DialHook(next redis.DialHook) redis.DialHook { return next }
+func (h errInjectHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return next
+}
+
+func (h errInjectHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		if cmd.Name() == h.cmdName {
+			// Set the command's error so the caller observes the injection.
+			cmd.SetErr(h.err)
+			return h.err
+		}
+		return next(ctx, cmd)
+	}
+}
+
+// Scenario: 5.1-UNIT-028
+// Cache HIT + sentinel ABSENT → serves from cache (no RPC, no purge).
+func TestRequireAPIKey_SentinelAbsent_ServesFromCache(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t, okValidate(sentinelKey))
+	// 1st request — miss + RPC + SETEX positive.
+	rr1 := h.do("Bearer " + sentinelKey)
+	if rr1.Code != http.StatusNotImplemented {
+		t.Fatalf("first: status = %d, want 501", rr1.Code)
+	}
+	rpcBefore := atomic.LoadInt32(&h.stub.rpcHits)
+	// 2nd request — sentinel ABSENT → cache hit serves OK.
+	rr2 := h.do("Bearer " + sentinelKey)
+	if rr2.Code != http.StatusNotImplemented {
+		t.Fatalf("second: status = %d, want 501 (cache hit)", rr2.Code)
+	}
+	if atomic.LoadInt32(&h.stub.rpcHits) != rpcBefore {
+		t.Fatalf("rpc_hits incremented from %d (cache hit must avoid RPC when sentinel absent)", rpcBefore)
+	}
+	// Cache entry MUST still be present.
+	sum := sha256.Sum256([]byte(sentinelKey))
+	cacheKey := "auth:apikey:" + hex.EncodeToString(sum[:])
+	if val, err := h.mini.Get(cacheKey); err != nil || val == "" {
+		t.Fatalf("cache entry purged unexpectedly")
+	}
+}
+
+// Scenario: 5.1-UNIT-029
+// Cache HIT + sentinel PRESENT → purges cache + falls through to RPC
+// (which returns REVOKED → 401).
+func TestRequireAPIKey_SentinelPresent_PurgesAndFallsThrough(t *testing.T) {
+	t.Parallel()
+	// Two-phase validate: first call returns ok; second call (after sentinel
+	// fires) returns REVOKED. The harness's stub does not natively support
+	// per-call swapping, so we toggle via a closure-captured flag.
+	var revoked atomic.Bool
+	validate := func(req *authv1.ValidateApiKeyRequest) (*authv1.ValidateApiKeyResponse, error) {
+		if revoked.Load() {
+			return &authv1.ValidateApiKeyResponse{Ok: false, Reason: authv1.ApiKeyValidationReason_API_KEY_VALIDATION_REASON_REVOKED}, nil
+		}
+		if req.GetPlaintextKey() != sentinelKey {
+			return &authv1.ValidateApiKeyResponse{Ok: false, Reason: authv1.ApiKeyValidationReason_API_KEY_VALIDATION_REASON_NOT_FOUND}, nil
+		}
+		return &authv1.ValidateApiKeyResponse{
+			Ok:       true,
+			ApiKeyId: "00000000-0000-0000-0000-000000000001",
+			UserId:   "00000000-0000-0000-0000-000000000002",
+			TeamId:   "",
+			Scope:    `{}`,
+			Reason:   authv1.ApiKeyValidationReason_API_KEY_VALIDATION_REASON_UNSPECIFIED,
+		}, nil
+	}
+	h := newHarness(t, validate)
+	// 1st request — cache + RPC ok.
+	rr1 := h.do("Bearer " + sentinelKey)
+	if rr1.Code != http.StatusNotImplemented {
+		t.Fatalf("first: status = %d, want 501", rr1.Code)
+	}
+	rpcBefore := atomic.LoadInt32(&h.stub.rpcHits)
+	// Trip the sentinel for the cached api_key_id.
+	sentinelFullKey := middleware.SentinelKeyPrefix + "00000000-0000-0000-0000-000000000001"
+	if err := h.mini.Set(sentinelFullKey, "1"); err != nil {
+		t.Fatalf("miniredis Set sentinel: %v", err)
+	}
+	h.mini.SetTTL(sentinelFullKey, 300*time.Second)
+	// Switch validate to REVOKED for the 2nd request (which falls through to RPC).
+	revoked.Store(true)
+	h.innerPanic = true // inner MUST NOT be invoked on the 2nd request (401 path)
+	rr2 := h.do("Bearer " + sentinelKey)
+	expect401Envelope(t, rr2, "Invalid API key provided.")
+	if atomic.LoadInt32(&h.stub.rpcHits) != rpcBefore+1 {
+		t.Fatalf("rpc_hits = %d, want %d (sentinel must force fall-through to RPC)",
+			h.stub.rpcHits, rpcBefore+1)
+	}
+	// Cache entry MUST have been purged.
+	sum := sha256.Sum256([]byte(sentinelKey))
+	cacheKey := "auth:apikey:" + hex.EncodeToString(sum[:])
+	if val, err := h.mini.Get(cacheKey); err == nil && val != "" {
+		t.Fatalf("cache entry still present after sentinel hit — purge contract violated")
+	}
+}
+
+// Scenario: 5.1-UNIT-030
+// Cache HIT + sentinel-EXISTS Redis error → fail-OPEN: serves cached
+// positive + WARN log. The cache GET succeeds; only EXISTS fails (isolated
+// via redis.Hook).
+func TestRequireAPIKey_SentinelExistsError_FailOpen(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t, okValidate(sentinelKey))
+	// 1st request — cache + RPC ok.
+	rr1 := h.do("Bearer " + sentinelKey)
+	if rr1.Code != http.StatusNotImplemented {
+		t.Fatalf("first: status = %d, want 501", rr1.Code)
+	}
+	rpcBefore := atomic.LoadInt32(&h.stub.rpcHits)
+	// Capture WARN logs by rebuilding the middleware with a logging
+	// buffer + an EXISTS-injection hook. NewHarness wires a discard logger
+	// so we replace it here.
+	var logBuf strings.Builder
+	logger := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	client := redis.NewClient(&redis.Options{Addr: h.mini.Addr()})
+	client.AddHook(errInjectHook{cmdName: "exists", err: errors.New("simulated sentinel outage")})
+	authClient := authv1connect.NewAuthServiceClient(h.authSrv.Client(), h.authSrv.URL)
+	mw := middleware.NewAPIKeyAuthenticator(authClient, func() *redis.Client { return client }, logger)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader("{}"))
+	req.Header.Set("Authorization", "Bearer "+sentinelKey)
+	rr2 := httptest.NewRecorder()
+	mw.RequireAPIKey(h.inner()).ServeHTTP(rr2, req)
+	if rr2.Code != http.StatusNotImplemented {
+		t.Fatalf("second: status = %d, want 501 (fail-open serves from cache)", rr2.Code)
+	}
+	if atomic.LoadInt32(&h.stub.rpcHits) != rpcBefore {
+		t.Fatalf("rpc_hits = %d, want %d (sentinel error must NOT force RPC; fail-open serves cache)", h.stub.rpcHits, rpcBefore)
+	}
+	if !strings.Contains(logBuf.String(), "sentinel EXISTS error") {
+		t.Fatalf("logBuf missing sentinel EXISTS error WARN: %s", logBuf.String())
+	}
+}
+
 // testWrapper lets miniredis.RunT accept a *testing.B (it asks for the
 // minimal TestingT interface).
 type testWrapper struct{ B *testing.B }
 
-func (w *testWrapper) Cleanup(fn func())                          { w.B.Cleanup(fn) }
-func (w *testWrapper) Errorf(format string, args ...interface{})  { w.B.Errorf(format, args...) }
-func (w *testWrapper) Fatalf(format string, args ...interface{})  { w.B.Fatalf(format, args...) }
-func (w *testWrapper) Helper()                                    { w.B.Helper() }
-func (w *testWrapper) Skipf(format string, args ...interface{})   { w.B.Skipf(format, args...) }
-func (w *testWrapper) Logf(format string, args ...interface{})    { w.B.Logf(format, args...) }
-func (w *testWrapper) Log(args ...interface{})                    { w.B.Log(args...) }
-func (w *testWrapper) Fail()                                      { w.B.Fail() }
-func (w *testWrapper) FailNow()                                   { w.B.FailNow() }
-func (w *testWrapper) Failed() bool                               { return w.B.Failed() }
-func (w *testWrapper) Name() string                               { return w.B.Name() }
-func (w *testWrapper) TempDir() string                            { return w.B.TempDir() }
-func (w *testWrapper) Setenv(key, value string)                   { w.B.Setenv(key, value) }
-func (w *testWrapper) Error(args ...interface{})                  { w.B.Error(args...) }
-func (w *testWrapper) Fatal(args ...interface{})                  { w.B.Fatal(args...) }
-func (w *testWrapper) Skip(args ...interface{})                   { w.B.Skip(args...) }
-func (w *testWrapper) SkipNow()                                   { w.B.SkipNow() }
-func (w *testWrapper) Skipped() bool                              { return w.B.Skipped() }
-func (w *testWrapper) String() string                             { return fmt.Sprintf("benchmark-%s", w.B.Name()) }
+func (w *testWrapper) Cleanup(fn func())                         { w.B.Cleanup(fn) }
+func (w *testWrapper) Errorf(format string, args ...interface{}) { w.B.Errorf(format, args...) }
+func (w *testWrapper) Fatalf(format string, args ...interface{}) { w.B.Fatalf(format, args...) }
+func (w *testWrapper) Helper()                                   { w.B.Helper() }
+func (w *testWrapper) Skipf(format string, args ...interface{})  { w.B.Skipf(format, args...) }
+func (w *testWrapper) Logf(format string, args ...interface{})   { w.B.Logf(format, args...) }
+func (w *testWrapper) Log(args ...interface{})                   { w.B.Log(args...) }
+func (w *testWrapper) Fail()                                     { w.B.Fail() }
+func (w *testWrapper) FailNow()                                  { w.B.FailNow() }
+func (w *testWrapper) Failed() bool                              { return w.B.Failed() }
+func (w *testWrapper) Name() string                              { return w.B.Name() }
+func (w *testWrapper) TempDir() string                           { return w.B.TempDir() }
+func (w *testWrapper) Setenv(key, value string)                  { w.B.Setenv(key, value) }
+func (w *testWrapper) Error(args ...interface{})                 { w.B.Error(args...) }
+func (w *testWrapper) Fatal(args ...interface{})                 { w.B.Fatal(args...) }
+func (w *testWrapper) Skip(args ...interface{})                  { w.B.Skip(args...) }
+func (w *testWrapper) SkipNow()                                  { w.B.SkipNow() }
+func (w *testWrapper) Skipped() bool                             { return w.B.Skipped() }
+func (w *testWrapper) String() string                            { return fmt.Sprintf("benchmark-%s", w.B.Name()) }

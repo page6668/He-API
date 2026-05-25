@@ -7,6 +7,32 @@
       "data": "Data"
     }
   },
+  "keys": {
+    "empty": {
+      "title": "No API keys yet",
+      "cta": "Create your first API key"
+    },
+    "errors": {
+      "name": {
+        "missing": "Key name is required.",
+        "too_short": "Key name is too short.",
+        "too_long": "Key name must be at most 100 characters.",
+        "invalid_chars": "Key name contains characters that aren't allowed."
+      },
+      "generic": "Something went wrong. Please try again.",
+      "plaintext_one_time": "This plaintext is shown ONCE. Store it now — it cannot be retrieved later.",
+      "rate_limited": "Too many key creations. Please wait and try again."
+    },
+    "revoke": {
+      "confirm": {
+        "title": "Revoke this API key?",
+        "cta": "Revoke"
+      },
+      "success": "API key revoked.",
+      "already_revoked": "This key was already revoked.",
+      "not_found": "API key not found or already removed."
+    }
+  },
   "profile": {
     "title": "Profile settings",
     "display_name": {

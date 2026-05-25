@@ -57,18 +57,18 @@ type fakeAuthClient struct {
 	updateProfileResp *authv1.UpdateProfileResponse
 	updateProfileErr  error
 	// captured inputs for assertions
-	lastReq             *authv1.RegisterUserRequest
-	lastVerifyReq       *authv1.VerifyEmailRequest
-	lastResendReq       *authv1.ResendVerificationRequest
-	lastLoginReq        *authv1.LoginUserRequest
-	lastRefreshReq      *authv1.RefreshTokenRequest
-	lastEnrollInitReq   *authv1.EnrollTOTPInitRequest
-	lastEnrollVerifyReq *authv1.EnrollTOTPVerifyRequest
-	lastChallengeReq    *authv1.ChallengeTOTPRequest
-	lastUseRecoveryReq  *authv1.UseRecoveryCodeRequest
-	lastRegenerateReq   *authv1.RegenerateRecoveryCodesRequest
-	lastDisableReq      *authv1.DisableTOTPRequest
-	lastGetMeReq        *authv1.GetMeRequest
+	lastReq              *authv1.RegisterUserRequest
+	lastVerifyReq        *authv1.VerifyEmailRequest
+	lastResendReq        *authv1.ResendVerificationRequest
+	lastLoginReq         *authv1.LoginUserRequest
+	lastRefreshReq       *authv1.RefreshTokenRequest
+	lastEnrollInitReq    *authv1.EnrollTOTPInitRequest
+	lastEnrollVerifyReq  *authv1.EnrollTOTPVerifyRequest
+	lastChallengeReq     *authv1.ChallengeTOTPRequest
+	lastUseRecoveryReq   *authv1.UseRecoveryCodeRequest
+	lastRegenerateReq    *authv1.RegenerateRecoveryCodesRequest
+	lastDisableReq       *authv1.DisableTOTPRequest
+	lastGetMeReq         *authv1.GetMeRequest
 	lastUpdateProfileReq *authv1.UpdateProfileRequest
 }
 
@@ -87,6 +87,7 @@ func (f *fakeAuthClient) RegisterUser(
 	}
 	return connect.NewResponse(f.registerResp), nil
 }
+
 func (f *fakeAuthClient) VerifyEmail(_ context.Context, r *connect.Request[authv1.VerifyEmailRequest]) (*connect.Response[authv1.VerifyEmailResponse], error) {
 	f.lastVerifyReq = r.Msg
 	if f.verifyErr != nil {
@@ -101,6 +102,7 @@ func (f *fakeAuthClient) VerifyEmail(_ context.Context, r *connect.Request[authv
 	}
 	return connect.NewResponse(f.verifyResp), nil
 }
+
 func (f *fakeAuthClient) ResendVerification(_ context.Context, r *connect.Request[authv1.ResendVerificationRequest]) (*connect.Response[authv1.ResendVerificationResponse], error) {
 	f.lastResendReq = r.Msg
 	if f.resendErr != nil {
@@ -111,6 +113,7 @@ func (f *fakeAuthClient) ResendVerification(_ context.Context, r *connect.Reques
 	}
 	return connect.NewResponse(f.resendResp), nil
 }
+
 func (f *fakeAuthClient) LoginUser(_ context.Context, r *connect.Request[authv1.LoginUserRequest]) (*connect.Response[authv1.LoginUserResponse], error) {
 	f.lastLoginReq = r.Msg
 	if f.loginErr != nil {
@@ -121,6 +124,7 @@ func (f *fakeAuthClient) LoginUser(_ context.Context, r *connect.Request[authv1.
 	}
 	return connect.NewResponse(f.loginResp), nil
 }
+
 func (f *fakeAuthClient) RefreshToken(_ context.Context, r *connect.Request[authv1.RefreshTokenRequest]) (*connect.Response[authv1.RefreshTokenResponse], error) {
 	f.lastRefreshReq = r.Msg
 	if f.refreshErr != nil {
@@ -138,6 +142,7 @@ func (f *fakeAuthClient) RefreshToken(_ context.Context, r *connect.Request[auth
 func (f *fakeAuthClient) BeginOAuth(_ context.Context, _ *connect.Request[authv1.BeginOAuthRequest]) (*connect.Response[authv1.BeginOAuthResponse], error) {
 	return nil, errFakeUnimplemented
 }
+
 func (f *fakeAuthClient) CompleteOAuth(_ context.Context, _ *connect.Request[authv1.CompleteOAuthRequest]) (*connect.Response[authv1.CompleteOAuthResponse], error) {
 	return nil, errFakeUnimplemented
 }
@@ -155,6 +160,7 @@ func (f *fakeAuthClient) EnrollTOTPInit(_ context.Context, r *connect.Request[au
 	}
 	return connect.NewResponse(f.enrollInitResp), nil
 }
+
 func (f *fakeAuthClient) EnrollTOTPVerify(_ context.Context, r *connect.Request[authv1.EnrollTOTPVerifyRequest]) (*connect.Response[authv1.EnrollTOTPVerifyResponse], error) {
 	f.lastEnrollVerifyReq = r.Msg
 	if f.enrollVerifyErr != nil {
@@ -165,6 +171,7 @@ func (f *fakeAuthClient) EnrollTOTPVerify(_ context.Context, r *connect.Request[
 	}
 	return connect.NewResponse(f.enrollVerifyResp), nil
 }
+
 func (f *fakeAuthClient) ChallengeTOTP(_ context.Context, r *connect.Request[authv1.ChallengeTOTPRequest]) (*connect.Response[authv1.ChallengeTOTPResponse], error) {
 	f.lastChallengeReq = r.Msg
 	if f.challengeErr != nil {
@@ -175,6 +182,7 @@ func (f *fakeAuthClient) ChallengeTOTP(_ context.Context, r *connect.Request[aut
 	}
 	return connect.NewResponse(f.challengeResp), nil
 }
+
 func (f *fakeAuthClient) UseRecoveryCode(_ context.Context, r *connect.Request[authv1.UseRecoveryCodeRequest]) (*connect.Response[authv1.UseRecoveryCodeResponse], error) {
 	f.lastUseRecoveryReq = r.Msg
 	if f.useRecoveryErr != nil {
@@ -185,6 +193,7 @@ func (f *fakeAuthClient) UseRecoveryCode(_ context.Context, r *connect.Request[a
 	}
 	return connect.NewResponse(f.useRecoveryResp), nil
 }
+
 func (f *fakeAuthClient) DisableTOTP(_ context.Context, r *connect.Request[authv1.DisableTOTPRequest]) (*connect.Response[authv1.DisableTOTPResponse], error) {
 	f.lastDisableReq = r.Msg
 	if f.disableErr != nil {
@@ -195,6 +204,7 @@ func (f *fakeAuthClient) DisableTOTP(_ context.Context, r *connect.Request[authv
 	}
 	return connect.NewResponse(f.disableResp), nil
 }
+
 func (f *fakeAuthClient) RegenerateRecoveryCodes(_ context.Context, r *connect.Request[authv1.RegenerateRecoveryCodesRequest]) (*connect.Response[authv1.RegenerateRecoveryCodesResponse], error) {
 	f.lastRegenerateReq = r.Msg
 	if f.regenerateErr != nil {
@@ -217,6 +227,7 @@ func (f *fakeAuthClient) GetMe(_ context.Context, r *connect.Request[authv1.GetM
 	}
 	return connect.NewResponse(f.getMeResp), nil
 }
+
 func (f *fakeAuthClient) UpdateProfile(_ context.Context, r *connect.Request[authv1.UpdateProfileRequest]) (*connect.Response[authv1.UpdateProfileResponse], error) {
 	f.lastUpdateProfileReq = r.Msg
 	if f.updateProfileErr != nil {
@@ -233,6 +244,22 @@ func (f *fakeAuthClient) UpdateProfile(_ context.Context, r *connect.Request[aut
 // and its tests use a stubAuthSvc instance). This stub keeps the interface
 // satisfied so the existing 2FA / profile handler tests still compile.
 func (f *fakeAuthClient) ValidateApiKey(_ context.Context, _ *connect.Request[authv1.ValidateApiKeyRequest]) (*connect.Response[authv1.ValidateApiKeyResponse], error) {
+	return nil, errFakeUnimplemented
+}
+
+// Story 5.1 — CreateApiKey / ListApiKeys / RevokeApiKey stubs. Exercised
+// directly by me_keys_test.go via a per-test specialised fake; this stub
+// keeps the existing 2FA / profile handler tests compiling without forcing
+// every test to wire the management surface.
+func (f *fakeAuthClient) CreateApiKey(_ context.Context, _ *connect.Request[authv1.CreateApiKeyRequest]) (*connect.Response[authv1.CreateApiKeyResponse], error) {
+	return nil, errFakeUnimplemented
+}
+
+func (f *fakeAuthClient) ListApiKeys(_ context.Context, _ *connect.Request[authv1.ListApiKeysRequest]) (*connect.Response[authv1.ListApiKeysResponse], error) {
+	return nil, errFakeUnimplemented
+}
+
+func (f *fakeAuthClient) RevokeApiKey(_ context.Context, _ *connect.Request[authv1.RevokeApiKeyRequest]) (*connect.Response[authv1.RevokeApiKeyResponse], error) {
 	return nil, errFakeUnimplemented
 }
 

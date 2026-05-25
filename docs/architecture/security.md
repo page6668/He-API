@@ -32,25 +32,63 @@ Validate (on request):
 
 Revoke:
   1. Set revoked_at timestamp
-  2. Invalidate Redis cache
+  2. Invalidate Redis cache via per-key sentinel (Story 5.1 BR-3.8)
   3. Reject all subsequent calls
 ```
 
-### 8.2.1 Revocation Lag Note (Story 3.2)
+> **Story 5.1 lifecycle realisation** (2026-05-25): The "Generate" + "Revoke"
+> steps are now realised by Story 5.1 (auth-svc CreateApiKey + RevokeApiKey
+> RPCs at `apps/auth-svc/internal/apikey/{generate,create,revoke}.go`). The
+> "Validate" step was realised by Story 3.2. The lag-note below has been
+> UPGRADED from the original 5-minute worst-case to a single-digit-second
+> bound via the per-key-id Redis sentinel (Architect Q2 ratified option-c).
+> The 5-minute fallback remains the worst-case only on sentinel-write failure
+> (BR-3.13 fail-open default).
 
-The Validate-step Redis cache (TTL = 300 s) introduces a documented
-**revocation lag**: when an operator UPDATEs `api_keys.revoked_at`, the
-api-gateway continues serving the cached positive result until the entry
-naturally expires — i.e., the worst-case window between revoke and
-client-visible 401 is 5 minutes.
+### 8.2.1 Revocation Lag Note (Story 5.1 UPGRADE)
 
-For the MVP this is the accepted design trade-off (Architect Round 1 OQ5
-ruling 2026-05-18): no enterprise SOC-2 customer has been onboarded
-pre-launch, and the lag bound is well-defined + operator-tunable. The
-positives-only cache rule (Story 3.2 BR-1.6) bounds the lag — revoked
-keys cannot pile up beyond cache TTL.
+The Validate-step Redis cache (TTL = 300 s) historically introduced a
+**revocation lag** worst-case of 5 minutes when an operator UPDATEd
+`api_keys.revoked_at`: the api-gateway continued serving the cached
+positive result until the entry naturally expired.
 
-**Immediate-revocation alternatives (future Story, not yet tracked):**
+**Story 5.1 UPGRADES this to single-digit milliseconds on the happy path**
+via the per-key-id Redis sentinel `auth:apikey:revoked:{api_key_id}`
+(TTL 300s — matches the positive-cache TTL). The mechanism:
+
+1. **auth-svc revoke path** (Story 5.1 T3.1): after the PG `UPDATE
+   SET revoked_at=NOW()` commits, auth-svc writes
+   `SET auth:apikey:revoked:{api_key_id} 1 EX 300` to Redis.
+2. **api-gateway bearer-auth path** (Story 5.1 T4.1 — additive modification
+   of the Story-3.2 `bearer_auth.go`): on a positive cache hit at
+   `auth:apikey:{sha256(plaintext)}`, the middleware ADDITIONALLY checks
+   `EXISTS auth:apikey:revoked:{cached.api_key_id}` before serving. If the
+   sentinel is present, it `DEL`s the stale positive entry and falls
+   through to the auth-svc Validate RPC — which returns REVOKED → 401
+   per BR-2.4 anti-enumeration parity.
+3. **Worst-case lag**: round-trip latency to Redis on the NEXT cache hit
+   (typically single-digit milliseconds). The bound is the time from
+   `UPDATE revoked_at=NOW()` to the auth-svc `SET` succeeding (~10 ms PG
+   commit + Redis round-trip) PLUS the gateway's next cache-hit request
+   (request-rate-dependent — for any actively-used key the bound is
+   effectively measured in milliseconds).
+4. **Fail-open fallback** (Architect Q-Spec-3 ratified): if the sentinel
+   write fails (Redis unavailable in auth-svc), the auth-svc revoke RPC
+   STILL returns success to the user; the PG `revoked_at=NOW()` is the
+   durable source of truth; the lag falls back to the pre-Story-5.1
+   5-minute baseline (positive cache natural-expiry). slog records
+   `apikey_revoke_sentinel_failed` at WARN.
+
+**Selected mechanism (Architect Q2 ratified — option c)**: per-key-id
+sentinel. Rationale: zero new infrastructure (Redis already in place);
+TTL bounded by the cache TTL it must outlive; single-write on revoke
+(auth-svc only — no subscriber maintenance); zero gateway-pod state
+(statelessness preserved across the cluster). Alternatives (a) Redis
+pub/sub and (b) Kafka consumer remain documented below as future
+multi-region-cache-coherence options should the threat model evolve.
+
+**Immediate-revocation alternatives (documented for future
+multi-region work, NOT realised in Story 5.1):**
 
 - **(a) Redis pub/sub channel invalidation** — auth-svc publishes
   `auth.apikey.revoked:{id}` on revoke; gateway-side subscribers `DEL`
@@ -68,10 +106,19 @@ keys cannot pile up beyond cache TTL.
   Story 1.6 `audit.event` topic + 30-day retention so the audit-trail
   doubles as the invalidation queue.
 
-Both alternatives bound the lag to single-digit seconds; the current
-5-minute lag is the MVP-acceptable design per AC4 documentation. No
-tracked Story spawned now per Architect — "wait for first enterprise
-prospect feedback to size the work".
+Both alternatives bound the lag to single-digit seconds and ADD operational
+complexity (per-pod subscribers or consumer-groups) over the Story-5.1
+sentinel; they remain documented for future multi-region cache-coherence
+work when the gateway is sharded across regions and a single Redis cluster
+no longer serves all pods.
+
+---
+
+### 8.x Change Log
+
+| Date | Story | Change |
+|------|-------|--------|
+| 2026-05-25 | 5.1 | **§8.2 Generate + Revoke steps REALISED** (auth-svc CreateApiKey + RevokeApiKey RPCs). **§8.2.1 lag-note UPGRADED**: 5-min worst-case → single-digit-millisecond happy path via per-key-id Redis sentinel (Architect Q2 ratified option-c). 5-min fallback preserved on sentinel-write failure (BR-3.13 fail-open per Q-Spec-3). |
 
 ## 8.3 GDPR / CCPA 实现
 

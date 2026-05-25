@@ -65,6 +65,19 @@ const (
 	// cacheTTL is the AC4 BR-4.1 spec — 5 minutes verbatim from
 	// security.md §8.2. NOT configurable in 3.2.
 	cacheTTL = 300 * time.Second
+
+	// SentinelKeyPrefix is the Story-5.1 BR-3.8 cross-pod cache-
+	// invalidation key prefix. MUST match the auth-svc redisclient
+	// package constant of the same value verbatim — the two binaries
+	// communicate by reading/writing this key uncoordinated except for
+	// the shared string. UNIT-028 asserts parity at the test boundary.
+	//
+	// Full key = SentinelKeyPrefix + apiKeyID.String(). On a positive
+	// cache-hit, the gateway EXISTS-checks this key; presence means the
+	// auth-svc revoked the key since the cache was filled and the
+	// gateway MUST purge the cached positive before serving (the
+	// Story-3.2 Validate path will then return REVOKED → 401).
+	SentinelKeyPrefix = "auth:apikey:revoked:"
 )
 
 // CodeInvalidAPIKey + the partner codes are the OpenAI-compatible envelope
@@ -224,14 +237,53 @@ func (a *APIKeyAuthenticator) RequireAPIKey(next http.Handler) http.Handler {
 		if getErr != nil {
 			// Logged once at WARN; fall through to the RPC path. Redis is a
 			// perf optimisation, not a correctness gate.
-			a.logger.WarnContext(ctx, "bearer_auth redis GET error — falling through",
+			a.logger.WarnContext(
+				ctx, "bearer_auth redis GET error — falling through",
 				slog.String("error", getErr.Error()),
 			)
 		}
 		if hit {
-			a.applyContext(r, claims)
-			next.ServeHTTP(w, r.WithContext(r.Context()))
-			return
+			// Story 5.1 BR-3.8 — additionally check the per-api_key_id
+			// sentinel before serving the cached positive. If the
+			// sentinel exists, auth-svc has marked the key revoked
+			// within the last 300s; purge the stale positive entry
+			// and fall through to the RPC (which will return REVOKED
+			// → 401 from the Story-3.2 envelope path).
+			//
+			// Fail-open on Redis error: if EXISTS returns an error we
+			// serve the cached positive (the auth-svc PG row is the
+			// durable source of truth; the cache will natural-expire
+			// at TTL 300s — degraded mode matches the security.md
+			// §8.2.1 pre-Story-5.1 contract). Logged at WARN.
+			revoked, sentErr := a.sentinelExists(ctx, claims.APIKeyID)
+			if sentErr != nil {
+				a.logger.WarnContext(
+					ctx, "bearer_auth sentinel EXISTS error — serving from cache",
+					slog.String("error", sentErr.Error()),
+				)
+				a.applyContext(r, claims)
+				next.ServeHTTP(w, r.WithContext(r.Context()))
+				return
+			}
+			if !revoked {
+				a.applyContext(r, claims)
+				next.ServeHTTP(w, r.WithContext(r.Context()))
+				return
+			}
+			// Sentinel present — purge the stale positive entry.
+			// Failure to purge is non-fatal (entry expires at TTL);
+			// log + continue to RPC.
+			if delErr := a.cacheDelete(ctx, cacheKey); delErr != nil {
+				a.logger.WarnContext(
+					ctx, "bearer_auth cache DEL after sentinel hit failed",
+					slog.String("error", delErr.Error()),
+				)
+			}
+			a.logger.InfoContext(
+				ctx, "apikey_cache_purged_by_sentinel",
+				slog.String("api_key_id", claims.APIKeyID),
+			)
+			// Fall through to upstream RPC.
 		}
 
 		// Cache miss → upstream.
@@ -259,7 +311,8 @@ func (a *APIKeyAuthenticator) RequireAPIKey(next http.Handler) http.Handler {
 			Scope:    resp.Msg.GetScope(),
 		}
 		if setErr := a.cacheSet(ctx, cacheKey, &newClaims); setErr != nil {
-			a.logger.WarnContext(ctx, "bearer_auth redis SETEX failed",
+			a.logger.WarnContext(
+				ctx, "bearer_auth redis SETEX failed",
 				slog.String("error", setErr.Error()),
 			)
 		}
@@ -278,7 +331,8 @@ func (a *APIKeyAuthenticator) handleUpstreamError(w http.ResponseWriter, r *http
 	if errors.As(err, &cerr) {
 		switch cerr.Code() {
 		case connect.CodeUnavailable, connect.CodeDeadlineExceeded:
-			a.logger.WarnContext(r.Context(), "auth-svc unavailable",
+			a.logger.WarnContext(
+				r.Context(), "auth-svc unavailable",
 				slog.String("connect_code", cerr.Code().String()),
 				slog.String("error", err.Error()),
 			)
@@ -288,7 +342,8 @@ func (a *APIKeyAuthenticator) handleUpstreamError(w http.ResponseWriter, r *http
 	}
 	// Catch-all — any non-OK / non-mapped error becomes 503 as well; the
 	// only "ok" path is `err == nil && resp.Msg.Ok` (handled above).
-	a.logger.WarnContext(r.Context(), "auth-svc validate error",
+	a.logger.WarnContext(
+		r.Context(), "auth-svc validate error",
 		slog.String("error", err.Error()),
 	)
 	_ = openaierr.Write(w, r.Context(), http.StatusServiceUnavailable, codeAuthUnavailable, msgAuthUnavailable, nil)
@@ -324,7 +379,8 @@ func (a *APIKeyAuthenticator) cacheGet(ctx context.Context, key string) (*Cached
 	}
 	var c CachedClaims
 	if jsonErr := json.Unmarshal([]byte(raw), &c); jsonErr != nil {
-		a.logger.WarnContext(ctx, "bearer_auth redis cache JSON parse failed",
+		a.logger.WarnContext(
+			ctx, "bearer_auth redis cache JSON parse failed",
 			slog.String("error", jsonErr.Error()),
 		)
 		return nil, false, nil
@@ -345,6 +401,41 @@ func (a *APIKeyAuthenticator) cacheSet(ctx context.Context, key string, c *Cache
 		return fmt.Errorf("marshal cached claims: %w", err)
 	}
 	return rdb.SetEx(ctx, key, body, cacheTTL).Err()
+}
+
+// cacheDelete purges a cache entry. Story 5.1 BR-3.8 invokes this when
+// the sentinel-EXISTS check fires on a positive cache-hit (the entry is
+// stale; the next request should fall through to the auth-svc Validate
+// path which will return REVOKED). Failure is non-fatal — the entry will
+// natural-expire at TTL 300s; subsequent requests fall through anyway.
+func (a *APIKeyAuthenticator) cacheDelete(ctx context.Context, key string) error {
+	rdb := a.redisClient()
+	if rdb == nil {
+		return nil
+	}
+	return rdb.Del(ctx, key).Err()
+}
+
+// sentinelExists implements the Story 5.1 BR-3.8 sentinel check. Returns
+// (true, nil) when `SentinelKeyPrefix+apiKeyID` is present in Redis;
+// (false, nil) when absent (the cached positive is still valid); (false,
+// err) on Redis transport error (caller fail-open serves the cache).
+func (a *APIKeyAuthenticator) sentinelExists(ctx context.Context, apiKeyID string) (bool, error) {
+	rdb := a.redisClient()
+	if rdb == nil {
+		// Sentinel store is unreachable; fail-open per BR-3.13.
+		return false, nil
+	}
+	if apiKeyID == "" {
+		// Defensive — empty api_key_id would EXISTS-check the bare
+		// prefix key. Treat as "no sentinel" rather than a false match.
+		return false, nil
+	}
+	n, err := rdb.Exists(ctx, SentinelKeyPrefix+apiKeyID).Result()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
 
 // buildCacheKey returns `auth:apikey:<hex(sha256(plaintext))>` (BR-1.5 /

@@ -86,6 +86,14 @@ const (
 	// AuthServiceValidateApiKeyProcedure is the fully-qualified name of the AuthService's
 	// ValidateApiKey RPC.
 	AuthServiceValidateApiKeyProcedure = "/he.auth.v1.AuthService/ValidateApiKey"
+	// AuthServiceCreateApiKeyProcedure is the fully-qualified name of the AuthService's CreateApiKey
+	// RPC.
+	AuthServiceCreateApiKeyProcedure = "/he.auth.v1.AuthService/CreateApiKey"
+	// AuthServiceListApiKeysProcedure is the fully-qualified name of the AuthService's ListApiKeys RPC.
+	AuthServiceListApiKeysProcedure = "/he.auth.v1.AuthService/ListApiKeys"
+	// AuthServiceRevokeApiKeyProcedure is the fully-qualified name of the AuthService's RevokeApiKey
+	// RPC.
+	AuthServiceRevokeApiKeyProcedure = "/he.auth.v1.AuthService/RevokeApiKey"
 )
 
 // AuthServiceClient is a client for the he.auth.v1.AuthService service.
@@ -148,6 +156,27 @@ type AuthServiceClient interface {
 	// revoked. Plaintext key MUST NOT appear in logs, span attributes, or
 	// errors — AC2 BR-2.6 + docs/architecture/coding-standards.md §12.3.
 	ValidateApiKey(context.Context, *connect.Request[v1.ValidateApiKeyRequest]) (*connect.Response[v1.ValidateApiKeyResponse], error)
+	// Story 5.1 — API Key management surface (Create / List / Revoke).
+	//
+	// CreateApiKey: crypto/rand 32B → base62 → "he-" prefix → bcrypt(cost=12)
+	// hash → INSERT he_api.api_keys → Kafka audit.event api_key.created.
+	// Response carries the plaintext key ONCE (BR-1.5). user_id is gateway-
+	// populated from JWT sub (BR-1.3 IDOR defence); client-supplied values
+	// REJECTED.
+	//
+	// ListApiKeys: SELECT user-bound keys (LIMIT 100; ORDER BY created_at
+	// DESC, id ASC). key_hash explicitly OMITTED from SELECT (BR-2.5 defence-
+	// in-depth at the SQL boundary).
+	//
+	// RevokeApiKey: idempotent terminal-state UPDATE SET revoked_at=NOW();
+	// sentinel SET auth:apikey:revoked:{api_key_id} EX 300 for cross-pod
+	// cache-invalidation (BR-3.8; Architect Q2 ratified option-c). Returns
+	// historical revoked_at + was_already_revoked on idempotent re-revoke.
+	// Anti-enumeration: cross-user / not-found collapse to same NotFound
+	// (BR-3.2; Architect Q4 ratified collapse).
+	CreateApiKey(context.Context, *connect.Request[v1.CreateApiKeyRequest]) (*connect.Response[v1.CreateApiKeyResponse], error)
+	ListApiKeys(context.Context, *connect.Request[v1.ListApiKeysRequest]) (*connect.Response[v1.ListApiKeysResponse], error)
+	RevokeApiKey(context.Context, *connect.Request[v1.RevokeApiKeyRequest]) (*connect.Response[v1.RevokeApiKeyResponse], error)
 }
 
 // NewAuthServiceClient constructs a client for the he.auth.v1.AuthService service. By default, it
@@ -257,6 +286,24 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("ValidateApiKey")),
 			connect.WithClientOptions(opts...),
 		),
+		createApiKey: connect.NewClient[v1.CreateApiKeyRequest, v1.CreateApiKeyResponse](
+			httpClient,
+			baseURL+AuthServiceCreateApiKeyProcedure,
+			connect.WithSchema(authServiceMethods.ByName("CreateApiKey")),
+			connect.WithClientOptions(opts...),
+		),
+		listApiKeys: connect.NewClient[v1.ListApiKeysRequest, v1.ListApiKeysResponse](
+			httpClient,
+			baseURL+AuthServiceListApiKeysProcedure,
+			connect.WithSchema(authServiceMethods.ByName("ListApiKeys")),
+			connect.WithClientOptions(opts...),
+		),
+		revokeApiKey: connect.NewClient[v1.RevokeApiKeyRequest, v1.RevokeApiKeyResponse](
+			httpClient,
+			baseURL+AuthServiceRevokeApiKeyProcedure,
+			connect.WithSchema(authServiceMethods.ByName("RevokeApiKey")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -278,6 +325,9 @@ type authServiceClient struct {
 	getMe                   *connect.Client[v1.GetMeRequest, v1.GetMeResponse]
 	updateProfile           *connect.Client[v1.UpdateProfileRequest, v1.UpdateProfileResponse]
 	validateApiKey          *connect.Client[v1.ValidateApiKeyRequest, v1.ValidateApiKeyResponse]
+	createApiKey            *connect.Client[v1.CreateApiKeyRequest, v1.CreateApiKeyResponse]
+	listApiKeys             *connect.Client[v1.ListApiKeysRequest, v1.ListApiKeysResponse]
+	revokeApiKey            *connect.Client[v1.RevokeApiKeyRequest, v1.RevokeApiKeyResponse]
 }
 
 // RegisterUser calls he.auth.v1.AuthService.RegisterUser.
@@ -360,6 +410,21 @@ func (c *authServiceClient) ValidateApiKey(ctx context.Context, req *connect.Req
 	return c.validateApiKey.CallUnary(ctx, req)
 }
 
+// CreateApiKey calls he.auth.v1.AuthService.CreateApiKey.
+func (c *authServiceClient) CreateApiKey(ctx context.Context, req *connect.Request[v1.CreateApiKeyRequest]) (*connect.Response[v1.CreateApiKeyResponse], error) {
+	return c.createApiKey.CallUnary(ctx, req)
+}
+
+// ListApiKeys calls he.auth.v1.AuthService.ListApiKeys.
+func (c *authServiceClient) ListApiKeys(ctx context.Context, req *connect.Request[v1.ListApiKeysRequest]) (*connect.Response[v1.ListApiKeysResponse], error) {
+	return c.listApiKeys.CallUnary(ctx, req)
+}
+
+// RevokeApiKey calls he.auth.v1.AuthService.RevokeApiKey.
+func (c *authServiceClient) RevokeApiKey(ctx context.Context, req *connect.Request[v1.RevokeApiKeyRequest]) (*connect.Response[v1.RevokeApiKeyResponse], error) {
+	return c.revokeApiKey.CallUnary(ctx, req)
+}
+
 // AuthServiceHandler is an implementation of the he.auth.v1.AuthService service.
 type AuthServiceHandler interface {
 	RegisterUser(context.Context, *connect.Request[v1.RegisterUserRequest]) (*connect.Response[v1.RegisterUserResponse], error)
@@ -420,6 +485,27 @@ type AuthServiceHandler interface {
 	// revoked. Plaintext key MUST NOT appear in logs, span attributes, or
 	// errors — AC2 BR-2.6 + docs/architecture/coding-standards.md §12.3.
 	ValidateApiKey(context.Context, *connect.Request[v1.ValidateApiKeyRequest]) (*connect.Response[v1.ValidateApiKeyResponse], error)
+	// Story 5.1 — API Key management surface (Create / List / Revoke).
+	//
+	// CreateApiKey: crypto/rand 32B → base62 → "he-" prefix → bcrypt(cost=12)
+	// hash → INSERT he_api.api_keys → Kafka audit.event api_key.created.
+	// Response carries the plaintext key ONCE (BR-1.5). user_id is gateway-
+	// populated from JWT sub (BR-1.3 IDOR defence); client-supplied values
+	// REJECTED.
+	//
+	// ListApiKeys: SELECT user-bound keys (LIMIT 100; ORDER BY created_at
+	// DESC, id ASC). key_hash explicitly OMITTED from SELECT (BR-2.5 defence-
+	// in-depth at the SQL boundary).
+	//
+	// RevokeApiKey: idempotent terminal-state UPDATE SET revoked_at=NOW();
+	// sentinel SET auth:apikey:revoked:{api_key_id} EX 300 for cross-pod
+	// cache-invalidation (BR-3.8; Architect Q2 ratified option-c). Returns
+	// historical revoked_at + was_already_revoked on idempotent re-revoke.
+	// Anti-enumeration: cross-user / not-found collapse to same NotFound
+	// (BR-3.2; Architect Q4 ratified collapse).
+	CreateApiKey(context.Context, *connect.Request[v1.CreateApiKeyRequest]) (*connect.Response[v1.CreateApiKeyResponse], error)
+	ListApiKeys(context.Context, *connect.Request[v1.ListApiKeysRequest]) (*connect.Response[v1.ListApiKeysResponse], error)
+	RevokeApiKey(context.Context, *connect.Request[v1.RevokeApiKeyRequest]) (*connect.Response[v1.RevokeApiKeyResponse], error)
 }
 
 // NewAuthServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -525,6 +611,24 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("ValidateApiKey")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceCreateApiKeyHandler := connect.NewUnaryHandler(
+		AuthServiceCreateApiKeyProcedure,
+		svc.CreateApiKey,
+		connect.WithSchema(authServiceMethods.ByName("CreateApiKey")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceListApiKeysHandler := connect.NewUnaryHandler(
+		AuthServiceListApiKeysProcedure,
+		svc.ListApiKeys,
+		connect.WithSchema(authServiceMethods.ByName("ListApiKeys")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceRevokeApiKeyHandler := connect.NewUnaryHandler(
+		AuthServiceRevokeApiKeyProcedure,
+		svc.RevokeApiKey,
+		connect.WithSchema(authServiceMethods.ByName("RevokeApiKey")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/he.auth.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthServiceRegisterUserProcedure:
@@ -559,6 +663,12 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceUpdateProfileHandler.ServeHTTP(w, r)
 		case AuthServiceValidateApiKeyProcedure:
 			authServiceValidateApiKeyHandler.ServeHTTP(w, r)
+		case AuthServiceCreateApiKeyProcedure:
+			authServiceCreateApiKeyHandler.ServeHTTP(w, r)
+		case AuthServiceListApiKeysProcedure:
+			authServiceListApiKeysHandler.ServeHTTP(w, r)
+		case AuthServiceRevokeApiKeyProcedure:
+			authServiceRevokeApiKeyHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -630,4 +740,16 @@ func (UnimplementedAuthServiceHandler) UpdateProfile(context.Context, *connect.R
 
 func (UnimplementedAuthServiceHandler) ValidateApiKey(context.Context, *connect.Request[v1.ValidateApiKeyRequest]) (*connect.Response[v1.ValidateApiKeyResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.ValidateApiKey is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) CreateApiKey(context.Context, *connect.Request[v1.CreateApiKeyRequest]) (*connect.Response[v1.CreateApiKeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.CreateApiKey is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) ListApiKeys(context.Context, *connect.Request[v1.ListApiKeysRequest]) (*connect.Response[v1.ListApiKeysResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.ListApiKeys is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) RevokeApiKey(context.Context, *connect.Request[v1.RevokeApiKeyRequest]) (*connect.Response[v1.RevokeApiKeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.RevokeApiKey is not implemented"))
 }

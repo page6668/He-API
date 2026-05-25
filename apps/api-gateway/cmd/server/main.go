@@ -183,6 +183,32 @@ func main() {
 	mux.Handle("GET /v1/me", jwtVerifier.RequireJWT(http.HandlerFunc(auth.GetMe)))
 	mux.Handle("PUT /v1/me/profile", jwtVerifier.RequireJWT(http.HandlerFunc(auth.UpdateProfile)))
 
+	// Story 5.1 — API Key management routes (AC1/AC2/AC3).
+	// Wrapped by JWT-only middleware (NO bearer-auth — BR-1.1: key-can-
+	// create-keys lateral movement explicitly rejected). aal>=1 per Q7 SM
+	// default ratified by Architect Round 1 (revoke is a security-positive
+	// action; AAL2 would create counter-productive friction).
+	//
+	// Origin-based CSRF (middleware.CSRF wrapping the mux at line ~280) is
+	// the inherited defence for POST/DELETE; no per-route CSRF wrap needed
+	// (Story 2.5 /v1/me/profile precedent).
+	meKeysRedisURL := envOr("HE_API_REDIS_URL", defaultRedisURL)
+	meKeys := handlers.NewMeKeysHandler(authUpstream, func() *redis.Client {
+		opt, parseErr := redis.ParseURL(meKeysRedisURL)
+		if parseErr != nil {
+			logger.Warn(
+				"me_keys redis URL parse failed — rate-limit will fail-open",
+				slog.String("url", meKeysRedisURL),
+				slog.String("error", parseErr.Error()),
+			)
+			return nil
+		}
+		return redis.NewClient(opt)
+	}, logger)
+	mux.Handle("POST /v1/me/keys", jwtVerifier.RequireJWT(http.HandlerFunc(meKeys.HandleCreate)))
+	mux.Handle("GET /v1/me/keys", jwtVerifier.RequireJWT(http.HandlerFunc(meKeys.HandleList)))
+	mux.Handle("DELETE /v1/me/keys/{api_key_id}", jwtVerifier.RequireJWT(http.HandlerFunc(meKeys.HandleRevoke)))
+
 	// Story 2.6 — GDPR data-export routes (AC2). Proxies to notification-svc.
 	// Both routes are aal>=1 (parity with Story 2.5 — user-visible
 	// account-data action, not credential mutation). BR-2.4 user_id-from-JWT
@@ -235,7 +261,8 @@ func main() {
 	// Empty env → registry omits the entry → all models fall through to
 	// the Story-3.3 mock. Stories 4.2-4.6 add sibling env-var lookups.
 	adapterRegistry := adapterclient.LoadFromEnv()
-	chatCompletions := handlers.NewChatCompletionsHandler(logger,
+	chatCompletions := handlers.NewChatCompletionsHandler(
+		logger,
 		handlers.WithAdapterRegistry(adapterRegistry),
 	)
 	mux.Handle("POST /v1/chat/completions", bearerAuth.RequireAPIKey(chatCompletions))

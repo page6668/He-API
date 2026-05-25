@@ -7,13 +7,13 @@
 //
 // Env config (all from K8s Secrets / ConfigMap mounted by infra/helm/auth-svc):
 //
-//   HE_API_DB_POSTGRES_URI       — Story 1.6 K8s Secret he-api-db-creds
-//   HE_API_DB_REDIS_URI          — Story 1.6 K8s Secret he-api-db-creds
-//   HE_API_NOTIFICATION_SVC_URL  — notification-svc ClusterIP base URL
-//                                  (e.g. http://notification-svc:8080)
-//   HE_API_CONSOLE_BASE_URL      — public console URL used to build the
-//                                  verification email link
-//                                  (e.g. https://console.he-api.com)
+//	HE_API_DB_POSTGRES_URI       — Story 1.6 K8s Secret he-api-db-creds
+//	HE_API_DB_REDIS_URI          — Story 1.6 K8s Secret he-api-db-creds
+//	HE_API_NOTIFICATION_SVC_URL  — notification-svc ClusterIP base URL
+//	                               (e.g. http://notification-svc:8080)
+//	HE_API_CONSOLE_BASE_URL      — public console URL used to build the
+//	                               verification email link
+//	                               (e.g. https://console.he-api.com)
 package main
 
 import (
@@ -43,6 +43,7 @@ import (
 	"github.com/he-api/he-api/apps/auth-svc/internal/metrics"
 	"github.com/he-api/he-api/apps/auth-svc/internal/notification"
 	"github.com/he-api/he-api/apps/auth-svc/internal/password"
+	"github.com/he-api/he-api/apps/auth-svc/internal/redisclient"
 
 	"github.com/google/uuid"
 )
@@ -209,15 +210,15 @@ func main() {
 	// unset and the NoOpPublisher path keeps the audit shape observable
 	// via structured logs without a broker dependency.
 	var (
-		auditPub     audit.Publisher
-		kafkaWriter  *kafka.Writer
+		auditPub    audit.Publisher
+		kafkaWriter *kafka.Writer
 	)
 	if rawBrokers := strings.TrimSpace(os.Getenv("HE_API_AUDIT_KAFKA_BROKERS")); rawBrokers != "" {
 		brokers := splitAndTrim(rawBrokers, ",")
 		kafkaWriter = &kafka.Writer{
 			Addr:                   kafka.TCP(brokers...),
 			Topic:                  auditTopicName,
-			Balancer:               &kafka.Hash{}, // hash(EmailHash) — per-account partition stability (BR-4.5)
+			Balancer:               &kafka.Hash{},    // hash(EmailHash) — per-account partition stability (BR-4.5)
 			RequiredAcks:           kafka.RequireOne, // TS-CONS-009: acks=1
 			Async:                  true,             // TS-CONS-009: non-blocking — errors surface via Completion
 			AllowAutoTopicCreation: false,            // topic is pre-provisioned by infra
@@ -228,7 +229,8 @@ func main() {
 					// warn-log only. The handler call path used
 					// PublishBestEffort which already returned nil to the
 					// caller; this is the async-publish failure backchannel.
-					logger.Warn("audit kafka publish failed (async)",
+					logger.Warn(
+						"audit kafka publish failed (async)",
 						slog.String("topic", auditTopicName),
 						slog.Int("msg_count", len(messages)),
 						slog.String("error", err.Error()),
@@ -237,7 +239,8 @@ func main() {
 			},
 		}
 		auditPub = audit.NewKafkaPublisher(kafkaWriter, logger)
-		logger.Info("audit publisher: kafka",
+		logger.Info(
+			"audit publisher: kafka",
 			slog.String("topic", auditTopicName),
 			slog.Int("broker_count", len(brokers)),
 		)
@@ -284,7 +287,8 @@ func main() {
 		os.Exit(1)
 	}
 	if jwtSigner.KeyID() != jwtVerifier.KeyID() {
-		logger.Error("JWT key mismatch — Signer kid ≠ Verifier kid (keypair drift)",
+		logger.Error(
+			"JWT key mismatch — Signer kid ≠ Verifier kid (keypair drift)",
 			slog.String("signer_kid", jwtSigner.KeyID()),
 			slog.String("verifier_kid", jwtVerifier.KeyID()),
 		)
@@ -321,15 +325,18 @@ func main() {
 	mfaIssuer := mfaIssuerAdapter{signer: jwtSigner}
 	mfaParser := mfaParserAdapter{verifier: jwtVerifier}
 
-	// === Story 3.2 — API-key validator (AC2) ===============================
-	// Backs AuthService.ValidateApiKey. The Repository surface wraps the
-	// shared pgxpool via a thin adapter so the same pool that serves the
-	// other auth handlers (users / mfa / oauth) also serves api_keys
-	// lookups — no separate pool, no extra TCP fanout.
-	apiKeyService := apikey.NewService(
+	// === Story 3.2 — API-key validator (AC2) + Story 5.1 management ========
+	// Story 3.2 backs AuthService.ValidateApiKey (Validate hot path).
+	// Story 5.1 extends with CreateApiKey + ListApiKeys + RevokeApiKey.
+	// The same pgxpool serves both paths; the Redis client (already
+	// constructed for ratelimit) doubles as the sentinel writer for the
+	// BR-3.8 cross-pod cache-invalidation contract.
+	apiKeyService := apikey.NewServiceWithMgmt(
 		apikey.QuerierRepository{Q: pgPool},
 		tp.Tracer("apps/auth-svc/internal/apikey"),
 		logger,
+		auditPub,
+		redisclient.NewRevokeSentinel(rdb),
 	)
 
 	// === AuthServer =========================================================
@@ -366,7 +373,8 @@ func main() {
 
 	serverErr := make(chan error, 1)
 	go func() {
-		logger.Info("auth-svc listening",
+		logger.Info(
+			"auth-svc listening",
 			slog.String("addr", listenAddr),
 			slog.String("notification_svc_url", notifURL),
 			slog.String("console_base_url", authServer.ConsoleBaseURL),

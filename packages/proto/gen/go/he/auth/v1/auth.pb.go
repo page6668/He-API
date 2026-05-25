@@ -2639,6 +2639,490 @@ func (x *ValidateApiKeyResponse) GetReason() ApiKeyValidationReason {
 	return ApiKeyValidationReason_API_KEY_VALIDATION_REASON_UNSPECIFIED
 }
 
+// CreateApiKeyRequest. user_id is the gateway-extracted JWT sub claim — the
+// client request body MUST NOT carry it (BR-1.3). name is NFC-normalized
+// + trimmed; 1-100 runes; allowed code-point classes L/M/N/P/Sc + ASCII
+// space (BR-1.7). Client-attribution metadata for audit payload only.
+type CreateApiKeyRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	ClientIp      string                 `protobuf:"bytes,3,opt,name=client_ip,json=clientIp,proto3" json:"client_ip,omitempty"`
+	UserAgent     string                 `protobuf:"bytes,4,opt,name=user_agent,json=userAgent,proto3" json:"user_agent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateApiKeyRequest) Reset() {
+	*x = CreateApiKeyRequest{}
+	mi := &file_he_auth_v1_auth_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateApiKeyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateApiKeyRequest) ProtoMessage() {}
+
+func (x *CreateApiKeyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_he_auth_v1_auth_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateApiKeyRequest.ProtoReflect.Descriptor instead.
+func (*CreateApiKeyRequest) Descriptor() ([]byte, []int) {
+	return file_he_auth_v1_auth_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *CreateApiKeyRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *CreateApiKeyRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CreateApiKeyRequest) GetClientIp() string {
+	if x != nil {
+		return x.ClientIp
+	}
+	return ""
+}
+
+func (x *CreateApiKeyRequest) GetUserAgent() string {
+	if x != nil {
+		return x.UserAgent
+	}
+	return ""
+}
+
+// CreateApiKeyResponse. plaintext is set ONCE (BR-1.5) — NEVER persisted,
+// NEVER re-fetchable, NEVER logged. key_prefix is the first 12 chars of
+// plaintext (security.md §8.2 step 4) and is surfaced on subsequent ListApiKeys
+// calls so users can identify keys without seeing the secret.
+type CreateApiKeyResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ApiKeyId      string                 `protobuf:"bytes,1,opt,name=api_key_id,json=apiKeyId,proto3" json:"api_key_id,omitempty"`
+	KeyPrefix     string                 `protobuf:"bytes,2,opt,name=key_prefix,json=keyPrefix,proto3" json:"key_prefix,omitempty"`
+	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	Plaintext     string                 `protobuf:"bytes,5,opt,name=plaintext,proto3" json:"plaintext,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateApiKeyResponse) Reset() {
+	*x = CreateApiKeyResponse{}
+	mi := &file_he_auth_v1_auth_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateApiKeyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateApiKeyResponse) ProtoMessage() {}
+
+func (x *CreateApiKeyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_he_auth_v1_auth_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateApiKeyResponse.ProtoReflect.Descriptor instead.
+func (*CreateApiKeyResponse) Descriptor() ([]byte, []int) {
+	return file_he_auth_v1_auth_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *CreateApiKeyResponse) GetApiKeyId() string {
+	if x != nil {
+		return x.ApiKeyId
+	}
+	return ""
+}
+
+func (x *CreateApiKeyResponse) GetKeyPrefix() string {
+	if x != nil {
+		return x.KeyPrefix
+	}
+	return ""
+}
+
+func (x *CreateApiKeyResponse) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CreateApiKeyResponse) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *CreateApiKeyResponse) GetPlaintext() string {
+	if x != nil {
+		return x.Plaintext
+	}
+	return ""
+}
+
+type ListApiKeysRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListApiKeysRequest) Reset() {
+	*x = ListApiKeysRequest{}
+	mi := &file_he_auth_v1_auth_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListApiKeysRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListApiKeysRequest) ProtoMessage() {}
+
+func (x *ListApiKeysRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_he_auth_v1_auth_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListApiKeysRequest.ProtoReflect.Descriptor instead.
+func (*ListApiKeysRequest) Descriptor() ([]byte, []int) {
+	return file_he_auth_v1_auth_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *ListApiKeysRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+type ListApiKeysResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Keys          []*ApiKeyEntry         `protobuf:"bytes,1,rep,name=keys,proto3" json:"keys,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListApiKeysResponse) Reset() {
+	*x = ListApiKeysResponse{}
+	mi := &file_he_auth_v1_auth_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListApiKeysResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListApiKeysResponse) ProtoMessage() {}
+
+func (x *ListApiKeysResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_he_auth_v1_auth_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListApiKeysResponse.ProtoReflect.Descriptor instead.
+func (*ListApiKeysResponse) Descriptor() ([]byte, []int) {
+	return file_he_auth_v1_auth_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *ListApiKeysResponse) GetKeys() []*ApiKeyEntry {
+	if x != nil {
+		return x.Keys
+	}
+	return nil
+}
+
+// ApiKeyEntry intentionally OMITS key_hash (BR-2.5 defence-in-depth at the
+// proto boundary). monthly_cost_cap_usd + current_month_cost_usd are string-
+// decimal (BR-2.10 / Architect Q-Spec-4 — Stripe precedent; JSON number
+// would lose NUMERIC(10,2) / NUMERIC(12,4) precision on round-trip).
+type ApiKeyEntry struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	ApiKeyId            string                 `protobuf:"bytes,1,opt,name=api_key_id,json=apiKeyId,proto3" json:"api_key_id,omitempty"`
+	Name                string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	KeyPrefix           string                 `protobuf:"bytes,3,opt,name=key_prefix,json=keyPrefix,proto3" json:"key_prefix,omitempty"`
+	Scope               string                 `protobuf:"bytes,4,opt,name=scope,proto3" json:"scope,omitempty"`                                                            // JSON-encoded scope JSONB
+	MonthlyCostCapUsd   *string                `protobuf:"bytes,5,opt,name=monthly_cost_cap_usd,json=monthlyCostCapUsd,proto3,oneof" json:"monthly_cost_cap_usd,omitempty"` // null when DB NULL
+	CurrentMonthCostUsd string                 `protobuf:"bytes,6,opt,name=current_month_cost_usd,json=currentMonthCostUsd,proto3" json:"current_month_cost_usd,omitempty"` // "0" default
+	LastUsedAt          *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=last_used_at,json=lastUsedAt,proto3,oneof" json:"last_used_at,omitempty"`
+	RevokedAt           *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=revoked_at,json=revokedAt,proto3,oneof" json:"revoked_at,omitempty"`
+	CreatedAt           *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *ApiKeyEntry) Reset() {
+	*x = ApiKeyEntry{}
+	mi := &file_he_auth_v1_auth_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ApiKeyEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ApiKeyEntry) ProtoMessage() {}
+
+func (x *ApiKeyEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_he_auth_v1_auth_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ApiKeyEntry.ProtoReflect.Descriptor instead.
+func (*ApiKeyEntry) Descriptor() ([]byte, []int) {
+	return file_he_auth_v1_auth_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *ApiKeyEntry) GetApiKeyId() string {
+	if x != nil {
+		return x.ApiKeyId
+	}
+	return ""
+}
+
+func (x *ApiKeyEntry) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ApiKeyEntry) GetKeyPrefix() string {
+	if x != nil {
+		return x.KeyPrefix
+	}
+	return ""
+}
+
+func (x *ApiKeyEntry) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+func (x *ApiKeyEntry) GetMonthlyCostCapUsd() string {
+	if x != nil && x.MonthlyCostCapUsd != nil {
+		return *x.MonthlyCostCapUsd
+	}
+	return ""
+}
+
+func (x *ApiKeyEntry) GetCurrentMonthCostUsd() string {
+	if x != nil {
+		return x.CurrentMonthCostUsd
+	}
+	return ""
+}
+
+func (x *ApiKeyEntry) GetLastUsedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastUsedAt
+	}
+	return nil
+}
+
+func (x *ApiKeyEntry) GetRevokedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.RevokedAt
+	}
+	return nil
+}
+
+func (x *ApiKeyEntry) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+type RevokeApiKeyRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	ApiKeyId      string                 `protobuf:"bytes,2,opt,name=api_key_id,json=apiKeyId,proto3" json:"api_key_id,omitempty"`
+	ClientIp      string                 `protobuf:"bytes,3,opt,name=client_ip,json=clientIp,proto3" json:"client_ip,omitempty"`
+	UserAgent     string                 `protobuf:"bytes,4,opt,name=user_agent,json=userAgent,proto3" json:"user_agent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeApiKeyRequest) Reset() {
+	*x = RevokeApiKeyRequest{}
+	mi := &file_he_auth_v1_auth_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeApiKeyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeApiKeyRequest) ProtoMessage() {}
+
+func (x *RevokeApiKeyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_he_auth_v1_auth_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeApiKeyRequest.ProtoReflect.Descriptor instead.
+func (*RevokeApiKeyRequest) Descriptor() ([]byte, []int) {
+	return file_he_auth_v1_auth_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *RevokeApiKeyRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *RevokeApiKeyRequest) GetApiKeyId() string {
+	if x != nil {
+		return x.ApiKeyId
+	}
+	return ""
+}
+
+func (x *RevokeApiKeyRequest) GetClientIp() string {
+	if x != nil {
+		return x.ClientIp
+	}
+	return ""
+}
+
+func (x *RevokeApiKeyRequest) GetUserAgent() string {
+	if x != nil {
+		return x.UserAgent
+	}
+	return ""
+}
+
+// RevokeApiKeyResponse. was_already_revoked = true on idempotent re-revoke
+// (BR-3.3); revoked_at carries the HISTORICAL timestamp in that case so the
+// UI can show "Revoked on YYYY-MM-DD" without a re-SELECT (Architect Q-Spec-1
+// upgrade of rest-api-spec.md §5.2 sketch).
+type RevokeApiKeyResponse struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	ApiKeyId          string                 `protobuf:"bytes,1,opt,name=api_key_id,json=apiKeyId,proto3" json:"api_key_id,omitempty"`
+	RevokedAt         *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=revoked_at,json=revokedAt,proto3" json:"revoked_at,omitempty"`
+	WasAlreadyRevoked bool                   `protobuf:"varint,3,opt,name=was_already_revoked,json=wasAlreadyRevoked,proto3" json:"was_already_revoked,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *RevokeApiKeyResponse) Reset() {
+	*x = RevokeApiKeyResponse{}
+	mi := &file_he_auth_v1_auth_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeApiKeyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeApiKeyResponse) ProtoMessage() {}
+
+func (x *RevokeApiKeyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_he_auth_v1_auth_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeApiKeyResponse.ProtoReflect.Descriptor instead.
+func (*RevokeApiKeyResponse) Descriptor() ([]byte, []int) {
+	return file_he_auth_v1_auth_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *RevokeApiKeyResponse) GetApiKeyId() string {
+	if x != nil {
+		return x.ApiKeyId
+	}
+	return ""
+}
+
+func (x *RevokeApiKeyResponse) GetRevokedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.RevokedAt
+	}
+	return nil
+}
+
+func (x *RevokeApiKeyResponse) GetWasAlreadyRevoked() bool {
+	if x != nil {
+		return x.WasAlreadyRevoked
+	}
+	return false
+}
+
 var File_he_auth_v1_auth_proto protoreflect.FileDescriptor
 
 const file_he_auth_v1_auth_proto_rawDesc = "" +
@@ -2847,7 +3331,57 @@ const file_he_auth_v1_auth_proto_rawDesc = "" +
 	"\auser_id\x18\x03 \x01(\tR\x06userId\x12\x17\n" +
 	"\ateam_id\x18\x04 \x01(\tR\x06teamId\x12\x14\n" +
 	"\x05scope\x18\x05 \x01(\tR\x05scope\x12:\n" +
-	"\x06reason\x18\x06 \x01(\x0e2\".he.auth.v1.ApiKeyValidationReasonR\x06reason*_\n" +
+	"\x06reason\x18\x06 \x01(\x0e2\".he.auth.v1.ApiKeyValidationReasonR\x06reason\"~\n" +
+	"\x13CreateApiKeyRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n" +
+	"\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\x04 \x01(\tR\tuserAgent\"\xc0\x01\n" +
+	"\x14CreateApiKeyResponse\x12\x1c\n" +
+	"\n" +
+	"api_key_id\x18\x01 \x01(\tR\bapiKeyId\x12\x1d\n" +
+	"\n" +
+	"key_prefix\x18\x02 \x01(\tR\tkeyPrefix\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x129\n" +
+	"\n" +
+	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x1c\n" +
+	"\tplaintext\x18\x05 \x01(\tR\tplaintext\"-\n" +
+	"\x12ListApiKeysRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\"B\n" +
+	"\x13ListApiKeysResponse\x12+\n" +
+	"\x04keys\x18\x01 \x03(\v2\x17.he.auth.v1.ApiKeyEntryR\x04keys\"\xd6\x03\n" +
+	"\vApiKeyEntry\x12\x1c\n" +
+	"\n" +
+	"api_key_id\x18\x01 \x01(\tR\bapiKeyId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n" +
+	"\n" +
+	"key_prefix\x18\x03 \x01(\tR\tkeyPrefix\x12\x14\n" +
+	"\x05scope\x18\x04 \x01(\tR\x05scope\x124\n" +
+	"\x14monthly_cost_cap_usd\x18\x05 \x01(\tH\x00R\x11monthlyCostCapUsd\x88\x01\x01\x123\n" +
+	"\x16current_month_cost_usd\x18\x06 \x01(\tR\x13currentMonthCostUsd\x12A\n" +
+	"\flast_used_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampH\x01R\n" +
+	"lastUsedAt\x88\x01\x01\x12>\n" +
+	"\n" +
+	"revoked_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampH\x02R\trevokedAt\x88\x01\x01\x129\n" +
+	"\n" +
+	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAtB\x17\n" +
+	"\x15_monthly_cost_cap_usdB\x0f\n" +
+	"\r_last_used_atB\r\n" +
+	"\v_revoked_at\"\x88\x01\n" +
+	"\x13RevokeApiKeyRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1c\n" +
+	"\n" +
+	"api_key_id\x18\x02 \x01(\tR\bapiKeyId\x12\x1b\n" +
+	"\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\x04 \x01(\tR\tuserAgent\"\x9f\x01\n" +
+	"\x14RevokeApiKeyResponse\x12\x1c\n" +
+	"\n" +
+	"api_key_id\x18\x01 \x01(\tR\bapiKeyId\x129\n" +
+	"\n" +
+	"revoked_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\trevokedAt\x12.\n" +
+	"\x13was_already_revoked\x18\x03 \x01(\bR\x11wasAlreadyRevoked*_\n" +
 	"\vLoginStatus\x12\x1c\n" +
 	"\x18LOGIN_STATUS_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fLOGIN_STATUS_OK\x10\x01\x12\x1d\n" +
@@ -2864,8 +3398,7 @@ const file_he_auth_v1_auth_proto_rawDesc = "" +
 	"\x16ApiKeyValidationReason\x12)\n" +
 	"%API_KEY_VALIDATION_REASON_UNSPECIFIED\x10\x00\x12'\n" +
 	"#API_KEY_VALIDATION_REASON_NOT_FOUND\x10\x01\x12%\n" +
-	"!API_KEY_VALIDATION_REASON_REVOKED\x10\x022\xf0\n" +
-	"\n" +
+	"!API_KEY_VALIDATION_REASON_REVOKED\x10\x022\xe6\f\n" +
 	"\vAuthService\x12Q\n" +
 	"\fRegisterUser\x12\x1f.he.auth.v1.RegisterUserRequest\x1a .he.auth.v1.RegisterUserResponse\x12N\n" +
 	"\vVerifyEmail\x12\x1e.he.auth.v1.VerifyEmailRequest\x1a\x1f.he.auth.v1.VerifyEmailResponse\x12c\n" +
@@ -2883,7 +3416,10 @@ const file_he_auth_v1_auth_proto_rawDesc = "" +
 	"\x17RegenerateRecoveryCodes\x12*.he.auth.v1.RegenerateRecoveryCodesRequest\x1a+.he.auth.v1.RegenerateRecoveryCodesResponse\x12<\n" +
 	"\x05GetMe\x12\x18.he.auth.v1.GetMeRequest\x1a\x19.he.auth.v1.GetMeResponse\x12T\n" +
 	"\rUpdateProfile\x12 .he.auth.v1.UpdateProfileRequest\x1a!.he.auth.v1.UpdateProfileResponse\x12W\n" +
-	"\x0eValidateApiKey\x12!.he.auth.v1.ValidateApiKeyRequest\x1a\".he.auth.v1.ValidateApiKeyResponseBBZ@github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1;authv1b\x06proto3"
+	"\x0eValidateApiKey\x12!.he.auth.v1.ValidateApiKeyRequest\x1a\".he.auth.v1.ValidateApiKeyResponse\x12Q\n" +
+	"\fCreateApiKey\x12\x1f.he.auth.v1.CreateApiKeyRequest\x1a .he.auth.v1.CreateApiKeyResponse\x12N\n" +
+	"\vListApiKeys\x12\x1e.he.auth.v1.ListApiKeysRequest\x1a\x1f.he.auth.v1.ListApiKeysResponse\x12Q\n" +
+	"\fRevokeApiKey\x12\x1f.he.auth.v1.RevokeApiKeyRequest\x1a .he.auth.v1.RevokeApiKeyResponseBBZ@github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1;authv1b\x06proto3"
 
 var (
 	file_he_auth_v1_auth_proto_rawDescOnce sync.Once
@@ -2898,7 +3434,7 @@ func file_he_auth_v1_auth_proto_rawDescGZIP() []byte {
 }
 
 var file_he_auth_v1_auth_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_he_auth_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
+var file_he_auth_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 39)
 var file_he_auth_v1_auth_proto_goTypes = []any{
 	(LoginStatus)(0),                        // 0: he.auth.v1.LoginStatus
 	(LinkOutcome)(0),                        // 1: he.auth.v1.LinkOutcome
@@ -2936,55 +3472,74 @@ var file_he_auth_v1_auth_proto_goTypes = []any{
 	(*UpdateProfileResponse)(nil),           // 33: he.auth.v1.UpdateProfileResponse
 	(*ValidateApiKeyRequest)(nil),           // 34: he.auth.v1.ValidateApiKeyRequest
 	(*ValidateApiKeyResponse)(nil),          // 35: he.auth.v1.ValidateApiKeyResponse
-	(*timestamppb.Timestamp)(nil),           // 36: google.protobuf.Timestamp
+	(*CreateApiKeyRequest)(nil),             // 36: he.auth.v1.CreateApiKeyRequest
+	(*CreateApiKeyResponse)(nil),            // 37: he.auth.v1.CreateApiKeyResponse
+	(*ListApiKeysRequest)(nil),              // 38: he.auth.v1.ListApiKeysRequest
+	(*ListApiKeysResponse)(nil),             // 39: he.auth.v1.ListApiKeysResponse
+	(*ApiKeyEntry)(nil),                     // 40: he.auth.v1.ApiKeyEntry
+	(*RevokeApiKeyRequest)(nil),             // 41: he.auth.v1.RevokeApiKeyRequest
+	(*RevokeApiKeyResponse)(nil),            // 42: he.auth.v1.RevokeApiKeyResponse
+	(*timestamppb.Timestamp)(nil),           // 43: google.protobuf.Timestamp
 }
 var file_he_auth_v1_auth_proto_depIdxs = []int32{
 	0,  // 0: he.auth.v1.LoginUserResponse.status:type_name -> he.auth.v1.LoginStatus
 	1,  // 1: he.auth.v1.CompleteOAuthResponse.link_outcome:type_name -> he.auth.v1.LinkOutcome
 	2,  // 2: he.auth.v1.DisableTOTPRequest.factor:type_name -> he.auth.v1.VerificationFactor
 	2,  // 3: he.auth.v1.RegenerateRecoveryCodesRequest.factor:type_name -> he.auth.v1.VerificationFactor
-	36, // 4: he.auth.v1.GetMeResponse.created_at:type_name -> google.protobuf.Timestamp
-	36, // 5: he.auth.v1.GetMeResponse.updated_at:type_name -> google.protobuf.Timestamp
-	36, // 6: he.auth.v1.UpdateProfileResponse.created_at:type_name -> google.protobuf.Timestamp
-	36, // 7: he.auth.v1.UpdateProfileResponse.updated_at:type_name -> google.protobuf.Timestamp
+	43, // 4: he.auth.v1.GetMeResponse.created_at:type_name -> google.protobuf.Timestamp
+	43, // 5: he.auth.v1.GetMeResponse.updated_at:type_name -> google.protobuf.Timestamp
+	43, // 6: he.auth.v1.UpdateProfileResponse.created_at:type_name -> google.protobuf.Timestamp
+	43, // 7: he.auth.v1.UpdateProfileResponse.updated_at:type_name -> google.protobuf.Timestamp
 	3,  // 8: he.auth.v1.ValidateApiKeyResponse.reason:type_name -> he.auth.v1.ApiKeyValidationReason
-	4,  // 9: he.auth.v1.AuthService.RegisterUser:input_type -> he.auth.v1.RegisterUserRequest
-	6,  // 10: he.auth.v1.AuthService.VerifyEmail:input_type -> he.auth.v1.VerifyEmailRequest
-	8,  // 11: he.auth.v1.AuthService.ResendVerification:input_type -> he.auth.v1.ResendVerificationRequest
-	10, // 12: he.auth.v1.AuthService.LoginUser:input_type -> he.auth.v1.LoginUserRequest
-	12, // 13: he.auth.v1.AuthService.RefreshToken:input_type -> he.auth.v1.RefreshTokenRequest
-	14, // 14: he.auth.v1.AuthService.BeginOAuth:input_type -> he.auth.v1.BeginOAuthRequest
-	16, // 15: he.auth.v1.AuthService.CompleteOAuth:input_type -> he.auth.v1.CompleteOAuthRequest
-	18, // 16: he.auth.v1.AuthService.EnrollTOTPInit:input_type -> he.auth.v1.EnrollTOTPInitRequest
-	20, // 17: he.auth.v1.AuthService.EnrollTOTPVerify:input_type -> he.auth.v1.EnrollTOTPVerifyRequest
-	22, // 18: he.auth.v1.AuthService.ChallengeTOTP:input_type -> he.auth.v1.ChallengeTOTPRequest
-	24, // 19: he.auth.v1.AuthService.UseRecoveryCode:input_type -> he.auth.v1.UseRecoveryCodeRequest
-	26, // 20: he.auth.v1.AuthService.DisableTOTP:input_type -> he.auth.v1.DisableTOTPRequest
-	28, // 21: he.auth.v1.AuthService.RegenerateRecoveryCodes:input_type -> he.auth.v1.RegenerateRecoveryCodesRequest
-	30, // 22: he.auth.v1.AuthService.GetMe:input_type -> he.auth.v1.GetMeRequest
-	32, // 23: he.auth.v1.AuthService.UpdateProfile:input_type -> he.auth.v1.UpdateProfileRequest
-	34, // 24: he.auth.v1.AuthService.ValidateApiKey:input_type -> he.auth.v1.ValidateApiKeyRequest
-	5,  // 25: he.auth.v1.AuthService.RegisterUser:output_type -> he.auth.v1.RegisterUserResponse
-	7,  // 26: he.auth.v1.AuthService.VerifyEmail:output_type -> he.auth.v1.VerifyEmailResponse
-	9,  // 27: he.auth.v1.AuthService.ResendVerification:output_type -> he.auth.v1.ResendVerificationResponse
-	11, // 28: he.auth.v1.AuthService.LoginUser:output_type -> he.auth.v1.LoginUserResponse
-	13, // 29: he.auth.v1.AuthService.RefreshToken:output_type -> he.auth.v1.RefreshTokenResponse
-	15, // 30: he.auth.v1.AuthService.BeginOAuth:output_type -> he.auth.v1.BeginOAuthResponse
-	17, // 31: he.auth.v1.AuthService.CompleteOAuth:output_type -> he.auth.v1.CompleteOAuthResponse
-	19, // 32: he.auth.v1.AuthService.EnrollTOTPInit:output_type -> he.auth.v1.EnrollTOTPInitResponse
-	21, // 33: he.auth.v1.AuthService.EnrollTOTPVerify:output_type -> he.auth.v1.EnrollTOTPVerifyResponse
-	23, // 34: he.auth.v1.AuthService.ChallengeTOTP:output_type -> he.auth.v1.ChallengeTOTPResponse
-	25, // 35: he.auth.v1.AuthService.UseRecoveryCode:output_type -> he.auth.v1.UseRecoveryCodeResponse
-	27, // 36: he.auth.v1.AuthService.DisableTOTP:output_type -> he.auth.v1.DisableTOTPResponse
-	29, // 37: he.auth.v1.AuthService.RegenerateRecoveryCodes:output_type -> he.auth.v1.RegenerateRecoveryCodesResponse
-	31, // 38: he.auth.v1.AuthService.GetMe:output_type -> he.auth.v1.GetMeResponse
-	33, // 39: he.auth.v1.AuthService.UpdateProfile:output_type -> he.auth.v1.UpdateProfileResponse
-	35, // 40: he.auth.v1.AuthService.ValidateApiKey:output_type -> he.auth.v1.ValidateApiKeyResponse
-	25, // [25:41] is the sub-list for method output_type
-	9,  // [9:25] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	43, // 9: he.auth.v1.CreateApiKeyResponse.created_at:type_name -> google.protobuf.Timestamp
+	40, // 10: he.auth.v1.ListApiKeysResponse.keys:type_name -> he.auth.v1.ApiKeyEntry
+	43, // 11: he.auth.v1.ApiKeyEntry.last_used_at:type_name -> google.protobuf.Timestamp
+	43, // 12: he.auth.v1.ApiKeyEntry.revoked_at:type_name -> google.protobuf.Timestamp
+	43, // 13: he.auth.v1.ApiKeyEntry.created_at:type_name -> google.protobuf.Timestamp
+	43, // 14: he.auth.v1.RevokeApiKeyResponse.revoked_at:type_name -> google.protobuf.Timestamp
+	4,  // 15: he.auth.v1.AuthService.RegisterUser:input_type -> he.auth.v1.RegisterUserRequest
+	6,  // 16: he.auth.v1.AuthService.VerifyEmail:input_type -> he.auth.v1.VerifyEmailRequest
+	8,  // 17: he.auth.v1.AuthService.ResendVerification:input_type -> he.auth.v1.ResendVerificationRequest
+	10, // 18: he.auth.v1.AuthService.LoginUser:input_type -> he.auth.v1.LoginUserRequest
+	12, // 19: he.auth.v1.AuthService.RefreshToken:input_type -> he.auth.v1.RefreshTokenRequest
+	14, // 20: he.auth.v1.AuthService.BeginOAuth:input_type -> he.auth.v1.BeginOAuthRequest
+	16, // 21: he.auth.v1.AuthService.CompleteOAuth:input_type -> he.auth.v1.CompleteOAuthRequest
+	18, // 22: he.auth.v1.AuthService.EnrollTOTPInit:input_type -> he.auth.v1.EnrollTOTPInitRequest
+	20, // 23: he.auth.v1.AuthService.EnrollTOTPVerify:input_type -> he.auth.v1.EnrollTOTPVerifyRequest
+	22, // 24: he.auth.v1.AuthService.ChallengeTOTP:input_type -> he.auth.v1.ChallengeTOTPRequest
+	24, // 25: he.auth.v1.AuthService.UseRecoveryCode:input_type -> he.auth.v1.UseRecoveryCodeRequest
+	26, // 26: he.auth.v1.AuthService.DisableTOTP:input_type -> he.auth.v1.DisableTOTPRequest
+	28, // 27: he.auth.v1.AuthService.RegenerateRecoveryCodes:input_type -> he.auth.v1.RegenerateRecoveryCodesRequest
+	30, // 28: he.auth.v1.AuthService.GetMe:input_type -> he.auth.v1.GetMeRequest
+	32, // 29: he.auth.v1.AuthService.UpdateProfile:input_type -> he.auth.v1.UpdateProfileRequest
+	34, // 30: he.auth.v1.AuthService.ValidateApiKey:input_type -> he.auth.v1.ValidateApiKeyRequest
+	36, // 31: he.auth.v1.AuthService.CreateApiKey:input_type -> he.auth.v1.CreateApiKeyRequest
+	38, // 32: he.auth.v1.AuthService.ListApiKeys:input_type -> he.auth.v1.ListApiKeysRequest
+	41, // 33: he.auth.v1.AuthService.RevokeApiKey:input_type -> he.auth.v1.RevokeApiKeyRequest
+	5,  // 34: he.auth.v1.AuthService.RegisterUser:output_type -> he.auth.v1.RegisterUserResponse
+	7,  // 35: he.auth.v1.AuthService.VerifyEmail:output_type -> he.auth.v1.VerifyEmailResponse
+	9,  // 36: he.auth.v1.AuthService.ResendVerification:output_type -> he.auth.v1.ResendVerificationResponse
+	11, // 37: he.auth.v1.AuthService.LoginUser:output_type -> he.auth.v1.LoginUserResponse
+	13, // 38: he.auth.v1.AuthService.RefreshToken:output_type -> he.auth.v1.RefreshTokenResponse
+	15, // 39: he.auth.v1.AuthService.BeginOAuth:output_type -> he.auth.v1.BeginOAuthResponse
+	17, // 40: he.auth.v1.AuthService.CompleteOAuth:output_type -> he.auth.v1.CompleteOAuthResponse
+	19, // 41: he.auth.v1.AuthService.EnrollTOTPInit:output_type -> he.auth.v1.EnrollTOTPInitResponse
+	21, // 42: he.auth.v1.AuthService.EnrollTOTPVerify:output_type -> he.auth.v1.EnrollTOTPVerifyResponse
+	23, // 43: he.auth.v1.AuthService.ChallengeTOTP:output_type -> he.auth.v1.ChallengeTOTPResponse
+	25, // 44: he.auth.v1.AuthService.UseRecoveryCode:output_type -> he.auth.v1.UseRecoveryCodeResponse
+	27, // 45: he.auth.v1.AuthService.DisableTOTP:output_type -> he.auth.v1.DisableTOTPResponse
+	29, // 46: he.auth.v1.AuthService.RegenerateRecoveryCodes:output_type -> he.auth.v1.RegenerateRecoveryCodesResponse
+	31, // 47: he.auth.v1.AuthService.GetMe:output_type -> he.auth.v1.GetMeResponse
+	33, // 48: he.auth.v1.AuthService.UpdateProfile:output_type -> he.auth.v1.UpdateProfileResponse
+	35, // 49: he.auth.v1.AuthService.ValidateApiKey:output_type -> he.auth.v1.ValidateApiKeyResponse
+	37, // 50: he.auth.v1.AuthService.CreateApiKey:output_type -> he.auth.v1.CreateApiKeyResponse
+	39, // 51: he.auth.v1.AuthService.ListApiKeys:output_type -> he.auth.v1.ListApiKeysResponse
+	42, // 52: he.auth.v1.AuthService.RevokeApiKey:output_type -> he.auth.v1.RevokeApiKeyResponse
+	34, // [34:53] is the sub-list for method output_type
+	15, // [15:34] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_he_auth_v1_auth_proto_init() }
@@ -2995,13 +3550,14 @@ func file_he_auth_v1_auth_proto_init() {
 	file_he_auth_v1_auth_proto_msgTypes[27].OneofWrappers = []any{}
 	file_he_auth_v1_auth_proto_msgTypes[28].OneofWrappers = []any{}
 	file_he_auth_v1_auth_proto_msgTypes[29].OneofWrappers = []any{}
+	file_he_auth_v1_auth_proto_msgTypes[36].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_he_auth_v1_auth_proto_rawDesc), len(file_he_auth_v1_auth_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   32,
+			NumMessages:   39,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -25,17 +25,32 @@ import (
 // --- Test doubles ----------------------------------------------------------
 
 type fakeRepo struct {
+	// Story 3.2 hot path
 	lookup     func(ctx context.Context, prefix string) ([]repository.ApiKeyRow, error)
 	lookupHits int
 	touch      func(ctx context.Context, id uuid.UUID) error
 	touchHits  int
 	touchDone  chan struct{}
+
+	// Story 5.1 management surface — nil-safe; tests opt in by setting the
+	// closure they care about.
+	insert           func(ctx context.Context, userID uuid.UUID, name, prefix, hash string) (uuid.UUID, time.Time, error)
+	insertHits       int
+	list             func(ctx context.Context, userID uuid.UUID) ([]repository.ApiKeyRow, error)
+	listHits         int
+	selectForUpd     func(ctx context.Context, apiKeyID uuid.UUID) (repository.ApiKeyRow, error)
+	selectForUpdHits int
+	updateRevoked    func(ctx context.Context, apiKeyID uuid.UUID) (time.Time, error)
+	updateRevHits    int
+	getUserStatus    func(ctx context.Context, userID uuid.UUID) (string, error)
+	getStatusHits    int
 }
 
 func (f *fakeRepo) LookupAPIKeysByPrefix(ctx context.Context, prefix string) ([]repository.ApiKeyRow, error) {
 	f.lookupHits++
 	return f.lookup(ctx, prefix)
 }
+
 func (f *fakeRepo) TouchAPIKeyLastUsed(ctx context.Context, id uuid.UUID) error {
 	f.touchHits++
 	err := func() error {
@@ -51,6 +66,46 @@ func (f *fakeRepo) TouchAPIKeyLastUsed(ctx context.Context, id uuid.UUID) error 
 		}
 	}
 	return err
+}
+
+func (f *fakeRepo) InsertAPIKey(ctx context.Context, userID uuid.UUID, name, prefix, hash string) (uuid.UUID, time.Time, error) {
+	f.insertHits++
+	if f.insert == nil {
+		return uuid.Nil, time.Time{}, errors.New("fakeRepo.insert unwired")
+	}
+	return f.insert(ctx, userID, name, prefix, hash)
+}
+
+func (f *fakeRepo) ListAPIKeysByUser(ctx context.Context, userID uuid.UUID) ([]repository.ApiKeyRow, error) {
+	f.listHits++
+	if f.list == nil {
+		return nil, errors.New("fakeRepo.list unwired")
+	}
+	return f.list(ctx, userID)
+}
+
+func (f *fakeRepo) SelectAPIKeyForUpdate(ctx context.Context, apiKeyID uuid.UUID) (repository.ApiKeyRow, error) {
+	f.selectForUpdHits++
+	if f.selectForUpd == nil {
+		return repository.ApiKeyRow{}, errors.New("fakeRepo.selectForUpd unwired")
+	}
+	return f.selectForUpd(ctx, apiKeyID)
+}
+
+func (f *fakeRepo) UpdateAPIKeyRevokedAt(ctx context.Context, apiKeyID uuid.UUID) (time.Time, error) {
+	f.updateRevHits++
+	if f.updateRevoked == nil {
+		return time.Time{}, errors.New("fakeRepo.updateRevoked unwired")
+	}
+	return f.updateRevoked(ctx, apiKeyID)
+}
+
+func (f *fakeRepo) GetUserStatus(ctx context.Context, userID uuid.UUID) (string, error) {
+	f.getStatusHits++
+	if f.getUserStatus == nil {
+		return "active", nil
+	}
+	return f.getUserStatus(ctx, userID)
 }
 
 // newTestService bundles a Service + in-memory tracetest exporter so each

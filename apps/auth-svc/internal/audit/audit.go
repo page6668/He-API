@@ -26,14 +26,14 @@ import (
 type EventType string
 
 const (
-	EventSignup                  EventType = "auth.signup"
-	EventSignupDuplicateAttempt  EventType = "auth.signup_duplicate_attempt"
-	EventVerifyEmail             EventType = "auth.verify_email"
-	EventVerifyEmailBruteForce   EventType = "auth.verify_email_brute_force"
-	EventSigninSuccess           EventType = "auth.signin_success"
-	EventSigninFailure           EventType = "auth.signin_failure"
-	EventAccountLocked           EventType = "auth.account_locked"
-	EventEmailSendFailed         EventType = "auth.email_send_failed"
+	EventSignup                 EventType = "auth.signup"
+	EventSignupDuplicateAttempt EventType = "auth.signup_duplicate_attempt"
+	EventVerifyEmail            EventType = "auth.verify_email"
+	EventVerifyEmailBruteForce  EventType = "auth.verify_email_brute_force"
+	EventSigninSuccess          EventType = "auth.signin_success"
+	EventSigninFailure          EventType = "auth.signin_failure"
+	EventAccountLocked          EventType = "auth.account_locked"
+	EventEmailSendFailed        EventType = "auth.email_send_failed"
 
 	// Story 2.3 OAuth event types (12 total per BR-4.3). All carry
 	// hashed PII only. The set replaces the earlier 9-event collapsed
@@ -43,32 +43,32 @@ const (
 	// is emitted as a structured warn log from api-gateway because the
 	// rejection happens pre-Redis and api-gateway has no Kafka publisher
 	// in Story 2.3 scope (see apps/api-gateway/internal/handlers/oauth.go).
-	EventOAuthInitiate                EventType = "auth.oauth.initiate"
-	EventOAuthCallbackSuccess         EventType = "auth.oauth.callback.success"
-	EventOAuthCallbackErrState        EventType = "auth.oauth.callback.error_state"
-	EventOAuthCallbackErrProv         EventType = "auth.oauth.callback.error_provider"
-	EventOAuthCallbackErrBinding      EventType = "auth.oauth.callback.error_binding"
-	EventOAuthCallbackRejSuspended    EventType = "auth.oauth.callback.rejected_suspended"
-	EventOAuthLinkSuccess             EventType = "auth.oauth.link.success"
-	EventOAuthLinkRejUnverified       EventType = "auth.oauth.link.rejected_unverified"
-	EventOAuthLinkRejSubjectMismatch  EventType = "auth.oauth.link.rejected_subject_mismatch"
-	EventOAuthLinkRejOtherProvider    EventType = "auth.oauth.link.rejected_other_provider"
-	EventOAuthLockBypass              EventType = "auth.oauth.lock_bypass"
-	EventOAuthInvalidReturnTo         EventType = "auth.oauth.invalid_return_to"
+	EventOAuthInitiate               EventType = "auth.oauth.initiate"
+	EventOAuthCallbackSuccess        EventType = "auth.oauth.callback.success"
+	EventOAuthCallbackErrState       EventType = "auth.oauth.callback.error_state"
+	EventOAuthCallbackErrProv        EventType = "auth.oauth.callback.error_provider"
+	EventOAuthCallbackErrBinding     EventType = "auth.oauth.callback.error_binding"
+	EventOAuthCallbackRejSuspended   EventType = "auth.oauth.callback.rejected_suspended"
+	EventOAuthLinkSuccess            EventType = "auth.oauth.link.success"
+	EventOAuthLinkRejUnverified      EventType = "auth.oauth.link.rejected_unverified"
+	EventOAuthLinkRejSubjectMismatch EventType = "auth.oauth.link.rejected_subject_mismatch"
+	EventOAuthLinkRejOtherProvider   EventType = "auth.oauth.link.rejected_other_provider"
+	EventOAuthLockBypass             EventType = "auth.oauth.lock_bypass"
+	EventOAuthInvalidReturnTo        EventType = "auth.oauth.invalid_return_to"
 
 	// Story 2.4 — 2FA event taxonomy (10 types per BR-5.7). Severity is
 	// recorded in Event.Metadata["severity"] = LOW/MEDIUM/HIGH per BR-5.7
 	// mapping so audit-svc routing keeps a single envelope shape.
-	Event2FAEnrollInitiated     EventType = "auth.2fa.enroll.initiated"     // LOW
-	Event2FAEnrolled            EventType = "auth.2fa.enrolled"             // MEDIUM
-	Event2FAEnrollFailed        EventType = "auth.2fa.enroll.failed"        // LOW
-	Event2FAChallengeSuccess    EventType = "auth.2fa.challenge.success"    // LOW
-	Event2FAChallengeFailed     EventType = "auth.2fa.challenge.failed"     // LOW
-	Event2FAChallengeLocked     EventType = "auth.2fa.challenge.locked"     // HIGH — possible attack
+	Event2FAEnrollInitiated     EventType = "auth.2fa.enroll.initiated"         // LOW
+	Event2FAEnrolled            EventType = "auth.2fa.enrolled"                 // MEDIUM
+	Event2FAEnrollFailed        EventType = "auth.2fa.enroll.failed"            // LOW
+	Event2FAChallengeSuccess    EventType = "auth.2fa.challenge.success"        // LOW
+	Event2FAChallengeFailed     EventType = "auth.2fa.challenge.failed"         // LOW
+	Event2FAChallengeLocked     EventType = "auth.2fa.challenge.locked"         // HIGH — possible attack
 	Event2FAChallengeBinding    EventType = "auth.2fa.challenge.binding_failed" // HIGH — possible cookie theft
-	Event2FARecoveryUsed        EventType = "auth.2fa.recovery.used"        // HIGH — out-of-band event
-	Event2FARecoveryRegenerated EventType = "auth.2fa.recovery.regenerated" // MEDIUM
-	Event2FADisabled            EventType = "auth.2fa.disabled"             // HIGH — security downgrade
+	Event2FARecoveryUsed        EventType = "auth.2fa.recovery.used"            // HIGH — out-of-band event
+	Event2FARecoveryRegenerated EventType = "auth.2fa.recovery.regenerated"     // MEDIUM
+	Event2FADisabled            EventType = "auth.2fa.disabled"                 // HIGH — security downgrade
 
 	// Story 2.5 — profile mutation event. Severity LOW; emitted on every
 	// successful PUT /v1/me/profile (display_name + locale + timezone).
@@ -93,6 +93,18 @@ const (
 	EventGdprExportRequested EventType = "gdpr.export.requested" // LOW
 	EventGdprExportCompleted EventType = "gdpr.export.completed" // LOW
 	EventGdprExportFailed    EventType = "gdpr.export.failed"    // WARN or ERROR per failed_stage
+
+	// Story 5.1 — API Key management events (BR-3.5 + BR-3.6). Severity LOW
+	// for created; MEDIUM for revoked (credential lifecycle event — ops
+	// SHOULD be able to grep revocation history for compromise forensics).
+	// Payload (per BR-3.5/3.6): {audit_event_type, api_key_id, user_id,
+	// key_prefix, name, client_ip_hash, user_agent_hash, ts[, revoked_at]}.
+	// The Metadata map carries api_key_id, key_prefix, name (and revoked_at
+	// for the revoke variant); IP + UserAgent fields carry the SHA-256
+	// hashes (NOT plaintext — verified by SECURITY-006 grep sweep).
+	// Plaintext key + key_hash are NEVER part of the payload.
+	EventAPIKeyCreated EventType = "api_key.created" // LOW
+	EventAPIKeyRevoked EventType = "api_key.revoked" // MEDIUM
 )
 
 // Severity classification for the 10 Story 2.4 event types per BR-5.7.
@@ -133,15 +145,15 @@ func Severity2FA(t EventType) string {
 //   - any Email field (plaintext); use EmailHash.
 //   - any Password / Token field; those NEVER leave their own packages.
 type Event struct {
-	EventType EventType              `json:"event_type"`
-	UserID    string                 `json:"user_id,omitempty"`
-	EmailHash string                 `json:"email_hash"`
-	IP        string                 `json:"ip,omitempty"`
-	UserAgent string                 `json:"ua,omitempty"`
-	Timestamp time.Time              `json:"ts"`
-	Success   bool                   `json:"success"`
-	ErrorCode string                 `json:"error_code,omitempty"`
-	Metadata  map[string]any         `json:"metadata,omitempty"`
+	EventType EventType      `json:"event_type"`
+	UserID    string         `json:"user_id,omitempty"`
+	EmailHash string         `json:"email_hash"`
+	IP        string         `json:"ip,omitempty"`
+	UserAgent string         `json:"ua,omitempty"`
+	Timestamp time.Time      `json:"ts"`
+	Success   bool           `json:"success"`
+	ErrorCode string         `json:"error_code,omitempty"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
 }
 
 // MarshalJSON exists so a future Kafka producer can hand it the event
@@ -174,7 +186,8 @@ func PublishBestEffort(ctx context.Context, p Publisher, logger *slog.Logger, ev
 		if logger == nil {
 			logger = slog.Default()
 		}
-		logger.WarnContext(ctx, "audit publish failed",
+		logger.WarnContext(
+			ctx, "audit publish failed",
 			slog.String("event_type", string(event.EventType)),
 			slog.String("error_code", event.ErrorCode),
 			slog.String("error", err.Error()),
@@ -200,7 +213,8 @@ func NewNoOpPublisher(logger *slog.Logger) *NoOpPublisher {
 
 // Publish logs the event at info level. Never returns an error.
 func (p *NoOpPublisher) Publish(ctx context.Context, event Event) error {
-	p.Logger.InfoContext(ctx, "audit",
+	p.Logger.InfoContext(
+		ctx, "audit",
 		slog.String("event_type", string(event.EventType)),
 		slog.String("email_hash", event.EmailHash),
 		slog.String("user_id", event.UserID),

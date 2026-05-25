@@ -5,9 +5,9 @@
 
 ## Registry Metadata
 
-**Last Updated**: 2026-05-19
-**Total Stories Tracked**: 5
-**Total Models**: 17
+**Last Updated**: 2026-05-25
+**Total Stories Tracked**: 6
+**Total Models**: 23
 **Repository**: He-API
 **Mode**: monolith
 
@@ -17,6 +17,13 @@
 |---------|-------|-------|
 | `ValidateApiKeyRequest` | 3.2 | `plaintext_key` (string) + `client_ip` (string) + `user_agent` (string). Client-attribution fields are informational only — auth-svc forwards them for future audit-svc logging. |
 | `ValidateApiKeyResponse` | 3.2 | `ok` (bool) + `api_key_id` / `user_id` / `team_id` / `scope` (all string, populated only when ok=true) + `reason` (enum). |
+| `CreateApiKeyRequest` | **5.1** | `user_id` (UUID v4; gateway-extracted from JWT `sub` per BR-1.3 IDOR defence — client body MUST NOT carry it) + `name` (NFC + trim + 1-100 runes; class L/M/N/P/Sc + ASCII space per BR-1.7) + `client_ip` + `user_agent` (audit payload). |
+| `CreateApiKeyResponse` | **5.1** | `api_key_id` + `key_prefix` (12 chars: `"he-"` + 9 base62) + `name` (as-stored) + `created_at` (google.protobuf.Timestamp) + `plaintext` (~46 chars; returned ONCE per BR-1.5 — never persisted, never re-fetchable). |
+| `ListApiKeysRequest` | **5.1** | `user_id` (UUID v4 from JWT). |
+| `ListApiKeysResponse` | **5.1** | `keys` (repeated `ApiKeyEntry`; 0..100 entries ORDER BY `created_at DESC, id ASC`). |
+| `ApiKeyEntry` | **5.1** | `api_key_id` + `name` + `key_prefix` + `scope` (JSON string of JSONB) + `monthly_cost_cap_usd` (optional string-decimal) + `current_month_cost_usd` (string-decimal) + `last_used_at` (optional Timestamp) + `revoked_at` (optional Timestamp) + `created_at`. **`key_hash` field INTENTIONALLY ABSENT** per BR-2.5 defence-in-depth at the proto boundary. |
+| `RevokeApiKeyRequest` | **5.1** | `user_id` + `api_key_id` (both UUID v4) + `client_ip` + `user_agent`. |
+| `RevokeApiKeyResponse` | **5.1** | `api_key_id` + `revoked_at` (Timestamp — historical on idempotent re-revoke per BR-3.3) + `was_already_revoked` (bool — true on idempotent path). Architect Q-Spec-1 UPGRADES the rest-api-spec.md §5.2 sketch which previously declared `returns (Empty)`. |
 
 ## Protobuf Enums
 
@@ -28,7 +35,11 @@
 
 | Type | Story | Notes |
 |------|-------|-------|
-| `ApiKeyRow` | 3.2 | Mirrors `he_api.api_keys` for the Validate hot path. Nullable columns surface as `pgtype.UUID` / `pgtype.Timestamptz` so the handler distinguishes "no team" from "empty UUID". |
+| `ApiKeyRow` | 3.2 / **5.1** (extended) | Mirrors `he_api.api_keys`. Story-5.1 extends with `Name`, `MonthlyCostCapUSD` (pgtype.Numeric), `CurrentMonthCostUSD` (pgtype.Numeric), `LastUsedAt` (pgtype.Timestamptz) — populated by `ListAPIKeysByUser`. The Story-3.2 Validate hot path leaves these as zero values (intentional carve-out — no money/name shipping across the bcrypt-compare path). `KeyHash` field is forcibly zeroed in the List path post-Scan (defence-in-depth at the struct boundary). |
+| `apikey.Service` | 3.2 / **5.1** (extended) | Concrete service type at `apps/auth-svc/internal/apikey/`. Story-3.2 provided `Validate` (bcrypt hot path). Story-5.1 adds `CreateApiKey` + `ListApiKeys` + `RevokeApiKey`. Construction: `NewServiceWithMgmt(repo, tracer, logger, auditPub, sentinelStore)` for production wiring; `NewService(repo, tracer, logger)` for Validate-only test contexts (Create/Revoke will WARN-log + skip when `Audit` or `Sentinel` are nil). |
+| `apikey.AuditPublisher` interface | **5.1** | Narrow Story-5.1 dep injected into `apikey.Service` for `Create` / `Revoke` audit emission. `Publish(ctx, audit.Event) error`. Production wires the same `audit.Publisher` (KafkaPublisher or NoOp) auth-svc constructs at boot. Nil-safe per BR audit-graceful-degradation (Architect Q-Spec-3 ratified). |
+| `apikey.SentinelStore` interface | **5.1** | Narrow Story-5.1 dep injected into `apikey.Service` for the BR-3.8 cross-pod cache-invalidation sentinel write. `SetRevokedSentinel(ctx, apiKeyID uuid.UUID) error`. Production wires `redisclient.RevokeSentinel`. Nil-safe per BR-3.13 fail-open (lag falls back to security.md §8.2.1 5-min baseline on failure). |
+| `redisclient.RevokeSentinel` | **5.1** | Production sentinel store at `apps/auth-svc/internal/redisclient/revoke_sentinel.go`. `SentinelKeyPrefix = "auth:apikey:revoked:"` (mirrors the api-gateway `middleware.SentinelKeyPrefix` constant for parity); `SentinelTTL = 300 * time.Second` (matches positive-cache TTL — bound by the cache it must outlive). |
 
 ## Go Handler Types (`apps/api-gateway/internal/handlers`)
 
@@ -46,6 +57,13 @@
 | `handlers.EmbeddingUsage` | 3.5 | Mock token-count. Fields: `prompt_tokens int` + `total_tokens int`. No `completion_tokens` (embeddings have no completion dimension). |
 | `handlers.EmbeddingsHandler` | 3.5 | Handler struct (`logger` + `dim`). Constructed via `NewEmbeddingsHandler(logger, opts...)`. |
 | `handlers.EmbeddingsHandlerOption` | 3.5 | Option-function type for `EmbeddingsHandler`; `WithEmbeddingDim(d int)` is test-only. |
+| `handlers.CreateKeyRequest` | **5.1** | Inbound `POST /v1/me/keys` body. Single field `Name string` (BR-1.2 strict-field — DisallowUnknownFields). |
+| `handlers.CreateKeyResponse` | **5.1** | Outbound `POST /v1/me/keys` body. Field declaration order LOCKS JSON marshal order per BR-1.13: `APIKeyID` → `KeyPrefix` → `Name` → `Plaintext` → `CreatedAt` → `Warning`. 5.1-UNIT-031 + 5.1-INT-013 grep-assert byte ordering. |
+| `handlers.KeyEntry` | **5.1** | One row in `ListKeysResponse.Data`. Pointers on nullable timestamps (`*string` for `LastUsedAt` / `RevokedAt`) so JSON renders null (not omitted / zero). Money fields are STRINGS per BR-2.10 / Architect Q-Spec-4 (Stripe precedent — preserves NUMERIC precision). `Scope json.RawMessage` for JSONB pass-through. |
+| `handlers.ListKeysResponse` | **5.1** | Outbound `GET /v1/me/keys` body. `Object="list"` + `Data []KeyEntry` (NEVER nil — empty list yields `[]` per BR-2.8). |
+| `handlers.RevokeKeyResponse` | **5.1** | Outbound `DELETE /v1/me/keys/{id}` body. Field order per BR-3.11: `APIKeyID` → `RevokedAt` → `WasAlreadyRevoked`. |
+| `handlers.MeKeysHandler` | **5.1** | Struct hosting `HandleCreate` / `HandleList` / `HandleRevoke`. Construction: `NewMeKeysHandler(upstream, redisFunc, logger)`. Lazy Redis init via `sync.Once` (Story-3.2 cold-start pattern). |
+| `handlers.CreateKeyRateLimitDecision` | **5.1** | Result of `CheckCreateKeyRateLimit`: `{Allowed bool; RetryAfter int; Count int64}`. Rate-limit ceiling `CreateKeyRateLimitMax = 10`; window `CreateKeyRateLimitWindow = 1 * time.Hour`; counter key prefix `ratelimit:apikey:create:`. Fail-open on Redis error (Story-2.3 OQ3 cascade). |
 
 ## Go Error-Envelope Types (`apps/api-gateway/internal/openaierr`)
 

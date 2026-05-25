@@ -7,6 +7,32 @@
       "data": "数据"
     }
   },
+  "keys": {
+    "empty": {
+      "title": "还没有 API 密钥",
+      "cta": "创建第一个 API 密钥"
+    },
+    "errors": {
+      "name": {
+        "missing": "请输入密钥名称。",
+        "too_short": "密钥名称太短。",
+        "too_long": "密钥名称最多 100 个字符。",
+        "invalid_chars": "密钥名称包含不允许的字符。"
+      },
+      "generic": "出错了,请稍后再试。",
+      "plaintext_one_time": "明文密钥仅显示一次,请立即保存——之后将无法再次获取。",
+      "rate_limited": "创建过于频繁,请稍后再试。"
+    },
+    "revoke": {
+      "confirm": {
+        "title": "确定吊销此 API 密钥?",
+        "cta": "吊销"
+      },
+      "success": "API 密钥已吊销。",
+      "already_revoked": "该密钥已被吊销。",
+      "not_found": "API 密钥不存在或已被移除。"
+    }
+  },
   "profile": {
     "title": "个人资料设置",
     "display_name": {
