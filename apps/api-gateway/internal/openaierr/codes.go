@@ -35,7 +35,10 @@ var CodeMetadata = map[string]struct {
 	"403_model_not_in_scope":     {403, "invalid_request_error"},
 	"413_payload_too_large":      {413, "invalid_request_error"},
 	"429_rate_limit_qps":         {429, "invalid_request_error"},
-	"429_rate_limit_tpm":         {429, "invalid_request_error"},
+	// Story 5.3 Architect Q5 ratified — fills the missing third member of
+	// the QPS/RPM/TPM triplet (§5.1.2 "one envelope code per HTTP scenario").
+	"429_rate_limit_rpm": {429, "invalid_request_error"},
+	"429_rate_limit_tpm": {429, "invalid_request_error"},
 	"429_rate_limit_gdpr_export": {429, "invalid_request_error"},
 	"500_gateway_misconfigured":  {500, "server_error"},
 	"500_internal_error":         {500, "server_error"},

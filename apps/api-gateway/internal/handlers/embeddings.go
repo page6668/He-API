@@ -241,20 +241,33 @@ func WithEmbeddingDim(d int) EmbeddingsHandlerOption {
 	}
 }
 
+// WithEmbeddingTokenDeducter wires the Story-5.3 TPM post-deduction hook
+// for /v1/embeddings (BR-X.8 — total_tokens deducted unchanged; no
+// streaming dimension on this route).
+func WithEmbeddingTokenDeducter(d TokenDeducter) EmbeddingsHandlerOption {
+	return func(h *EmbeddingsHandler) {
+		if d != nil {
+			h.tokenDeducter = d
+		}
+	}
+}
+
 // EmbeddingsHandler serves POST /v1/embeddings. Stateless beyond logger
 // + dim; safe to construct once at startup and share across all bearer-
 // protected requests.
 type EmbeddingsHandler struct {
-	logger *slog.Logger
-	dim    int
+	logger        *slog.Logger
+	dim           int
+	tokenDeducter TokenDeducter // Story 5.3 — TPM post-deduction; nil → nop
 }
 
 // NewEmbeddingsHandler builds the handler. logger may be nil — falls back
 // to slog.Default(). dim defaults to defaultEmbeddingDim (128).
 func NewEmbeddingsHandler(logger *slog.Logger, opts ...EmbeddingsHandlerOption) *EmbeddingsHandler {
 	h := &EmbeddingsHandler{
-		logger: logger,
-		dim:    defaultEmbeddingDim,
+		logger:        logger,
+		dim:           defaultEmbeddingDim,
+		tokenDeducter: nopTokenDeducter{},
 	}
 	if h.logger == nil {
 		h.logger = slog.Default()
@@ -350,4 +363,8 @@ func (h *EmbeddingsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			TotalTokens:  promptTokens,
 		},
 	})
+
+	// Story 5.3 BR-X.8 — embeddings have no completion dimension; deduct
+	// the prompt_tokens value (== total_tokens) unchanged after response.
+	h.tokenDeducter.TPMDeduct(r.Context(), apiKeyID, promptTokens)
 }

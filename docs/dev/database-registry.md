@@ -5,8 +5,8 @@
 
 ## Registry Metadata
 
-**Last Updated**: 2026-05-25
-**Total Stories Tracked**: 2
+**Last Updated**: 2026-05-26
+**Total Stories Tracked**: 3
 **Repository**: He-API
 **Mode**: monolith
 
@@ -22,3 +22,4 @@
 |------|-------|-----------|--------|
 | 2026-05-18 | 3.2 | `0006_create_api_keys.sql` | CREATE TABLE `he_api.api_keys` (12 columns) + 2 indices. Forward-only; rollback via `atlas migrate down 1` (dynamic computation per `database-bootstrap.md §2`). |
 | 2026-05-25 | 5.1 | _none_ | No DDL change (`cumulative_context_impact.db_schema=false`). Story 5.1 reuses the existing 3.2 schema; adds INSERT + UPDATE writers on `he_api.api_keys` (see Writers column above). |
+| 2026-05-26 | 5.3 | _none_ | No DDL change (`cumulative_context_impact.db_schema=false`). Story 5.3 introduces 3-axis rate-limit state in Redis ONLY (`ratelimit:key:{api_key_id}:{qps,rpm,tpm}` per data-models.md §4.3 NEW rows); zero PostgreSQL touch. `ResolveCeilings` is a pure constant returning `FreeTierDefaults` per Architect H-1 remediation — no per-request PG SELECT. |

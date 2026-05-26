@@ -36,6 +36,7 @@ import (
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/requestid"
 	"github.com/he-api/he-api/apps/api-gateway/internal/openaierr"
 	"github.com/he-api/he-api/apps/api-gateway/internal/streaming"
+	adapterv1 "github.com/he-api/he-api/packages/proto/gen/go/he/adapter/v1"
 )
 
 // serveStream is invoked from ServeHTTP when validateChatRequest succeeds
@@ -190,6 +191,8 @@ func (h *ChatCompletionsHandler) serveAdapterStream(w http.ResponseWriter, r *ht
 				slog.String("error", adapterErrString(streamErr)),
 			)
 			_ = openaierr.Write(w, ctx, status, code, message, nil)
+			// Pre-flush error → upstream returned no usable usage. Q10
+			// case iv collapses here (no deduct).
 			return
 		}
 		// BR-2.6 post-flush boundary — emit inline SSE error frame +
@@ -199,6 +202,18 @@ func (h *ChatCompletionsHandler) serveAdapterStream(w http.ResponseWriter, r *ht
 			h.writeSSEErrorFrame(w, ctx, writer, streamErr, req.Model, apiKeyID, chunksEmitted)
 		}
 	}
+
+	// Story 5.3 ISSUE-001 / Architect Q10 — streaming TPM post-deduction.
+	// Decision matrix:
+	//
+	//	streamErr == nil + tailUsage != nil  → (i) total_tokens
+	//	streamErr != nil + tailUsage != nil  → (ii/iii) prompt_tokens (partial)
+	//	any                + tailUsage == nil → (iv) no deduct + slog WARN
+	//
+	// Fire-and-forget; errors are absorbed by the deducter (slog WARN
+	// inside the ratelimit package). The response has already been
+	// written.
+	h.maybeStreamTPMDeduct(ctx, apiKeyID, req.Model, chunker.TailUsage(), streamErr, clientDisconnected)
 
 	attrs := []slog.Attr{
 		slog.String("event", "chat_completions_stream"),
@@ -249,6 +264,56 @@ func (h *ChatCompletionsHandler) writeSSEErrorFrame(_ http.ResponseWriter, ctx c
 		slog.String("error_code", code),
 		slog.String("error", adapterErrString(cause)),
 	)
+}
+
+// maybeStreamTPMDeduct implements Architect Q10 for the streaming path.
+// Called once per streamed request after Stream() returns. Fire-and-forget:
+// errors land in slog WARN via the deducter; the response is already on
+// the wire.
+//
+// Cases:
+//
+//	streamErr == nil + tailUsage != nil  → (i)  TPMDeduct(total_tokens)
+//	streamErr != nil + tailUsage != nil  → (ii/iii) TPMDeduct(prompt_tokens)
+//	tailUsage == nil                     → (iv) NO deduct + WARN slog
+//
+// The clientDisconnected flag disambiguates Q10 (ii) (server-side mid-flight
+// error) from (iii) (client disconnect) for slog-only purposes; the
+// deduction amount is identical in both partial cases.
+func (h *ChatCompletionsHandler) maybeStreamTPMDeduct(ctx context.Context, apiKeyID, model string, tailUsage *adapterv1.Usage, streamErr error, clientDisconnected bool) {
+	if tailUsage == nil {
+		// Q10 case iv — missing-tail-usage. NO deduct; slog WARN so SREs
+		// can correlate with upstream regressions.
+		h.logger.LogAttrs(ctx, slog.LevelWarn, "ratelimit_tpm_failed_no_deduction",
+			slog.String("event", "ratelimit_tpm_failed_no_deduction"),
+			slog.String("model", model),
+			slog.String("api_key_id", apiKeyID),
+			slog.Bool("stream_error", streamErr != nil),
+			slog.Bool("client_disconnected", clientDisconnected),
+		)
+		return
+	}
+	if streamErr == nil {
+		// Q10 case i — normal completion → total_tokens.
+		h.tokenDeducter.TPMDeduct(ctx, apiKeyID, int(tailUsage.GetTotalTokens()))
+		return
+	}
+	// Q10 case ii (mid-flight error) OR case iii (client disconnect) —
+	// partial deduction of prompt_tokens only (work the upstream
+	// actually billed us for).
+	partial := int(tailUsage.GetPromptTokens())
+	reason := "stream_error"
+	if clientDisconnected {
+		reason = "client_disconnect"
+	}
+	h.logger.LogAttrs(ctx, slog.LevelWarn, "ratelimit_tpm_partial_deduction",
+		slog.String("event", "ratelimit_tpm_partial_deduction"),
+		slog.String("model", model),
+		slog.String("api_key_id", apiKeyID),
+		slog.String("reason", reason),
+		slog.Int("prompt_tokens", partial),
+	)
+	h.tokenDeducter.TPMDeduct(ctx, apiKeyID, partial)
 }
 
 // openaierrTypeFor mirrors the openaierr package's code→type mapping for

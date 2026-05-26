@@ -184,6 +184,22 @@ func WithAdapterRegistry(reg *adapterclient.Registry) ChatHandlerOption {
 	}
 }
 
+// WithTokenDeducter wires the Story-5.3 TPM post-deduction hook. The
+// handler invokes deducter.TPMDeduct(ctx, apiKeyID, usage.total_tokens)
+// after the upstream returns on the non-streaming success paths (mock
+// + adapter non-stream). Streaming TPM deduction lands on the adapter-
+// chunker tail-usage chunk in a Phase-2 follow-up (BR-3.5 wiring).
+//
+// Nil is silently treated as a no-op deducter — production wires a
+// non-nil *ratelimit.Middleware at startup; tests may omit.
+func WithTokenDeducter(d TokenDeducter) ChatHandlerOption {
+	return func(h *ChatCompletionsHandler) {
+		if d != nil {
+			h.tokenDeducter = d
+		}
+	}
+}
+
 // ChatCompletionsHandler is the concrete handler. Construct once at startup
 // and reuse across all bearer-protected /v1/chat/completions requests.
 type ChatCompletionsHandler struct {
@@ -191,6 +207,7 @@ type ChatCompletionsHandler struct {
 	newID           func() string // injected via WithIDFactory; production default newMockCompletionID
 	now             func() time.Time
 	adapterRegistry *adapterclient.Registry
+	tokenDeducter   TokenDeducter // Story 5.3 — post-response TPM deduction; nil → nop
 }
 
 // NewChatCompletionsHandler builds the handler. logger may be nil — falls
@@ -198,9 +215,10 @@ type ChatCompletionsHandler struct {
 // WithIDFactory(stub).
 func NewChatCompletionsHandler(logger *slog.Logger, opts ...ChatHandlerOption) *ChatCompletionsHandler {
 	h := &ChatCompletionsHandler{
-		logger: logger,
-		newID:  newMockCompletionID,
-		now:    time.Now,
+		logger:        logger,
+		newID:         newMockCompletionID,
+		now:           time.Now,
+		tokenDeducter: nopTokenDeducter{},
 	}
 	if h.logger == nil {
 		h.logger = slog.Default()
@@ -306,6 +324,10 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 
 	resp := mockChatCompletionResponse(&req, h.newID(), h.now())
 	writeChatJSON(w, http.StatusOK, resp)
+	// Story 5.3 BR-3.4 / Architect Q3 — post-deduction on success. Fire-
+	// and-forget; errors are absorbed by the deducter (slog WARN inside
+	// the ratelimit package).
+	h.tokenDeducter.TPMDeduct(ctx, apiKeyID, resp.Usage.TotalTokens)
 }
 
 // serveAdapterNonStream dispatches a stream=false request to the adapter
@@ -364,6 +386,9 @@ func (h *ChatCompletionsHandler) serveAdapterNonStream(w http.ResponseWriter, r 
 	// BR-1.6 — gateway sets X-He-Selected-Model on success.
 	w.Header().Set("X-He-Selected-Model", req.Model)
 	writeChatJSON(w, http.StatusOK, resp)
+
+	// Story 5.3 BR-3.4 / Architect Q3 — post-deduction on success.
+	h.tokenDeducter.TPMDeduct(ctx, apiKeyID, int(chunk.Usage.GetTotalTokens()))
 
 	h.logger.InfoContext(
 		ctx, "chat_completions_adapter",

@@ -5,9 +5,9 @@
 
 ## Registry Metadata
 
-**Last Updated**: 2026-05-25
-**Total Stories Tracked**: 6
-**Total Models**: 23
+**Last Updated**: 2026-05-26
+**Total Stories Tracked**: 7
+**Total Models**: 31
 **Repository**: He-API
 **Mode**: monolith
 
@@ -72,6 +72,19 @@
 | `openaierr.body` (private) | 3.6 | The §5.1.2 5-field envelope payload. Field declaration order locks JSON marshal order per BR-1.7 (Architect Round 1 OQ2): `code` → `message` → `type` → `param` → `he_request_id`. |
 | `openaierr.envelope` (private) | 3.6 | Top-level wrapper `{"error": body}`. |
 | `openaierr.CodeMetadata` (exported map) | 3.6 | `map[string]struct{HTTPStatus int; ErrorType string}` — single source of truth for the canonical taxonomy. Lookup derives both HTTP status + error.type. RETIRED row `501_streaming_not_implemented` is OMITTED (Architect Round 2 L1). |
+
+## Go Rate-Limit Middleware Types (`apps/api-gateway/internal/middleware/ratelimit`)
+
+| Type | Story | Notes |
+|------|-------|-------|
+| `ratelimit.Config` (exported) | **5.3** | `{Redis RedisClient; ResolveCeilings ResolveCeilingsFunc; FreeTierDefaults Ceilings; FailOpenTimeout time.Duration}`. Build once at startup; share across all bearer-protected routes. `Redis` may be nil — middleware degrades to no-op pass-through with cold-start WARN. `FailOpenTimeout <= 0` falls back to `DefaultFailOpenTimeout = 5*time.Millisecond` per Architect Q6. |
+| `ratelimit.Ceilings` (exported) | **5.3** | `{QPSMax, RPMMax, TPMMax int}`. Pure value type; loaded from `RATELIMIT_FREE_TIER_{QPS,RPM,TPM}_MAX` env vars at boot per M-3 remediation. HALT-on-non-positive at boot (T0.11). |
+| `ratelimit.Decision` (exported) | **5.3** | `{Allowed bool; RetryAfterSeconds int; ExhaustedAxis string}`. Returned from the atomic Lua check; `ExhaustedAxis ∈ {qps, rpm, tpm}` when `!Allowed`. |
+| `ratelimit.ResolveCeilingsFunc` (exported) | **5.3** | `func(ctx context.Context, apiKeyID string) (Ceilings, error)`. MVP impl is pure constant (returns `FreeTierDefaults`) per Architect H-1 remediation. Signature preserved for forward-compat — a future 5.x Story may swap in a cached-claims-aware impl. |
+| `ratelimit.RedisClient` (exported interface) | **5.3** | Narrow surface `interface { redis.Scripter }`. Production wires `*redis.Client`; tests wire `*redis.Client` from miniredis or fakes. Defined in the middleware package (not at the call site) so the unit tests can plug a thin fake without dragging the entire go-redis import surface. |
+| `ratelimit.Middleware` (exported) | **5.3** | Internal struct constructed via `New(cfg, logger)`. Method `Wrap(next http.Handler) http.Handler` enforces the 3-axis check + emits 429 envelope / `Retry-After` header on denial. Method `TPMDeduct(ctx, apiKeyID, tokens int)` is the AC3 post-deduction hook (fire-and-forget; defensive on `tokens <= 0` / nil Redis). |
+| `ratelimit.ErrAPIKeyIDMissing` / `ErrRedisUnavailable` (exported sentinels) | **5.3** | Errors returned from the misconfig / Redis-nil branches; callers may `errors.Is`-check via the public helper `IsAPIKeyIDMissing(err)`. |
+| `handlers.TokenDeducter` (exported interface) | **5.3** | `interface { TPMDeduct(ctx context.Context, apiKeyID string, tokens int) }`. Decouples `ChatCompletionsHandler` + `EmbeddingsHandler` from the `ratelimit` package; production wires `*ratelimit.Middleware` (its method satisfies the interface implicitly). Constructor options: `handlers.WithTokenDeducter(d)` + `handlers.WithEmbeddingTokenDeducter(d)`. Default fallback is `handlers.nopTokenDeducter{}` (private). |
 
 ## Go Middleware Types (`apps/api-gateway/internal/middleware/requestid`)
 
@@ -209,6 +222,10 @@
   - **New i18n union** (`packages/i18n-keys/src/models.ts`): `ModelsKeys` literal union covering 36 keys in the `models` namespace.
   - **New envelope code**: `openaierr.CodeMetadata["405_method_not_allowed"] = {HTTPStatus: 405, ErrorType: "invalid_request_error"}` per OQ-4.7-6 ratification.
   - **New middleware package**: `apps/api-gateway/internal/middleware/cors/` exports `cors.PublicCORS(next)` + `cors.PublicPathPrefix` + `cors.PublicOriginWildcard` + `cors.PublicAllowedMethods` constants.
+
+- **5.3** — Rate limit middleware Go types (per-Story summary; full table above in "Go Rate-Limit Middleware Types"):
+  - `ratelimit.Config`, `ratelimit.Ceilings`, `ratelimit.Decision`, `ratelimit.ResolveCeilingsFunc`, `ratelimit.RedisClient`, `ratelimit.Middleware`, `ratelimit.ErrAPIKeyIDMissing`, `ratelimit.ErrRedisUnavailable`.
+  - `handlers.TokenDeducter` interface + `nopTokenDeducter` (private) — decouples handlers from the ratelimit package; constructor options `handlers.WithTokenDeducter` + `handlers.WithEmbeddingTokenDeducter`.
 
 ## Test Infrastructure Types (Story 4.8)
 

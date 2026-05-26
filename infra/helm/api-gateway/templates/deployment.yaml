@@ -28,6 +28,16 @@ spec:
             - name: http
               containerPort: {{ .Values.service.port }}
               protocol: TCP
+          env:
+            # Story 5.3 — rate-limit free-tier ceilings (operator-tunable
+            # per env via values-{staging,prod}.yaml). cmd/server validates
+            # range [1, defensive_upper_bound] and HALTs on misconfig.
+            - name: RATELIMIT_FREE_TIER_QPS_MAX
+              value: {{ .Values.ratelimit.freeTierDefaults.qpsMax | quote }}
+            - name: RATELIMIT_FREE_TIER_RPM_MAX
+              value: {{ .Values.ratelimit.freeTierDefaults.rpmMax | quote }}
+            - name: RATELIMIT_FREE_TIER_TPM_MAX
+              value: {{ .Values.ratelimit.freeTierDefaults.tpmMax | quote }}
           readinessProbe:
             httpGet:
               path: {{ .Values.probes.readiness.httpGet.path }}

@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -32,6 +33,7 @@ import (
 	"github.com/he-api/he-api/apps/api-gateway/internal/handlers"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/cors"
+	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/ratelimit"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/requestid"
 	obs "github.com/he-api/he-api/packages/go-observability"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1/authv1connect"
@@ -81,6 +83,24 @@ func main() {
 		sctx, scancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer scancel()
 		_ = tp.Shutdown(sctx)
+	}()
+
+	// Story 5.3 ISSUE-006 — install the global meter provider BEFORE any
+	// package constructs an OTel meter (ratelimit.New → newMetrics calls
+	// otel.Meter(...); if the provider is still the no-op at that point
+	// the he_ratelimit_* instruments are orphaned and never surface on
+	// `/metrics`). The Prometheus exporter registers on
+	// prometheus.DefaultRegisterer which obs.WrapHTTPHandler exposes.
+	mp, err := obs.NewMeterProvider(ctx, serviceName, serviceNS, serviceVersion)
+	if err != nil {
+		logger.Error("meter provider init failed", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	otel.SetMeterProvider(mp)
+	defer func() {
+		sctx, scancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer scancel()
+		_ = mp.Shutdown(sctx)
 	}()
 
 	// Connect-go client to auth-svc. HTTP/2 over the cluster Service URL;
@@ -251,6 +271,23 @@ func main() {
 		logger,
 	)
 
+	// Story 5.3 — 3-axis rate-limit middleware (QPS / RPM / TPM). Loaded
+	// from env vars `RATELIMIT_FREE_TIER_{QPS,RPM,TPM}_MAX` (templated by
+	// Helm `infra/helm/api-gateway/values.yaml`). HALT-on-invalid keeps
+	// operators from accidentally booting a gateway with `qpsMax=0` (which
+	// would deny every authenticated request). Shares the bearer-auth
+	// Redis URL — same backend, distinct key namespace.
+	rlCeilings, rlErr := loadRateLimitCeilings()
+	if rlErr != nil {
+		logger.Error("ratelimit env validation failed", slog.String("error", rlErr.Error()))
+		os.Exit(1)
+	}
+	rateLimitMW := ratelimit.New(ratelimit.Config{
+		Redis: redis.NewClient(mustRedisOptions(redisURL, logger)),
+		FreeTierDefaults: rlCeilings,
+		FailOpenTimeout:  ratelimit.DefaultFailOpenTimeout,
+	}, logger)
+
 	// Story 3.3 — /v1/chat/completions: non-streaming mock chat handler.
 	// Replaces the Story-3.2 `chatPlaceholder` 501 stub. Bearer-auth wrap
 	// is preserved (BR-1.1); the inner handler swap is the only change to
@@ -264,8 +301,13 @@ func main() {
 	chatCompletions := handlers.NewChatCompletionsHandler(
 		logger,
 		handlers.WithAdapterRegistry(adapterRegistry),
+		handlers.WithTokenDeducter(rateLimitMW),
 	)
-	mux.Handle("POST /v1/chat/completions", bearerAuth.RequireAPIKey(chatCompletions))
+	// Story 5.3 BR-X.4 / Architect Q9 — ratelimit runs AFTER bearer-auth
+	// (needs the resolved api_key_id from context) and BEFORE the
+	// chat-completions handler.
+	mux.Handle("POST /v1/chat/completions",
+		bearerAuth.RequireAPIKey(rateLimitMW.Wrap(chatCompletions)))
 
 	// Story 3.5 — /v1/models (static catalogue) + /v1/embeddings (mock
 	// vector). Per-route bearer-auth wrap mirrors Story 3.2 BR-1.4 +
@@ -273,9 +315,15 @@ func main() {
 	// they make wrong-method requests fall through to a stdlib 405
 	// without invoking the bearer-auth chain.
 	modelsHandler := handlers.NewModelsHandler(logger)
-	embeddingsHandler := handlers.NewEmbeddingsHandler(logger)
+	embeddingsHandler := handlers.NewEmbeddingsHandler(
+		logger,
+		handlers.WithEmbeddingTokenDeducter(rateLimitMW),
+	)
+	// /v1/models is a static catalogue — no token cost, NO ratelimit wrap.
 	mux.Handle("GET /v1/models", bearerAuth.RequireAPIKey(modelsHandler))
-	mux.Handle("POST /v1/embeddings", bearerAuth.RequireAPIKey(embeddingsHandler))
+	// /v1/embeddings consumes tokens — Story 5.3 BR-X.8 applies.
+	mux.Handle("POST /v1/embeddings",
+		bearerAuth.RequireAPIKey(rateLimitMW.Wrap(embeddingsHandler)))
 
 	// Story 4.7 — unauthenticated mirror of /v1/models. Mounted OUTSIDE
 	// the bearer middleware chain; both handlers share a snapshot built
@@ -397,6 +445,80 @@ func parseRSAPublicPEM(pemBytes []byte) (*rsa.PublicKey, error) {
 		return nil, errors.New("rsa: public key is not RSA")
 	}
 	return pub, nil
+}
+
+// Story 5.3 rate-limit ceiling defaults + bounds. Source-of-truth lives
+// in infra/helm/api-gateway/values.yaml `ratelimit.freeTierDefaults.*`
+// (M-3 remediation); env vars templated by templates/deployment.yaml.
+const (
+	defaultRateLimitQPSMax = 10     // requests/second
+	defaultRateLimitRPMMax = 300    // requests/minute
+	defaultRateLimitTPMMax = 60_000 // tokens/minute
+
+	// Defensive upper bounds — HALT-on-invalid if env value exceeds. Story
+	// 5.3 Data Validation rows; 100M tokens/min is well above any plausible
+	// commercial tier.
+	maxRateLimitQPSMax = 100_000
+	maxRateLimitRPMMax = 100_000
+	maxRateLimitTPMMax = 100_000_000
+)
+
+// loadRateLimitCeilings reads RATELIMIT_FREE_TIER_{QPS,RPM,TPM}_MAX env
+// vars, applies defaults for unset values, and HALT-validates the [1, max]
+// range. Story 5.3 BR-X.7 — boot-time validation; gateway refuses to
+// start on out-of-range values (operator-error protection).
+func loadRateLimitCeilings() (ratelimit.Ceilings, error) {
+	qpsMax, err := parseRateLimitEnv("RATELIMIT_FREE_TIER_QPS_MAX",
+		defaultRateLimitQPSMax, maxRateLimitQPSMax)
+	if err != nil {
+		return ratelimit.Ceilings{}, err
+	}
+	rpmMax, err := parseRateLimitEnv("RATELIMIT_FREE_TIER_RPM_MAX",
+		defaultRateLimitRPMMax, maxRateLimitRPMMax)
+	if err != nil {
+		return ratelimit.Ceilings{}, err
+	}
+	tpmMax, err := parseRateLimitEnv("RATELIMIT_FREE_TIER_TPM_MAX",
+		defaultRateLimitTPMMax, maxRateLimitTPMMax)
+	if err != nil {
+		return ratelimit.Ceilings{}, err
+	}
+	return ratelimit.Ceilings{QPSMax: qpsMax, RPMMax: rpmMax, TPMMax: tpmMax}, nil
+}
+
+// parseRateLimitEnv reads `name` as a positive integer in [1, maxBound].
+// Empty/unset → fallback. Returns a structured error on parse failure or
+// out-of-range value so main() can log + HALT (Story 5.3 BR-X.7).
+func parseRateLimitEnv(name string, fallback, maxBound int) (int, error) {
+	raw := os.Getenv(name)
+	if raw == "" {
+		return fallback, nil
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("env %s=%q: %w", name, raw, err)
+	}
+	if v < 1 || v > maxBound {
+		return 0, fmt.Errorf("env %s=%d out of range [1, %d]", name, v, maxBound)
+	}
+	return v, nil
+}
+
+// mustRedisOptions parses a Redis URL; on parse failure it logs WARN and
+// returns the default loopback options (consistent with the Story-3.2
+// lazy-init posture). Never panics — production wants degraded operation
+// over a hard cold-start failure.
+func mustRedisOptions(redisURL string, logger *slog.Logger) *redis.Options {
+	opt, err := redis.ParseURL(redisURL)
+	if err != nil {
+		logger.Warn(
+			"ratelimit redis URL parse failed — using loopback fallback",
+			slog.String("url", redisURL),
+			slog.String("error", err.Error()),
+		)
+		return &redis.Options{Addr: "127.0.0.1:6379"}
+	}
+	return opt
 }
 
 // jwksFromPublicPEM builds the JWKS document from an RSA public-key PEM.

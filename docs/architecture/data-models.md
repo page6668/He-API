@@ -214,7 +214,9 @@ CREATE TABLE benchmark_results (
 ratelimit:user:{user_id}:qps                    INCR + EXPIRE 1
 ratelimit:user:{user_id}:rpm                    INCR + EXPIRE 60
 ratelimit:user:{user_id}:tpm                    INCRBY + EXPIRE 60
-ratelimit:key:{api_key_id}:qps                  同上
+ratelimit:key:{api_key_id}:qps                  INCR + EXPIRE 1 NX            # Story 5.3 (Architect Q4 per-key MVP)
+ratelimit:key:{api_key_id}:rpm                  INCR + EXPIRE 60 NX           # Story 5.3 (Architect Q4 per-key MVP)
+ratelimit:key:{api_key_id}:tpm                  INCRBY + EXPIRE 60 NX         # Story 5.3 post-deduction (Architect Q3 + Q4)
 ratelimit:apikey:create:{user_id}               INCR + EXPIRE 3600, 上限 10  # Story 5.1 (BR-1.10 anti-abuse on POST /v1/me/keys)
 session:{session_id}                            JSON, TTL 7 days
 auth:apikey:{sha256_hex(plaintext_key)}         缓存 user_id + scope, TTL 5min  # Story 3.2 (T6.5 §4.5 Change Log)
@@ -244,5 +246,6 @@ flag:beta_mode                                  bool, 实时 Feature Flag
 | 2026-05-25 | 5.1 | Dev (Linus) | **§4.3 NEW Redis keys**: `ratelimit:apikey:create:{user_id}` (TTL 3600s, ceiling 10 per BR-1.10 anti-abuse on POST /v1/me/keys); `auth:apikey:revoked:{api_key_id}` (TTL 300s, BR-3.8 cross-pod cache-invalidation sentinel — Architect Q2 ratified option-c; gateway bearer_auth.go EXISTS-checks on positive cache hit). The 300s TTL is chosen to outlive the Story-3.2 positive-cache TTL (300s) so stale positives can't survive sentinel-driven invalidation. |
 | 2026-05-25 | 5.1 | Dev (Linus) | **§4.4 NEW `audit.event` event_type values**: `api_key.created` (BR-3.5 — payload `{api_key_id, user_id, key_prefix, name, client_ip_hash, user_agent_hash, ts}`); `api_key.revoked` (BR-3.6 — adds `revoked_at`). PII-safe: NEVER plaintext, NEVER bcrypt hash. The audit-svc consumer routes by `event_type` and requires NO code changes for Story 5.1. |
 | 2026-05-25 | 5.1 | Dev (Linus) | **§4.4 NEW canonical money-field serialization** (Architect Q-Spec-4 ratified — Stripe precedent): NUMERIC(10,2) + NUMERIC(12,4) columns surface on the He-API OpenAPI surface as **string-decimals** (e.g., `"50.00"`) — NOT JSON numbers. Rationale: a JSON number is IEEE 754 binary float; round-trip would lose NUMERIC precision (`0.1 + 0.2 != 0.3`). FIRST money field on the API surface (`monthly_cost_cap_usd` + `current_month_cost_usd` via Story 5.1 GET /v1/me/keys). Future money-field stories (5.4 monthly-cap, billing-svc) MUST cascade-lock. |
+| 2026-05-26 | 5.3 | Dev (Linus) | **§4.3 per-key rate-limit siblings realised**: `ratelimit:key:{api_key_id}:rpm` (TTL 60s NX) and `ratelimit:key:{api_key_id}:tpm` (TTL 60s NX, post-deduction model) — previously implied by `同上` on the `:qps` row. Atomic operations via two Lua scripts: `check_and_incr.lua` (3-axis CHECK + INCR(QPS,RPM) + EXPIRE NX; TPM check-only, no INCR) and `tpm_deduct.lua` (INCRBY + EXPIRE 60 NX) — strict NX semantics matching BR-3.2 / Architect H-2. Per Architect Q4 ratification, MVP ships per-key only; per-user counters (`ratelimit:user:*`) remain reserved for future team-scoped Story. |
 
 ---

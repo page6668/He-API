@@ -37,9 +37,20 @@ type AdapterChunkStream interface {
 
 // AdapterChunker iterates an adapter Connect-RPC server-stream and forwards
 // each ChatChunk as a `data: <json>\n\n` SSE event into Writer w.
+//
+// Story 5.3 ISSUE-001 — the chunker tracks the LAST non-nil `chunk.Usage`
+// it saw during the iteration and exposes it via TailUsage(). The streaming
+// handler reads this AFTER Stream() returns to decide the post-deduction
+// path per Architect Q10:
+//
+//	(i)  normal completion + tail usage     → TPMDeduct(total_tokens)
+//	(ii) stream error + tail usage          → TPMDeduct(prompt_tokens) — partial
+//	(iii) client disconnect + tail usage    → TPMDeduct(prompt_tokens) — partial
+//	(iv) any path + no tail usage           → NO deduct; slog WARN
 type AdapterChunker struct {
-	stream AdapterChunkStream
-	model  string
+	stream    AdapterChunkStream
+	model     string
+	tailUsage *adapterv1.Usage // captured by Stream(); nil until first usage chunk
 }
 
 // NewAdapterChunker builds the chunker. model is the OpenAI-shape `model`
@@ -47,6 +58,16 @@ type AdapterChunker struct {
 // req.Model verbatim (failover-aware behaviour lands in Epic 6 routing-svc).
 func NewAdapterChunker(stream AdapterChunkStream, model string) *AdapterChunker {
 	return &AdapterChunker{stream: stream, model: model}
+}
+
+// TailUsage returns the LAST non-nil `chunk.Usage` the chunker saw during
+// the most-recent Stream() invocation. Nil if no chunk carried a usage
+// field (Architect Q10 case iv — missing-tail-usage). Safe to call after
+// Stream() returns, including on error paths (partial captures preserved
+// per Q10 case ii/iii). Single-use semantics: subsequent Stream() calls
+// reset the field on the first usage chunk encountered.
+func (c *AdapterChunker) TailUsage() *adapterv1.Usage {
+	return c.tailUsage
 }
 
 // Stream consumes the entire adapter chunk stream and emits the OpenAI SSE
@@ -78,6 +99,16 @@ func (c *AdapterChunker) Stream(ctx context.Context, w Writer) (chunksEmitted in
 		chunk := c.stream.Msg()
 		if chunk == nil {
 			continue
+		}
+		// Story 5.3 ISSUE-001 — capture LAST seen usage for the post-
+		// deduction decision in serveAdapterStream. Per Story 4.1 BR-2.4
+		// usage typically arrives on the terminal chunk; this also
+		// captures any interim chunk that carries usage (e.g. an
+		// OpenAI `stream_options.include_usage=true`-style early
+		// prompt_tokens broadcast) so partial-deduction (Q10 case ii/iii)
+		// has a chance of having data.
+		if chunk.Usage != nil {
+			c.tailUsage = chunk.Usage
 		}
 		jsonBytes, jerr := marshalAdapterChunk(chunk, c.model)
 		if jerr != nil {

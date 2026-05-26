@@ -93,8 +93,9 @@ Each event is `data: <single-line JSON>\n\n` per W3C EventSource §9.2.6. The te
 | 403 | `403_model_not_in_scope` | Key 无权调用该模型 |
 | 400 | `400_content_filter` | 命中内容安全过滤 |
 | 400 | `400_invalid_request` | 参数错误 |
-| 429 | `429_rate_limit_qps` | QPS 超限 |
-| 429 | `429_rate_limit_tpm` | TPM 超限 |
+| 429 | `429_rate_limit_qps` | QPS 超限（每秒请求数）|
+| 429 | `429_rate_limit_rpm` | RPM 超限（每分钟请求数）— Story 5.3 Architect Q5 ratified |
+| 429 | `429_rate_limit_tpm` | TPM 超限（每分钟上游 token 数）|
 | 429 | `429_rate_limit_gdpr_export` | GDPR 数据导出 24 小时内的限流（Story 2.6 AC2 BR-2.5；正常幂等路径返回 200 + 已存在的导出记录，仅在 100ms 级竞态下命中） |
 | 405 | `405_method_not_allowed` | 端点不接受请求方法（Story 4.7 OQ-4.7-6 — `/public/models` POST/PUT/DELETE/PATCH 命中此码；handler 同步发送 `Allow: GET` 响应头 per RFC 7231 §6.5.5） |
 | 413 | `413_payload_too_large` | 请求体超出 1 MiB 限制（Story 3.3 BR-1.2 — chat-completions handler） |

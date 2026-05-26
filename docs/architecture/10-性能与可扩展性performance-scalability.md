@@ -34,11 +34,15 @@ Edge 层（Cloudflare Rate Limiting）:
   - 全局每 IP 1000 RPM 上限（防 DDoS）
   - 异常流量自动 challenge
 
-应用层（quota-svc）:
+应用层（gateway middleware in MVP; quota-svc reserved for future multi-caller）:
   - QPS / RPM / TPM per Key
   - 月度消费上限
-  - 滑动窗口计数（Redis ZSET 实现）
+  - 固定窗口计数（Redis INCR + EXPIRE NX, 1s/60s TTL）—— ZSET 滑动窗口预留为未来精度升级路径
 ```
+
+**Q1 ratification (Story 5.3 / Architect Round 1):** MVP 选择 **in-gateway middleware**（`apps/api-gateway/internal/middleware/ratelimit/`），不引入独立 `quota-svc`。理由：Story 5.3 唯一调用方是网关热路径；独立服务多一次 RPC 跳转，无相称收益。`quota-svc` 预留给未来多调用方场景（如 billing-svc + routing-svc 同时消费同一配额状态）。
+
+**Q2 ratification (Story 5.3 / Architect Round 1):** MVP 选择 **固定窗口 INCR + EXPIRE NX**（go-redis EVALSHA-cached Lua 原子脚本），不使用 ZSET 滑动窗口。理由：边界 artifact 有界（窗口边界 ≤ 2x ceiling，永不持续），符合滥用防护威胁模型；ZSET 滑动窗口预留为未来精度升级（付费层需要严格按秒预算时）。
 
 ## 10.4 扩展瓶颈
 
@@ -56,5 +60,6 @@ Edge 层（Cloudflare Rate Limiting）:
 | Date | Story | Change |
 |------|-------|--------|
 | 2026-05-18 | Story 3.1 (SM Phil) | §10.1 网关延迟 / 单实例 QPS 表格的"实现"列由 "Go fasthttp" 改写为 "Go stdlib net/http"；5 k QPS 5,000 QPS 单实例上限以 stdlib 基线在 Epic 9 k6 baseline 重新认证。Original Fiber fasthttp benchmark claim is no longer load-bearing per Story 3.1 ratification (ADR-2). |
+| 2026-05-26 | Story 5.3 (Architect Wright Round 1, M-2 + R-5) | §10.3 限流分层段落更新：Q1 ratification（in-gateway middleware for MVP, quota-svc reserved）+ Q2 ratification（fixed-window INCR + EXPIRE NX for MVP, ZSET sliding-window reserved）。原 nominal `应用层（quota-svc）` + `滑动窗口计数（Redis ZSET 实现）` 文案保留为未来精度升级路径的预留态，divergence rulings 显式记录。 |
 
 ---
