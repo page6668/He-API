@@ -177,21 +177,37 @@ service AuthService {
   rpc RevokeApiKey(RevokeApiKeyRequest) returns (RevokeApiKeyResponse); // Story 5.1 UPGRADED from (Empty) per Architect Q-Spec-1 — see §5.3 Change Log 2026-05-25
 }
 
+// RoutingService — REALISED by Story 6.1 as `he.routing.v1.RoutingService`
+// (Connect-RPC) at packages/proto/he/routing/v1/routing.proto. The block below
+// reflects the realised contract (NOT the pre-Epic-6 string-strategy sketch);
+// see §5.3 Change Log 2026-06-03. Server-side only in 6.1; gateway wiring +
+// real scoring land in Story 6.2.
 service RoutingService {
   rpc SelectModel(SelectModelRequest) returns (SelectModelResponse);
+}
+
+enum Strategy {                    // Q-D: enum (was `string strategy`)
+  STRATEGY_UNSPECIFIED = 0;        // engine treats 0 ≡ DEFAULT(1); never errors
+  STRATEGY_DEFAULT = 1;
+  STRATEGY_QUALITY = 2;
+  STRATEGY_COST = 3;
+  STRATEGY_LATENCY = 4;
 }
 
 message SelectModelRequest {
   string user_id = 1;
   string requested_model = 2;       // 'qwen-max' or 'he-router-cost'
-  string strategy = 3;              // quality / cost / latency
-  repeated string ab_models = 4;
+  Strategy strategy = 3;            // Q-D enum upgrade (was `string strategy`)
+  repeated string ab_models = 4;    // ignored in 6.1 (A/B is Story 6.4)
+  string he_request_id = 5;         // Q-H: gateway correlation id (Story 3.6); slog-only echo
 }
 
 message SelectModelResponse {
   string selected_model = 1;
-  string adapter_endpoint = 2;
+  string adapter_endpoint = 2;      // Q-K: RESERVED/empty in 6.1; gateway resolves via adapterclient.Registry
   bool is_ab_test = 3;
+  repeated string ab_selected_models = 4;  // additive (Story 6.4); empty in 6.1
+  Strategy strategy_used = 5;       // Q-I: which strategy actually fired
 }
 
 service ModelAdapterService {
@@ -230,5 +246,6 @@ service QuotaService {
 | 2026-06-03 | Story 5.2 (Dev / Linus) | **§5.1.3 NEW endpoint**: `PATCH /v1/me/keys/{api_key_id}` (JWT-cookie + global origin-CSRF) — partial-update of `scope.models` / `scope.ip_whitelist` / `monthly_cost_cap_usd`; strict 2-level field validation; cross-user / nonexistent / revoked collapse to `404_api_key_not_found`. **§5.2 `AuthService` extended** with `UpdateApiKey(UpdateApiKeyRequest) → UpdateApiKeyResponse` (+`ScopePatch`); **`ValidateApiKeyResponse` EXTENDED** with `optional monthly_cost_cap_usd` (carried to the gateway bearer cache for the AC4 cap gate — no per-request PG round-trip). **§5.1.2 FIRST-EMISSION** of three pre-declared codes (no new codes): `403_ip_not_whitelisted` (AC2), `403_model_not_in_scope` (AC3), `402_quota_exhausted` (AC4) — emitted by the NEW `keypolicy` middleware on the bearer hot path. Money-field discipline (Q-Spec-4) cascades: `monthly_cost_cap_usd` accepted/returned as string-decimal (`"50.00"` / `null`); a JSON number is rejected with `400_invalid_request` (BR-1.6). |
 | 2026-06-03 | Story 5.5 (Dev / Linus) | **NO contract change** — the Console Keys page is a pure CONSUMER of the existing `/v1/me/keys{,/{id}}` family (Stories 5.1 + 5.2) and the §5.1.2 envelope codes. **Architect Q-E5 OVERRULED**: the proposed `cap_tripped:bool` field on the `GET /v1/me/keys` `ApiKeyEntry` shape was DE-SCOPED to keep Story 5.5 frontend-only; the UI computes the cap-tripped badge via a client heuristic (`current_month_cost_usd >= monthly_cost_cap_usd` in `CapBudgetBar`), accepting the documented GAP-CAP-001 cron-reset edge case. Console-side `KeyEntrySchema.monthly_cost_cap_usd` tightened to canonical `^\d+\.\d{2}$` (BR-L-4 safety net; `current_month_cost_usd` left loose — the shipped 5.1 contract emits `"0"`). No gateway / proto / DB change. |
 | 2026-06-03 | Story 5.4 (Dev / Linus) | NO new REST endpoints, NO new envelope codes (reuses `402_quota_exhausted`). **§5.2 `NotificationService` EXTENDED** with `NotifyMonthlyCapThreshold(api_key_id, ThresholdLevel{WARNING_80\|TRIPPED}, request_id) → (was_already_notified, email_sent)` — fired fire-and-forget by the gateway keypolicy middleware; notification-svc owns the SETNX dedupe + localized SendGrid dispatch. **§5.2 `AuthService` EXTENDED** with `GetCapNotificationContext(api_key_id) → (user_email, user_locale, user_display_name, key_name, key_monthly_cost_cap_usd)` (Architect Round 1 Q-L Fix-A — internal lookup; preserves auth-svc as sole canonical `api_keys` reader). **`EmailTemplate` enum** ADDS `MONTHLY_CAP_WARNING=7` + `MONTHLY_CAP_TRIPPED=8`; NEW `ThresholdLevel` enum. The cap-trip 402 is emitted by the keypolicy sticky-trip sentinel fast-path (EXISTS hit, no counter GET) OR the counter-comparison slow path. |
+| 2026-06-03 | Story 6.1 (Dev / Linus) | **§5.2 `RoutingService` proto sketch REALISED** as `he.routing.v1.RoutingService` (Connect-RPC) at `packages/proto/he/routing/v1/routing.proto` + vendored Go at `packages/proto/gen/go/he/routing/v1/`. FIRST `routing-svc` Go service (`apps/routing-svc/`, server-side only — gateway client wiring + real scoring are Story 6.2 per Q-B). The realised contract supersedes the pre-Epic-6 sketch: **Q-D** `strategy` upgraded `string`→`enum Strategy{UNSPECIFIED=0,DEFAULT=1,QUALITY=2,COST=3,LATENCY=4}` (engine maps `UNSPECIFIED(0) ≡ DEFAULT(1)`, never errors on zero-value); **Q-H** NEW `SelectModelRequest.he_request_id=5` (gateway correlation, slog-only echo); **additive** `SelectModelResponse.ab_selected_models=4` (Story 6.4 A/B; empty in 6.1) + **Q-I** `strategy_used=5` (echoes the actually-fired strategy); **Q-K** `adapter_endpoint=2` documented RESERVED/empty in 6.1 (the gateway resolves the endpoint via `adapterclient.Registry`; field number held stable). Field numbers 1/2/3 preserved from the sketch; this is a NEW proto file (`he.routing.v1`, not `he.api.v1`) so `buf breaking: FILE` is not crossed. **NO new §5.1.2 envelope codes** — routing-svc surfaces gRPC codes only (`InvalidArgument`/`NotFound`/`Internal`); the gRPC→§5.1.2 envelope translation lands gateway-side in Story 6.2 (BR1-3). **Q-E** SelectModel deadline budget = 100ms documented as a lifetime contract value (the actual `context.WithTimeout` lands gateway-side in 6.2). Models-catalogue lifted to shared `packages/models-catalogue/` (Q-A option (a)); `BuildPublicModelsSnapshot()` byte-identical (4.7-INT-001 unchanged). |
 
 ---

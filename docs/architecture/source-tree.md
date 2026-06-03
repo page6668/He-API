@@ -331,3 +331,8 @@ he-api/                                  (Monorepo, Turborepo)
 > Entry added by Story 5.5 (Dev / Linus), 2026-06-03.
 
 ---
+
+> **注 (Story 6.1, 2026-06-03)**: `apps/routing-svc/`（source-tree 第 19 行预分配）由 Story 6.1 **REALISED**（server-side skeleton）：`cmd/server/` (main + Dockerfile) + `internal/{engine,strategy,handler,server,catalogue}/` + `tests/`。FIRST `routing-svc` Go 服务（Connect-RPC `he.routing.v1.RoutingService/SelectModel`）。Gateway 客户端接线 + 真实打分 + failover + A/B 延后至 Stories 6.2-6.4。
+> - `packages/models-catalogue/` — **NEW top-level Go module**（sibling to `packages/adapter-usage/` / `packages/go-observability/`，Q-A option (a) lift）。承载 Story-4.7 `modelsCatalogue` + `capabilitiesByModelID`（11 行）+ BR-1.3 1:1 invariant（panic-at-construction，双向）。`ModelEntry`/`Capabilities`/`Catalogue`/`Registry`/`NewFromRegistry`/`DefaultRegistry`/`DefaultCatalogue`。被 `apps/api-gateway/internal/handlers`（重接线为 `buildGatewayCatalogue`，wire shape byte-identical，4.7-INT-001 不变）+ `apps/routing-svc/internal/catalogue` 共同消费（single SoT，no drift）。
+> - `packages/proto/he/routing/v1/routing.proto` + vendored `packages/proto/gen/go/he/routing/v1/` — 实现 rest-api-spec.md §5.2 `RoutingService` sketch（enum Q-D / `he_request_id` Q-H / `ab_selected_models`+`strategy_used` additive / `adapter_endpoint` reserved Q-K）。
+> - `infra/helm/routing-svc/`（Q-J sizing，stateless：deployment/service/sa/configmap/servicemonitor/prometheusrule/networkpolicy）+ `infra/argocd/applications/routing-svc.yaml`。

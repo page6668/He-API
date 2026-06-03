@@ -23,13 +23,13 @@
 package handlers
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
 	"github.com/he-api/he-api/apps/api-gateway/internal/openaierr"
+	modelscatalogue "github.com/he-api/he-api/packages/models-catalogue"
 )
 
 // ModelCapabilities is the Story-4.7 He-API extension surfaced on every
@@ -63,73 +63,45 @@ type ModelsResponse struct {
 	Data   []ModelEntry `json:"data"`
 }
 
-// modelsCatalogue is the BR-1.4 (Architect Round 1 OQ1) authoritative list
-// of 11 entries. Future Story 4.7 replaces this with a DB-backed registry
-// derived from he_api.models seeds; until then, this slice is the single
-// source of truth for the gateway's advertised models.
+// modelsCatalogue + capabilitiesByModelID are the BR-1.4 (Architect Round 1
+// OQ1) authoritative 11-entry catalogue. As of Story 6.1 (Architect Round-1
+// Q-A, option (a)) the seed data + the BR-1.3 1:1 invariant moved OUT of this
+// package into the shared github.com/he-api/he-api/packages/models-catalogue
+// module, so the api-gateway and the new routing-svc consume one canonical
+// source of truth (no duplication, no cross-service drift). These two
+// package-level vars are now RECONSTRUCTED from that shared catalogue at init
+// — the wire shape (declaration order, Object="model", owned_by=vendor, the
+// 7 capability fields) is preserved byte-for-byte, so the Story-4.7 contract
+// (incl. 4.7-INT-001) is unchanged.
 //
-// IMMUTABLE: ServeHTTP MUST emit a per-request copy via make+copy — never
-// mutate this slice in place (BR-1.10 ordering + concurrency safety).
-var modelsCatalogue = []ModelEntry{
-	{ID: "qwen-max", Object: "model", OwnedBy: "alibaba"},
-	{ID: "qwen-plus", Object: "model", OwnedBy: "alibaba"},
-	{ID: "deepseek-v3", Object: "model", OwnedBy: "deepseek"},
-	{ID: "moonshot-v1-128k", Object: "model", OwnedBy: "moonshot"},
-	{ID: "glm-4", Object: "model", OwnedBy: "zhipu"},
-	{ID: "doubao-pro", Object: "model", OwnedBy: "bytedance"},
-	{ID: "doubao-lite", Object: "model", OwnedBy: "bytedance"},
-	{ID: "ernie-4.0", Object: "model", OwnedBy: "baidu"},
-	{ID: "he-router-cost", Object: "model", OwnedBy: "he-api"},
-	{ID: "he-router-quality", Object: "model", OwnedBy: "he-api"},
-	{ID: "he-router-latency", Object: "model", OwnedBy: "he-api"},
-}
+// IMMUTABLE: ServeHTTP emits a per-request copy via make+copy — never mutate
+// these in place (BR-1.10 ordering + concurrency safety). The 1:1 invariant
+// is enforced inside the shared package (panic at its init) per Story 6.1
+// BR4-3; the gateway no longer carries its own init() check.
+var modelsCatalogue, capabilitiesByModelID = buildGatewayCatalogue(modelscatalogue.DefaultCatalogue)
 
-// capabilitiesByModelID is the Story-4.7 BR-1.3 authoritative capability
-// table. Architect Round 1 OQ-4.7-3 ratified the 11-row values verbatim:
-// per-vendor numbers are sourced from each adapter's
-// docs/dev/secrets/{vendor}-upstream.md runbook; the three he-router-*
-// virtual entries report the UNION of their candidate pool (marketing-
-// correct — Epic-6 routing-svc gates "don't route to doubao-lite if tool-
-// calling requested" at routing time, so the marketing capability surface
-// is the strict superset).
-//
-// IMMUTABLE: the package-level map is read-only after init() — the per-
-// request loop in ServeHTTP reads by key without mutation (Story-3.5 BR-
-// 1.10 concurrency posture preserved).
-var capabilitiesByModelID = map[string]ModelCapabilities{
-	"qwen-max":          {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 32768, MaxOutputTokens: 8192},
-	"qwen-plus":         {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 32768, MaxOutputTokens: 8192},
-	"deepseek-v3":       {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 65536, MaxOutputTokens: 8192},
-	"moonshot-v1-128k":  {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 131072, MaxOutputTokens: 8192},
-	"glm-4":             {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 32768, MaxOutputTokens: 8192},
-	"doubao-pro":        {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: false, ContextWindowTokens: 32768, MaxOutputTokens: 8192},
-	"doubao-lite":       {Chat: true, Streaming: true, FunctionCalling: false, Vision: false, JSONMode: false, ContextWindowTokens: 32768, MaxOutputTokens: 4096},
-	"ernie-4.0":         {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 8192, MaxOutputTokens: 2048},
-	"he-router-cost":    {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 131072, MaxOutputTokens: 8192},
-	"he-router-quality": {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 131072, MaxOutputTokens: 8192},
-	"he-router-latency": {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 131072, MaxOutputTokens: 8192},
-}
-
-// init() enforces the BR-1.3 1:1 invariant between modelsCatalogue and
-// capabilitiesByModelID. A drift here would surface a missing capability
-// row in the JSON response (zero-value ModelCapabilities{} silently — every
-// flag is false, every numeric is 0 — which would mislead SDK consumers).
-// Panicking at boot is the safest mode: K8s readiness probe stays red
-// until the catalogue is fixed. 4.7-UNIT-010 asserts the same invariant
-// as a Go test so the failure surfaces clearly in CI before the binary
-// ships.
-func init() {
-	if len(modelsCatalogue) != len(capabilitiesByModelID) {
-		panic(fmt.Sprintf(
-			"handlers: BR-1.3 invariant violated — len(modelsCatalogue)=%d, len(capabilitiesByModelID)=%d",
-			len(modelsCatalogue), len(capabilitiesByModelID),
-		))
-	}
-	for _, m := range modelsCatalogue {
-		if _, ok := capabilitiesByModelID[m.ID]; !ok {
-			panic("handlers: BR-1.3 invariant violated — missing capabilities row for model id " + m.ID)
+// buildGatewayCatalogue projects the shared domain catalogue into the
+// gateway's OpenAI-compatible response types. The per-model `Object` is the
+// constant "model" and `OwnedBy` is the shared `Vendor`; `Created` stays
+// zero-valued (it is patched per-request from the handler's startedAt clock,
+// BR-1.6). Declaration order is preserved from Catalogue.List() (BR-1.10).
+func buildGatewayCatalogue(c modelscatalogue.Catalogue) ([]ModelEntry, map[string]ModelCapabilities) {
+	entries := c.List()
+	cat := make([]ModelEntry, len(entries))
+	caps := make(map[string]ModelCapabilities, len(entries))
+	for i, e := range entries {
+		cat[i] = ModelEntry{ID: e.ID, Object: "model", OwnedBy: e.Vendor}
+		caps[e.ID] = ModelCapabilities{
+			Chat:                e.Capabilities.Chat,
+			Streaming:           e.Capabilities.Streaming,
+			FunctionCalling:     e.Capabilities.FunctionCalling,
+			Vision:              e.Capabilities.Vision,
+			JSONMode:            e.Capabilities.JSONMode,
+			ContextWindowTokens: e.Capabilities.ContextWindowTokens,
+			MaxOutputTokens:     e.Capabilities.MaxOutputTokens,
 		}
 	}
+	return cat, caps
 }
 
 // ModelsHandler serves GET /v1/models. Construct once at startup and reuse

@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "routing-svc.fullname" . }}
+  labels:
+    {{- include "routing-svc.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "routing-svc.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "routing-svc.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "routing-svc.serviceAccountName" . }}
+      # Pod Security Restricted profile — 6 fields literal so static regex
+      # checks can verify without expanding Helm expressions (matches the
+      # sample-grpc-app / auth-svc pattern, Story 1.5 Q7 ruling).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: routing-svc
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            # Non-secret runtime config (OTel endpoint, PORT). routing-svc is
+            # stateless — no DB/Redis/Kafka/JWT Secret references in 6.1.
+            - configMapRef:
+                name: {{ include "routing-svc.fullname" . }}-config
+          # Liveness: process-up only (AC1 — GET /livez returns 200
+          # unconditionally once the process is running).
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          # Readiness: gates traffic until the catalogue snapshot is loaded +
+          # the decision engine is constructed (AC1 / BR1-2 — GET /ready is
+          # 503 before, 200 after).
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 1
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

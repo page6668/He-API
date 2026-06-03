@@ -1,0 +1,69 @@
+// routing.proto — gateway↔routing-svc Connect-RPC contract for Epic 6 (智能
+// 路由与故障转移). Realises the rest-api-spec.md §5.2 `RoutingService.SelectModel`
+// sketch (pre-declared since the original architecture pass, never implemented)
+// as a concrete Buf-managed proto under the Story-1.5-ratified layout
+// `packages/proto/he/<domain>/v1/<service>.proto`.
+//
+// Story 6.1 ships the SERVER side only (routing-svc). The gateway-side client
+// wiring + `X-He-Routing-Strategy` header parsing + the `req.Model`-passthrough
+// replacement are Story 6.2 scope (Architect Round-1 Q-B). This contract is
+// cascade-locked across Stories 6.2 (real scoring) / 6.3 (failover) / 6.4 (A/B)
+// / 6.5 (Console UI) — late field-renames / wire-tag shifts incur breaking-
+// change cost downstream. Since `he.routing.v1` is a NEW file (not an edit to
+// an existing proto), `buf breaking: FILE` is not crossed (BR3-1).
+//
+// Architect Round-1 rulings folded in (see story 6.1 §Architect Review Results):
+//   Q-D  Strategy is an enum (not a string); zero-value UNSPECIFIED(0) is
+//        treated identically to DEFAULT(1) by the engine — a zero-value
+//        request NEVER errors.
+//   Q-H  `he_request_id` is an explicit request field (field 5), not transport
+//        metadata — discoverable + type-safe for a cascade-locked contract.
+//   Q-I  `strategy_used` echoes the actually-fired strategy (detects an
+//        unknown-slug → default fallback masquerade).
+//   Q-K  `adapter_endpoint` (field 2) is RESERVED-for-future in 6.1 — always
+//        empty; the gateway resolves the endpoint via adapterclient.Registry.
+//        The field number is held stable so a 6.2+ producer is additive.
+syntax = "proto3";
+
+package he.routing.v1;
+
+option go_package = "github.com/he-api/he-api/packages/proto/gen/go/he/routing/v1;routingv1";
+
+// RoutingService selects an upstream model for a chat request according to the
+// caller's routing strategy. Single RPC in 6.1; failover / A/B variants in
+// Stories 6.3 / 6.4 extend the engine behind this same RPC, not the surface.
+service RoutingService {
+  rpc SelectModel(SelectModelRequest) returns (SelectModelResponse);
+}
+
+// Strategy is the routing-strategy taxonomy (Q-D: enum, not string — Story 2.6
+// R-2 cascade). The engine maps UNSPECIFIED(0) ≡ DEFAULT(1) so an omitted
+// proto3 zero-value strategy routes via the default path and never errors.
+enum Strategy {
+  STRATEGY_UNSPECIFIED = 0; // proto3 zero-value; engine treats it as DEFAULT
+  STRATEGY_DEFAULT = 1;     // return the caller's requested_model verbatim
+  STRATEGY_QUALITY = 2;     // 6.1 STUB: first-alphabetical; 6.2 real scoring
+  STRATEGY_COST = 3;        // 6.1 STUB: first-alphabetical; 6.2 real scoring
+  STRATEGY_LATENCY = 4;     // 6.1 STUB: first-alphabetical; 6.2 real scoring
+}
+
+// SelectModelRequest is the inbound routing request. `requested_model` is
+// required only on the default/unspecified path (the named strategies select
+// from the catalogue and ignore it in 6.1's stubs).
+message SelectModelRequest {
+  string user_id = 1;            // caller identity (slog-only in 6.1; routing-svc never sees the JWT)
+  string requested_model = 2;    // the model the caller asked for (required on default path)
+  Strategy strategy = 3;         // Q-D enum upgrade (the §5.2 sketch used `string strategy = 3`)
+  repeated string ab_models = 4; // A/B candidate set — IGNORED in 6.1 (Story 6.4 owns A/B)
+  string he_request_id = 5;      // Q-H: gateway-propagated correlation id (Story 3.6); echoed to slog only
+}
+
+// SelectModelResponse is the routing decision. Field numbers 1/2/3 are
+// preserved from the §5.2 sketch; 4/5 are additive (backward-compatible).
+message SelectModelResponse {
+  string selected_model = 1;             // the chosen model id
+  string adapter_endpoint = 2;           // Q-K: RESERVED-for-future in 6.1 — ALWAYS empty; the gateway resolves the endpoint via adapterclient.Registry. Field number held stable.
+  bool is_ab_test = 3;                   // always false in 6.1 (A/B is Story 6.4)
+  repeated string ab_selected_models = 4; // additive — Story 6.4 needs the per-model output list; shape defined now to avoid a 6.4 contract break. Empty in 6.1.
+  Strategy strategy_used = 5;            // Q-I: which strategy actually fired (UNSPECIFIED requests echo DEFAULT)
+}

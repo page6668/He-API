@@ -1,0 +1,65 @@
+package modelscatalogue
+
+// ModelSeed is one declared model in a Registry: its id + owning vendor, in
+// the canonical advertised order. Capabilities are held separately (in the
+// Registry.Capabilities map) so the BR-1.3 1:1 invariant between the two is a
+// real, testable surface rather than a merged struct.
+type ModelSeed struct {
+	ID          string
+	DisplayName string // reserved-for-future; empty in DefaultRegistry
+	Vendor      string
+}
+
+// Registry is the raw catalogue seed: an ordered model list + a capability
+// map keyed by model id. NewFromRegistry resolves the two into a Catalogue,
+// enforcing the 1:1 invariant.
+type Registry struct {
+	Models       []ModelSeed
+	Capabilities map[string]Capabilities
+}
+
+// DefaultRegistry is the BR-1.4 authoritative 11-entry catalogue, lifted
+// verbatim from the Story-4.7 api-gateway `modelsCatalogue` +
+// `capabilitiesByModelID` (Architect Round-1 OQ1 ratified 11 rows — NOT 9 —
+// and OQ-4.7-3 ratified the capability values). Declaration order is
+// load-bearing (Story-3.5 BR-1.10): the gateway emits `/v1/models` in this
+// order and SDK consumers may use index-based assertions.
+//
+// The three he-router-* virtual entries report the UNION of their candidate
+// pool (marketing-correct); they are routing meta-models, not upstream
+// targets — Epic-6 routing-svc never routes TO them (that support is Story
+// 6.2 scope).
+var DefaultRegistry = Registry{
+	Models: []ModelSeed{
+		{ID: "qwen-max", Vendor: "alibaba"},
+		{ID: "qwen-plus", Vendor: "alibaba"},
+		{ID: "deepseek-v3", Vendor: "deepseek"},
+		{ID: "moonshot-v1-128k", Vendor: "moonshot"},
+		{ID: "glm-4", Vendor: "zhipu"},
+		{ID: "doubao-pro", Vendor: "bytedance"},
+		{ID: "doubao-lite", Vendor: "bytedance"},
+		{ID: "ernie-4.0", Vendor: "baidu"},
+		{ID: "he-router-cost", Vendor: "he-api"},
+		{ID: "he-router-quality", Vendor: "he-api"},
+		{ID: "he-router-latency", Vendor: "he-api"},
+	},
+	Capabilities: map[string]Capabilities{
+		"qwen-max":          {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 32768, MaxOutputTokens: 8192},
+		"qwen-plus":         {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 32768, MaxOutputTokens: 8192},
+		"deepseek-v3":       {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 65536, MaxOutputTokens: 8192},
+		"moonshot-v1-128k":  {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 131072, MaxOutputTokens: 8192},
+		"glm-4":             {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 32768, MaxOutputTokens: 8192},
+		"doubao-pro":        {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: false, ContextWindowTokens: 32768, MaxOutputTokens: 8192},
+		"doubao-lite":       {Chat: true, Streaming: true, FunctionCalling: false, Vision: false, JSONMode: false, ContextWindowTokens: 32768, MaxOutputTokens: 4096},
+		"ernie-4.0":         {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 8192, MaxOutputTokens: 2048},
+		"he-router-cost":    {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 131072, MaxOutputTokens: 8192},
+		"he-router-quality": {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 131072, MaxOutputTokens: 8192},
+		"he-router-latency": {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 131072, MaxOutputTokens: 8192},
+	},
+}
+
+// DefaultCatalogue is the resolved DefaultRegistry. Built at package init, so
+// any future drift in DefaultRegistry (a model without a capability row, or a
+// capability orphan) panics at process start — preserving the Story-4.7
+// boot-fail posture for both the api-gateway and routing-svc.
+var DefaultCatalogue = NewFromRegistry(DefaultRegistry)

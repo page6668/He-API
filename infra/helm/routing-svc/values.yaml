@@ -1,0 +1,56 @@
+# Default values for routing-svc (Story 6.1). Pod Security Restricted profile
+# matches the auth-svc / sample-grpc-app baseline so admission stays uniform.
+#
+# routing-svc is STATELESS in 6.1 (BR1-1): no DB, no Redis, no Kafka, no JWT.
+# The catalogue is loaded in-process at boot from the shared
+# packages/models-catalogue registry; runtime mutation / PG backing is Story 6.2.
+
+image:
+  repository: he-api/routing-svc
+  tag: "0.0.1"
+  pullPolicy: IfNotPresent
+
+# Q-J ruling: 2 replicas (HA pair) for a stateless dispatch service.
+replicaCount: 2
+
+service:
+  type: ClusterIP
+  port: 8080
+
+# Q-J ruling: 0.1 CPU / 128Mi request; 0.5 CPU / 512Mi limit.
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# Non-secret runtime config, projected via a ConfigMap (envFrom).
+config:
+  OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector.monitoring.svc.cluster.local:4317
+  PORT: "8080"
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+serviceMonitor:
+  enabled: true
+  interval: 15s
+
+# Alertmanager rules for the routing decision path.
+prometheusRule:
+  enabled: true
+
+# NetworkPolicy — default-deny + explicit allows. routing-svc is stateless:
+# ingress from api-gateway (the only caller) + monitoring; egress is DNS +
+# OTel collector only (no PG/Redis/Kafka — those land with Story 6.2).
+networkPolicy:
+  enabled: true
+  monitoringNamespace: monitoring
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

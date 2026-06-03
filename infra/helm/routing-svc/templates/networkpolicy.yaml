@@ -1,0 +1,89 @@
+{{- if .Values.networkPolicy.enabled }}
+# Story 6.1 — routing-svc NetworkPolicy.
+#
+# routing-svc is STATELESS in 6.1 (BR1-1): no PG/Redis/Kafka egress (those land
+# with Story 6.2's PG-backed catalogue). The only ingress client is api-gateway
+# (service-topology.md §3); egress is DNS + the OTel collector.
+#
+# Ingress (default-deny + explicit allows):
+#   - api-gateway pods (port 8080) — the canonical SelectModel caller (6.2 on)
+#   - monitoring namespace (port 8080) — Prometheus ServiceMonitor /metrics scrape
+# Egress:
+#   - DNS (kube-system)
+#   - OTel collector (monitoring, 4317)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "routing-svc.fullname" . }}-default-deny
+  labels:
+    {{- include "routing-svc.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "routing-svc.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "routing-svc.fullname" . }}-allow-ingress
+  labels:
+    {{- include "routing-svc.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "routing-svc.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    # api-gateway pods — the only caller of routing-svc (Story 6.2 wires the client).
+    - from:
+        - podSelector:
+            matchLabels:
+              app: api-gateway
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Prometheus scrape from the monitoring namespace (ServiceMonitor).
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.monitoringNamespace | default "monitoring" }}
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "routing-svc.fullname" . }}-allow-egress
+  labels:
+    {{- include "routing-svc.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "routing-svc.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Egress
+  egress:
+    # DNS — kube-dns / CoreDNS in kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # OTel collector — telemetry uplink (traces + metrics push if used).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.monitoringNamespace | default "monitoring" }}
+      ports:
+        - protocol: TCP
+          port: 4317
+{{- end }}

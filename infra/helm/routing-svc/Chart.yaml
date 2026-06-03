@@ -1,0 +1,15 @@
+apiVersion: v2
+name: routing-svc
+description: He-API intelligent-routing service (Epic 6, Story 6.1). Stateless gRPC service that selects an upstream model per routing strategy; consumed by api-gateway.
+type: application
+version: 0.1.0
+appVersion: "0.0.1"
+kubeVersion: ">=1.29.0-0"
+
+keywords:
+  - he-api
+  - grpc
+  - routing
+
+maintainers:
+  - name: He-API platform team

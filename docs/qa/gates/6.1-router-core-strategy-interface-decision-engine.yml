@@ -1,0 +1,96 @@
+schema: 1
+story: "6.1"
+story_title: "路由器核心（策略接口 + 决策引擎）"
+gate: "PASS"
+status_reason: "All 4 ACs verified with real code + test traceability; full routing-svc suite + models-catalogue lift + 4.7-INT-001 byte-identity all green under -race; internal/ coverage 88.2–100% (≥80% target). No critical/high issues; only low-severity documentation notes."
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-03T00:00:00Z"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "MEDIUM"
+  cached_review_mode: "automated_plus_spot_check"
+  cached_project_type: "web_backend"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+# Low-severity, non-blocking observations (do not affect gate)
+top_issues:
+  - id: "DOC-001"
+    severity: low
+    finding: "Story Dev Notes / AC4 state '10 seed rows' but the authoritative Story-4.7 catalogue is 11 rows (incl. 3 he-router-* virtual meta-models). Dev documented this; verbatim parity + 4.7-INT-001 byte-identity are preserved, so it is a story-text imprecision, not a data defect."
+    suggested_action: "Optional: SM corrects the '10'→'11' wording in 6.1 Dev Notes/AC4 for future readers. Non-blocking."
+  - id: "DOC-002"
+    severity: low
+    finding: "Q-E 100ms SelectModel deadline budget is documentation-only in 6.1 (no server-side context.WithTimeout). This is by-design per the Architect Q-E ruling (enforcement lands gateway-side in Story 6.2)."
+    suggested_action: "Story 6.2 must apply context.WithTimeout(100ms) gateway-side when the client wiring lands. Tracked, not a 6.1 defect."
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 49
+    passed_count: 49
+    failed_count: 0
+    skipped_count: 0
+    pass_rate: 100
+    coverage_percentage: 94  # internal/ packages: catalogue 100 / engine 100 / server 96.3 / strategy 94.7 / handler 88.2
+    failed_tests: []
+  e2e:
+    executed: true   # in-process Connect-RPC integration tests (httptest over the wire) — no external env
+    passed: true
+    skipped: false
+    skip_reason: ""
+    scenarios_tested: 13   # INT-001..006, INT-010/011, BLIND-CONCURRENCY-001/002 + boundary integration
+    scenarios_passed: 13
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: ""   # no issues requiring evidence capture
+  issues: []
+
+risk_assessment:
+  risk_level: MEDIUM
+  review_mode: automated_plus_spot_check
+  complexity_count: 4
+  security_sensitive: false
+  dev_gate_score: 95
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 2 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "Story 6.2: enforce the 100ms SelectModel deadline gateway-side (DOC-002)."
+
+evidence_extended:
+  tests_reviewed: 49
+  risks_identified: 0
+  trace:
+    ac_covered: [1, 2, 3, 4]
+    ac_gaps: []
+
+nfr_validation:
+  security: { status: PASS, notes: "No credentials/PII/auth surface; slog non-PII (strategy + model_id + he_request_id only, never user_id) — verified in handler/select_model.go." }
+  performance: { status: PASS, notes: "Stateless O(N) dispatch; deadline budget documented (100ms, enforced 6.2)." }
+  reliability: { status: PASS, notes: "Boot fail-fast on empty catalogue / nil-impl slug; concurrency-safe via defensive map copy (-race clean)." }
+  maintainability: { status: PASS, notes: "Cascade-locked Strategy interface with compile-time var _ assertions; loud STUB(6.1) godoc on quality/cost/latency per BR2-3." }
+
+history:
+  - at: "2026-06-03T00:00:00Z"
+    gate: PASS
+    note: "Round 1 full review. 4/4 ACs verified, all suites green under -race, internal/ coverage ≥80%, 4.7-INT-001 byte-identical preserved across the catalogue lift. 0 critical/high; 2 low doc notes."

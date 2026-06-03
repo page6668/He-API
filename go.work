@@ -11,9 +11,11 @@ use (
 	./apps/api-gateway
 	./apps/auth-svc
 	./apps/notification-svc
+	./apps/routing-svc
 	./apps/sample-grpc-app
 	./apps/sample-otel-app
 	./packages/adapter-usage
 	./packages/go-observability
+	./packages/models-catalogue
 	./packages/proto
 )

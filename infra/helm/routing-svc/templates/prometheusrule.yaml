@@ -1,0 +1,62 @@
+{{- if .Values.prometheusRule.enabled }}
+# Story 6.1 — routing-svc Alertmanager rules.
+#
+# routing-svc is stateless and on the critical request path (api-gateway calls
+# SelectModel for every routed request from Story 6.2 on). Two baseline alerts:
+#
+#   1. RoutingSvcDown — no ready replica. Severity critical → PagerDuty: the
+#      gateway loses its routing decision source.
+#   2. RoutingSvcHighErrorRate — sustained gRPC error responses on SelectModel.
+#      Severity warning → Feishu: surfaces a mis-seeded catalogue or a client
+#      sending malformed requests (InvalidArgument / NotFound).
+#
+# Real per-strategy SLO budgets land with Story 6.2 once the actual scoring +
+# the gateway-side 100ms deadline (Q-E) are wired.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "routing-svc.fullname" . }}
+  labels:
+    {{- include "routing-svc.labels" . | nindent 4 }}
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: routing-svc.story-6.1
+      interval: 30s
+      rules:
+        - alert: RoutingSvcDown
+          expr: |
+            sum(up{job=~".*routing-svc.*"}) == 0
+          for: 1m
+          labels:
+            severity: critical
+            team: platform
+            service: routing-svc
+            channel: pagerduty
+          annotations:
+            summary: "routing-svc has no ready replica"
+            description: |
+              No routing-svc target is up for >1m. The api-gateway loses its
+              model-routing decision source. Check the deployment + the /ready
+              probe (gates on a non-empty catalogue snapshot, BR1-2).
+            runbook_url: "https://runbooks.he-api.com/routing/svc-down"
+
+        - alert: RoutingSvcHighErrorRate
+          expr: |
+            sum(rate(rpc_server_responses_total{rpc_service="he.routing.v1.RoutingService", rpc_grpc_status_code!="0"}[5m])) > 1
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+            service: routing-svc
+            channel: feishu
+          annotations:
+            summary: "routing-svc SelectModel error rate elevated"
+            description: |
+              SelectModel is returning gRPC errors (>1/s for 5m). Inspect the
+              code distribution: InvalidArgument (empty/whitespace
+              requested_model or unknown strategy slug) vs NotFound
+              (requested_model not in catalogue). A spike of NotFound may mean
+              a catalogue seed drift.
+            runbook_url: "https://runbooks.he-api.com/routing/high-error-rate"
+{{- end }}
