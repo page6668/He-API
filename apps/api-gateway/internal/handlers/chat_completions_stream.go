@@ -42,14 +42,16 @@ import (
 // serveStream is invoked from ServeHTTP when validateChatRequest succeeds
 // AND req.Stream == true. The caller has already enforced bearer-auth +
 // body-size + JSON parse + role validation.
-func (h *ChatCompletionsHandler) serveStream(w http.ResponseWriter, r *http.Request, req *ChatRequest, apiKeyID, selected string) {
+func (h *ChatCompletionsHandler) serveStream(w http.ResponseWriter, r *http.Request, req *ChatRequest, apiKeyID, selected string, failoverChain []string, strategy string) {
 	ctx := r.Context()
 	// Story 4.1 BR-2.1 — dispatch fork BEFORE the writer/chunker is built.
 	// Registry hit (on the Story-6.2 ROUTED model) → real adapter Connect-RPC
 	// server-stream; miss → fall through to the Story-3.4 MockChunker.
+	// Story 6.3 AC3 — the adapter stream path runs the PRE-FLUSH failover loop
+	// (dispatchStreamWithFailover); the mock path below has no failover.
 	if h.adapterRegistry != nil {
-		if handle, ok := h.adapterRegistry.Resolve(selected); ok {
-			h.serveAdapterStream(w, r, req, apiKeyID, selected, handle)
+		if _, ok := h.adapterRegistry.Resolve(selected); ok {
+			h.dispatchStreamWithFailover(w, r, req, apiKeyID, selected, failoverChain, strategy)
 			return
 		}
 	}
@@ -115,24 +117,93 @@ func isWriteOrFlushFailure(err error) bool {
 	return true
 }
 
-// serveAdapterStream dispatches stream=true to the real adapter Connect-RPC
-// server-streaming endpoint. Selected by BR-2.1 registry-resolution hit in
-// serveStream; mirrors the non-streaming serveAdapterNonStream path.
+// dispatchStreamWithFailover is the Story-6.3 streaming PRE-FLUSH failover loop
+// (AC3). It iterates the scope-filtered candidate chain, dispatching each
+// resolvable hop via attemptAdapterStream. Failover is possible ONLY while no
+// SSE byte has been committed (writer.HeadersFlushed()==false — Q-E HTTP
+// constraint): a pre-flush 502/504 (Q-C) advances to the next model (same
+// 3-attempt / 30s budget as AC2); once a chunk flushes (or a post-flush error is
+// handled inline per BR-2.6), the response is committed and the loop STOPS. On
+// pre-flush exhaustion it writes the BR-2.5 JSON envelope (status not yet
+// committed).
+func (h *ChatCompletionsHandler) dispatchStreamWithFailover(w http.ResponseWriter, r *http.Request, req *ChatRequest, apiKeyID, selected string, failoverChain []string, strategy string) {
+	ctx, cancel := context.WithTimeout(r.Context(), h.failoverBudget) // Q-G
+	defer cancel()
+
+	chain := append([]string{selected}, failoverChain...)
+
+	attempts := 0
+	var lastErr error
+	var prevModel, prevReason string
+
+	for _, model := range chain {
+		if ctx.Err() != nil {
+			break // budget exhausted / client disconnected (Q-B/Q-G)
+		}
+		handle, ok := h.adapterRegistry.Resolve(model)
+		if !ok {
+			h.logger.LogAttrs(ctx, slog.LevelWarn, "chat_completions_stream_failover_skip_unresolved",
+				slog.String("event", "chat_completions_stream_failover_skip_unresolved"),
+				slog.String("model", model),
+			)
+			continue // BR2-3 — not an upstream attempt
+		}
+		if prevModel != "" {
+			h.recordFailover(ctx, prevModel, model, prevReason, strategy, attempts+1)
+		}
+		attempts++
+
+		committed, preErr := h.attemptAdapterStream(ctx, w, req, apiKeyID, model, handle)
+		if committed {
+			// Stream succeeded OR a post-flush error was handled inline (BR-2.6).
+			// The response is committed — NO failover past the flush frontier.
+			h.router.RecordFailoverAttempts(ctx, attempts)
+			if attempts > 1 {
+				h.logFailoverServed(ctx, chain[0], model, attempts) // 6.3-UNIT-048
+			}
+			return
+		}
+
+		// Pre-flush failure — nothing committed; the loop MAY advance.
+		code, retriable := isRetriableUpstream(preErr)
+		if !retriable {
+			h.router.RecordFailoverAttempts(ctx, attempts)
+			h.writeStreamPreflushTerminal(w, ctx, req, apiKeyID, preErr)
+			return
+		}
+		lastErr = preErr
+		prevModel, prevReason = model, failoverReason(code)
+		if attempts >= MaxFailoverAttempts {
+			break // 3-attempt cap (Q-B/BR2-2)
+		}
+	}
+
+	// Pre-flush exhaustion — chain end, attempt cap, or budget. Emit the BR-2.5
+	// JSON envelope (status not yet committed).
+	h.router.RecordFailoverAttempts(ctx, attempts)
+	if lastErr == nil {
+		lastErr = errUpstreamInvalidResponse
+	}
+	h.writeStreamPreflushTerminal(w, ctx, req, apiKeyID, lastErr)
+}
+
+// attemptAdapterStream performs ONE streaming upstream attempt against handle
+// (Story 6.3 m-1 — the per-hop pre-flush dispatch primitive). It returns:
 //
-// Error envelope selection:
+//   - (true, nil)  → the stream SUCCEEDED, or a POST-flush error was handled
+//     inline (BR-2.6 SSE error frame + [DONE]); the response is COMMITTED and
+//     the failover loop STOPS (Q-E — committed bytes are unrecoverable).
+//   - (false, err) → a PRE-flush failure (adapter Chat() error, or a chunker
+//     error with HeadersFlushed()==false): NO byte was committed; the loop may
+//     failover. err carries the cause for classification + the terminal envelope.
 //
-//	BR-2.5 (pre-flush): adapter Chat() returns err OR AdapterChunker.Stream
-//	  returns err with HeadersFlushed()=false → emit JSON envelope via
-//	  openaierr.Write (the gateway has not committed to streaming yet).
-//	BR-2.6 (post-flush): chunker err with HeadersFlushed()=true → emit
-//	  inline `data: {"error":...}\n\n` + `data: [DONE]\n\n` and keep
-//	  HTTP status 200.
-func (h *ChatCompletionsHandler) serveAdapterStream(w http.ResponseWriter, r *http.Request, req *ChatRequest, apiKeyID, selected string, handle adapterclient.ClientHandle) {
-	ctx := r.Context()
+// The failed upstream stream/connection is Closed on return (defer) before the
+// next hop re-opens a fresh one (BLIND-RESOURCE-001).
+func (h *ChatCompletionsHandler) attemptAdapterStream(ctx context.Context, w http.ResponseWriter, req *ChatRequest, apiKeyID, servedModel string, handle adapterclient.ClientHandle) (committed bool, preFlushErr error) {
 	realStart := time.Now()
 	heRequestID, _ := requestid.FromContext(ctx)
 
-	adapterReq := buildAdapterRequest(req, selected, heRequestID)
+	adapterReq := buildAdapterRequest(req, servedModel, heRequestID)
 	adapterReq.Stream = true // BR-2.1 streaming branch
 	headers := http.Header{}
 	if heRequestID != "" {
@@ -141,35 +212,30 @@ func (h *ChatCompletionsHandler) serveAdapterStream(w http.ResponseWriter, r *ht
 
 	stream, callErr := handle.Chat(ctx, adapterReq, headers)
 	if callErr != nil {
-		// BR-2.5 — failure BEFORE any byte was sent to the wire. Emit JSON
-		// envelope. Status code derives from the Connect-RPC code per BR-1.4.
-		status, code, message := classifyAdapterError(callErr)
-		h.logger.LogAttrs(ctx, slog.LevelWarn, "chat_completions_stream_adapter_preflush_error",
-			slog.String("event", "chat_completions_stream_adapter_preflush_error"),
-			slog.String("model", req.Model),
-			slog.String("api_key_id", apiKeyID),
-			slog.Int("messages_count", len(req.Messages)),
-			slog.String("error_code", code),
-			slog.String("error", adapterErrString(callErr)),
-		)
-		_ = openaierr.Write(w, ctx, status, code, message, nil)
-		return
+		// BR-2.5 — failure BEFORE any writer/byte exists → pre-flush (failoverable).
+		return false, callErr
 	}
 	defer func() { _ = stream.Close() }()
 
 	writer := streaming.NewWriter(w)
-	chunker := streaming.NewAdapterChunker(stream, selected)
+	chunker := streaming.NewAdapterChunker(stream, servedModel)
 
-	// BR1-2 — gateway sets X-He-Selected-Model = the ROUTED model on the
-	// streaming success path (Story 6.2 — was req.Model). MUST set BEFORE the
-	// first chunk emit so the header reaches the wire alongside the SSE response
-	// headers (the streaming.writer flushes headers lazily on the first
-	// WriteEvent — FLOW-001).
-	w.Header().Set("X-He-Selected-Model", selected)
+	// BR1-2 / Q-F — X-He-Selected-Model = the model SERVING this hop. Set BEFORE
+	// the first chunk emit (the writer flushes headers lazily on first WriteEvent
+	// — FLOW-001); pre-flush it is overwritable, so the FINAL served model wins.
+	w.Header().Set("X-He-Selected-Model", servedModel)
 
 	chunksEmitted, firstFlushAt, streamErr := chunker.Stream(ctx, writer)
 	_ = writer.Close()
 
+	if streamErr != nil && !writer.HeadersFlushed() {
+		// BR-2.5 pre-flush boundary — the chunker errored before any SSE byte
+		// reached the wire → failoverable. The deferred stream.Close() releases
+		// the upstream connection before the next hop (BLIND-RESOURCE-001).
+		return false, streamErr
+	}
+
+	// Committed: the response is either a success or a post-flush error.
 	var ttfbMs int64
 	if !firstFlushAt.IsZero() {
 		ttfbMs = firstFlushAt.Sub(realStart).Milliseconds()
@@ -181,47 +247,21 @@ func (h *ChatCompletionsHandler) serveAdapterStream(w http.ResponseWriter, r *ht
 			errors.Is(ctx.Err(), context.Canceled))
 
 	if streamErr != nil {
-		if !writer.HeadersFlushed() {
-			// BR-2.5 pre-flush boundary — the chunker errored before any
-			// SSE byte reached the wire. Emit JSON envelope.
-			status, code, message := classifyAdapterError(streamErr)
-			h.logger.LogAttrs(ctx, slog.LevelWarn, "chat_completions_stream_adapter_preflush_error",
-				slog.String("event", "chat_completions_stream_adapter_preflush_error"),
-				slog.String("model", req.Model),
-				slog.String("api_key_id", apiKeyID),
-				slog.Int("messages_count", len(req.Messages)),
-				slog.Int("chunks_emitted", chunksEmitted),
-				slog.String("error_code", code),
-				slog.String("error", adapterErrString(streamErr)),
-			)
-			_ = openaierr.Write(w, ctx, status, code, message, nil)
-			// Pre-flush error → upstream returned no usable usage. Q10
-			// case iv collapses here (no deduct).
-			return
-		}
-		// BR-2.6 post-flush boundary — emit inline SSE error frame +
-		// terminal [DONE]. Status is already 200 (headers flushed); we MUST
-		// NOT WriteHeader again.
+		// BR-2.6 post-flush boundary — emit inline SSE error frame + terminal
+		// [DONE]. Status is already 200 (headers flushed); NO failover (BR3-2).
 		if !clientDisconnected {
 			h.writeSSEErrorFrame(w, ctx, writer, streamErr, req.Model, apiKeyID, chunksEmitted)
 		}
 	}
 
-	// Story 5.3 ISSUE-001 / Architect Q10 — streaming TPM post-deduction.
-	// Decision matrix:
-	//
-	//	streamErr == nil + tailUsage != nil  → (i) total_tokens
-	//	streamErr != nil + tailUsage != nil  → (ii/iii) prompt_tokens (partial)
-	//	any                + tailUsage == nil → (iv) no deduct + slog WARN
-	//
-	// Fire-and-forget; errors are absorbed by the deducter (slog WARN
-	// inside the ratelimit package). The response has already been
-	// written.
+	// Story 5.3 ISSUE-001 / Architect Q10 — streaming TPM post-deduction (Q-H:
+	// fires once, on the committed stream only).
 	h.maybeStreamTPMDeduct(ctx, apiKeyID, req.Model, chunker.TailUsage(), streamErr, clientDisconnected)
 
 	attrs := []slog.Attr{
 		slog.String("event", "chat_completions_stream"),
 		slog.String("model", req.Model),
+		slog.String("served_model", servedModel), // Story 6.3 Q-F (non-PII)
 		slog.String("api_key_id", apiKeyID),
 		slog.Int("messages_count", len(req.Messages)),
 		slog.Int("chunks_emitted", chunksEmitted),
@@ -236,6 +276,24 @@ func (h *ChatCompletionsHandler) serveAdapterStream(w http.ResponseWriter, r *ht
 		attrs = append(attrs, slog.String("flush_error", streamErr.Error()))
 	}
 	h.logger.LogAttrs(ctx, slog.LevelInfo, "chat_completions_stream", attrs...)
+	return true, nil
+}
+
+// writeStreamPreflushTerminal emits the BR-2.5 pre-flush JSON envelope at the
+// end of the streaming failover loop (status not yet committed). For 502/504 it
+// is byte-identical to the pre-6.3 pre-flush write (classifyFailoverError ==
+// classifyAdapterError for those codes).
+func (h *ChatCompletionsHandler) writeStreamPreflushTerminal(w http.ResponseWriter, ctx context.Context, req *ChatRequest, apiKeyID string, err error) {
+	status, code, message, _ := classifyFailoverError(err)
+	h.logger.LogAttrs(ctx, slog.LevelWarn, "chat_completions_stream_adapter_preflush_error",
+		slog.String("event", "chat_completions_stream_adapter_preflush_error"),
+		slog.String("model", req.Model),
+		slog.String("api_key_id", apiKeyID),
+		slog.Int("messages_count", len(req.Messages)),
+		slog.String("error_code", code),
+		slog.String("error", adapterErrString(err)),
+	)
+	_ = openaierr.Write(w, ctx, status, code, message, nil)
 }
 
 // writeSSEErrorFrame emits the BR-2.6 inline error envelope as a single

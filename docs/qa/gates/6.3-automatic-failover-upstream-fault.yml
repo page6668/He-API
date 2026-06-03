@@ -1,0 +1,103 @@
+schema: 1
+story: "6.3"
+story_title: "自动 failover（3 次失败 / 30s 超时）"
+gate: "PASS"
+status_reason: "All 4 ACs implemented and independently verified at source + test; routing-svc + api-gateway + proto suites all green; new-path coverage 81.4–95.5% (≥80% target); -race clean on the failover handlers; chaos-tagged fault-injection passes. Every load-bearing invariant confirmed at source: exactly-one TPMDeduct (primitive returns the upstream error WITHOUT writing), 3-attempt/30s parent-ctx budget, retriable=502/504-only (Q-C), scope-filter-before-dispatch (Q-K), X-He-Selected-Model=final served (Q-F), streaming PRE-FLUSH-only failover with post-flush BR-2.6 untouched (Q-E), he-router-* excluded from the WHOLE ranked chain (BR1-3), integer attempt buckets [1,2,3] (m-2), loop at the Resolve→dispatch boundary (m-1). Residual: Toxiproxy real-toxic + over-the-wire testcontainer + buf-breaking are docker/buf-gated and unexecuted locally — authored, logic-equivalents pass, MUST run in CI (non-blocking, ratified env precedent)."
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-03T00:00:00Z"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "HIGH"
+  cached_review_mode: "full_testing"
+  cached_project_type: "web_backend"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+# No blocking issues. Items below are CI-execution follow-ups (env-limited), not defects.
+top_issues:
+  - id: "CI-001"
+    severity: low
+    finding: "Toxiproxy chaos (6.3-INT-007/008) is delivered as a //go:build chaos gated fault-injection test (adapter-boundary fault handle); docker/testcontainers are unavailable locally (auto-memory project_toolchain_env_limits). The invariant (502/timeout on rank-1 → switch to rank-2) is identical; the -tags chaos suite passes locally."
+    suggested_action: "Run the real Toxiproxy toxics (502 + connection-timeout) in the nightly chaos lane / CI to obtain the over-the-wire fault-injection proof."
+  - id: "CI-002"
+    severity: low
+    finding: "buf generate + buf breaking:FILE (6.3-CONTRACT-001) could not run — buf is uninstallable in the env (LC_UUID dyld abort, auto-memory). The additive SelectModelResponse.failover_chain=7 field was hand-applied to the vendored routing.pb.go."
+    suggested_action: "Re-run buf generate + buf breaking:FILE in CI to confirm the additive contract gate. Verified locally via the wire round-trip test (routing/v1 pkg green: failover_chain marshals/unmarshals as field 7; fields 1-6 byte-unchanged)."
+  - id: "CI-003"
+    severity: low
+    finding: "Gateway↔routing-svc↔adapter end-to-end (6.3-INT-002..006) is delivered at the httptest integration tier (full ServeHTTP → routing decision → failover loop → adapter dispatch, fake routing client + fake adapter registry) rather than docker testcontainers, same env constraint."
+    suggested_action: "Run the testcontainer integration suite in CI for the over-the-wire E2E failover proof."
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 33            # 9 routing-svc pkgs + 15 api-gateway pkgs + proto routing/v1 + others green
+    passed_count: 33
+    failed_count: 0
+    skipped_count: 0
+    pass_rate: 100
+    coverage_percentage: 87   # new-path: gw-handlers 81.4 / routingclient 84.8 / strategy 86.0 / engine 90.3 / handler 95.5
+    failed_tests: []
+  e2e:
+    executed: false
+    passed: true
+    skipped: true
+    skip_reason: "Backend service-to-service story — no UI/browser tier (test-design declares E2E 0). End-to-end proof is at the integration tier (httptest full-handler failover) + the -tags chaos fault-injection suite; the docker/testcontainer/Toxiproxy-real variants are deferred to CI."
+    scenarios_tested: 0
+    scenarios_passed: 0
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: ""
+  issues: []
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 5
+  security_sensitive: false
+  dev_gate_score: 97
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 3 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "Run the docker/buf/Toxiproxy-gated chaos + contract + integration gates (CI-001/002/003) in CI before deploy."
+      - "Q-B cross-request circuit-breaker is DEFERRED (Architect ruling) — carry as an Epic-6 backlog candidate once upstream-health telemetry lands."
+
+quality_score: 96
+
+# Verification trace (Step 4.6 AC coverage)
+evidence_trace:
+  ac_covered: [1, 2, 3, 4]
+  ac_gaps: []
+  invariants_verified:
+    billing_exactly_once_Q_H: "serveAdapterNonStream (chat_completions.go:456-518) returns the upstream error WITHOUT writing/deducting on every fault branch (468-491); TPMDeduct fires only after writeChatJSON on success (499-504). Loop calls it per hop and returns on err==nil. Streaming: maybeStreamTPMDeduct fires once on the committed stream (Q-H). Tests 6.3-UNIT-025 green."
+    budget_3_30s_Q_B_Q_G: "MaxFailoverAttempts=3 (598) + FailoverBudget=30s parent context.WithTimeout (532/130); ctx.Err() checked before each hop; attempts>=cap breaks. WithFailoverBudget test seam confirms budget-exhaustion path."
+    retriable_502_504_only_Q_C: "classifyFailoverError (627-668) marks ONLY Unavailable/Internal/Unknown/dial→502 and DeadlineExceeded→504 retriable; InvalidArgument/PermissionDenied/ResourceExhausted/FailedPrecondition non-retriable → terminal immediately (572-576)."
+    scope_filter_Q_K: "routingclient.FilterByScope (decider.go:146-161) applied to decision.FailoverChain BEFORE chain assembly (chat_completions.go:418); empty scope = unrestricted pass-through. Tests 6.3-UNIT-030/031."
+    final_served_model_Q_F: "X-He-Selected-Model = servedModel set inside the per-hop primitive (498 / stream 226, final-wins pre-flush); logFailoverServed records chain[0] vs served on a failed-over request."
+    streaming_preflush_only_Q_E: "attemptAdapterStream returns (false,err) only while !writer.HeadersFlushed() (216 callErr, 231-236 chunker err); post-flush errors handled inline (BR-2.6, 249-255) → committed=true → loop STOPS. stream.Close() deferred per hop (RESOURCE-001)."
+    he_router_whole_chain_BR1_3: "strategy/candidates.go concreteCandidates() strips the he-router- prefix inside rankCheapest (whole ranking); scored.go applies it to the score-ranked + degraded chains. ranked_test.go asserts no meta id anywhere in the chain."
+  architect_lows_folded:
+    m_1_loop_at_resolve_boundary: "dispatchNonStreamWithFailover / dispatchStreamWithFailover wrap adapterRegistry.Resolve(model)→dispatch at the ServeHTTP/serveStream level; unresolved entry `continue`s without incrementing attempts (BR2-3). VERIFIED."
+    m_2_integer_buckets: "metrics.go he_routing_failover_attempts WithExplicitBucketBoundaries(1,2,3). VERIFIED."
+  integrity_check: "Dev claimed gw-handlers 80.9% — QA independent run 81.4% (consistent, no discrepancy). All other claimed coverages match."
+  regression: "6.2 routing + 6-vendor adapter matrix + 4.7 + SSE + keypolicy(5.2) + ratelimit(5.3) + cap(5.4) green; -race clean on failover handlers; chaos-tagged suite passes."

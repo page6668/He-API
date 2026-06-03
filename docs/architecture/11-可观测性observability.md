@@ -35,6 +35,15 @@
   severity: warning
   labels:
     routing_action: failover
+    # Story 6.3 REALISED — the gateway emits, on every failover hop, a non-PII
+    # slog line {event:routing_failover, routing_action:failover, from_model,
+    # to_model, reason∈{upstream_unavailable,upstream_timeout}, attempt,
+    # strategy, he_request_id} + Prometheus:
+    #   he_routing_failover_total{from_model,to_model,reason}  (counter)
+    #   he_routing_failover_attempts                            (histogram, buckets [1,2,3])
+    # Cardinality bounded (~8×8 catalogue for from×to). A high
+    # he_routing_failover_total rate is the canonical "upstream degraded but
+    # users transparent" signal (RTO 0 target, infrastructure-deployment §灾备).
     
 - alert: DataExportSuspect
   expr: increase(network_egress_to_overseas_bytes[10m]) > 0

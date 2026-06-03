@@ -47,18 +47,23 @@ func NewEngine(catalogue modelscatalogue.Catalogue, strategies map[routingv1.Str
 }
 
 // Decide resolves the effective strategy, dispatches to its implementation
-// over the boot-loaded catalogue, and returns the selected model, the strategy
-// that ACTUALLY fired (strategy_used, Q-I), and the score source (Story 6.2
-// High-1 — model_pricing|clickhouse|fallback|default).
+// over the boot-loaded catalogue, and returns the selected model, the ordered
+// failover tail (Story 6.3 — the ranked fallbacks AFTER the selected model,
+// EXCLUDING it), the strategy that ACTUALLY fired (strategy_used, Q-I), and the
+// score source (Story 6.2 High-1 — model_pricing|clickhouse|fallback|default).
 //
 //   - STRATEGY_UNSPECIFIED(0) is treated identically to STRATEGY_DEFAULT(1)
 //     and never errors on the zero value (Q-D);
 //   - an enum with no registered implementation -> ErrUnknownStrategy;
 //   - the chosen Strategy.Select error (e.g. ErrNoCandidates) is propagated
 //     verbatim for the handler to map to a gRPC code;
-//   - a strategy implementing SourcedStrategy reports its own score source;
-//     a plain Strategy reports ScoreSourceDefault.
-func (e *Engine) Decide(ctx context.Context, strategy routingv1.Strategy, hints SelectionHints) (modelscatalogue.ModelEntry, routingv1.Strategy, string, error) {
+//   - a strategy implementing RankedStrategy (Story 6.3) yields the full ranked
+//     order: selected = chain[0], failoverTail = chain[1:] (BR1-2);
+//   - a strategy implementing SourcedStrategy (but not RankedStrategy) reports
+//     its score source with an EMPTY failover tail;
+//   - a plain Strategy reports ScoreSourceDefault with an EMPTY failover tail
+//     (Q-D — the pinned/default path has no fallbacks).
+func (e *Engine) Decide(ctx context.Context, strategy routingv1.Strategy, hints SelectionHints) (modelscatalogue.ModelEntry, []modelscatalogue.ModelEntry, routingv1.Strategy, string, error) {
 	effective := strategy
 	if effective == routingv1.Strategy_STRATEGY_UNSPECIFIED {
 		effective = routingv1.Strategy_STRATEGY_DEFAULT // Q-D zero-value rule
@@ -66,20 +71,37 @@ func (e *Engine) Decide(ctx context.Context, strategy routingv1.Strategy, hints 
 
 	impl, ok := e.strategies[effective]
 	if !ok {
-		return modelscatalogue.ModelEntry{}, effective, "", ErrUnknownStrategy
+		return modelscatalogue.ModelEntry{}, nil, effective, "", ErrUnknownStrategy
+	}
+
+	// Story 6.3 — prefer the ranked capability so failover_chain is populated in
+	// the SAME decision (Q-A Option A: zero extra round-trips on the failure
+	// path). chain[0] is the selected model; chain[1:] is the ordered tail.
+	if ranked, ok := impl.(RankedStrategy); ok {
+		chain, source, err := ranked.SelectRanked(ctx, e.catalogue.List(), hints)
+		if err != nil {
+			return modelscatalogue.ModelEntry{}, nil, effective, "", err
+		}
+		if len(chain) == 0 {
+			// Defensive: a non-error ranked result must hold at least the
+			// winner; an empty chain is treated as no-route (never a hot-path
+			// panic on chain[0]).
+			return modelscatalogue.ModelEntry{}, nil, effective, "", ErrNoCandidates
+		}
+		return chain[0], chain[1:], effective, source, nil
 	}
 
 	if sourced, ok := impl.(SourcedStrategy); ok {
 		selected, source, err := sourced.SelectSourced(ctx, e.catalogue.List(), hints)
 		if err != nil {
-			return modelscatalogue.ModelEntry{}, effective, "", err
+			return modelscatalogue.ModelEntry{}, nil, effective, "", err
 		}
-		return selected, effective, source, nil
+		return selected, nil, effective, source, nil
 	}
 
 	selected, err := impl.Select(ctx, e.catalogue.List(), hints)
 	if err != nil {
-		return modelscatalogue.ModelEntry{}, effective, "", err
+		return modelscatalogue.ModelEntry{}, nil, effective, "", err
 	}
-	return selected, effective, ScoreSourceDefault, nil
+	return selected, nil, effective, ScoreSourceDefault, nil
 }

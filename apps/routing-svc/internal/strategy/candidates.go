@@ -2,6 +2,7 @@ package strategy
 
 import (
 	"math"
+	"sort"
 	"strings"
 
 	"github.com/he-api/he-api/apps/routing-svc/internal/engine"
@@ -44,22 +45,36 @@ func concreteCandidates(candidates []engine.ModelEntry) []engine.ModelEntry {
 // so the result degrades to first-alphabetical (the cost-ordering identity used
 // by the quality/latency fallback when pricing is also empty).
 func cheapest(candidates []engine.ModelEntry, snap *pricing.Snapshot) (engine.ModelEntry, error) {
+	ranked, err := rankCheapest(candidates, snap)
+	if err != nil {
+		return engine.ModelEntry{}, err
+	}
+	return ranked[0], nil
+}
+
+// rankCheapest is the Story-6.3 ranked LIFT of cheapest (BR1-4): it returns the
+// FULL concrete candidate order by (input+output) price ascending — rank-1
+// first — using the SAME total order cheapest already implies (price asc, tie
+// → first-alphabetical id). A candidate with no pricing row is +Inf and ranks
+// LAST (BR2-3); the he-router-* virtual entries are excluded from the WHOLE
+// ranking (BR1-3). It returns ErrNoCandidates when no concrete candidate exists
+// (BLIND-BOUNDARY-002). By construction ranked[0] == cheapest's winner for the
+// same input (zero regression — 6.3-UNIT-009/013), and cheapest delegates here.
+func rankCheapest(candidates []engine.ModelEntry, snap *pricing.Snapshot) ([]engine.ModelEntry, error) {
 	concrete := concreteCandidates(candidates)
 	if len(concrete) == 0 {
-		return engine.ModelEntry{}, engine.ErrNoCandidates
+		return nil, engine.ErrNoCandidates
 	}
-	best := concrete[0]
-	bestPrice := priceOrInf(snap, best.ID)
-	for _, c := range concrete[1:] {
-		p := priceOrInf(snap, c.ID)
-		switch {
-		case p < bestPrice:
-			best, bestPrice = c, p
-		case p == bestPrice && c.ID < best.ID:
-			best = c // deterministic tie-break: first-alphabetical
+	ranked := make([]engine.ModelEntry, len(concrete))
+	copy(ranked, concrete)
+	sort.SliceStable(ranked, func(i, j int) bool {
+		pi, pj := priceOrInf(snap, ranked[i].ID), priceOrInf(snap, ranked[j].ID)
+		if pi != pj {
+			return pi < pj
 		}
-	}
-	return best, nil
+		return ranked[i].ID < ranked[j].ID // deterministic tie-break: first-alphabetical
+	})
+	return ranked, nil
 }
 
 // priceOrInf returns the price sum for id, or +Inf when snap is nil or has no

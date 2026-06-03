@@ -217,6 +217,19 @@ func WithTokenDeducter(d TokenDeducter) ChatHandlerOption {
 	}
 }
 
+// WithFailoverBudget overrides the Story-6.3 total wall-clock failover budget
+// (default FailoverBudget=30s). It exists so the budget-exhaustion behaviour
+// (Q-B/Q-G, 6.3-UNIT-018) is testable deterministically with a small budget +
+// a blocking upstream, instead of a 30s real-time wait. Production never wires
+// it (the 30s const governs). A non-positive value is ignored.
+func WithFailoverBudget(d time.Duration) ChatHandlerOption {
+	return func(h *ChatCompletionsHandler) {
+		if d > 0 {
+			h.failoverBudget = d
+		}
+	}
+}
+
 // ChatCompletionsHandler is the concrete handler. Construct once at startup
 // and reuse across all bearer-protected /v1/chat/completions requests.
 type ChatCompletionsHandler struct {
@@ -226,6 +239,7 @@ type ChatCompletionsHandler struct {
 	adapterRegistry *adapterclient.Registry
 	tokenDeducter   TokenDeducter          // Story 5.3 — post-response TPM deduction; nil → nop
 	router          *routingclient.Decider // Story 6.2 — routing decision; default passthrough
+	failoverBudget  time.Duration          // Story 6.3 — total wall-clock failover budget (default FailoverBudget)
 }
 
 // NewChatCompletionsHandler builds the handler. logger may be nil — falls
@@ -233,10 +247,11 @@ type ChatCompletionsHandler struct {
 // WithIDFactory(stub).
 func NewChatCompletionsHandler(logger *slog.Logger, opts ...ChatHandlerOption) *ChatCompletionsHandler {
 	h := &ChatCompletionsHandler{
-		logger:        logger,
-		newID:         newMockCompletionID,
-		now:           time.Now,
-		tokenDeducter: nopTokenDeducter{},
+		logger:         logger,
+		newID:          newMockCompletionID,
+		now:            time.Now,
+		tokenDeducter:  nopTokenDeducter{},
+		failoverBudget: FailoverBudget, // Story 6.3 default; WithFailoverBudget overrides for tests
 	}
 	if h.logger == nil {
 		h.logger = slog.Default()
@@ -319,7 +334,7 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	// returned `selected` replaces req.Model for adapter resolution, the
 	// X-He-Selected-Model header, and the response model echo. A fail-closed /
 	// invalid outcome (Q-G/Q-H) writes the §5.1.2 envelope and returns.
-	selected, ok := h.routeOrWriteError(w, r, &req, apiKeyID)
+	selected, failoverChain, strategyLabel, ok := h.routeOrWriteError(w, r, &req, apiKeyID)
 	if !ok {
 		return
 	}
@@ -328,17 +343,20 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	// non-streaming path below is preserved byte-for-byte for stream=false
 	// (and stream omitted, which defaults to false via Go's bool zero-value).
 	if req.Stream {
-		h.serveStream(w, r, &req, apiKeyID, selected)
+		h.serveStream(w, r, &req, apiKeyID, selected, failoverChain, strategyLabel)
 		return
 	}
 
 	// Story 4.1 BR-1.2 adapter-dispatch fork — BEFORE the existing mock-
 	// write block, check the model-id resolver against the ROUTED model
 	// (Story 6.2 — was req.Model). Hit → real adapter; miss → fall through to
-	// the Story-3.3 mock path.
+	// the Story-3.3 mock path. Story 6.3 m-1: the Resolve→dispatch unit is now
+	// wrapped in the failover loop (dispatchNonStreamWithFailover), which
+	// re-resolves per hop; this Resolve only decides the adapter-vs-mock fork on
+	// the PRIMARY model (the mock path has no failover).
 	if h.adapterRegistry != nil {
-		if handle, ok := h.adapterRegistry.Resolve(selected); ok {
-			h.serveAdapterNonStream(w, r, &req, apiKeyID, selected, handle)
+		if _, ok := h.adapterRegistry.Resolve(selected); ok {
+			h.dispatchNonStreamWithFailover(w, r, &req, apiKeyID, selected, failoverChain, strategyLabel)
 			return
 		}
 	}
@@ -370,7 +388,7 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 // it writes the canonical §5.1.2 envelope (BR4-3) and returns ok=false. The
 // 100ms deadline (Q-E) is applied inside the Decider. The decision is echoed to
 // slog (non-PII) here so every dispatch path shares one decision log.
-func (h *ChatCompletionsHandler) routeOrWriteError(w http.ResponseWriter, r *http.Request, req *ChatRequest, apiKeyID string) (string, bool) {
+func (h *ChatCompletionsHandler) routeOrWriteError(w http.ResponseWriter, r *http.Request, req *ChatRequest, apiKeyID string) (selected string, failoverChain []string, strategy string, ok bool) {
 	ctx := r.Context()
 	heRequestID, _ := requestid.FromContext(ctx)
 	userID, _ := middleware.BearerUserIDFromContext(ctx)
@@ -380,13 +398,24 @@ func (h *ChatCompletionsHandler) routeOrWriteError(w http.ResponseWriter, r *htt
 		var ee *routingclient.EnvelopeError
 		if errors.As(err, &ee) {
 			_ = openaierr.Write(w, ctx, 0, ee.Code, routingEnvelopeMessage(ee.Code), nil)
-			return "", false
+			return "", nil, "", false
 		}
 		// Defensive — an unexpected non-envelope error degrades to 502.
 		_ = openaierr.Write(w, ctx, 0, "502_upstream_unavailable",
 			"Upstream model service is unavailable, please retry.", nil)
-		return "", false
+		return "", nil, "", false
 	}
+
+	// Story 6.3 Q-K / BR2-5 — scope-filter the failover tail BEFORE dispatch so
+	// failover NEVER targets a model the key is not authorised for. The key's
+	// scope.models comes from the Story-5.2 keypolicy cache claims; an empty
+	// scope means "all models allowed". selected_model (chain[0]) already passed
+	// the gate via 6.2, so it is dispatched as-is.
+	var scopeModels []string
+	if claims, hasClaims := middleware.CacheValueFromContext(ctx); hasClaims {
+		scopeModels = claims.ScopeModels
+	}
+	failoverChain = routingclient.FilterByScope(decision.FailoverChain, scopeModels)
 
 	h.logger.LogAttrs(ctx, slog.LevelInfo, "chat_completions_routing_decision",
 		slog.String("event", "chat_completions_routing_decision"),
@@ -395,9 +424,10 @@ func (h *ChatCompletionsHandler) routeOrWriteError(w http.ResponseWriter, r *htt
 		slog.String("strategy", decision.Strategy.String()),
 		slog.String("score_source", decision.ScoreSource),
 		slog.Bool("bypassed", decision.Bypassed),
+		slog.Int("failover_chain_len", len(failoverChain)), // Story 6.3 (non-PII)
 		slog.String("he_request_id", heRequestID),
 	) // BR4-2 non-PII: NEVER user_id / api_key content.
-	return decision.SelectedModel, true
+	return decision.SelectedModel, failoverChain, decision.Strategy.String(), true
 }
 
 // routingEnvelopeMessage returns the user-facing message for a routing envelope
@@ -413,14 +443,20 @@ func routingEnvelopeMessage(code string) string {
 	}
 }
 
-// serveAdapterNonStream dispatches a stream=false request to the adapter
-// Connect-RPC client, collects the single terminal chunk, and writes the
-// OpenAI chat.completion response body. Errors map per BR-1.4.
-func (h *ChatCompletionsHandler) serveAdapterNonStream(w http.ResponseWriter, r *http.Request, req *ChatRequest, apiKeyID, selected string, handle adapterclient.ClientHandle) {
-	ctx := r.Context()
+// serveAdapterNonStream performs ONE upstream attempt against handle (Story 6.3
+// m-1 — the single-attempt dispatch primitive invoked per failover hop). On
+// success it writes the OpenAI chat.completion body + X-He-Selected-Model
+// (= servedModel, Q-F) + TPMDeduct (BR2-4 exactly-once) and returns nil. On an
+// upstream fault it returns the error WITHOUT writing anything to w, so the
+// caller (the failover loop) can classify + advance (BR2-1). It NEVER writes an
+// error envelope itself — terminal envelope writing is the loop's job.
+//
+// ctx is the failover-budgeted context (Q-G); servedModel is the model this hop
+// dispatches to (== the model echoed in the body + header on success).
+func (h *ChatCompletionsHandler) serveAdapterNonStream(ctx context.Context, w http.ResponseWriter, req *ChatRequest, apiKeyID, servedModel string, handle adapterclient.ClientHandle) error {
 	heRequestID, _ := requestid.FromContext(ctx)
 
-	adapterReq := buildAdapterRequest(req, selected, heRequestID)
+	adapterReq := buildAdapterRequest(req, servedModel, heRequestID)
 	headers := http.Header{}
 	if heRequestID != "" {
 		// BR-1.5 — propagate to the adapter Connect-RPC as a header AND
@@ -431,21 +467,16 @@ func (h *ChatCompletionsHandler) serveAdapterNonStream(w http.ResponseWriter, r 
 
 	stream, err := handle.Chat(ctx, adapterReq, headers)
 	if err != nil {
-		h.writeAdapterError(w, ctx, req, apiKeyID, err, 0)
-		return
+		return err
 	}
 	defer func() { _ = stream.Close() }()
 
 	if !stream.Receive() {
 		// No chunk emitted — treat as upstream invalid response per BR-1.4.
 		if e := stream.Err(); e != nil {
-			h.writeAdapterError(w, ctx, req, apiKeyID, e, 0)
-			return
+			return e
 		}
-		_ = openaierr.Write(w, ctx, http.StatusBadGateway,
-			"502_upstream_unavailable",
-			"Upstream model service returned an invalid response.", nil)
-		return
+		return errUpstreamInvalidResponse
 	}
 	chunk := stream.Msg()
 	// Drain any subsequent chunks defensively — non-streaming path expects
@@ -454,35 +485,242 @@ func (h *ChatCompletionsHandler) serveAdapterNonStream(w http.ResponseWriter, r 
 		// ignore extras
 	}
 	if e := stream.Err(); e != nil {
-		h.writeAdapterError(w, ctx, req, apiKeyID, e, 0)
-		return
+		return e
 	}
 	if chunk == nil || chunk.Usage == nil || len(chunk.Choices) == 0 {
-		_ = openaierr.Write(w, ctx, http.StatusBadGateway,
-			"502_upstream_unavailable",
-			"Upstream model service returned an invalid response.", nil)
-		return
+		return errUpstreamInvalidResponse
 	}
 
-	resp := adapterChunkToResponse(chunk, selected, h.now())
+	resp := adapterChunkToResponse(chunk, servedModel, h.now())
 
-	// BR1-2 — gateway sets X-He-Selected-Model = the ROUTED model on success
-	// (Story 6.2 — was req.Model).
-	w.Header().Set("X-He-Selected-Model", selected)
+	// BR1-2 / Q-F — gateway sets X-He-Selected-Model = the model that actually
+	// SERVED (after any failover hops; == the body `model` echo).
+	w.Header().Set("X-He-Selected-Model", servedModel)
 	writeChatJSON(w, http.StatusOK, resp)
 
-	// Story 5.3 BR-3.4 / Architect Q3 — post-deduction on success.
+	// Story 5.3 BR-3.4 / Architect Q3 — post-deduction on success. BR2-4: this
+	// is the ONLY TPMDeduct per request; failed attempts carry no usage and
+	// never reach here.
 	h.tokenDeducter.TPMDeduct(ctx, apiKeyID, int(chunk.Usage.GetTotalTokens()))
 
 	h.logger.InfoContext(
 		ctx, "chat_completions_adapter",
 		slog.String("event", "chat_completions_adapter"),
 		slog.String("model", req.Model),
+		slog.String("served_model", servedModel), // Story 6.3 Q-F (non-PII)
 		slog.String("api_key_id", apiKeyID),
 		slog.Int("messages_count", len(req.Messages)),
 		slog.Int("prompt_tokens", int(chunk.Usage.GetPromptTokens())),
 		slog.Int("completion_tokens", int(chunk.Usage.GetCompletionTokens())),
 		slog.Int("total_tokens", int(chunk.Usage.GetTotalTokens())),
+	)
+	return nil
+}
+
+// dispatchNonStreamWithFailover is the Story-6.3 non-streaming failover loop
+// (AC2). It iterates the scope-filtered candidate chain (selected_model +
+// failoverChain), dispatching each resolvable hop via serveAdapterNonStream,
+// advancing on a retriable upstream fault (502/504 — Q-C) until success, the
+// MaxFailoverAttempts cap, the FailoverBudget wall-clock, or chain exhaustion.
+// On the first success the body is already written by the primitive; on
+// exhaustion / a non-retriable outcome it writes the terminal §5.1.2 envelope
+// ONCE (BR2-1). The happy path (first attempt succeeds) is byte-for-byte the
+// 6.2 path plus a single 1-attempt histogram observation (BR4-2).
+func (h *ChatCompletionsHandler) dispatchNonStreamWithFailover(w http.ResponseWriter, r *http.Request, req *ChatRequest, apiKeyID, selected string, failoverChain []string, strategy string) {
+	// Q-G — a parent budget wraps the whole loop; each attempt keeps its own
+	// per-adapter deadline. defer cancel on EVERY exit path (BLIND-RESOURCE-002).
+	ctx, cancel := context.WithTimeout(r.Context(), h.failoverBudget)
+	defer cancel()
+
+	chain := append([]string{selected}, failoverChain...)
+
+	attempts := 0
+	var lastErr error
+	var prevModel, prevReason string
+
+	for _, model := range chain {
+		if ctx.Err() != nil {
+			break // 30s budget exhausted before this hop (Q-B/Q-G)
+		}
+		handle, ok := h.adapterRegistry.Resolve(model)
+		if !ok {
+			// BR2-3 — an unresolved chain entry is skipped (logged), NOT counted
+			// against the attempt cap (no upstream call was made).
+			h.logger.LogAttrs(ctx, slog.LevelWarn, "chat_completions_failover_skip_unresolved",
+				slog.String("event", "chat_completions_failover_skip_unresolved"),
+				slog.String("model", model),
+			)
+			continue
+		}
+		if prevModel != "" {
+			// We advanced from a failed hop to this one — record the failover hop
+			// (Q-I metric + slog) with the model we are about to try as `to`.
+			h.recordFailover(ctx, prevModel, model, prevReason, strategy, attempts+1)
+		}
+		attempts++
+
+		err := h.serveAdapterNonStream(ctx, w, req, apiKeyID, model, handle)
+		if err == nil {
+			h.router.RecordFailoverAttempts(ctx, attempts) // BR4-2 — 1 on happy path
+			if attempts > 1 {
+				h.logFailoverServed(ctx, chain[0], model, attempts) // 6.3-UNIT-048
+			}
+			return
+		}
+
+		code, retriable := isRetriableUpstream(err)
+		if !retriable {
+			// Q-C — a non-retriable outcome is TERMINAL immediately; no failover.
+			h.router.RecordFailoverAttempts(ctx, attempts)
+			h.writeFailoverTerminal(w, ctx, req, apiKeyID, err)
+			return
+		}
+		lastErr = err
+		prevModel, prevReason = model, failoverReason(code)
+		if attempts >= MaxFailoverAttempts {
+			break // 3-attempt cap (Q-B/BR2-2)
+		}
+	}
+
+	// Exhausted — chain end, attempt cap, or budget. Write the LAST upstream
+	// error envelope (today's terminal behaviour — zero regression).
+	h.router.RecordFailoverAttempts(ctx, attempts)
+	if lastErr == nil {
+		// Defensive: no resolvable hop made an upstream call (every entry was
+		// unresolved, or an empty chain) — surface an upstream-unavailable 502.
+		lastErr = errUpstreamInvalidResponse
+	}
+	h.writeFailoverTerminal(w, ctx, req, apiKeyID, lastErr)
+}
+
+// MaxFailoverAttempts caps the TOTAL upstream attempts per request (primary +
+// ≤2 failover hops) — the "3 次" half of the title (Q-B / BR2-2).
+const MaxFailoverAttempts = 3
+
+// FailoverBudget is the TOTAL wall-clock budget across all attempts — the "30s"
+// half (Q-B/Q-G); a parent context.WithTimeout wraps the attempt loop.
+const FailoverBudget = 30 * time.Second
+
+// errUpstreamInvalidResponse marks an upstream reply with no usable chunk/usage.
+// It is a retriable upstream fault (failover advances) and renders the §5.1.2
+// "invalid response" 502 envelope on exhaustion (byte-identical to the pre-6.3
+// inline write — no test asserts the message, but the wording is preserved).
+var errUpstreamInvalidResponse = errors.New("upstream model service returned an invalid response")
+
+// isRetriableUpstream classifies an adapter dispatch error for the failover loop
+// WITHOUT writing (BR2-1 / 6.3-UNIT-028). It returns the §5.1.2 code and whether
+// the loop should advance. ONLY the two documented upstream-fault codes are
+// retriable (Q-C): 502_upstream_unavailable + 504_upstream_timeout. Epic-4
+// collapses upstream 4xx/5xx → Unavailable/Internal, so in production every
+// adapter error is retriable; the non-retriable branch (a client/policy connect
+// code surfacing as an adapter error) is defensive — it terminates instead of
+// fanning a request/policy error across the catalogue.
+func isRetriableUpstream(err error) (code string, retriable bool) {
+	_, code, _, retriable = classifyFailoverError(err)
+	return code, retriable
+}
+
+// classifyFailoverError is the single source of truth for the failover path's
+// error→envelope mapping (status, §5.1.2 code, message, retriable). For the
+// 502/504 cases it is byte-identical to classifyAdapterError (zero regression on
+// the concrete-default exhaustion path — 6.3-UNIT-023).
+func classifyFailoverError(err error) (status int, code, message string, retriable bool) {
+	const (
+		msgUnavailable     = "Upstream model service is unavailable, please retry."
+		msgTimeout         = "Upstream model service did not respond within the deadline."
+		msgInvalidResponse = "Upstream model service returned an invalid response."
+		msgInvalidRequest  = "The request was rejected by the upstream model service."
+		msgModelNotInScope = "The selected model is not available for this key."
+		msgRateLimited     = "The upstream model service is rate limiting the request."
+		msgContentFilter   = "The request was blocked by the upstream content filter."
+	)
+	switch {
+	case err == nil:
+		return http.StatusBadGateway, "502_upstream_unavailable", msgUnavailable, true
+	case errors.Is(err, errUpstreamInvalidResponse):
+		return http.StatusBadGateway, "502_upstream_unavailable", msgInvalidResponse, true
+	case errors.Is(err, context.DeadlineExceeded):
+		return http.StatusGatewayTimeout, "504_upstream_timeout", msgTimeout, true
+	}
+	var ce *connect.Error
+	if errors.As(err, &ce) {
+		switch ce.Code() {
+		case connect.CodeDeadlineExceeded:
+			return http.StatusGatewayTimeout, "504_upstream_timeout", msgTimeout, true
+		case connect.CodeUnavailable, connect.CodeInternal, connect.CodeUnknown:
+			return http.StatusBadGateway, "502_upstream_unavailable", msgUnavailable, true
+		case connect.CodeInvalidArgument:
+			return http.StatusBadRequest, "400_invalid_request", msgInvalidRequest, false
+		case connect.CodePermissionDenied:
+			return http.StatusForbidden, "403_model_not_in_scope", msgModelNotInScope, false
+		case connect.CodeResourceExhausted:
+			return http.StatusTooManyRequests, "429_rate_limit_qps", msgRateLimited, false
+		case connect.CodeFailedPrecondition:
+			return http.StatusBadRequest, "400_content_filter", msgContentFilter, false
+		default:
+			// Q-C note — an upstream misconfiguration is indistinguishable from
+			// upstream-down and DOES failover (collapses to a retriable 502).
+			return http.StatusBadGateway, "502_upstream_unavailable", msgUnavailable, true
+		}
+	}
+	// Non-Connect (dial / TCP) error — upstream unreachable, retriable.
+	return http.StatusBadGateway, "502_upstream_unavailable", msgUnavailable, true
+}
+
+// failoverReason maps a §5.1.2 code to the Q-I metric/slog reason label.
+func failoverReason(code string) string {
+	if code == "504_upstream_timeout" {
+		return "upstream_timeout"
+	}
+	return "upstream_unavailable"
+}
+
+// writeFailoverTerminal writes the single terminal §5.1.2 envelope at the end of
+// the failover loop (BR2-1 — openaierr.Write stays the sole writer). For 502/504
+// it is byte-identical to the pre-6.3 writeAdapterError envelope.
+func (h *ChatCompletionsHandler) writeFailoverTerminal(w http.ResponseWriter, ctx context.Context, req *ChatRequest, apiKeyID string, lastErr error) {
+	status, code, message, _ := classifyFailoverError(lastErr)
+	h.logger.LogAttrs(ctx, slog.LevelWarn, "chat_completions_adapter_error",
+		slog.String("event", "chat_completions_adapter_error"),
+		slog.String("model", req.Model),
+		slog.String("api_key_id", apiKeyID),
+		slog.Int("messages_count", len(req.Messages)),
+		slog.String("error_code", code),
+		slog.String("error", adapterErrString(lastErr)),
+	)
+	_ = openaierr.Write(w, ctx, status, code, message, nil)
+}
+
+// recordFailover emits the Story-6.3 failover hop instrument + a non-PII slog
+// line (Q-I / BR4-1). It fires once per advance (from a failed hop to the next
+// attempted model). NEVER logs user_id / message content.
+func (h *ChatCompletionsHandler) recordFailover(ctx context.Context, fromModel, toModel, reason, strategy string, attempt int) {
+	h.router.RecordFailover(ctx, fromModel, toModel, reason)
+	heRequestID, _ := requestid.FromContext(ctx)
+	h.logger.LogAttrs(ctx, slog.LevelInfo, "routing_failover",
+		slog.String("event", "routing_failover"),
+		slog.String("routing_action", "failover"), // observability §11.3 label
+		slog.String("from_model", fromModel),
+		slog.String("to_model", toModel),
+		slog.String("reason", reason),
+		slog.String("strategy", strategy),
+		slog.Int("attempt", attempt),
+		slog.String("he_request_id", heRequestID),
+	)
+}
+
+// logFailoverServed records (on a request that DID fail over) both the originally
+// requested model (chain[0]) and the model that actually served (Q-F / 6.3-
+// UNIT-048), distinguishing intended-vs-served. Not emitted on the happy path
+// (BR4-2 zero-regression).
+func (h *ChatCompletionsHandler) logFailoverServed(ctx context.Context, requestedSelected, servedModel string, attempts int) {
+	heRequestID, _ := requestid.FromContext(ctx)
+	h.logger.LogAttrs(ctx, slog.LevelInfo, "routing_failover_served",
+		slog.String("event", "routing_failover_served"),
+		slog.String("requested_selected", requestedSelected),
+		slog.String("served_model", servedModel),
+		slog.Int("failover_count", attempts-1),
+		slog.String("he_request_id", heRequestID),
 	)
 }
 

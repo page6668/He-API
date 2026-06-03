@@ -19,10 +19,12 @@ type Quality struct {
 	prices PriceSource
 }
 
-// compile-time cascade-lock assertions (Story 6.1 BR2-1 + Story 6.2 score-source).
+// compile-time cascade-lock assertions (Story 6.1 BR2-1 + Story 6.2 score-source
+// + Story 6.3 ranked capability).
 var (
 	_ engine.Strategy        = Quality{}
 	_ engine.SourcedStrategy = Quality{}
+	_ engine.RankedStrategy  = Quality{}
 )
 
 // NewQuality constructs the quality strategy. A nil scorer is treated as
@@ -41,4 +43,11 @@ func (q Quality) Select(ctx context.Context, candidates []engine.ModelEntry, hin
 // degrades to the cost ordering. higher score wins.
 func (q Quality) SelectSourced(ctx context.Context, candidates []engine.ModelEntry, _ engine.SelectionHints) (engine.ModelEntry, string, error) {
 	return scoredOrDegrade(ctx, candidates, q.scorer, q.prices, func(a, b float64) bool { return a > b })
+}
+
+// SelectRanked implements engine.RankedStrategy (Story 6.3): the FULL quality-
+// DESC order when data is available, else the degraded cost ordering — rank-1
+// == SelectSourced's winner (BR1-4). higher score wins.
+func (q Quality) SelectRanked(ctx context.Context, candidates []engine.ModelEntry, _ engine.SelectionHints) ([]engine.ModelEntry, string, error) {
+	return rankScoredOrDegrade(ctx, candidates, q.scorer, q.prices, func(a, b float64) bool { return a > b })
 }

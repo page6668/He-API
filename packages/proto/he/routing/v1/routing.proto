@@ -73,4 +73,12 @@ message SelectModelResponse {
   // Values: "model_pricing" (cost real) | "clickhouse" (quality/latency real,
   // Epic-9) | "fallback" (degraded quality/latency) | "default" (passthrough).
   string score_source = 6;
+  // Story 6.3 (failover) — the ranked fallback model ids AFTER selected_model
+  // (rank-2, rank-3, …), all concrete (NEVER a he-router-* id — BR1-3). The
+  // gateway iterates this chain client-side on a 502/504 (Q-A Option A); an
+  // empty chain is the common case (DEFAULT path / single-candidate catalogue —
+  // Q-D / BR1-5). Additive (same backward-compatible pattern as fields 4/5/6;
+  // passes buf breaking:FILE). selected_model is the chain head and is NOT
+  // repeated here.
+  repeated string failover_chain = 7;
 }

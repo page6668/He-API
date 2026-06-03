@@ -34,6 +34,13 @@ type Decision struct {
 	Strategy      routingv1.Strategy
 	ScoreSource   string
 	Bypassed      bool
+	// FailoverChain (Story 6.3) is the ordered tail of fallback model ids AFTER
+	// SelectedModel (rank-2, rank-3, …), concrete-only (the he-router-* virtual
+	// entries are excluded by routing-svc — BR1-3). It is EMPTY on the
+	// concrete-default/passthrough + fail-open paths (Q-D — a pinned model has no
+	// fallbacks) and on a single-candidate catalogue. The handler scope-filters
+	// it (Q-K) and iterates it on a retriable 502/504 (Q-A Option A).
+	FailoverChain []string
 }
 
 // EnvelopeError signals the handler to write an OpenAI §5.1.2 error envelope
@@ -123,9 +130,55 @@ func (d *Decider) Decide(ctx context.Context, model string, header http.Header, 
 		SelectedModel: selected,
 		Strategy:      resp.GetStrategyUsed(),
 		ScoreSource:   resp.GetScoreSource(),
+		FailoverChain: resp.GetFailoverChain(), // Story 6.3 — ranked fallback tail (Q-A Option A)
 	}
 	d.metrics.decision(ctx, strategyLabel(dec.Strategy), dec.SelectedModel, dec.ScoreSource)
 	return dec, nil
+}
+
+// FilterByScope returns the chain entries the key is authorised for, preserving
+// order (Story 6.3 BR2-5 / Q-K). An empty scope means "all models allowed"
+// (Story 5.2 keypolicy BR-3.1), so the chain is returned unchanged. Matching is
+// case-sensitive — parity with the keypolicy.CheckModelScope canonical form. The
+// gateway applies this to the failover tail BEFORE dispatch so failover NEVER
+// targets a scoped-out model (chain[0]/selected_model already passed the 6.2
+// gate). A nil/empty result is a valid terminal (every fallback scoped out).
+func FilterByScope(chain, scopeModels []string) []string {
+	if len(scopeModels) == 0 {
+		return chain
+	}
+	allowed := make(map[string]struct{}, len(scopeModels))
+	for _, m := range scopeModels {
+		allowed[m] = struct{}{}
+	}
+	out := make([]string, 0, len(chain))
+	for _, m := range chain {
+		if _, ok := allowed[m]; ok {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// RecordFailover emits the Story-6.3 failover hop instrument + slog is handled
+// by the handler (which owns the per-attempt context). It is a thin pass-through
+// to the routingclient metrics so the failover counter lives beside the routing
+// decision counter (bounded cardinality, one registration point). Safe on a nil
+// Decider (routing disabled → no-op).
+func (d *Decider) RecordFailover(ctx context.Context, fromModel, toModel, reason string) {
+	if d == nil {
+		return
+	}
+	d.metrics.failover(ctx, fromModel, toModel, reason)
+}
+
+// RecordFailoverAttempts observes the per-request upstream attempt count (Q-I /
+// BR4-2 — 1 on the happy path). Safe on a nil Decider.
+func (d *Decider) RecordFailoverAttempts(ctx context.Context, attempts int) {
+	if d == nil {
+		return
+	}
+	d.metrics.observeAttempts(ctx, attempts)
 }
 
 // mapError implements the Q-H gRPC→§5.1.2 mapping + the Q-G fail-open/closed

@@ -194,6 +194,7 @@ type SelectModelResponse struct {
 	AbSelectedModels []string               `protobuf:"bytes,4,rep,name=ab_selected_models,json=abSelectedModels,proto3" json:"ab_selected_models,omitempty"`                // additive — Story 6.4 needs the per-model output list; shape defined now to avoid a 6.4 contract break. Empty in 6.1.
 	StrategyUsed     Strategy               `protobuf:"varint,5,opt,name=strategy_used,json=strategyUsed,proto3,enum=he.routing.v1.Strategy" json:"strategy_used,omitempty"` // Q-I: which strategy actually fired (UNSPECIFIED requests echo DEFAULT)
 	ScoreSource      string                 `protobuf:"bytes,6,opt,name=score_source,json=scoreSource,proto3" json:"score_source,omitempty"`                                 // Story 6.2 High-1: routing-svc score source ("model_pricing"|"clickhouse"|"fallback"|"default")
+	FailoverChain    []string               `protobuf:"bytes,7,rep,name=failover_chain,json=failoverChain,proto3" json:"failover_chain,omitempty"`                           // Story 6.3: ranked fallback model ids AFTER selected_model (concrete only; empty on the DEFAULT/single-candidate path)
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -270,6 +271,13 @@ func (x *SelectModelResponse) GetScoreSource() string {
 	return ""
 }
 
+func (x *SelectModelResponse) GetFailoverChain() []string {
+	if x != nil {
+		return x.FailoverChain
+	}
+	return nil
+}
+
 var File_he_routing_v1_routing_proto protoreflect.FileDescriptor
 
 const file_he_routing_v1_routing_proto_rawDesc = "" +
@@ -280,7 +288,7 @@ const file_he_routing_v1_routing_proto_rawDesc = "" +
 	"\x0frequested_model\x18\x02 \x01(\tR\x0erequestedModel\x123\n" +
 	"\bstrategy\x18\x03 \x01(\x0e2\x17.he.routing.v1.StrategyR\bstrategy\x12\x1b\n" +
 	"\tab_models\x18\x04 \x03(\tR\babModels\x12\"\n" +
-	"\rhe_request_id\x18\x05 \x01(\tR\vheRequestId\"\x94\x02\n" +
+	"\rhe_request_id\x18\x05 \x01(\tR\vheRequestId\"\xbb\x02\n" +
 	"\x13SelectModelResponse\x12%\n" +
 	"\x0eselected_model\x18\x01 \x01(\tR\rselectedModel\x12)\n" +
 	"\x10adapter_endpoint\x18\x02 \x01(\tR\x0fadapterEndpoint\x12\x1c\n" +
@@ -288,7 +296,8 @@ const file_he_routing_v1_routing_proto_rawDesc = "" +
 	"is_ab_test\x18\x03 \x01(\bR\bisAbTest\x12,\n" +
 	"\x12ab_selected_models\x18\x04 \x03(\tR\x10abSelectedModels\x12<\n" +
 	"\rstrategy_used\x18\x05 \x01(\x0e2\x17.he.routing.v1.StrategyR\fstrategyUsed\x12!\n" +
-	"\fscore_source\x18\x06 \x01(\tR\vscoreSource*y\n" +
+	"\fscore_source\x18\x06 \x01(\tR\vscoreSource\x12%\n" +
+	"\x0efailover_chain\x18\x07 \x03(\tR\rfailoverChain*y\n" +
 	"\bStrategy\x12\x18\n" +
 	"\x14STRATEGY_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10STRATEGY_DEFAULT\x10\x01\x12\x14\n" +

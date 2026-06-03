@@ -21,10 +21,12 @@ type Latency struct {
 	prices PriceSource
 }
 
-// compile-time cascade-lock assertions (Story 6.1 BR2-1 + Story 6.2 score-source).
+// compile-time cascade-lock assertions (Story 6.1 BR2-1 + Story 6.2 score-source
+// + Story 6.3 ranked capability).
 var (
 	_ engine.Strategy        = Latency{}
 	_ engine.SourcedStrategy = Latency{}
+	_ engine.RankedStrategy  = Latency{}
 )
 
 // NewLatency constructs the latency strategy. A nil scorer is treated as
@@ -43,4 +45,11 @@ func (l Latency) Select(ctx context.Context, candidates []engine.ModelEntry, hin
 // degrades to the cost ordering. lower score wins.
 func (l Latency) SelectSourced(ctx context.Context, candidates []engine.ModelEntry, _ engine.SelectionHints) (engine.ModelEntry, string, error) {
 	return scoredOrDegrade(ctx, candidates, l.scorer, l.prices, func(a, b float64) bool { return a < b })
+}
+
+// SelectRanked implements engine.RankedStrategy (Story 6.3): the FULL latency-
+// ASC order when data is available, else the degraded cost ordering — rank-1
+// == SelectSourced's winner (BR1-4). lower score wins.
+func (l Latency) SelectRanked(ctx context.Context, candidates []engine.ModelEntry, _ engine.SelectionHints) ([]engine.ModelEntry, string, error) {
+	return rankScoredOrDegrade(ctx, candidates, l.scorer, l.prices, func(a, b float64) bool { return a < b })
 }

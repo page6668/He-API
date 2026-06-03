@@ -23,7 +23,7 @@
 | 契约测试 | Adapter 协议合规 | 自建 fixtures + golden files + 共享协议不变量库 `apps/api-gateway/tests/_protocol_invariants.py`（Story 4.8）+ adapter-fake CI lane（Story 4.8） |
 | E2E | 核心用户旅程（注册→调用→计费） | Playwright |
 | 压测 | 网关性能 | k6 |
-| 混沌测试 | 上游模型故障注入 | Toxiproxy |
+| 混沌测试 | 上游模型故障注入 | Toxiproxy<br>**Story 6.3 REALISED**：上游 502 / 连接超时注入 → 网关 failover 切到下一候选模型（`go test -tags chaos`；Toxiproxy 为 nightly 环境超集，门控 lane 用 fault-handle 注入同一不变量） |
 | 安全测试 | OWASP Top 10 | OWASP ZAP |
 
 ## 13.3 关键测试场景

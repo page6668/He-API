@@ -20,10 +20,12 @@ type Cost struct {
 	prices PriceSource
 }
 
-// compile-time cascade-lock assertions (Story 6.1 BR2-1 + Story 6.2 score-source).
+// compile-time cascade-lock assertions (Story 6.1 BR2-1 + Story 6.2 score-source
+// + Story 6.3 ranked capability).
 var (
 	_ engine.Strategy        = Cost{}
 	_ engine.SourcedStrategy = Cost{}
+	_ engine.RankedStrategy  = Cost{}
 )
 
 // NewCost constructs the cost strategy over a pricing source. A nil source
@@ -49,4 +51,16 @@ func (c Cost) SelectSourced(_ context.Context, candidates []engine.ModelEntry, _
 	}
 	m, err := cheapest(candidates, snap)
 	return m, engine.ScoreSourceModelPricing, err
+}
+
+// SelectRanked implements engine.RankedStrategy (Story 6.3): the FULL price-
+// ascending order over the concrete candidates (rank-1 == SelectSourced's
+// winner — BR1-4). The source is always model_pricing (Q-J).
+func (c Cost) SelectRanked(_ context.Context, candidates []engine.ModelEntry, _ engine.SelectionHints) ([]engine.ModelEntry, string, error) {
+	var snap *pricing.Snapshot
+	if c.prices != nil {
+		snap = c.prices.Current()
+	}
+	ranked, err := rankCheapest(candidates, snap)
+	return ranked, engine.ScoreSourceModelPricing, err
 }

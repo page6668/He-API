@@ -2,6 +2,7 @@ package strategy
 
 import (
 	"context"
+	"sort"
 
 	"github.com/he-api/he-api/apps/routing-svc/internal/engine"
 	"github.com/he-api/he-api/apps/routing-svc/internal/pricing"
@@ -25,15 +26,37 @@ func scoredOrDegrade(
 	prices PriceSource,
 	better func(a, b float64) bool,
 ) (engine.ModelEntry, string, error) {
+	ranked, source, err := rankScoredOrDegrade(ctx, candidates, scorer, prices, better)
+	if err != nil {
+		return engine.ModelEntry{}, source, err
+	}
+	return ranked[0], source, nil
+}
+
+// rankScoredOrDegrade is the Story-6.3 ranked LIFT of scoredOrDegrade (BR1-4):
+// it returns the FULL concrete candidate order (rank-1 first) plus the score
+// source. With Scorer data it ranks by `better` (quality desc / latency asc,
+// tie → first-alphabetical), reporting score_source=clickhouse; otherwise it
+// degrades DETERMINISTICALLY to the cost ordering (rankCheapest) over the SAME
+// concrete set, reporting score_source=fallback (BR3-2). The he-router-* virtual
+// entries are excluded from the WHOLE ranking (BR1-3). By construction ranked[0]
+// == scoredOrDegrade's winner for the same input (zero regression).
+func rankScoredOrDegrade(
+	ctx context.Context,
+	candidates []engine.ModelEntry,
+	scorer scoring.Scorer,
+	prices PriceSource,
+	better func(a, b float64) bool,
+) ([]engine.ModelEntry, string, error) {
 	concrete := concreteCandidates(candidates)
 	if len(concrete) == 0 {
-		return engine.ModelEntry{}, "", engine.ErrNoCandidates
+		return nil, "", engine.ErrNoCandidates
 	}
 
 	if scorer != nil {
 		if scores, hasData := scorer.Score(ctx, concrete); hasData {
-			if best, ok := bestByScore(concrete, scores, better); ok {
-				return best, engine.ScoreSourceClickHouse, nil
+			if ranked, ok := rankByScore(concrete, scores, better); ok {
+				return ranked, engine.ScoreSourceClickHouse, nil
 			}
 			// hasData but no concrete candidate carried a score → fall through
 			// to the deterministic fallback (defensive; keeps the path total).
@@ -44,28 +67,47 @@ func scoredOrDegrade(
 	if prices != nil {
 		snap = prices.Current()
 	}
-	m, err := cheapest(concrete, snap)
-	return m, engine.ScoreSourceFallback, err
+	ranked, err := rankCheapest(concrete, snap)
+	return ranked, engine.ScoreSourceFallback, err
 }
 
 // bestByScore returns the candidate with the best score per `better`, ties
 // broken by first-alphabetical model id. Candidates with no score are skipped.
-// found=false when no candidate carried a score.
+// found=false when no candidate carried a score. It delegates to rankByScore so
+// the winner is exactly the head of the ranked order (zero regression).
 func bestByScore(candidates []engine.ModelEntry, scores map[string]float64, better func(a, b float64) bool) (engine.ModelEntry, bool) {
-	var best engine.ModelEntry
-	var bestScore float64
-	found := false
+	ranked, ok := rankByScore(candidates, scores, better)
+	if !ok {
+		return engine.ModelEntry{}, false
+	}
+	return ranked[0], true
+}
+
+// rankByScore returns the candidates ordered best-first per `better` (tie →
+// first-alphabetical id); candidates carrying a score rank ahead of those that
+// do not, and the unscored remainder is appended in alphabetical order so the
+// chain is total + deterministic (never silently dropping a candidate — BR2-3).
+// ok=false when NO candidate carried a score (caller degrades to cost ordering).
+func rankByScore(candidates []engine.ModelEntry, scores map[string]float64, better func(a, b float64) bool) ([]engine.ModelEntry, bool) {
+	scored := make([]engine.ModelEntry, 0, len(candidates))
+	unscored := make([]engine.ModelEntry, 0, len(candidates))
 	for _, c := range candidates {
-		s, ok := scores[c.ID]
-		if !ok {
-			continue
-		}
-		switch {
-		case !found, better(s, bestScore):
-			best, bestScore, found = c, s, true
-		case s == bestScore && c.ID < best.ID:
-			best = c
+		if _, ok := scores[c.ID]; ok {
+			scored = append(scored, c)
+		} else {
+			unscored = append(unscored, c)
 		}
 	}
-	return best, found
+	if len(scored) == 0 {
+		return nil, false
+	}
+	sort.SliceStable(scored, func(i, j int) bool {
+		si, sj := scores[scored[i].ID], scores[scored[j].ID]
+		if si != sj {
+			return better(si, sj)
+		}
+		return scored[i].ID < scored[j].ID // deterministic tie-break
+	})
+	sort.SliceStable(unscored, func(i, j int) bool { return unscored[i].ID < unscored[j].ID })
+	return append(scored, unscored...), true
 }

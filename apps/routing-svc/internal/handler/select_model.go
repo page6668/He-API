@@ -61,7 +61,7 @@ func (s *RoutingServer) SelectModel(
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("requested_model must not be empty"))
 	}
 
-	selected, used, scoreSource, err := s.engine.Decide(ctx, strat, engine.SelectionHints{
+	selected, failoverTail, used, scoreSource, err := s.engine.Decide(ctx, strat, engine.SelectionHints{
 		UserID:         msg.GetUserId(),
 		RequestedModel: msg.GetRequestedModel(),
 		ABModels:       msg.GetAbModels(),
@@ -70,12 +70,26 @@ func (s *RoutingServer) SelectModel(
 		return nil, mapEngineError(err)
 	}
 
+	// Story 6.3 — failover_chain is the ordered tail of fallback model ids AFTER
+	// selected_model (Q-A Option A). It is concrete-only (the he-router-* virtual
+	// entries are excluded from the WHOLE ranking by the strategy — BR1-3) and
+	// excludes selected_model itself (BR1-5). Empty on the DEFAULT/passthrough
+	// path (Q-D) and the single-candidate catalogue.
+	var failoverChain []string
+	if len(failoverTail) > 0 {
+		failoverChain = make([]string, len(failoverTail))
+		for i, m := range failoverTail {
+			failoverChain[i] = m.ID
+		}
+	}
+
 	s.logger.InfoContext(
 		ctx, "select_model",
 		slog.String("event", "select_model"),
 		slog.String("strategy", used.String()),
 		slog.String("model_id", selected.ID),
-		slog.String("score_source", scoreSource), // Story 6.2 High-1 (non-PII)
+		slog.String("score_source", scoreSource),           // Story 6.2 High-1 (non-PII)
+		slog.Int("failover_chain_len", len(failoverChain)), // Story 6.3 (non-PII)
 		slog.String("he_request_id", msg.GetHeRequestId()),
 	)
 
@@ -83,9 +97,10 @@ func (s *RoutingServer) SelectModel(
 		SelectedModel: selected.ID,
 		// AdapterEndpoint left empty — Q-K reserved-for-future.
 		IsAbTest:         false,
-		AbSelectedModels: nil,         // A/B is Story 6.4
-		StrategyUsed:     used,        // Q-I: actually-fired strategy (truthful under degradation)
-		ScoreSource:      scoreSource, // Story 6.2 High-1: model_pricing|clickhouse|fallback|default
+		AbSelectedModels: nil,           // A/B is Story 6.4
+		StrategyUsed:     used,          // Q-I: actually-fired strategy (truthful under degradation)
+		ScoreSource:      scoreSource,   // Story 6.2 High-1: model_pricing|clickhouse|fallback|default
+		FailoverChain:    failoverChain, // Story 6.3: ranked fallback tail (concrete-only; empty on DEFAULT path)
 	}), nil
 }
 

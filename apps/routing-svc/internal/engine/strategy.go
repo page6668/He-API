@@ -72,6 +72,27 @@ type SourcedStrategy interface {
 	SelectSourced(ctx context.Context, candidates []ModelEntry, hints SelectionHints) (ModelEntry, string, error)
 }
 
+// RankedStrategy is an OPTIONAL Story-6.3 capability layered on Strategy: a
+// strategy that returns the FULL ranked candidate order (rank-1 first), not just
+// the winner. The ranking feeds the gateway's failover_chain (Q-A Option A) —
+// chain[0] is the selected_model, chain[1:] the ordered fallbacks.
+//
+// It mirrors the SourcedStrategy shape verbatim (BR1-2): like SelectSourced it
+// also reports the score source, so a ranked decision is fully described by one
+// call (the source is a property of the ranking, set once — Q-J). The
+// cascade-locked Strategy.Select (BR2-1) is UNCHANGED: a plain Strategy (the
+// DEFAULT passthrough) does NOT implement this and yields an empty failover tail
+// (Q-D). Engine.Decide PREFERS SelectRanked when a strategy implements it.
+//
+// INVARIANT (BR1-4): SelectRanked is a pure lift of the winner-selection —
+// chain[0] MUST equal the same strategy's Select/SelectSourced winner for the
+// same input (zero regression). The he-router-* virtual entries are excluded
+// from the WHOLE ranking (BR1-3), not just chain[0].
+type RankedStrategy interface {
+	Strategy
+	SelectRanked(ctx context.Context, candidates []ModelEntry, hints SelectionHints) ([]ModelEntry, string, error)
+}
+
 // Exported sentinels (BR2-4) — compared with errors.Is by the handler to map
 // to gRPC codes (Q-F): ErrNoCandidates -> NotFound, ErrUnknownStrategy ->
 // InvalidArgument.
