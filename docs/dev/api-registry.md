@@ -179,3 +179,14 @@
   - **WORKFLOW EXTENSION** `.github/workflows/test.yml::gateway-openai-sdk-contract` — builds + starts six fake-upstreams (TLS) + six adapter binaries + auth-svc + api-gateway (14 background processes); env vars wire the registry so all 10 vendor model-ids resolve through the in-process mesh. SSL_CERT_FILE points adapters at the workflow-generated self-signed cert.
   - **NEW WORKFLOW** `.github/workflows/contract-tests-live.yml` — opt-in live lane (`workflow_dispatch` + nightly 02:00 UTC cron per OQ-4.8-5); runs SAME `_contract_test.py` bodies against real vendor base URLs (M-1 Path (ii)). Consumes six per-vendor `HE_API_*_UPSTREAM_KEY` repo secrets via `secrets: inherit` scope.
   - **REWIRED** 11 contract test files now consume the shared invariants library (DRY enforcement per BR-2.10); 6 `_live_test.py` modules wholesale-skipped via module-level `pytestmark = [pytest.mark.skip(reason='folded into contract suite under Story 4.8 — pending deletion in housekeeping')]` per T4.13.
+
+## Cost-Cap Enforcement + Notifications (Story 5.4)
+
+- **5.4** — Monthly cost-cap circuit breaker + threshold email. NO new REST endpoints, NO new envelope codes (reuses `402_quota_exhausted` from §5.1.2). Two NEW internal gRPC RPCs + the gateway cap-branch extension.
+  - **NEW gRPC RPC** `he.notification.v1.NotificationService/NotifyMonthlyCapThreshold(api_key_id, threshold{WARNING_80|TRIPPED}, request_id) → (was_already_notified, email_sent)`. Fired fire-and-forget by the gateway keypolicy middleware (detached-context goroutine, 500ms deadline). notification-svc owns the once-per-month SETNX dedupe + the localized SendGrid dispatch.
+  - **NEW gRPC RPC** `he.auth.v1.AuthService/GetCapNotificationContext(api_key_id) → (user_email, user_locale, user_display_name, key_name, key_monthly_cost_cap_usd)` (Architect Round 1 Q-L Fix-A). Single PG JOIN; auth-svc stays the sole canonical reader of the PII-sensitive `api_keys` table (notification-svc reaches it only via this hop — the cross-module `internal/` import is forbidden by Go).
+  - **NEW EmailTemplate enum values** `EMAIL_TEMPLATE_MONTHLY_CAP_WARNING = 7` + `EMAIL_TEMPLATE_MONTHLY_CAP_TRIPPED = 8`; NEW `ThresholdLevel` enum.
+  - **Gateway keypolicy extension** (`apps/api-gateway/internal/middleware/keypolicy`): sticky-trip sentinel EXISTS fast-path (402 without a counter GET, BR-1.1), first-cross `SET NX` gated TRIPPED fire (BR-1.9 dedup), 80%-crossing WARNING_80 fire. All fail-OPEN on Redis error (Q-F).
+  - **NEW Redis keys** (no TTL): `keystate:apikey:cap_tripped:{id}` + `keystate:apikey:cap_warning_80_notified:{id}` + `keystate:apikey:cap_tripped_notified:{id}`.
+  - **NEW Kafka `audit.event` event_types** `monthly_cost_reset.completed` + `monthly_cost_reset.redis_only.completed` (+ `.failed` variants); audit-svc routes by type — no consumer change.
+  - **NEW Prometheus counters** `he_apikey_cap_tripped_sentinel_hit_total` + `he_apikey_cap_threshold_notify_total{threshold,outcome}`.

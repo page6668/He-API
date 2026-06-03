@@ -51,6 +51,16 @@ func (f *fakeUpstream) GetCurrentExport(
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("fakeUpstream: GetCurrentExport not stubbed"))
 }
 
+// Story 5.4 — the NotificationServiceHandler interface now also requires
+// NotifyMonthlyCapThreshold. auth-svc never calls it (the gateway does), so
+// the stub is Unimplemented.
+func (f *fakeUpstream) NotifyMonthlyCapThreshold(
+	_ context.Context,
+	_ *connect.Request[notificationv1.NotifyMonthlyCapThresholdRequest],
+) (*connect.Response[notificationv1.NotifyMonthlyCapThresholdResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("fakeUpstream: NotifyMonthlyCapThreshold not stubbed"))
+}
+
 func newClientServer(t *testing.T, up *fakeUpstream) *notification.Client {
 	t.Helper()
 	mux := http.NewServeMux()

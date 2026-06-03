@@ -34,6 +34,7 @@ import (
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/cors"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/keypolicy"
+	"github.com/he-api/he-api/apps/api-gateway/internal/notifyclient"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/ratelimit"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/requestid"
 	"github.com/he-api/he-api/apps/api-gateway/internal/usage"
@@ -325,13 +326,23 @@ func main() {
 	}
 	logger.Info("apikey_trusted_proxies_loaded", slog.Int("count", len(trustedProxies)))
 	keyPolicyRedis := redis.NewClient(mustRedisOptions(redisURL, logger))
+	// Story 5.4 — fire-and-forget cap-threshold notifier (reuses the Story-2.6
+	// notification-svc Connect client URL). The sticky-trip sentinel shares the
+	// keypolicy Redis client.
+	capNotifier := notifyclient.New(
+		&http.Client{Timeout: 10 * time.Second},
+		notificationSvcURL,
+		logger,
+	)
 	keyPolicy := keypolicy.New(keypolicy.Options{
 		Logger:         logger,
 		TrustedProxies: trustedProxies,
 		CostReader: func(ctx context.Context, apiKeyID string) (string, bool, error) {
 			return usage.ReadMonthlyCostUSD(ctx, keyPolicyRedis, apiKeyID)
 		},
-		Metrics: keypolicy.NewPolicyMetrics(),
+		Metrics:     keypolicy.NewPolicyMetrics(),
+		CapSentinel: keypolicy.NewRedisCapSentinel(keyPolicyRedis),
+		Notifier:    capNotifier,
 	})
 
 	// Story 5.3 BR-X.4 / Architect Q9 — ratelimit runs AFTER bearer-auth

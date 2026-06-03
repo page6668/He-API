@@ -97,6 +97,9 @@ const (
 	// AuthServiceUpdateApiKeyProcedure is the fully-qualified name of the AuthService's UpdateApiKey
 	// RPC.
 	AuthServiceUpdateApiKeyProcedure = "/he.auth.v1.AuthService/UpdateApiKey"
+	// AuthServiceGetCapNotificationContextProcedure is the fully-qualified name of the AuthService's
+	// GetCapNotificationContext RPC.
+	AuthServiceGetCapNotificationContextProcedure = "/he.auth.v1.AuthService/GetCapNotificationContext"
 )
 
 // AuthServiceClient is a client for the he.auth.v1.AuthService service.
@@ -194,6 +197,13 @@ type AuthServiceClient interface {
 	// → FailedPrecondition account_pending_deletion (Q-I). No updated_at write
 	// (Architect Q-K — the schema has no such column).
 	UpdateApiKey(context.Context, *connect.Request[v1.UpdateApiKeyRequest]) (*connect.Response[v1.UpdateApiKeyResponse], error)
+	// Story 5.4 (Architect Round 1 Q-L Fix-A) — internal lookup feeding the
+	// notification-svc monthly-cap email path. notification-svc cannot import
+	// auth-svc's internal/repository across the go.work module boundary, so
+	// auth-svc (the sole canonical reader of the PII-sensitive api_keys table)
+	// exposes the JOIN result over gRPC. Single PG round-trip; called
+	// fire-and-forget off the gateway hot path.
+	GetCapNotificationContext(context.Context, *connect.Request[v1.GetCapNotificationContextRequest]) (*connect.Response[v1.GetCapNotificationContextResponse], error)
 }
 
 // NewAuthServiceClient constructs a client for the he.auth.v1.AuthService service. By default, it
@@ -327,31 +337,38 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("UpdateApiKey")),
 			connect.WithClientOptions(opts...),
 		),
+		getCapNotificationContext: connect.NewClient[v1.GetCapNotificationContextRequest, v1.GetCapNotificationContextResponse](
+			httpClient,
+			baseURL+AuthServiceGetCapNotificationContextProcedure,
+			connect.WithSchema(authServiceMethods.ByName("GetCapNotificationContext")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // authServiceClient implements AuthServiceClient.
 type authServiceClient struct {
-	registerUser            *connect.Client[v1.RegisterUserRequest, v1.RegisterUserResponse]
-	verifyEmail             *connect.Client[v1.VerifyEmailRequest, v1.VerifyEmailResponse]
-	resendVerification      *connect.Client[v1.ResendVerificationRequest, v1.ResendVerificationResponse]
-	loginUser               *connect.Client[v1.LoginUserRequest, v1.LoginUserResponse]
-	refreshToken            *connect.Client[v1.RefreshTokenRequest, v1.RefreshTokenResponse]
-	beginOAuth              *connect.Client[v1.BeginOAuthRequest, v1.BeginOAuthResponse]
-	completeOAuth           *connect.Client[v1.CompleteOAuthRequest, v1.CompleteOAuthResponse]
-	enrollTOTPInit          *connect.Client[v1.EnrollTOTPInitRequest, v1.EnrollTOTPInitResponse]
-	enrollTOTPVerify        *connect.Client[v1.EnrollTOTPVerifyRequest, v1.EnrollTOTPVerifyResponse]
-	challengeTOTP           *connect.Client[v1.ChallengeTOTPRequest, v1.ChallengeTOTPResponse]
-	useRecoveryCode         *connect.Client[v1.UseRecoveryCodeRequest, v1.UseRecoveryCodeResponse]
-	disableTOTP             *connect.Client[v1.DisableTOTPRequest, v1.DisableTOTPResponse]
-	regenerateRecoveryCodes *connect.Client[v1.RegenerateRecoveryCodesRequest, v1.RegenerateRecoveryCodesResponse]
-	getMe                   *connect.Client[v1.GetMeRequest, v1.GetMeResponse]
-	updateProfile           *connect.Client[v1.UpdateProfileRequest, v1.UpdateProfileResponse]
-	validateApiKey          *connect.Client[v1.ValidateApiKeyRequest, v1.ValidateApiKeyResponse]
-	createApiKey            *connect.Client[v1.CreateApiKeyRequest, v1.CreateApiKeyResponse]
-	listApiKeys             *connect.Client[v1.ListApiKeysRequest, v1.ListApiKeysResponse]
-	revokeApiKey            *connect.Client[v1.RevokeApiKeyRequest, v1.RevokeApiKeyResponse]
-	updateApiKey            *connect.Client[v1.UpdateApiKeyRequest, v1.UpdateApiKeyResponse]
+	registerUser              *connect.Client[v1.RegisterUserRequest, v1.RegisterUserResponse]
+	verifyEmail               *connect.Client[v1.VerifyEmailRequest, v1.VerifyEmailResponse]
+	resendVerification        *connect.Client[v1.ResendVerificationRequest, v1.ResendVerificationResponse]
+	loginUser                 *connect.Client[v1.LoginUserRequest, v1.LoginUserResponse]
+	refreshToken              *connect.Client[v1.RefreshTokenRequest, v1.RefreshTokenResponse]
+	beginOAuth                *connect.Client[v1.BeginOAuthRequest, v1.BeginOAuthResponse]
+	completeOAuth             *connect.Client[v1.CompleteOAuthRequest, v1.CompleteOAuthResponse]
+	enrollTOTPInit            *connect.Client[v1.EnrollTOTPInitRequest, v1.EnrollTOTPInitResponse]
+	enrollTOTPVerify          *connect.Client[v1.EnrollTOTPVerifyRequest, v1.EnrollTOTPVerifyResponse]
+	challengeTOTP             *connect.Client[v1.ChallengeTOTPRequest, v1.ChallengeTOTPResponse]
+	useRecoveryCode           *connect.Client[v1.UseRecoveryCodeRequest, v1.UseRecoveryCodeResponse]
+	disableTOTP               *connect.Client[v1.DisableTOTPRequest, v1.DisableTOTPResponse]
+	regenerateRecoveryCodes   *connect.Client[v1.RegenerateRecoveryCodesRequest, v1.RegenerateRecoveryCodesResponse]
+	getMe                     *connect.Client[v1.GetMeRequest, v1.GetMeResponse]
+	updateProfile             *connect.Client[v1.UpdateProfileRequest, v1.UpdateProfileResponse]
+	validateApiKey            *connect.Client[v1.ValidateApiKeyRequest, v1.ValidateApiKeyResponse]
+	createApiKey              *connect.Client[v1.CreateApiKeyRequest, v1.CreateApiKeyResponse]
+	listApiKeys               *connect.Client[v1.ListApiKeysRequest, v1.ListApiKeysResponse]
+	revokeApiKey              *connect.Client[v1.RevokeApiKeyRequest, v1.RevokeApiKeyResponse]
+	updateApiKey              *connect.Client[v1.UpdateApiKeyRequest, v1.UpdateApiKeyResponse]
+	getCapNotificationContext *connect.Client[v1.GetCapNotificationContextRequest, v1.GetCapNotificationContextResponse]
 }
 
 // RegisterUser calls he.auth.v1.AuthService.RegisterUser.
@@ -454,6 +471,11 @@ func (c *authServiceClient) UpdateApiKey(ctx context.Context, req *connect.Reque
 	return c.updateApiKey.CallUnary(ctx, req)
 }
 
+// GetCapNotificationContext calls he.auth.v1.AuthService.GetCapNotificationContext.
+func (c *authServiceClient) GetCapNotificationContext(ctx context.Context, req *connect.Request[v1.GetCapNotificationContextRequest]) (*connect.Response[v1.GetCapNotificationContextResponse], error) {
+	return c.getCapNotificationContext.CallUnary(ctx, req)
+}
+
 // AuthServiceHandler is an implementation of the he.auth.v1.AuthService service.
 type AuthServiceHandler interface {
 	RegisterUser(context.Context, *connect.Request[v1.RegisterUserRequest]) (*connect.Response[v1.RegisterUserResponse], error)
@@ -549,6 +571,13 @@ type AuthServiceHandler interface {
 	// → FailedPrecondition account_pending_deletion (Q-I). No updated_at write
 	// (Architect Q-K — the schema has no such column).
 	UpdateApiKey(context.Context, *connect.Request[v1.UpdateApiKeyRequest]) (*connect.Response[v1.UpdateApiKeyResponse], error)
+	// Story 5.4 (Architect Round 1 Q-L Fix-A) — internal lookup feeding the
+	// notification-svc monthly-cap email path. notification-svc cannot import
+	// auth-svc's internal/repository across the go.work module boundary, so
+	// auth-svc (the sole canonical reader of the PII-sensitive api_keys table)
+	// exposes the JOIN result over gRPC. Single PG round-trip; called
+	// fire-and-forget off the gateway hot path.
+	GetCapNotificationContext(context.Context, *connect.Request[v1.GetCapNotificationContextRequest]) (*connect.Response[v1.GetCapNotificationContextResponse], error)
 }
 
 // NewAuthServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -678,6 +707,12 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("UpdateApiKey")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceGetCapNotificationContextHandler := connect.NewUnaryHandler(
+		AuthServiceGetCapNotificationContextProcedure,
+		svc.GetCapNotificationContext,
+		connect.WithSchema(authServiceMethods.ByName("GetCapNotificationContext")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/he.auth.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthServiceRegisterUserProcedure:
@@ -720,6 +755,8 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceRevokeApiKeyHandler.ServeHTTP(w, r)
 		case AuthServiceUpdateApiKeyProcedure:
 			authServiceUpdateApiKeyHandler.ServeHTTP(w, r)
+		case AuthServiceGetCapNotificationContextProcedure:
+			authServiceGetCapNotificationContextHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -807,4 +844,8 @@ func (UnimplementedAuthServiceHandler) RevokeApiKey(context.Context, *connect.Re
 
 func (UnimplementedAuthServiceHandler) UpdateApiKey(context.Context, *connect.Request[v1.UpdateApiKeyRequest]) (*connect.Response[v1.UpdateApiKeyResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.UpdateApiKey is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) GetCapNotificationContext(context.Context, *connect.Request[v1.GetCapNotificationContextRequest]) (*connect.Response[v1.GetCapNotificationContextResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.GetCapNotificationContext is not implemented"))
 }

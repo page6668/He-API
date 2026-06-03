@@ -47,6 +47,18 @@
         "invalid_request": "部分配置值无效。",
         "generic": "出现错误，请重试。"
       }
+    },
+    "cap": {
+      "email": {
+        "warning": {
+          "subject": "您的 API 密钥即将达到月度消费上限",
+          "description": "用量达到上限的 80% 时通知"
+        },
+        "tripped": {
+          "subject": "您的 API 密钥已暂停 — 已达到月度消费上限",
+          "description": "达到上限并暂停密钥时通知"
+        }
+      }
     }
   },
   "profile": {

@@ -27,6 +27,7 @@ import (
 
 	obs "github.com/he-api/he-api/packages/go-observability"
 	"github.com/he-api/he-api/apps/notification-svc/internal/audit"
+	"github.com/he-api/he-api/apps/notification-svc/internal/authsvcclient"
 	"github.com/he-api/he-api/apps/notification-svc/internal/events"
 	"github.com/he-api/he-api/apps/notification-svc/internal/handlers"
 	gdprratelimit "github.com/he-api/he-api/apps/notification-svc/internal/ratelimit"
@@ -82,6 +83,7 @@ func main() {
 	// nil-check by binding only the full server when all deps are
 	// present).
 	var dataExport *handlers.DataExportServer
+	var capServer *handlers.CapThresholdServer
 	if dbURI := strings.TrimSpace(os.Getenv("HE_API_DB_POSTGRES_URI")); dbURI != "" {
 		var pool *pgxpool.Pool
 		pool, err = pgxpool.New(ctx, dbURI)
@@ -138,20 +140,30 @@ func main() {
 			logger,
 		)
 		logger.Info("notification-svc Story-2.6 data-export RPCs enabled")
+
+		// Story 5.4 — cap-threshold notification RPC. Needs the same Redis
+		// (dedupe sentinels) + the auth-svc gRPC endpoint (Q-L Fix-A context
+		// lookup). Env var follows the repo's HE_API_*_URL convention.
+		if authURL := strings.TrimSpace(os.Getenv("HE_API_AUTH_SVC_URL")); authURL != "" {
+			authClient := authsvcclient.New(&http.Client{Timeout: 10 * time.Second}, authURL)
+			capServer = handlers.NewCapThresholdServer(handlers.NewRedisDedupeStore(rdb), authClient, sender, logger)
+			logger.Info("notification-svc Story-5.4 cap-threshold RPC enabled")
+		} else {
+			logger.Warn("HE_API_AUTH_SVC_URL unset — NotifyMonthlyCapThreshold will return Unimplemented")
+		}
 	} else {
 		logger.Warn("HE_API_DB_POSTGRES_URI unset — Story 2.6 RequestDataExport / GetCurrentExport will return Unimplemented")
 	}
 
 	mux := http.NewServeMux()
+	var ns *handlers.NotificationServer
 	if dataExport != nil {
-		mux.Handle(notificationv1connect.NewNotificationServiceHandler(
-			handlers.NewNotificationServerWithDataExport(sender, dataExport),
-		))
+		ns = handlers.NewNotificationServerWithDataExport(sender, dataExport)
 	} else {
-		mux.Handle(notificationv1connect.NewNotificationServiceHandler(
-			handlers.NewNotificationServer(sender),
-		))
+		ns = handlers.NewNotificationServer(sender)
 	}
+	ns.Cap = capServer // nil → NotifyMonthlyCapThreshold returns Unimplemented
+	mux.Handle(notificationv1connect.NewNotificationServiceHandler(ns))
 
 	srv := &http.Server{
 		Addr:              listenAddr,

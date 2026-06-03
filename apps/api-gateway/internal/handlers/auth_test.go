@@ -267,6 +267,13 @@ func (f *fakeAuthClient) UpdateApiKey(_ context.Context, _ *connect.Request[auth
 	return nil, errFakeUnimplemented
 }
 
+// Story 5.4 — the gateway never calls GetCapNotificationContext (it's a
+// notification-svc → auth-svc internal hop), but the test double must satisfy
+// the extended AuthServiceClient interface.
+func (f *fakeAuthClient) GetCapNotificationContext(_ context.Context, _ *connect.Request[authv1.GetCapNotificationContextRequest]) (*connect.Response[authv1.GetCapNotificationContextResponse], error) {
+	return nil, errFakeUnimplemented
+}
+
 var _ authv1connect.AuthServiceClient = (*fakeAuthClient)(nil)
 
 // --- helpers -------------------------------------------------------------

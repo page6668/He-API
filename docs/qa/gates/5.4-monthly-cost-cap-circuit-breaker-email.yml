@@ -1,0 +1,126 @@
+schema: 1
+story: "5.4"
+story_title: "月度消费上限熔断 + 邮件预警"
+gate: PASS
+status_reason: >
+  Round 2 PASS — all 4 Round-1 issues resolved + independently verified, each against its
+  own Round-1 suggested_action. ISSUE-001 (high, INT/E2E/CHAOS tier deferred): Dev committed
+  apps/api-gateway/tests/5_4_cap_breaker_skeleton_test.go — 43 t.Skip subtests enumerating
+  all 39 deferred scenarios (INT-001..034 incl 029b, E2E-001..003, CHAOS-001..004), each
+  annotated with its // Scenario: ID + BR/blind-spot/priority + DEFERRED marker + live-target
+  path, compiling + running (skipping) under the consolidated unit-go job. This is EXACTLY
+  the build-tagged-skeleton route the Round-1 gate explicitly offered as acceptable, and the
+  same bar 5.3 met when it PASSED. ISSUE-002 (high, 43 unchecked boxes): 0 unchecked remain
+  (33 [x] complete + 5 [~] deferred-annotated → T1.6/T2.9/T3.7/T4.1/T4.2). ISSUE-003 (medium,
+  redisclient zero tests): NEW redisclient/cap_state_test.go — 5 miniredis tests, -race clean,
+  asserting the decisive glob-isolation invariant (sticky-trip glob must NOT swallow
+  cap_tripped_notified; dedupe glob covers BOTH notified families; auth:apikey:revoked:* /
+  foreign-suffix / id-less keys survive) + empty-state + idempotent re-run + SCAN-fail
+  error-wrap + >1000-key DEL batch-flush boundary. ISSUE-004 (low): accepted, no action.
+  Independent go test green across all 3 modules; go vet clean; verify-cron-schedule.sh exit 0.
+  All 3 ACs were already semantically verified at 100% in Round 1 (failed_acs: []).
+  RESIDUAL (tracked, non-blocking): genuine integration/E2E/chaos EXECUTION (testcontainers
+  -race + toxiproxy -tags chaos + Python E2E) remains deferred behind the committed skeleton
+  — race/blast-radius BRs are unit-mock-covered for logic but not yet executed against real
+  infra. Consistent with the 5.3 PASS posture; land the live suites when the CI infra lane is
+  available. The skeleton guarantees the full inventory is committed + greppable.
+reviewer: "Turing (QA Engineer)"
+updated: "2026-06-03T05:10:00Z"
+
+review_round: 2
+review_mode_type: incremental
+risk_level: HIGH
+review_mode: full_testing
+project_type: web_backend
+
+incremental_context:
+  cached_risk_level: HIGH
+  cached_review_mode: full_testing
+  cached_project_type: web_backend
+  failed_acs: []          # all 3 ACs implemented + semantically verified Round 1; unchanged
+  failed_e2e_scenarios: []   # skeleton-committed + deferral-tracked; not gating per skeleton route (5.3 precedent)
+  missing_blind_spots: []    # all Round-1 gaps either resolved (ISSUE-003 unit-covered) or skeleton-tracked-deferred
+  checkbox_issues: []        # 0 unchecked; 33 [x] + 5 [~]
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+test_results:
+  automated_tests:
+    verification_method: independent_execution
+    commands:
+      - "go test ./apps/api-gateway/internal/middleware/keypolicy/... ./apps/api-gateway/internal/notifyclient/... -count=1"
+      - "go test ./apps/notification-svc/internal/handlers/... ./apps/notification-svc/internal/authsvcclient/... ./apps/notification-svc/internal/templates/... -count=1"
+      - "go test ./apps/auth-svc/cmd/monthly-cost-reset/... ./apps/auth-svc/internal/handlers/... ./apps/auth-svc/internal/redisclient/... ./apps/auth-svc/internal/repository/... -count=1"
+    result: PASS
+    note: "all unit suites green across 3 modules; redisclient -race clean (was [no test files] in Round 1); go vet clean"
+    commands_round2:
+      - "go test ./apps/api-gateway/internal/middleware/keypolicy/... ./apps/api-gateway/internal/notifyclient/... ./apps/api-gateway/tests/... -count=1   # incl 5_4_cap_breaker_skeleton_test.go (skips)"
+      - "go test ./apps/notification-svc/internal/handlers/... ./apps/notification-svc/internal/authsvcclient/... ./apps/notification-svc/internal/templates/... -count=1"
+      - "go test ./apps/auth-svc/cmd/monthly-cost-reset/... ./apps/auth-svc/internal/handlers/... ./apps/auth-svc/internal/redisclient/... ./apps/auth-svc/internal/repository/... -count=1"
+      - "go test ./apps/auth-svc/internal/redisclient/... -race -count=1   # ISSUE-003 blast-radius path"
+  ci_gates:
+    - {name: "verify-cron-schedule.sh", result: PASS, note: "schedule literal 0 0 1 * * asserted (BR-3.1)"}
+  ac_coverage:
+    verification_method: traceability_verification
+    coverage_rate: 100   # AC-implementation coverage; all 3 ACs traced to real code + semantically verified
+    integration_e2e_chaos_tier: DEFERRED_SKELETON   # committed as build-wired t.Skip skeleton (5.3 precedent); execution tracked
+  file_list_verification: {claimed: 16, present: 16, templates_present: 40}
+  skeleton_verification:
+    file: "apps/api-gateway/tests/5_4_cap_breaker_skeleton_test.go"
+    scenario_annotations: 42   # // Scenario: markers
+    skip_subtests: 43
+    scenarios_enumerated: "INT-001..034 (incl 029b) + E2E-001..003 + CHAOS-001..004 (39 deferred)"
+    compiles_and_runs_under: unit-go
+
+top_issues: []   # Round 2 — all Round-1 issues resolved (see resolved_issues)
+
+resolved_issues:
+  - id: "ISSUE-001"
+    severity: high
+    resolution: >
+      CLOSED — 5_4_cap_breaker_skeleton_test.go commits all 39 deferred scenarios as 43
+      annotated t.Skip subtests, CI-wired under unit-go, greppable. Exactly the skeleton
+      route the Round-1 gate offered + the 5.3 PASS precedent. Live execution tracked as
+      non-blocking residual (testcontainers/toxiproxy infra unavailable this pass).
+  - id: "ISSUE-002"
+    severity: high
+    resolution: "CLOSED — 0 unchecked boxes; 33 [x] complete + 5 [~] deferred (T1.6/T2.9/T3.7/T4.1/T4.2, annotated → ISSUE-001)."
+  - id: "ISSUE-003"
+    severity: medium
+    resolution: >
+      CLOSED — redisclient/cap_state_test.go (5 miniredis tests, -race clean) asserts the
+      glob-isolation invariant (sticky-trip glob ≠ swallow cap_tripped_notified; dedupe glob
+      covers both notified families; unrelated keys survive) + empty/idempotent/error-wrap/
+      >1000-key batch-flush. Cluster ForEachMaster arm remains covered by deferred INT-029.
+  - id: "ISSUE-004"
+    severity: low
+    resolution: "NO ACTION — accepted; deviations are corrections / improvements (recorded in Dev Agent Record)."
+
+residual_followups:
+  - id: "FOLLOWUP-INT-EXEC"
+    severity: tracked
+    finding: >
+      Genuine integration/E2E/chaos EXECUTION deferred behind the committed skeleton. Race /
+      blast-radius BRs (BR-1.8 N-pod SETNX, INT-005/013/029/032, CHAOS-003/004) are
+      unit-mock-covered for logic but not yet executed against real infra (testcontainers
+      -race + toxiproxy -tags chaos + Python E2E).
+    suggested_action: >
+      Land the live suites when the testcontainers/toxiproxy lane is available; the skeleton
+      file is the authoritative checklist. Consistent with the 5.3 PASS posture — non-blocking.
+
+evidence:
+  files_reviewed:
+    - "apps/api-gateway/internal/middleware/keypolicy/{keypolicy.go,cap_state.go}"
+    - "apps/notification-svc/internal/handlers/cap_threshold.go"
+    - "apps/auth-svc/internal/repository/api_keys.go (resetMonthlyCostsSQL + LookupCapNotificationContext)"
+    - "apps/auth-svc/cmd/monthly-cost-reset/main.go"
+    - "apps/auth-svc/internal/redisclient/cap_state.go"
+    - "infra/helm/auth-svc/templates/cronjob-monthly-cost-reset.yaml"
+    - "scripts/ci/verify-cron-schedule.sh (executed → exit 0)"
+  ac_semantic_verification:
+    AC1: "VERIFIED — sentinel EXISTS fast-path before counter GET; fail-OPEN on EXISTS err (BR-1.10); SETNX-winner-only fire + skip-on-err (BR-1.2/1.8/1.9); sentinel-hit no re-fire (BR-1.11); 402 codeQuotaExhausted reuse; fire-before-wire (BR-1.7)"
+    AC2: "VERIFIED — SETNX dedupe inside notification-svc (BR-2.3); resolveDisplayName fallback chain (BR-2.5); cap_usd (not precise spend) in tripped email (BR-2.10 §8.3 PII); html/template auto-escape (BR-2.8); SETNX-on-claim (BR-2.4)"
+    AC3: "VERIFIED — UPDATE current_month_cost_usd=0 WHERE revoked_at IS NULL (revoked-exclusion + idempotent); cluster-aware ForEachMaster purge of 3 prefixes (m-1); --purge-redis-only + DRY_RUN + 5-min deadline; Forbid/backoffLimit=0/timeZone CronJob; verify-cron-schedule CI gate green"

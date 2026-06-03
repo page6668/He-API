@@ -77,6 +77,12 @@ spec:
             # HE_API_DB_REDIS_URI) are mounted from the shared Secret.
             - secretRef:
                 name: {{ .Values.db.credsSecretName }}
+            {{- if .Values.externalSecret.enabled }}
+            # Story 5.4 H-3 — Vault-projected Secret (shared with the
+            # monthly-cost-reset CronJob). GitOps-clean credential source.
+            - secretRef:
+                name: {{ .Values.externalSecret.targetSecretName }}
+            {{- end }}
           volumeMounts:
             # Story 2.2 — JWT signing key (TS-CONS-003). The Secret carries
             # the private + public PEMs; mount read-only.

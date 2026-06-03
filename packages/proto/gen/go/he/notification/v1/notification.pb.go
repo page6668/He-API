@@ -52,6 +52,15 @@ const (
 	// `gdpr_export_ready` is internal to notification-svc and decoupled
 	// from the wire contract (the template loader maps enum → slug).
 	EmailTemplate_EMAIL_TEMPLATE_GDPR_EXPORT_READY EmailTemplate = 6
+	// Story 5.4 — monthly-cost-cap 80% warning. Required variables:
+	// {display_name, key_name, cap_usd, threshold_pct}. The file-naming slug
+	// `cap_warning` is internal to notification-svc (R-2 enum-not-string).
+	EmailTemplate_EMAIL_TEMPLATE_MONTHLY_CAP_WARNING EmailTemplate = 7
+	// Story 5.4 — monthly-cost-cap 100% tripped (key paused until next UTC
+	// month). Required variables: {display_name, key_name, cap_usd}. NO
+	// precise current-cost figure (security.md §8.3 PII discipline). Slug
+	// `cap_tripped`.
+	EmailTemplate_EMAIL_TEMPLATE_MONTHLY_CAP_TRIPPED EmailTemplate = 8
 )
 
 // Enum value maps for EmailTemplate.
@@ -64,6 +73,8 @@ var (
 		4: "EMAIL_TEMPLATE_2FA_RECOVERY_REGENERATED",
 		5: "EMAIL_TEMPLATE_2FA_DISABLED",
 		6: "EMAIL_TEMPLATE_GDPR_EXPORT_READY",
+		7: "EMAIL_TEMPLATE_MONTHLY_CAP_WARNING",
+		8: "EMAIL_TEMPLATE_MONTHLY_CAP_TRIPPED",
 	}
 	EmailTemplate_value = map[string]int32{
 		"EMAIL_TEMPLATE_UNSPECIFIED":              0,
@@ -73,6 +84,8 @@ var (
 		"EMAIL_TEMPLATE_2FA_RECOVERY_REGENERATED": 4,
 		"EMAIL_TEMPLATE_2FA_DISABLED":             5,
 		"EMAIL_TEMPLATE_GDPR_EXPORT_READY":        6,
+		"EMAIL_TEMPLATE_MONTHLY_CAP_WARNING":      7,
+		"EMAIL_TEMPLATE_MONTHLY_CAP_TRIPPED":      8,
 	}
 )
 
@@ -101,6 +114,58 @@ func (x EmailTemplate) Number() protoreflect.EnumNumber {
 // Deprecated: Use EmailTemplate.Descriptor instead.
 func (EmailTemplate) EnumDescriptor() ([]byte, []int) {
 	return file_he_notification_v1_notification_proto_rawDescGZIP(), []int{0}
+}
+
+// ThresholdLevel — Story 5.4 monthly-cost-cap crossing classification. The
+// gateway detector fires one RPC per crossing; both levels dedupe on
+// independent SETNX sentinels inside notification-svc.
+type ThresholdLevel int32
+
+const (
+	ThresholdLevel_THRESHOLD_LEVEL_UNSPECIFIED ThresholdLevel = 0
+	ThresholdLevel_THRESHOLD_LEVEL_WARNING_80  ThresholdLevel = 1 // current/cap crossed 0.80 (still < 1.00)
+	ThresholdLevel_THRESHOLD_LEVEL_TRIPPED     ThresholdLevel = 2 // current/cap reached 1.00 (key paused)
+)
+
+// Enum value maps for ThresholdLevel.
+var (
+	ThresholdLevel_name = map[int32]string{
+		0: "THRESHOLD_LEVEL_UNSPECIFIED",
+		1: "THRESHOLD_LEVEL_WARNING_80",
+		2: "THRESHOLD_LEVEL_TRIPPED",
+	}
+	ThresholdLevel_value = map[string]int32{
+		"THRESHOLD_LEVEL_UNSPECIFIED": 0,
+		"THRESHOLD_LEVEL_WARNING_80":  1,
+		"THRESHOLD_LEVEL_TRIPPED":     2,
+	}
+)
+
+func (x ThresholdLevel) Enum() *ThresholdLevel {
+	p := new(ThresholdLevel)
+	*p = x
+	return p
+}
+
+func (x ThresholdLevel) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ThresholdLevel) Descriptor() protoreflect.EnumDescriptor {
+	return file_he_notification_v1_notification_proto_enumTypes[1].Descriptor()
+}
+
+func (ThresholdLevel) Type() protoreflect.EnumType {
+	return &file_he_notification_v1_notification_proto_enumTypes[1]
+}
+
+func (x ThresholdLevel) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ThresholdLevel.Descriptor instead.
+func (ThresholdLevel) EnumDescriptor() ([]byte, []int) {
+	return file_he_notification_v1_notification_proto_rawDescGZIP(), []int{1}
 }
 
 type SendEmailRequest struct {
@@ -487,6 +552,122 @@ func (x *GetCurrentExportResponse) GetSignedUrlExpiresAt() *timestamppb.Timestam
 	return nil
 }
 
+// NotifyMonthlyCapThresholdRequest — Story 5.4 AC2. Fired fire-and-forget by
+// the gateway keypolicy middleware. The handler owns the SETNX dedupe so a
+// duplicate fire (concurrent pods, retries) sends at most one email per
+// month per (api_key_id, threshold).
+type NotifyMonthlyCapThresholdRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ApiKeyId      string                 `protobuf:"bytes,1,opt,name=api_key_id,json=apiKeyId,proto3" json:"api_key_id,omitempty"` // UUID v4
+	Threshold     ThresholdLevel         `protobuf:"varint,2,opt,name=threshold,proto3,enum=he.notification.v1.ThresholdLevel" json:"threshold,omitempty"`
+	RequestId     string                 `protobuf:"bytes,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"` // Story-3.6 he_request_id propagation (optional)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NotifyMonthlyCapThresholdRequest) Reset() {
+	*x = NotifyMonthlyCapThresholdRequest{}
+	mi := &file_he_notification_v1_notification_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NotifyMonthlyCapThresholdRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NotifyMonthlyCapThresholdRequest) ProtoMessage() {}
+
+func (x *NotifyMonthlyCapThresholdRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_he_notification_v1_notification_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NotifyMonthlyCapThresholdRequest.ProtoReflect.Descriptor instead.
+func (*NotifyMonthlyCapThresholdRequest) Descriptor() ([]byte, []int) {
+	return file_he_notification_v1_notification_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *NotifyMonthlyCapThresholdRequest) GetApiKeyId() string {
+	if x != nil {
+		return x.ApiKeyId
+	}
+	return ""
+}
+
+func (x *NotifyMonthlyCapThresholdRequest) GetThreshold() ThresholdLevel {
+	if x != nil {
+		return x.Threshold
+	}
+	return ThresholdLevel_THRESHOLD_LEVEL_UNSPECIFIED
+}
+
+func (x *NotifyMonthlyCapThresholdRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+type NotifyMonthlyCapThresholdResponse struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	WasAlreadyNotified bool                   `protobuf:"varint,1,opt,name=was_already_notified,json=wasAlreadyNotified,proto3" json:"was_already_notified,omitempty"` // SETNX returned 0 (already-sent this month)
+	EmailSent          bool                   `protobuf:"varint,2,opt,name=email_sent,json=emailSent,proto3" json:"email_sent,omitempty"`                              // true on actual SendGrid send success
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *NotifyMonthlyCapThresholdResponse) Reset() {
+	*x = NotifyMonthlyCapThresholdResponse{}
+	mi := &file_he_notification_v1_notification_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NotifyMonthlyCapThresholdResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NotifyMonthlyCapThresholdResponse) ProtoMessage() {}
+
+func (x *NotifyMonthlyCapThresholdResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_he_notification_v1_notification_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NotifyMonthlyCapThresholdResponse.ProtoReflect.Descriptor instead.
+func (*NotifyMonthlyCapThresholdResponse) Descriptor() ([]byte, []int) {
+	return file_he_notification_v1_notification_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *NotifyMonthlyCapThresholdResponse) GetWasAlreadyNotified() bool {
+	if x != nil {
+		return x.WasAlreadyNotified
+	}
+	return false
+}
+
+func (x *NotifyMonthlyCapThresholdResponse) GetEmailSent() bool {
+	if x != nil {
+		return x.EmailSent
+	}
+	return false
+}
+
 var File_he_notification_v1_notification_proto protoreflect.FileDescriptor
 
 const file_he_notification_v1_notification_proto_rawDesc = "" +
@@ -520,7 +701,17 @@ const file_he_notification_v1_notification_proto_rawDesc = "" +
 	"\texport_id\x18\x02 \x01(\tR\bexportId\x12\x16\n" +
 	"\x06status\x18\x03 \x01(\tR\x06status\x12=\n" +
 	"\frequested_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\vrequestedAt\x12M\n" +
-	"\x15signed_url_expires_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x12signedUrlExpiresAt*\x90\x02\n" +
+	"\x15signed_url_expires_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x12signedUrlExpiresAt\"\xa1\x01\n" +
+	" NotifyMonthlyCapThresholdRequest\x12\x1c\n" +
+	"\n" +
+	"api_key_id\x18\x01 \x01(\tR\bapiKeyId\x12@\n" +
+	"\tthreshold\x18\x02 \x01(\x0e2\".he.notification.v1.ThresholdLevelR\tthreshold\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x03 \x01(\tR\trequestId\"t\n" +
+	"!NotifyMonthlyCapThresholdResponse\x120\n" +
+	"\x14was_already_notified\x18\x01 \x01(\bR\x12wasAlreadyNotified\x12\x1d\n" +
+	"\n" +
+	"email_sent\x18\x02 \x01(\bR\temailSent*\xe0\x02\n" +
 	"\rEmailTemplate\x12\x1e\n" +
 	"\x1aEMAIL_TEMPLATE_UNSPECIFIED\x10\x00\x12%\n" +
 	"!EMAIL_TEMPLATE_EMAIL_VERIFICATION\x10\x01\x12\x1e\n" +
@@ -528,11 +719,18 @@ const file_he_notification_v1_notification_proto_rawDesc = "" +
 	" EMAIL_TEMPLATE_2FA_RECOVERY_USED\x10\x03\x12+\n" +
 	"'EMAIL_TEMPLATE_2FA_RECOVERY_REGENERATED\x10\x04\x12\x1f\n" +
 	"\x1bEMAIL_TEMPLATE_2FA_DISABLED\x10\x05\x12$\n" +
-	" EMAIL_TEMPLATE_GDPR_EXPORT_READY\x10\x062\xd0\x02\n" +
+	" EMAIL_TEMPLATE_GDPR_EXPORT_READY\x10\x06\x12&\n" +
+	"\"EMAIL_TEMPLATE_MONTHLY_CAP_WARNING\x10\a\x12&\n" +
+	"\"EMAIL_TEMPLATE_MONTHLY_CAP_TRIPPED\x10\b*n\n" +
+	"\x0eThresholdLevel\x12\x1f\n" +
+	"\x1bTHRESHOLD_LEVEL_UNSPECIFIED\x10\x00\x12\x1e\n" +
+	"\x1aTHRESHOLD_LEVEL_WARNING_80\x10\x01\x12\x1b\n" +
+	"\x17THRESHOLD_LEVEL_TRIPPED\x10\x022\xdb\x03\n" +
 	"\x13NotificationService\x12X\n" +
 	"\tSendEmail\x12$.he.notification.v1.SendEmailRequest\x1a%.he.notification.v1.SendEmailResponse\x12p\n" +
 	"\x11RequestDataExport\x12,.he.notification.v1.RequestDataExportRequest\x1a-.he.notification.v1.RequestDataExportResponse\x12m\n" +
-	"\x10GetCurrentExport\x12+.he.notification.v1.GetCurrentExportRequest\x1a,.he.notification.v1.GetCurrentExportResponseBRZPgithub.com/he-api/he-api/packages/proto/gen/go/he/notification/v1;notificationv1b\x06proto3"
+	"\x10GetCurrentExport\x12+.he.notification.v1.GetCurrentExportRequest\x1a,.he.notification.v1.GetCurrentExportResponse\x12\x88\x01\n" +
+	"\x19NotifyMonthlyCapThreshold\x124.he.notification.v1.NotifyMonthlyCapThresholdRequest\x1a5.he.notification.v1.NotifyMonthlyCapThresholdResponseBRZPgithub.com/he-api/he-api/packages/proto/gen/go/he/notification/v1;notificationv1b\x06proto3"
 
 var (
 	file_he_notification_v1_notification_proto_rawDescOnce sync.Once
@@ -546,36 +744,42 @@ func file_he_notification_v1_notification_proto_rawDescGZIP() []byte {
 	return file_he_notification_v1_notification_proto_rawDescData
 }
 
-var file_he_notification_v1_notification_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_he_notification_v1_notification_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_he_notification_v1_notification_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_he_notification_v1_notification_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_he_notification_v1_notification_proto_goTypes = []any{
-	(EmailTemplate)(0),                // 0: he.notification.v1.EmailTemplate
-	(*SendEmailRequest)(nil),          // 1: he.notification.v1.SendEmailRequest
-	(*SendEmailResponse)(nil),         // 2: he.notification.v1.SendEmailResponse
-	(*RequestDataExportRequest)(nil),  // 3: he.notification.v1.RequestDataExportRequest
-	(*RequestDataExportResponse)(nil), // 4: he.notification.v1.RequestDataExportResponse
-	(*GetCurrentExportRequest)(nil),   // 5: he.notification.v1.GetCurrentExportRequest
-	(*GetCurrentExportResponse)(nil),  // 6: he.notification.v1.GetCurrentExportResponse
-	nil,                               // 7: he.notification.v1.SendEmailRequest.VariablesEntry
-	(*timestamppb.Timestamp)(nil),     // 8: google.protobuf.Timestamp
+	(EmailTemplate)(0),                        // 0: he.notification.v1.EmailTemplate
+	(ThresholdLevel)(0),                       // 1: he.notification.v1.ThresholdLevel
+	(*SendEmailRequest)(nil),                  // 2: he.notification.v1.SendEmailRequest
+	(*SendEmailResponse)(nil),                 // 3: he.notification.v1.SendEmailResponse
+	(*RequestDataExportRequest)(nil),          // 4: he.notification.v1.RequestDataExportRequest
+	(*RequestDataExportResponse)(nil),         // 5: he.notification.v1.RequestDataExportResponse
+	(*GetCurrentExportRequest)(nil),           // 6: he.notification.v1.GetCurrentExportRequest
+	(*GetCurrentExportResponse)(nil),          // 7: he.notification.v1.GetCurrentExportResponse
+	(*NotifyMonthlyCapThresholdRequest)(nil),  // 8: he.notification.v1.NotifyMonthlyCapThresholdRequest
+	(*NotifyMonthlyCapThresholdResponse)(nil), // 9: he.notification.v1.NotifyMonthlyCapThresholdResponse
+	nil,                           // 10: he.notification.v1.SendEmailRequest.VariablesEntry
+	(*timestamppb.Timestamp)(nil), // 11: google.protobuf.Timestamp
 }
 var file_he_notification_v1_notification_proto_depIdxs = []int32{
-	0, // 0: he.notification.v1.SendEmailRequest.template:type_name -> he.notification.v1.EmailTemplate
-	7, // 1: he.notification.v1.SendEmailRequest.variables:type_name -> he.notification.v1.SendEmailRequest.VariablesEntry
-	8, // 2: he.notification.v1.RequestDataExportResponse.requested_at:type_name -> google.protobuf.Timestamp
-	8, // 3: he.notification.v1.GetCurrentExportResponse.requested_at:type_name -> google.protobuf.Timestamp
-	8, // 4: he.notification.v1.GetCurrentExportResponse.signed_url_expires_at:type_name -> google.protobuf.Timestamp
-	1, // 5: he.notification.v1.NotificationService.SendEmail:input_type -> he.notification.v1.SendEmailRequest
-	3, // 6: he.notification.v1.NotificationService.RequestDataExport:input_type -> he.notification.v1.RequestDataExportRequest
-	5, // 7: he.notification.v1.NotificationService.GetCurrentExport:input_type -> he.notification.v1.GetCurrentExportRequest
-	2, // 8: he.notification.v1.NotificationService.SendEmail:output_type -> he.notification.v1.SendEmailResponse
-	4, // 9: he.notification.v1.NotificationService.RequestDataExport:output_type -> he.notification.v1.RequestDataExportResponse
-	6, // 10: he.notification.v1.NotificationService.GetCurrentExport:output_type -> he.notification.v1.GetCurrentExportResponse
-	8, // [8:11] is the sub-list for method output_type
-	5, // [5:8] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	0,  // 0: he.notification.v1.SendEmailRequest.template:type_name -> he.notification.v1.EmailTemplate
+	10, // 1: he.notification.v1.SendEmailRequest.variables:type_name -> he.notification.v1.SendEmailRequest.VariablesEntry
+	11, // 2: he.notification.v1.RequestDataExportResponse.requested_at:type_name -> google.protobuf.Timestamp
+	11, // 3: he.notification.v1.GetCurrentExportResponse.requested_at:type_name -> google.protobuf.Timestamp
+	11, // 4: he.notification.v1.GetCurrentExportResponse.signed_url_expires_at:type_name -> google.protobuf.Timestamp
+	1,  // 5: he.notification.v1.NotifyMonthlyCapThresholdRequest.threshold:type_name -> he.notification.v1.ThresholdLevel
+	2,  // 6: he.notification.v1.NotificationService.SendEmail:input_type -> he.notification.v1.SendEmailRequest
+	4,  // 7: he.notification.v1.NotificationService.RequestDataExport:input_type -> he.notification.v1.RequestDataExportRequest
+	6,  // 8: he.notification.v1.NotificationService.GetCurrentExport:input_type -> he.notification.v1.GetCurrentExportRequest
+	8,  // 9: he.notification.v1.NotificationService.NotifyMonthlyCapThreshold:input_type -> he.notification.v1.NotifyMonthlyCapThresholdRequest
+	3,  // 10: he.notification.v1.NotificationService.SendEmail:output_type -> he.notification.v1.SendEmailResponse
+	5,  // 11: he.notification.v1.NotificationService.RequestDataExport:output_type -> he.notification.v1.RequestDataExportResponse
+	7,  // 12: he.notification.v1.NotificationService.GetCurrentExport:output_type -> he.notification.v1.GetCurrentExportResponse
+	9,  // 13: he.notification.v1.NotificationService.NotifyMonthlyCapThreshold:output_type -> he.notification.v1.NotifyMonthlyCapThresholdResponse
+	10, // [10:14] is the sub-list for method output_type
+	6,  // [6:10] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_he_notification_v1_notification_proto_init() }
@@ -588,8 +792,8 @@ func file_he_notification_v1_notification_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_he_notification_v1_notification_proto_rawDesc), len(file_he_notification_v1_notification_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   7,
+			NumEnums:      2,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

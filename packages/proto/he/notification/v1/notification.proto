@@ -31,6 +31,13 @@ service NotificationService {
   // Story 2.6 — read the user's most-recent in-flight export (if any),
   // for AC1 BR-1.5 CTA-disabled hydration.
   rpc GetCurrentExport(GetCurrentExportRequest) returns (GetCurrentExportResponse);
+  // Story 5.4 — monthly-cost-cap threshold-crossing notification. Called
+  // fire-and-forget by api-gateway keypolicy middleware when a key crosses
+  // the 80% warning or 100% tripped threshold. The handler owns the
+  // once-per-month SETNX dedupe (keystate:apikey:cap_*_notified:{id}),
+  // resolves the user's email/locale/display_name + key name via auth-svc
+  // GetCapNotificationContext, and dispatches the localized SendEmail.
+  rpc NotifyMonthlyCapThreshold(NotifyMonthlyCapThresholdRequest) returns (NotifyMonthlyCapThresholdResponse);
 }
 
 enum EmailTemplate {
@@ -53,6 +60,24 @@ enum EmailTemplate {
   // `gdpr_export_ready` is internal to notification-svc and decoupled
   // from the wire contract (the template loader maps enum → slug).
   EMAIL_TEMPLATE_GDPR_EXPORT_READY        = 6;
+  // Story 5.4 — monthly-cost-cap 80% warning. Required variables:
+  // {display_name, key_name, cap_usd, threshold_pct}. The file-naming slug
+  // `cap_warning` is internal to notification-svc (R-2 enum-not-string).
+  EMAIL_TEMPLATE_MONTHLY_CAP_WARNING      = 7;
+  // Story 5.4 — monthly-cost-cap 100% tripped (key paused until next UTC
+  // month). Required variables: {display_name, key_name, cap_usd}. NO
+  // precise current-cost figure (security.md §8.3 PII discipline). Slug
+  // `cap_tripped`.
+  EMAIL_TEMPLATE_MONTHLY_CAP_TRIPPED      = 8;
+}
+
+// ThresholdLevel — Story 5.4 monthly-cost-cap crossing classification. The
+// gateway detector fires one RPC per crossing; both levels dedupe on
+// independent SETNX sentinels inside notification-svc.
+enum ThresholdLevel {
+  THRESHOLD_LEVEL_UNSPECIFIED = 0;
+  THRESHOLD_LEVEL_WARNING_80  = 1; // current/cap crossed 0.80 (still < 1.00)
+  THRESHOLD_LEVEL_TRIPPED     = 2; // current/cap reached 1.00 (key paused)
 }
 
 message SendEmailRequest {
@@ -113,4 +138,19 @@ message GetCurrentExportResponse {
   string status = 3;
   google.protobuf.Timestamp requested_at = 4;
   google.protobuf.Timestamp signed_url_expires_at = 5; // zero unless status=completed
+}
+
+// NotifyMonthlyCapThresholdRequest — Story 5.4 AC2. Fired fire-and-forget by
+// the gateway keypolicy middleware. The handler owns the SETNX dedupe so a
+// duplicate fire (concurrent pods, retries) sends at most one email per
+// month per (api_key_id, threshold).
+message NotifyMonthlyCapThresholdRequest {
+  string api_key_id = 1;          // UUID v4
+  ThresholdLevel threshold = 2;
+  string request_id = 3;           // Story-3.6 he_request_id propagation (optional)
+}
+
+message NotifyMonthlyCapThresholdResponse {
+  bool was_already_notified = 1;   // SETNX returned 0 (already-sent this month)
+  bool email_sent = 2;             // true on actual SendGrid send success
 }

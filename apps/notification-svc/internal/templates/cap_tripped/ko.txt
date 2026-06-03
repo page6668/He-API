@@ -1,0 +1,9 @@
+[en-pending] Your API key has been paused — monthly spend cap reached
+
+Hi {{.display_name}},
+
+Your API key "{{.key_name}}" has reached its monthly spend cap of ${{.cap_usd}} and has been paused.
+
+The key resumes automatically at the start of the next UTC month. To resume sooner, raise the cap in the console.
+
+If you didn't expect this, review your key's activity in the console.

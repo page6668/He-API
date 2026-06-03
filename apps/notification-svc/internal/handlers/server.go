@@ -44,6 +44,22 @@ type NotificationServer struct {
 	Renderer TemplateRenderer
 	Sender   EmailSender
 	*DataExportServer
+	// Story 5.4 — cap-threshold notification handler. nil in SendEmail-only
+	// deployments; the NotifyMonthlyCapThreshold RPC returns Unimplemented then.
+	Cap *CapThresholdServer
+}
+
+// NotifyMonthlyCapThreshold delegates to the Story-5.4 CapThresholdServer with
+// a nil-guard so SendEmail-only deployments return a clean Unimplemented rather
+// than a nil-pointer panic.
+func (s *NotificationServer) NotifyMonthlyCapThreshold(
+	ctx context.Context,
+	req *connect.Request[notificationv1.NotifyMonthlyCapThresholdRequest],
+) (*connect.Response[notificationv1.NotifyMonthlyCapThresholdResponse], error) {
+	if s.Cap == nil {
+		return nil, connect.NewError(connect.CodeUnimplemented, errors.New("notify_monthly_cap_threshold: not configured"))
+	}
+	return s.Cap.NotifyMonthlyCapThreshold(ctx, req)
 }
 
 // NewNotificationServer wires the canonical Renderer + provided EmailSender.
@@ -141,6 +157,10 @@ func templateNameForEnum(e notificationv1.EmailTemplate) (string, error) {
 		// Story 2.6 — Architect R-2: caller passes the enum value, this
 		// handler maps to the file-naming slug.
 		return templates.TemplateGDPRExportReady, nil
+	case notificationv1.EmailTemplate_EMAIL_TEMPLATE_MONTHLY_CAP_WARNING:
+		return templates.TemplateMonthlyCapWarning, nil
+	case notificationv1.EmailTemplate_EMAIL_TEMPLATE_MONTHLY_CAP_TRIPPED:
+		return templates.TemplateMonthlyCapTripped, nil
 	case notificationv1.EmailTemplate_EMAIL_TEMPLATE_UNSPECIFIED:
 		return "", errors.New("send_email: template is required (UNSPECIFIED)")
 	default:
@@ -159,6 +179,10 @@ var requiredVars = map[string][]string{
 	// "there" fallback (per Story 2.5 BR-2.4) so this map still treats it
 	// as required at the wire-shape level.
 	templates.TemplateGDPRExportReady: {"display_name", "signed_url", "expires_at", "requested_at"},
+	// Story 5.4 — cap-warning carries the 80% threshold pct; cap-tripped omits
+	// it (BR-2.10 — no precise current-cost, only the user's own cap).
+	templates.TemplateMonthlyCapWarning: {"display_name", "key_name", "cap_usd", "threshold_pct"},
+	templates.TemplateMonthlyCapTripped: {"display_name", "key_name", "cap_usd"},
 }
 
 func validateRequiredVars(tpl string, vars map[string]string) error {

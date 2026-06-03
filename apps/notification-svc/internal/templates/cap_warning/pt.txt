@@ -1,0 +1,9 @@
+[en-pending] Your API key has reached {{.threshold_pct}}% of its monthly spend cap
+
+Hi {{.display_name}},
+
+Your API key "{{.key_name}}" has reached {{.threshold_pct}}% of its monthly spend cap of ${{.cap_usd}}.
+
+When spending reaches the cap, the key is paused until the start of the next UTC month. To avoid interruption, review your usage or raise the cap in the console.
+
+If you didn't expect this, review your key's activity in the console.

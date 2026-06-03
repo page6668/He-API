@@ -83,3 +83,12 @@ ArgoCD sync to prod (Blue-Green or Canary)
 | 上游模型 API 故障 | 0（用户透明） | 0 | 智能路由 failover 到其他模型 |
 
 ---
+
+## 7.5 计划任务（CronJobs）
+
+| CronJob | Story | Schedule (UTC) | Image | Posture | Notes |
+|---------|-------|----------------|-------|---------|-------|
+| `db-doctor` | 1.6 | `*/30 * * * *` | `db-doctor` | dev-tooling | 连接性/迁移健康巡检（非数据面）。 |
+| `monthly-cost-reset` | 5.4 | `0 0 1 * *` | `monthly-cost-reset` (auth-svc chart) | **生产数据面** | 月初将 `he_api.api_keys.current_month_cost_usd` 重置为 0（非吊销行）+ SCAN+DEL 三类 Redis cap-state key（`usage:apikey:*:month_cost_usd`、`keystate:apikey:cap_tripped:*`、`keystate:apikey:cap_*_notified:*`，cluster-mode 经 `ForEachMaster` 全分片枚举）。`concurrencyPolicy: Forbid` + `startingDeadlineSeconds: 200` + `backoffLimit: 0`（一次执行、失败人工介入）+ `successfulJobsHistoryLimit/failedJobsHistoryLimit: 3` + `timeZone: Etc/UTC`（K8s 1.27+）。复用 auth-svc ServiceAccount + 凭据 Secret；可选 `--purge-redis-only` 运维模式。审计事件 `monthly_cost_reset.completed`（3 次退避重试，best-effort）。CI 金标门 `scripts/ci/verify-cron-schedule.sh` 锁定 schedule 字面量（BR-3.1）。Schedule 漂移会中途重置熔断器 → 成本失控，故纳入门禁。可选 `externalsecret.yaml`（Vault → `auth-svc-vault-secret`，Deployment + CronJob 共享，H-3）默认关闭。 |
+
+---

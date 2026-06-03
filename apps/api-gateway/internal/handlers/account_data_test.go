@@ -67,6 +67,13 @@ func (f *fakeNotificationClient) GetCurrentExport(_ context.Context, req *connec
 	return connect.NewResponse(f.currentResp), nil
 }
 
+// Story 5.4 — the AccountDataProxy never calls NotifyMonthlyCapThreshold (it's
+// fired by keypolicy via the dedicated notifyclient), but the test double must
+// satisfy the extended NotificationServiceClient interface.
+func (f *fakeNotificationClient) NotifyMonthlyCapThreshold(_ context.Context, _ *connect.Request[notificationv1.NotifyMonthlyCapThresholdRequest]) (*connect.Response[notificationv1.NotifyMonthlyCapThresholdResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("fake: NotifyMonthlyCapThreshold unimplemented"))
+}
+
 func newProxyRequest(t *testing.T, method, target string, body string, userID string) *http.Request {
 	t.Helper()
 	var r *http.Request

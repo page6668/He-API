@@ -22,6 +22,9 @@ type PolicyMetrics struct {
 	checkTotal    metric.Int64Counter
 	denialTotal   metric.Int64Counter
 	checkDuration metric.Float64Histogram
+	// Story 5.4 — sticky-trip fast-path hits + threshold-notify fires.
+	sentinelHitTotal metric.Int64Counter
+	notifyTotal      metric.Int64Counter
 }
 
 // NewPolicyMetrics registers the instruments against the global meter
@@ -40,7 +43,35 @@ func NewPolicyMetrics() *PolicyMetrics {
 		"apikey_policy_check_duration_seconds",
 		metric.WithDescription("Latency of the three sequential key-policy gates"),
 	)
-	return &PolicyMetrics{checkTotal: ct, denialTotal: dt, checkDuration: cd}
+	sh, _ := m.Int64Counter(
+		"he_apikey_cap_tripped_sentinel_hit_total",
+		metric.WithDescription("Sticky-trip sentinel fast-path hits (402 without a counter GET)"),
+	)
+	nt, _ := m.Int64Counter(
+		"he_apikey_cap_threshold_notify_total",
+		metric.WithDescription("Cap threshold-crossing notifications fired, by threshold + outcome"),
+	)
+	return &PolicyMetrics{checkTotal: ct, denialTotal: dt, checkDuration: cd, sentinelHitTotal: sh, notifyTotal: nt}
+}
+
+// sentinelHit records a sticky-trip fast-path 402 (BR-1.5).
+func (m *PolicyMetrics) sentinelHit(ctx context.Context) {
+	if m == nil {
+		return
+	}
+	m.sentinelHitTotal.Add(ctx, 1)
+}
+
+// notify records a threshold-crossing fire (outcome is "fired" gateway-side;
+// notification-svc owns the dedup/error outcomes).
+func (m *PolicyMetrics) notify(ctx context.Context, threshold, outcome string) {
+	if m == nil {
+		return
+	}
+	m.notifyTotal.Add(ctx, 1, metric.WithAttributes(
+		attribute.String("threshold", threshold),
+		attribute.String("outcome", outcome),
+	))
 }
 
 func (m *PolicyMetrics) check(ctx context.Context, checkName, result string) {

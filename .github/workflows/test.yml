@@ -57,6 +57,10 @@ jobs:
         run: |
           go test ./apps/api-gateway/... -count=1 -race -coverprofile=coverage.out
 
+      - name: Run go test (auth-svc + notification-svc — Story 5.4 cross-service)
+        run: |
+          go test ./apps/auth-svc/... ./apps/notification-svc/... -count=1 -race
+
       - name: Coverage summary
         if: always()
         run: |
@@ -65,6 +69,17 @@ jobs:
           else
             echo "no coverage.out produced" >> "$GITHUB_STEP_SUMMARY"
           fi
+
+  # Story 5.4 BR-3.1 — monthly-cost-reset CronJob schedule golden-file gate.
+  # A drifted schedule could reset the cost-cap breakers mid-month; this gate
+  # asserts the literal "0 0 1 * *" stays the single source of truth.
+  verify-cron-schedule:
+    name: verify-cron-schedule
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: verify monthly-cost-reset schedule
+        run: bash scripts/ci/verify-cron-schedule.sh
 
   # Story 1.5 Q4 ruling — vendored Go gen drift detection. CI runs
   # `buf generate` and fails if `packages/proto/gen/` differs from committed

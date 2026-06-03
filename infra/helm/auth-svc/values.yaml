@@ -97,3 +97,51 @@ networkPolicy:
 nodeSelector: {}
 tolerations: []
 affinity: {}
+
+# Story 5.4 AC3 — monthly cost-reset CronJob. Resets api_keys.current_month_cost_usd
+# + purges the Redis cap-state key families at the UTC month boundary.
+# The schedule string is a CI single-source-of-truth (scripts/ci/verify-cron-schedule.sh
+# greps the literal "0 0 1 * *"); changing it requires updating that gate.
+monthlyCostReset:
+  enabled: true
+  schedule: "0 0 1 * *"        # 00:00 UTC on day 1 of each month (BR-3.1)
+  timeZone: "Etc/UTC"          # K8s 1.27+ CronJob TimeZone (TC-7)
+  concurrencyPolicy: Forbid    # BR-3.2
+  startingDeadlineSeconds: 200 # BR-3.3
+  backoffLimit: 0              # BR-3.4 (no auto-retry; on-call investigates)
+  successfulJobsHistoryLimit: 3 # L-1
+  failedJobsHistoryLimit: 3     # L-1
+  image:
+    repository: he-api/monthly-cost-reset
+    tag: "0.0.1"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+# Story 5.4 H-3 — Vault ExternalSecret. When enabled, projects the auth-svc
+# PG/Redis/Kafka credentials from Vault into a K8s Secret (auth-svc-vault-secret)
+# that BOTH the Deployment + the monthly-cost-reset CronJob consume via envFrom.
+# Disabled by default so clusters without the external-secrets operator keep
+# using the Story-1.6 he-api-db-creds Secret (db.credsSecretName) unchanged.
+externalSecret:
+  enabled: false
+  targetSecretName: auth-svc-vault-secret
+  refreshInterval: 1h
+  secretStoreRef:
+    name: he-api-vault
+    kind: ClusterSecretStore
+  # Vault KV path → env-var key mappings. Tighten to the real Vault layout
+  # before enabling in a cluster.
+  vaultPath: "kv/data/he-api/auth-svc"
+  data:
+    - secretKey: HE_API_DB_POSTGRES_URI
+      property: postgres_uri
+    - secretKey: HE_API_DB_REDIS_URI
+      property: redis_uri
+    - secretKey: HE_API_AUDIT_KAFKA_BROKERS
+      property: kafka_brokers

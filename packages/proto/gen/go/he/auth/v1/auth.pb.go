@@ -3419,6 +3419,136 @@ func (x *UpdateApiKeyResponse) GetCreatedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+// GetCapNotificationContextRequest — Story 5.4 Q-L Fix-A. Looks up the
+// notification context for a single api_key by id (UUID v4).
+type GetCapNotificationContextRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ApiKeyId      string                 `protobuf:"bytes,1,opt,name=api_key_id,json=apiKeyId,proto3" json:"api_key_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetCapNotificationContextRequest) Reset() {
+	*x = GetCapNotificationContextRequest{}
+	mi := &file_he_auth_v1_auth_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetCapNotificationContextRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetCapNotificationContextRequest) ProtoMessage() {}
+
+func (x *GetCapNotificationContextRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_he_auth_v1_auth_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetCapNotificationContextRequest.ProtoReflect.Descriptor instead.
+func (*GetCapNotificationContextRequest) Descriptor() ([]byte, []int) {
+	return file_he_auth_v1_auth_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *GetCapNotificationContextRequest) GetApiKeyId() string {
+	if x != nil {
+		return x.ApiKeyId
+	}
+	return ""
+}
+
+// GetCapNotificationContextResponse — the single-statement JOIN result
+// (users u JOIN api_keys ak ON u.id = ak.user_id WHERE ak.id = $1). Canonical
+// field order: user fields then key fields. user_display_name may be empty
+// (notification-svc resolveDisplayName falls back to the email local-part).
+// key_monthly_cost_cap_usd is the NUMERIC(10,2) cap as a string-decimal
+// ("50.00") — the email body's {{.CapUSD}} variable (BR-2.7); auth-svc is the
+// canonical api_keys reader, so the cap is sourced here rather than re-derived
+// in notification-svc.
+type GetCapNotificationContextResponse struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	UserEmail            string                 `protobuf:"bytes,1,opt,name=user_email,json=userEmail,proto3" json:"user_email,omitempty"`
+	UserLocale           string                 `protobuf:"bytes,2,opt,name=user_locale,json=userLocale,proto3" json:"user_locale,omitempty"`
+	UserDisplayName      string                 `protobuf:"bytes,3,opt,name=user_display_name,json=userDisplayName,proto3" json:"user_display_name,omitempty"`
+	KeyName              string                 `protobuf:"bytes,4,opt,name=key_name,json=keyName,proto3" json:"key_name,omitempty"`
+	KeyMonthlyCostCapUsd string                 `protobuf:"bytes,5,opt,name=key_monthly_cost_cap_usd,json=keyMonthlyCostCapUsd,proto3" json:"key_monthly_cost_cap_usd,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *GetCapNotificationContextResponse) Reset() {
+	*x = GetCapNotificationContextResponse{}
+	mi := &file_he_auth_v1_auth_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetCapNotificationContextResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetCapNotificationContextResponse) ProtoMessage() {}
+
+func (x *GetCapNotificationContextResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_he_auth_v1_auth_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetCapNotificationContextResponse.ProtoReflect.Descriptor instead.
+func (*GetCapNotificationContextResponse) Descriptor() ([]byte, []int) {
+	return file_he_auth_v1_auth_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *GetCapNotificationContextResponse) GetUserEmail() string {
+	if x != nil {
+		return x.UserEmail
+	}
+	return ""
+}
+
+func (x *GetCapNotificationContextResponse) GetUserLocale() string {
+	if x != nil {
+		return x.UserLocale
+	}
+	return ""
+}
+
+func (x *GetCapNotificationContextResponse) GetUserDisplayName() string {
+	if x != nil {
+		return x.UserDisplayName
+	}
+	return ""
+}
+
+func (x *GetCapNotificationContextResponse) GetKeyName() string {
+	if x != nil {
+		return x.KeyName
+	}
+	return ""
+}
+
+func (x *GetCapNotificationContextResponse) GetKeyMonthlyCostCapUsd() string {
+	if x != nil {
+		return x.KeyMonthlyCostCapUsd
+	}
+	return ""
+}
+
 var File_he_auth_v1_auth_proto protoreflect.FileDescriptor
 
 const file_he_auth_v1_auth_proto_rawDesc = "" +
@@ -3714,7 +3844,18 @@ const file_he_auth_v1_auth_proto_rawDesc = "" +
 	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAtB\x17\n" +
 	"\x15_monthly_cost_cap_usdB\x0f\n" +
 	"\r_last_used_atB\r\n" +
-	"\v_revoked_at*_\n" +
+	"\v_revoked_at\"@\n" +
+	" GetCapNotificationContextRequest\x12\x1c\n" +
+	"\n" +
+	"api_key_id\x18\x01 \x01(\tR\bapiKeyId\"\xe2\x01\n" +
+	"!GetCapNotificationContextResponse\x12\x1d\n" +
+	"\n" +
+	"user_email\x18\x01 \x01(\tR\tuserEmail\x12\x1f\n" +
+	"\vuser_locale\x18\x02 \x01(\tR\n" +
+	"userLocale\x12*\n" +
+	"\x11user_display_name\x18\x03 \x01(\tR\x0fuserDisplayName\x12\x19\n" +
+	"\bkey_name\x18\x04 \x01(\tR\akeyName\x126\n" +
+	"\x18key_monthly_cost_cap_usd\x18\x05 \x01(\tR\x14keyMonthlyCostCapUsd*_\n" +
 	"\vLoginStatus\x12\x1c\n" +
 	"\x18LOGIN_STATUS_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fLOGIN_STATUS_OK\x10\x01\x12\x1d\n" +
@@ -3731,7 +3872,7 @@ const file_he_auth_v1_auth_proto_rawDesc = "" +
 	"\x16ApiKeyValidationReason\x12)\n" +
 	"%API_KEY_VALIDATION_REASON_UNSPECIFIED\x10\x00\x12'\n" +
 	"#API_KEY_VALIDATION_REASON_NOT_FOUND\x10\x01\x12%\n" +
-	"!API_KEY_VALIDATION_REASON_REVOKED\x10\x022\xb9\r\n" +
+	"!API_KEY_VALIDATION_REASON_REVOKED\x10\x022\xb3\x0e\n" +
 	"\vAuthService\x12Q\n" +
 	"\fRegisterUser\x12\x1f.he.auth.v1.RegisterUserRequest\x1a .he.auth.v1.RegisterUserResponse\x12N\n" +
 	"\vVerifyEmail\x12\x1e.he.auth.v1.VerifyEmailRequest\x1a\x1f.he.auth.v1.VerifyEmailResponse\x12c\n" +
@@ -3753,7 +3894,8 @@ const file_he_auth_v1_auth_proto_rawDesc = "" +
 	"\fCreateApiKey\x12\x1f.he.auth.v1.CreateApiKeyRequest\x1a .he.auth.v1.CreateApiKeyResponse\x12N\n" +
 	"\vListApiKeys\x12\x1e.he.auth.v1.ListApiKeysRequest\x1a\x1f.he.auth.v1.ListApiKeysResponse\x12Q\n" +
 	"\fRevokeApiKey\x12\x1f.he.auth.v1.RevokeApiKeyRequest\x1a .he.auth.v1.RevokeApiKeyResponse\x12Q\n" +
-	"\fUpdateApiKey\x12\x1f.he.auth.v1.UpdateApiKeyRequest\x1a .he.auth.v1.UpdateApiKeyResponseBBZ@github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1;authv1b\x06proto3"
+	"\fUpdateApiKey\x12\x1f.he.auth.v1.UpdateApiKeyRequest\x1a .he.auth.v1.UpdateApiKeyResponse\x12x\n" +
+	"\x19GetCapNotificationContext\x12,.he.auth.v1.GetCapNotificationContextRequest\x1a-.he.auth.v1.GetCapNotificationContextResponseBBZ@github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1;authv1b\x06proto3"
 
 var (
 	file_he_auth_v1_auth_proto_rawDescOnce sync.Once
@@ -3768,76 +3910,78 @@ func file_he_auth_v1_auth_proto_rawDescGZIP() []byte {
 }
 
 var file_he_auth_v1_auth_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_he_auth_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 42)
+var file_he_auth_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 44)
 var file_he_auth_v1_auth_proto_goTypes = []any{
-	(LoginStatus)(0),                        // 0: he.auth.v1.LoginStatus
-	(LinkOutcome)(0),                        // 1: he.auth.v1.LinkOutcome
-	(VerificationFactor)(0),                 // 2: he.auth.v1.VerificationFactor
-	(ApiKeyValidationReason)(0),             // 3: he.auth.v1.ApiKeyValidationReason
-	(*RegisterUserRequest)(nil),             // 4: he.auth.v1.RegisterUserRequest
-	(*RegisterUserResponse)(nil),            // 5: he.auth.v1.RegisterUserResponse
-	(*VerifyEmailRequest)(nil),              // 6: he.auth.v1.VerifyEmailRequest
-	(*VerifyEmailResponse)(nil),             // 7: he.auth.v1.VerifyEmailResponse
-	(*ResendVerificationRequest)(nil),       // 8: he.auth.v1.ResendVerificationRequest
-	(*ResendVerificationResponse)(nil),      // 9: he.auth.v1.ResendVerificationResponse
-	(*LoginUserRequest)(nil),                // 10: he.auth.v1.LoginUserRequest
-	(*LoginUserResponse)(nil),               // 11: he.auth.v1.LoginUserResponse
-	(*RefreshTokenRequest)(nil),             // 12: he.auth.v1.RefreshTokenRequest
-	(*RefreshTokenResponse)(nil),            // 13: he.auth.v1.RefreshTokenResponse
-	(*BeginOAuthRequest)(nil),               // 14: he.auth.v1.BeginOAuthRequest
-	(*BeginOAuthResponse)(nil),              // 15: he.auth.v1.BeginOAuthResponse
-	(*CompleteOAuthRequest)(nil),            // 16: he.auth.v1.CompleteOAuthRequest
-	(*CompleteOAuthResponse)(nil),           // 17: he.auth.v1.CompleteOAuthResponse
-	(*EnrollTOTPInitRequest)(nil),           // 18: he.auth.v1.EnrollTOTPInitRequest
-	(*EnrollTOTPInitResponse)(nil),          // 19: he.auth.v1.EnrollTOTPInitResponse
-	(*EnrollTOTPVerifyRequest)(nil),         // 20: he.auth.v1.EnrollTOTPVerifyRequest
-	(*EnrollTOTPVerifyResponse)(nil),        // 21: he.auth.v1.EnrollTOTPVerifyResponse
-	(*ChallengeTOTPRequest)(nil),            // 22: he.auth.v1.ChallengeTOTPRequest
-	(*ChallengeTOTPResponse)(nil),           // 23: he.auth.v1.ChallengeTOTPResponse
-	(*UseRecoveryCodeRequest)(nil),          // 24: he.auth.v1.UseRecoveryCodeRequest
-	(*UseRecoveryCodeResponse)(nil),         // 25: he.auth.v1.UseRecoveryCodeResponse
-	(*DisableTOTPRequest)(nil),              // 26: he.auth.v1.DisableTOTPRequest
-	(*DisableTOTPResponse)(nil),             // 27: he.auth.v1.DisableTOTPResponse
-	(*RegenerateRecoveryCodesRequest)(nil),  // 28: he.auth.v1.RegenerateRecoveryCodesRequest
-	(*RegenerateRecoveryCodesResponse)(nil), // 29: he.auth.v1.RegenerateRecoveryCodesResponse
-	(*GetMeRequest)(nil),                    // 30: he.auth.v1.GetMeRequest
-	(*GetMeResponse)(nil),                   // 31: he.auth.v1.GetMeResponse
-	(*UpdateProfileRequest)(nil),            // 32: he.auth.v1.UpdateProfileRequest
-	(*UpdateProfileResponse)(nil),           // 33: he.auth.v1.UpdateProfileResponse
-	(*ValidateApiKeyRequest)(nil),           // 34: he.auth.v1.ValidateApiKeyRequest
-	(*ValidateApiKeyResponse)(nil),          // 35: he.auth.v1.ValidateApiKeyResponse
-	(*CreateApiKeyRequest)(nil),             // 36: he.auth.v1.CreateApiKeyRequest
-	(*CreateApiKeyResponse)(nil),            // 37: he.auth.v1.CreateApiKeyResponse
-	(*ListApiKeysRequest)(nil),              // 38: he.auth.v1.ListApiKeysRequest
-	(*ListApiKeysResponse)(nil),             // 39: he.auth.v1.ListApiKeysResponse
-	(*ApiKeyEntry)(nil),                     // 40: he.auth.v1.ApiKeyEntry
-	(*RevokeApiKeyRequest)(nil),             // 41: he.auth.v1.RevokeApiKeyRequest
-	(*RevokeApiKeyResponse)(nil),            // 42: he.auth.v1.RevokeApiKeyResponse
-	(*ScopePatch)(nil),                      // 43: he.auth.v1.ScopePatch
-	(*UpdateApiKeyRequest)(nil),             // 44: he.auth.v1.UpdateApiKeyRequest
-	(*UpdateApiKeyResponse)(nil),            // 45: he.auth.v1.UpdateApiKeyResponse
-	(*timestamppb.Timestamp)(nil),           // 46: google.protobuf.Timestamp
+	(LoginStatus)(0),                          // 0: he.auth.v1.LoginStatus
+	(LinkOutcome)(0),                          // 1: he.auth.v1.LinkOutcome
+	(VerificationFactor)(0),                   // 2: he.auth.v1.VerificationFactor
+	(ApiKeyValidationReason)(0),               // 3: he.auth.v1.ApiKeyValidationReason
+	(*RegisterUserRequest)(nil),               // 4: he.auth.v1.RegisterUserRequest
+	(*RegisterUserResponse)(nil),              // 5: he.auth.v1.RegisterUserResponse
+	(*VerifyEmailRequest)(nil),                // 6: he.auth.v1.VerifyEmailRequest
+	(*VerifyEmailResponse)(nil),               // 7: he.auth.v1.VerifyEmailResponse
+	(*ResendVerificationRequest)(nil),         // 8: he.auth.v1.ResendVerificationRequest
+	(*ResendVerificationResponse)(nil),        // 9: he.auth.v1.ResendVerificationResponse
+	(*LoginUserRequest)(nil),                  // 10: he.auth.v1.LoginUserRequest
+	(*LoginUserResponse)(nil),                 // 11: he.auth.v1.LoginUserResponse
+	(*RefreshTokenRequest)(nil),               // 12: he.auth.v1.RefreshTokenRequest
+	(*RefreshTokenResponse)(nil),              // 13: he.auth.v1.RefreshTokenResponse
+	(*BeginOAuthRequest)(nil),                 // 14: he.auth.v1.BeginOAuthRequest
+	(*BeginOAuthResponse)(nil),                // 15: he.auth.v1.BeginOAuthResponse
+	(*CompleteOAuthRequest)(nil),              // 16: he.auth.v1.CompleteOAuthRequest
+	(*CompleteOAuthResponse)(nil),             // 17: he.auth.v1.CompleteOAuthResponse
+	(*EnrollTOTPInitRequest)(nil),             // 18: he.auth.v1.EnrollTOTPInitRequest
+	(*EnrollTOTPInitResponse)(nil),            // 19: he.auth.v1.EnrollTOTPInitResponse
+	(*EnrollTOTPVerifyRequest)(nil),           // 20: he.auth.v1.EnrollTOTPVerifyRequest
+	(*EnrollTOTPVerifyResponse)(nil),          // 21: he.auth.v1.EnrollTOTPVerifyResponse
+	(*ChallengeTOTPRequest)(nil),              // 22: he.auth.v1.ChallengeTOTPRequest
+	(*ChallengeTOTPResponse)(nil),             // 23: he.auth.v1.ChallengeTOTPResponse
+	(*UseRecoveryCodeRequest)(nil),            // 24: he.auth.v1.UseRecoveryCodeRequest
+	(*UseRecoveryCodeResponse)(nil),           // 25: he.auth.v1.UseRecoveryCodeResponse
+	(*DisableTOTPRequest)(nil),                // 26: he.auth.v1.DisableTOTPRequest
+	(*DisableTOTPResponse)(nil),               // 27: he.auth.v1.DisableTOTPResponse
+	(*RegenerateRecoveryCodesRequest)(nil),    // 28: he.auth.v1.RegenerateRecoveryCodesRequest
+	(*RegenerateRecoveryCodesResponse)(nil),   // 29: he.auth.v1.RegenerateRecoveryCodesResponse
+	(*GetMeRequest)(nil),                      // 30: he.auth.v1.GetMeRequest
+	(*GetMeResponse)(nil),                     // 31: he.auth.v1.GetMeResponse
+	(*UpdateProfileRequest)(nil),              // 32: he.auth.v1.UpdateProfileRequest
+	(*UpdateProfileResponse)(nil),             // 33: he.auth.v1.UpdateProfileResponse
+	(*ValidateApiKeyRequest)(nil),             // 34: he.auth.v1.ValidateApiKeyRequest
+	(*ValidateApiKeyResponse)(nil),            // 35: he.auth.v1.ValidateApiKeyResponse
+	(*CreateApiKeyRequest)(nil),               // 36: he.auth.v1.CreateApiKeyRequest
+	(*CreateApiKeyResponse)(nil),              // 37: he.auth.v1.CreateApiKeyResponse
+	(*ListApiKeysRequest)(nil),                // 38: he.auth.v1.ListApiKeysRequest
+	(*ListApiKeysResponse)(nil),               // 39: he.auth.v1.ListApiKeysResponse
+	(*ApiKeyEntry)(nil),                       // 40: he.auth.v1.ApiKeyEntry
+	(*RevokeApiKeyRequest)(nil),               // 41: he.auth.v1.RevokeApiKeyRequest
+	(*RevokeApiKeyResponse)(nil),              // 42: he.auth.v1.RevokeApiKeyResponse
+	(*ScopePatch)(nil),                        // 43: he.auth.v1.ScopePatch
+	(*UpdateApiKeyRequest)(nil),               // 44: he.auth.v1.UpdateApiKeyRequest
+	(*UpdateApiKeyResponse)(nil),              // 45: he.auth.v1.UpdateApiKeyResponse
+	(*GetCapNotificationContextRequest)(nil),  // 46: he.auth.v1.GetCapNotificationContextRequest
+	(*GetCapNotificationContextResponse)(nil), // 47: he.auth.v1.GetCapNotificationContextResponse
+	(*timestamppb.Timestamp)(nil),             // 48: google.protobuf.Timestamp
 }
 var file_he_auth_v1_auth_proto_depIdxs = []int32{
 	0,  // 0: he.auth.v1.LoginUserResponse.status:type_name -> he.auth.v1.LoginStatus
 	1,  // 1: he.auth.v1.CompleteOAuthResponse.link_outcome:type_name -> he.auth.v1.LinkOutcome
 	2,  // 2: he.auth.v1.DisableTOTPRequest.factor:type_name -> he.auth.v1.VerificationFactor
 	2,  // 3: he.auth.v1.RegenerateRecoveryCodesRequest.factor:type_name -> he.auth.v1.VerificationFactor
-	46, // 4: he.auth.v1.GetMeResponse.created_at:type_name -> google.protobuf.Timestamp
-	46, // 5: he.auth.v1.GetMeResponse.updated_at:type_name -> google.protobuf.Timestamp
-	46, // 6: he.auth.v1.UpdateProfileResponse.created_at:type_name -> google.protobuf.Timestamp
-	46, // 7: he.auth.v1.UpdateProfileResponse.updated_at:type_name -> google.protobuf.Timestamp
+	48, // 4: he.auth.v1.GetMeResponse.created_at:type_name -> google.protobuf.Timestamp
+	48, // 5: he.auth.v1.GetMeResponse.updated_at:type_name -> google.protobuf.Timestamp
+	48, // 6: he.auth.v1.UpdateProfileResponse.created_at:type_name -> google.protobuf.Timestamp
+	48, // 7: he.auth.v1.UpdateProfileResponse.updated_at:type_name -> google.protobuf.Timestamp
 	3,  // 8: he.auth.v1.ValidateApiKeyResponse.reason:type_name -> he.auth.v1.ApiKeyValidationReason
-	46, // 9: he.auth.v1.CreateApiKeyResponse.created_at:type_name -> google.protobuf.Timestamp
+	48, // 9: he.auth.v1.CreateApiKeyResponse.created_at:type_name -> google.protobuf.Timestamp
 	40, // 10: he.auth.v1.ListApiKeysResponse.keys:type_name -> he.auth.v1.ApiKeyEntry
-	46, // 11: he.auth.v1.ApiKeyEntry.last_used_at:type_name -> google.protobuf.Timestamp
-	46, // 12: he.auth.v1.ApiKeyEntry.revoked_at:type_name -> google.protobuf.Timestamp
-	46, // 13: he.auth.v1.ApiKeyEntry.created_at:type_name -> google.protobuf.Timestamp
-	46, // 14: he.auth.v1.RevokeApiKeyResponse.revoked_at:type_name -> google.protobuf.Timestamp
+	48, // 11: he.auth.v1.ApiKeyEntry.last_used_at:type_name -> google.protobuf.Timestamp
+	48, // 12: he.auth.v1.ApiKeyEntry.revoked_at:type_name -> google.protobuf.Timestamp
+	48, // 13: he.auth.v1.ApiKeyEntry.created_at:type_name -> google.protobuf.Timestamp
+	48, // 14: he.auth.v1.RevokeApiKeyResponse.revoked_at:type_name -> google.protobuf.Timestamp
 	43, // 15: he.auth.v1.UpdateApiKeyRequest.scope:type_name -> he.auth.v1.ScopePatch
-	46, // 16: he.auth.v1.UpdateApiKeyResponse.last_used_at:type_name -> google.protobuf.Timestamp
-	46, // 17: he.auth.v1.UpdateApiKeyResponse.revoked_at:type_name -> google.protobuf.Timestamp
-	46, // 18: he.auth.v1.UpdateApiKeyResponse.created_at:type_name -> google.protobuf.Timestamp
+	48, // 16: he.auth.v1.UpdateApiKeyResponse.last_used_at:type_name -> google.protobuf.Timestamp
+	48, // 17: he.auth.v1.UpdateApiKeyResponse.revoked_at:type_name -> google.protobuf.Timestamp
+	48, // 18: he.auth.v1.UpdateApiKeyResponse.created_at:type_name -> google.protobuf.Timestamp
 	4,  // 19: he.auth.v1.AuthService.RegisterUser:input_type -> he.auth.v1.RegisterUserRequest
 	6,  // 20: he.auth.v1.AuthService.VerifyEmail:input_type -> he.auth.v1.VerifyEmailRequest
 	8,  // 21: he.auth.v1.AuthService.ResendVerification:input_type -> he.auth.v1.ResendVerificationRequest
@@ -3858,28 +4002,30 @@ var file_he_auth_v1_auth_proto_depIdxs = []int32{
 	38, // 36: he.auth.v1.AuthService.ListApiKeys:input_type -> he.auth.v1.ListApiKeysRequest
 	41, // 37: he.auth.v1.AuthService.RevokeApiKey:input_type -> he.auth.v1.RevokeApiKeyRequest
 	44, // 38: he.auth.v1.AuthService.UpdateApiKey:input_type -> he.auth.v1.UpdateApiKeyRequest
-	5,  // 39: he.auth.v1.AuthService.RegisterUser:output_type -> he.auth.v1.RegisterUserResponse
-	7,  // 40: he.auth.v1.AuthService.VerifyEmail:output_type -> he.auth.v1.VerifyEmailResponse
-	9,  // 41: he.auth.v1.AuthService.ResendVerification:output_type -> he.auth.v1.ResendVerificationResponse
-	11, // 42: he.auth.v1.AuthService.LoginUser:output_type -> he.auth.v1.LoginUserResponse
-	13, // 43: he.auth.v1.AuthService.RefreshToken:output_type -> he.auth.v1.RefreshTokenResponse
-	15, // 44: he.auth.v1.AuthService.BeginOAuth:output_type -> he.auth.v1.BeginOAuthResponse
-	17, // 45: he.auth.v1.AuthService.CompleteOAuth:output_type -> he.auth.v1.CompleteOAuthResponse
-	19, // 46: he.auth.v1.AuthService.EnrollTOTPInit:output_type -> he.auth.v1.EnrollTOTPInitResponse
-	21, // 47: he.auth.v1.AuthService.EnrollTOTPVerify:output_type -> he.auth.v1.EnrollTOTPVerifyResponse
-	23, // 48: he.auth.v1.AuthService.ChallengeTOTP:output_type -> he.auth.v1.ChallengeTOTPResponse
-	25, // 49: he.auth.v1.AuthService.UseRecoveryCode:output_type -> he.auth.v1.UseRecoveryCodeResponse
-	27, // 50: he.auth.v1.AuthService.DisableTOTP:output_type -> he.auth.v1.DisableTOTPResponse
-	29, // 51: he.auth.v1.AuthService.RegenerateRecoveryCodes:output_type -> he.auth.v1.RegenerateRecoveryCodesResponse
-	31, // 52: he.auth.v1.AuthService.GetMe:output_type -> he.auth.v1.GetMeResponse
-	33, // 53: he.auth.v1.AuthService.UpdateProfile:output_type -> he.auth.v1.UpdateProfileResponse
-	35, // 54: he.auth.v1.AuthService.ValidateApiKey:output_type -> he.auth.v1.ValidateApiKeyResponse
-	37, // 55: he.auth.v1.AuthService.CreateApiKey:output_type -> he.auth.v1.CreateApiKeyResponse
-	39, // 56: he.auth.v1.AuthService.ListApiKeys:output_type -> he.auth.v1.ListApiKeysResponse
-	42, // 57: he.auth.v1.AuthService.RevokeApiKey:output_type -> he.auth.v1.RevokeApiKeyResponse
-	45, // 58: he.auth.v1.AuthService.UpdateApiKey:output_type -> he.auth.v1.UpdateApiKeyResponse
-	39, // [39:59] is the sub-list for method output_type
-	19, // [19:39] is the sub-list for method input_type
+	46, // 39: he.auth.v1.AuthService.GetCapNotificationContext:input_type -> he.auth.v1.GetCapNotificationContextRequest
+	5,  // 40: he.auth.v1.AuthService.RegisterUser:output_type -> he.auth.v1.RegisterUserResponse
+	7,  // 41: he.auth.v1.AuthService.VerifyEmail:output_type -> he.auth.v1.VerifyEmailResponse
+	9,  // 42: he.auth.v1.AuthService.ResendVerification:output_type -> he.auth.v1.ResendVerificationResponse
+	11, // 43: he.auth.v1.AuthService.LoginUser:output_type -> he.auth.v1.LoginUserResponse
+	13, // 44: he.auth.v1.AuthService.RefreshToken:output_type -> he.auth.v1.RefreshTokenResponse
+	15, // 45: he.auth.v1.AuthService.BeginOAuth:output_type -> he.auth.v1.BeginOAuthResponse
+	17, // 46: he.auth.v1.AuthService.CompleteOAuth:output_type -> he.auth.v1.CompleteOAuthResponse
+	19, // 47: he.auth.v1.AuthService.EnrollTOTPInit:output_type -> he.auth.v1.EnrollTOTPInitResponse
+	21, // 48: he.auth.v1.AuthService.EnrollTOTPVerify:output_type -> he.auth.v1.EnrollTOTPVerifyResponse
+	23, // 49: he.auth.v1.AuthService.ChallengeTOTP:output_type -> he.auth.v1.ChallengeTOTPResponse
+	25, // 50: he.auth.v1.AuthService.UseRecoveryCode:output_type -> he.auth.v1.UseRecoveryCodeResponse
+	27, // 51: he.auth.v1.AuthService.DisableTOTP:output_type -> he.auth.v1.DisableTOTPResponse
+	29, // 52: he.auth.v1.AuthService.RegenerateRecoveryCodes:output_type -> he.auth.v1.RegenerateRecoveryCodesResponse
+	31, // 53: he.auth.v1.AuthService.GetMe:output_type -> he.auth.v1.GetMeResponse
+	33, // 54: he.auth.v1.AuthService.UpdateProfile:output_type -> he.auth.v1.UpdateProfileResponse
+	35, // 55: he.auth.v1.AuthService.ValidateApiKey:output_type -> he.auth.v1.ValidateApiKeyResponse
+	37, // 56: he.auth.v1.AuthService.CreateApiKey:output_type -> he.auth.v1.CreateApiKeyResponse
+	39, // 57: he.auth.v1.AuthService.ListApiKeys:output_type -> he.auth.v1.ListApiKeysResponse
+	42, // 58: he.auth.v1.AuthService.RevokeApiKey:output_type -> he.auth.v1.RevokeApiKeyResponse
+	45, // 59: he.auth.v1.AuthService.UpdateApiKey:output_type -> he.auth.v1.UpdateApiKeyResponse
+	47, // 60: he.auth.v1.AuthService.GetCapNotificationContext:output_type -> he.auth.v1.GetCapNotificationContextResponse
+	40, // [40:61] is the sub-list for method output_type
+	19, // [19:40] is the sub-list for method input_type
 	19, // [19:19] is the sub-list for extension type_name
 	19, // [19:19] is the sub-list for extension extendee
 	0,  // [0:19] is the sub-list for field type_name
@@ -3903,7 +4049,7 @@ func file_he_auth_v1_auth_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_he_auth_v1_auth_proto_rawDesc), len(file_he_auth_v1_auth_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   42,
+			NumMessages:   44,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

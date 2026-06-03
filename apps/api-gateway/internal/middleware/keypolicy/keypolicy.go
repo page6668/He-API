@@ -25,6 +25,8 @@ import (
 	"time"
 
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
+	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/requestid"
+	"github.com/he-api/he-api/apps/api-gateway/internal/notifyclient"
 	"github.com/he-api/he-api/apps/api-gateway/internal/openaierr"
 )
 
@@ -40,6 +42,12 @@ type Options struct {
 	TrustedProxies []netip.Prefix // Q-E XFF walker source (env-sourced at startup)
 	CostReader     MonthlyCostReader
 	Metrics        *PolicyMetrics
+
+	// Story 5.4 — sticky-trip breaker + threshold-crossing notifier. Both nil
+	// in Story-5.2 callers (sentinel-hit fast path + email fire are skipped,
+	// behaviour falls back to the pure counter-comparison gate).
+	CapSentinel CapTrippedSentinel
+	Notifier    CapThresholdNotifier
 }
 
 const (
@@ -108,8 +116,35 @@ func New(opts Options) func(http.Handler) http.Handler {
 			}
 			opts.Metrics.check(ctx, "model_scope", "allowed")
 
-			// --- AC4: monthly cap (fail-OPEN on Redis error per Q-F) --------
+			// --- AC4 + Story 5.4: monthly cap (fail-OPEN on Redis error, Q-F) -
 			if cap := claims.MonthlyCostCapUSD; cap != nil && *cap != "" {
+				reqID, _ := requestid.FromContext(ctx)
+
+				// Story 5.4 AC1 BR-1.1 — sticky-trip sentinel EXISTS fast-path,
+				// BEFORE the counter GET. A tripped key skips the counter
+				// round-trip and re-emits 402 without re-firing the email
+				// (BR-1.11).
+				if opts.CapSentinel != nil {
+					tripped, serr := opts.CapSentinel.Exists(ctx, claims.APIKeyID)
+					switch {
+					case serr != nil:
+						// BR-1.10 fail-OPEN: fall through to the counter slow path.
+						logger.WarnContext(ctx, "apikey_cap_tripped_sentinel_exists_failed",
+							slog.String("api_key_id", claims.APIKeyID),
+							slog.String("error", serr.Error()))
+					case tripped:
+						opts.Metrics.check(ctx, "monthly_cap", "denied")
+						opts.Metrics.denial(ctx, "monthly_cap", codeQuotaExhausted)
+						opts.Metrics.sentinelHit(ctx)
+						logger.WarnContext(ctx, "apikey_cap_tripped_sentinel_hit",
+							slog.String("api_key_id", claims.APIKeyID),
+							slog.String("he_request_id", reqID))
+						opts.Metrics.duration(ctx, time.Since(start).Seconds())
+						_ = openaierr.Write(w, ctx, http.StatusPaymentRequired, codeQuotaExhausted, msgQuotaExhausted, nil)
+						return
+					}
+				}
+
 				if opts.CostReader == nil {
 					// No counter wired — cannot enforce; fail-open + WARN.
 					opts.Metrics.check(ctx, "monthly_cap", "redis_error")
@@ -124,6 +159,8 @@ func New(opts Options) func(http.Handler) http.Handler {
 							slog.String("api_key_id", claims.APIKeyID),
 							slog.String("error", err.Error()))
 					case !CheckMonthlyCap(current, *cap):
+						// current >= cap — AC1 slow-path first-crossing.
+						opts.fireCapTripped(ctx, logger, claims, current, *cap, reqID)
 						opts.Metrics.check(ctx, "monthly_cap", "denied")
 						opts.Metrics.denial(ctx, "monthly_cap", codeQuotaExhausted)
 						logger.WarnContext(ctx, "apikey_monthly_cap_denied",
@@ -135,6 +172,11 @@ func New(opts Options) func(http.Handler) http.Handler {
 						_ = openaierr.Write(w, ctx, http.StatusPaymentRequired, codeQuotaExhausted, msgQuotaExhausted, nil)
 						return
 					default:
+						// under cap — AC2 threshold detector (80% warning).
+						if opts.Notifier != nil && crossedWarning(current, *cap) {
+							opts.Notifier.NotifyCapThresholdAsync(ctx, claims.APIKeyID, notifyclient.ThresholdWarning80)
+							opts.Metrics.notify(ctx, "warning_80", "fired")
+						}
 						opts.Metrics.check(ctx, "monthly_cap", "allowed")
 					}
 				}
@@ -144,6 +186,47 @@ func New(opts Options) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// fireCapTripped runs the AC1 slow-path first-crossing side effects: claim the
+// sticky-trip sentinel (BR-1.2 fire-and-forget, fail-OPEN) and fire the
+// threshold notifications. The TRIPPED email fire is gated on the SETNX win
+// (BR-1.9 single-source dedup); a straight-to-over-cap jump also fires
+// WARNING_80 (notification-svc dedupes per BR-2 both-crossings).
+func (opts Options) fireCapTripped(ctx context.Context, logger *slog.Logger, claims *middleware.CachedClaims, current, capUSD, reqID string) {
+	acquired := true
+	if opts.CapSentinel != nil {
+		a, serr := opts.CapSentinel.SetNX(ctx, claims.APIKeyID)
+		if serr != nil {
+			// BR-1.2 fail-OPEN: the 402 is emitted regardless; skip the fire so
+			// a Redis outage does not duplicate-email on every request.
+			acquired = false
+			logger.WarnContext(ctx, "apikey_cap_tripped_sentinel_write_failed",
+				slog.String("api_key_id", claims.APIKeyID),
+				slog.String("error", serr.Error()))
+		} else {
+			acquired = a
+		}
+	}
+	// BR-1.8/1.9: only the SETNX winner fires — concurrent losers stay silent
+	// so a tripped key produces exactly one tripped email. The winner also
+	// fires WARNING_80 for the straight-to-over-cap jump (BR-2 both-crossings);
+	// notification-svc dedupes the warning independently, so a no-op when the
+	// 80% email already went out earlier in the month.
+	if !acquired || opts.Notifier == nil {
+		return
+	}
+	logger.InfoContext(ctx, "apikey_cap_tripped_sentinel_set",
+		slog.String("api_key_id", claims.APIKeyID),
+		slog.String("current_cost_usd", current),
+		slog.String("monthly_cost_cap_usd", capUSD),
+		slog.String("he_request_id", reqID))
+	if crossedWarning(current, capUSD) {
+		opts.Notifier.NotifyCapThresholdAsync(ctx, claims.APIKeyID, notifyclient.ThresholdWarning80)
+		opts.Metrics.notify(ctx, "warning_80", "fired")
+	}
+	opts.Notifier.NotifyCapThresholdAsync(ctx, claims.APIKeyID, notifyclient.ThresholdTripped)
+	opts.Metrics.notify(ctx, "tripped", "fired")
 }
 
 // hashClientIP masks the address to its /24 (IPv4) or /64 (IPv6) network and

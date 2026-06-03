@@ -13,6 +13,8 @@ import (
 
 //go:embed email_verification/*.txt email_verification/*.html
 //go:embed gdpr_export_ready/*.txt gdpr_export_ready/*.html
+//go:embed cap_warning/*.txt cap_warning/*.html
+//go:embed cap_tripped/*.txt cap_tripped/*.html
 var fs embed.FS
 
 // FallbackLocale is the locale that any non-resolvable locale falls back to.
@@ -28,6 +30,10 @@ const (
 	// (Architect Round 1 Ruling R-2 — the slug is internal to this
 	// package; the proto wire contract uses the EmailTemplate enum).
 	TemplateGDPRExportReady = "gdpr_export_ready"
+	// Story 5.4 — monthly-cost-cap threshold emails. Slugs internal to this
+	// package; the proto wire contract uses the EmailTemplate enum (R-2 cascade).
+	TemplateMonthlyCapWarning = "cap_warning"
+	TemplateMonthlyCapTripped = "cap_tripped"
 )
 
 // Rendered is what the SendGrid client needs to build one outbound mail.

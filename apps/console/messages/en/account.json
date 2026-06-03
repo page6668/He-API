@@ -47,6 +47,18 @@
         "invalid_request": "Some of the configuration values are invalid.",
         "generic": "Something went wrong. Please try again."
       }
+    },
+    "cap": {
+      "email": {
+        "warning": {
+          "subject": "Your API key is approaching its monthly spend cap",
+          "description": "Notify when usage reaches 80% of the cap"
+        },
+        "tripped": {
+          "subject": "Your API key has been paused — monthly spend cap reached",
+          "description": "Notify when the cap is reached and the key is paused"
+        }
+      }
     }
   },
   "profile": {

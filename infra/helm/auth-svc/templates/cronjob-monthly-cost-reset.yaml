@@ -1,0 +1,77 @@
+{{- if .Values.monthlyCostReset.enabled }}
+# Story 5.4 AC3 — monthly cost-reset CronJob. Resets
+# he_api.api_keys.current_month_cost_usd to 0 (non-revoked rows) and SCAN+DELs
+# the three Redis cap-state key families at 00:00 UTC on day 1 of each month.
+# concurrencyPolicy: Forbid + backoffLimit: 0 → one cron, one outcome,
+# human-verified on failure (security-sensitive-cron posture, Q-C).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "auth-svc.fullname" . }}-monthly-cost-reset
+  labels:
+    {{- include "auth-svc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: monthly-cost-reset
+spec:
+  # NOTE: the literal schedule below is the single-source-of-truth asserted by
+  # scripts/ci/verify-cron-schedule.sh (BR-3.1). Do not template it away.
+  schedule: {{ .Values.monthlyCostReset.schedule | quote }}
+  timeZone: {{ .Values.monthlyCostReset.timeZone | quote }}
+  concurrencyPolicy: {{ .Values.monthlyCostReset.concurrencyPolicy }}
+  startingDeadlineSeconds: {{ .Values.monthlyCostReset.startingDeadlineSeconds }}
+  successfulJobsHistoryLimit: {{ .Values.monthlyCostReset.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.monthlyCostReset.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      backoffLimit: {{ .Values.monthlyCostReset.backoffLimit }}
+      activeDeadlineSeconds: 330  # > the binary's 5-min ctx deadline (BR-3.13)
+      template:
+        metadata:
+          labels:
+            {{- include "auth-svc.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: monthly-cost-reset
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ include "auth-svc.serviceAccountName" . }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: monthly-cost-reset
+              image: "{{ .Values.monthlyCostReset.image.repository }}:{{ .Values.monthlyCostReset.image.tag }}"
+              imagePullPolicy: {{ .Values.monthlyCostReset.image.pullPolicy }}
+              env:
+                - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                  value: {{ .Values.env.OTEL_EXPORTER_OTLP_ENDPOINT | quote }}
+                # Audit emit is best-effort; empty value skips it gracefully.
+                - name: HE_API_AUDIT_KAFKA_BROKERS
+                  value: {{ .Values.audit.kafkaBrokers | quote }}
+              envFrom:
+                # PG + Redis URIs (HE_API_DB_POSTGRES_URI / HE_API_DB_REDIS_URI)
+                # from the shared Story-1.6 Secret — same creds as the Deployment.
+                - secretRef:
+                    name: {{ .Values.db.credsSecretName }}
+                {{- if .Values.externalSecret.enabled }}
+                # H-3 — Vault-projected Secret (shared with the Deployment).
+                - secretRef:
+                    name: {{ .Values.externalSecret.targetSecretName }}
+                {{- end }}
+              securityContext:
+                runAsNonRoot: true
+                runAsUser: 65532
+                readOnlyRootFilesystem: true
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                seccompProfile:
+                  type: RuntimeDefault
+              resources:
+                requests:
+                  cpu: {{ .Values.monthlyCostReset.resources.requests.cpu }}
+                  memory: {{ .Values.monthlyCostReset.resources.requests.memory }}
+                limits:
+                  cpu: {{ .Values.monthlyCostReset.resources.limits.cpu }}
+                  memory: {{ .Values.monthlyCostReset.resources.limits.memory }}
+{{- end }}

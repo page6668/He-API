@@ -115,6 +115,14 @@ service AuthService {
   // → FailedPrecondition account_pending_deletion (Q-I). No updated_at write
   // (Architect Q-K — the schema has no such column).
   rpc UpdateApiKey(UpdateApiKeyRequest) returns (UpdateApiKeyResponse);
+
+  // Story 5.4 (Architect Round 1 Q-L Fix-A) — internal lookup feeding the
+  // notification-svc monthly-cap email path. notification-svc cannot import
+  // auth-svc's internal/repository across the go.work module boundary, so
+  // auth-svc (the sole canonical reader of the PII-sensitive api_keys table)
+  // exposes the JOIN result over gRPC. Single PG round-trip; called
+  // fire-and-forget off the gateway hot path.
+  rpc GetCapNotificationContext(GetCapNotificationContextRequest) returns (GetCapNotificationContextResponse);
 }
 
 // --- RegisterUser --------------------------------------------------------
@@ -648,4 +656,26 @@ message UpdateApiKeyResponse {
   optional google.protobuf.Timestamp last_used_at = 7;
   optional google.protobuf.Timestamp revoked_at = 8;  // always null on UPDATE
   google.protobuf.Timestamp created_at = 9;
+}
+
+// GetCapNotificationContextRequest — Story 5.4 Q-L Fix-A. Looks up the
+// notification context for a single api_key by id (UUID v4).
+message GetCapNotificationContextRequest {
+  string api_key_id = 1;
+}
+
+// GetCapNotificationContextResponse — the single-statement JOIN result
+// (users u JOIN api_keys ak ON u.id = ak.user_id WHERE ak.id = $1). Canonical
+// field order: user fields then key fields. user_display_name may be empty
+// (notification-svc resolveDisplayName falls back to the email local-part).
+// key_monthly_cost_cap_usd is the NUMERIC(10,2) cap as a string-decimal
+// ("50.00") — the email body's {{.CapUSD}} variable (BR-2.7); auth-svc is the
+// canonical api_keys reader, so the cap is sourced here rather than re-derived
+// in notification-svc.
+message GetCapNotificationContextResponse {
+  string user_email = 1;
+  string user_locale = 2;
+  string user_display_name = 3;
+  string key_name = 4;
+  string key_monthly_cost_cap_usd = 5;
 }

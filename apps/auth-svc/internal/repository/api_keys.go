@@ -329,6 +329,63 @@ func SelectAPIKeyConfigForUpdate(ctx context.Context, q Querier, apiKeyID uuid.U
 	return r, nil
 }
 
+// CapNotificationContext is the single-statement JOIN projection feeding the
+// Story-5.4 notification-svc monthly-cap email path (Architect Round 1 Q-L
+// Fix-A). UserDisplayName is COALESCE'd to "" when the column is NULL so the
+// caller's resolveDisplayName fallback (display_name → email local-part) sees a
+// clean empty string rather than a SQL NULL.
+type CapNotificationContext struct {
+	UserEmail            string
+	UserLocale           string
+	UserDisplayName      string
+	KeyName              string
+	KeyMonthlyCostCapUSD string // NUMERIC(10,2)::text e.g. "50.00"; "" if NULL
+}
+
+const (
+	// lookupCapNotificationContextSQL drives the Story-5.4 GetCapNotificationContext
+	// RPC. Single round-trip JOIN; auth-svc remains the sole canonical reader
+	// of the PII-sensitive api_keys table (notification-svc reaches it only via
+	// this gRPC hop, never a cross-module repository import).
+	lookupCapNotificationContextSQL = `SELECT u.email, u.locale, COALESCE(u.display_name, ''), ak.name, COALESCE(ak.monthly_cost_cap_usd::text, '')
+FROM he_api.users u
+JOIN he_api.api_keys ak ON u.id = ak.user_id
+WHERE ak.id = $1
+LIMIT 1`
+
+	// resetMonthlyCostsSQL drives the Story-5.4 monthly-cost-reset CronJob
+	// (AC3 BR-3.5). Column-level constant assignment — idempotent on re-run.
+	// `WHERE revoked_at IS NULL` freezes revoked rows' aggregates for audit.
+	resetMonthlyCostsSQL = `UPDATE he_api.api_keys SET current_month_cost_usd = 0 WHERE revoked_at IS NULL`
+)
+
+// LookupCapNotificationContext returns the user email/locale/display_name + key
+// name for a single api_key id (Story-5.4 Q-L Fix-A). Returns ErrAPIKeyNotFound
+// on zero rows (the handler maps to gRPC NotFound — anti-enumeration parity
+// with Story-5.1; the payload is internal-only).
+func LookupCapNotificationContext(ctx context.Context, q Querier, apiKeyID uuid.UUID) (CapNotificationContext, error) {
+	var c CapNotificationContext
+	row := q.QueryRow(ctx, lookupCapNotificationContextSQL, apiKeyID)
+	if err := row.Scan(&c.UserEmail, &c.UserLocale, &c.UserDisplayName, &c.KeyName, &c.KeyMonthlyCostCapUSD); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return CapNotificationContext{}, ErrAPIKeyNotFound
+		}
+		return CapNotificationContext{}, err
+	}
+	return c, nil
+}
+
+// ResetMonthlyCosts zeroes current_month_cost_usd for every non-revoked
+// api_keys row (Story-5.4 AC3 BR-3.5). Returns rows_affected. Idempotent —
+// re-running sets the same column to the same value.
+func ResetMonthlyCosts(ctx context.Context, q Querier) (int64, error) {
+	tag, err := q.Exec(ctx, resetMonthlyCostsSQL)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
 // UpdateAPIKeyConfig writes the merged scope JSONB + monthly_cost_cap_usd for
 // the Story-5.2 UpdateApiKey RPC (AC1). The WHERE clause re-asserts ownership
 // + revoke-state against TOCTOU; a concurrent revoke between SELECT and

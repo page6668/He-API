@@ -50,6 +50,9 @@ const (
 	// NotificationServiceGetCurrentExportProcedure is the fully-qualified name of the
 	// NotificationService's GetCurrentExport RPC.
 	NotificationServiceGetCurrentExportProcedure = "/he.notification.v1.NotificationService/GetCurrentExport"
+	// NotificationServiceNotifyMonthlyCapThresholdProcedure is the fully-qualified name of the
+	// NotificationService's NotifyMonthlyCapThreshold RPC.
+	NotificationServiceNotifyMonthlyCapThresholdProcedure = "/he.notification.v1.NotificationService/NotifyMonthlyCapThreshold"
 )
 
 // NotificationServiceClient is a client for the he.notification.v1.NotificationService service.
@@ -62,6 +65,13 @@ type NotificationServiceClient interface {
 	// Story 2.6 — read the user's most-recent in-flight export (if any),
 	// for AC1 BR-1.5 CTA-disabled hydration.
 	GetCurrentExport(context.Context, *connect.Request[v1.GetCurrentExportRequest]) (*connect.Response[v1.GetCurrentExportResponse], error)
+	// Story 5.4 — monthly-cost-cap threshold-crossing notification. Called
+	// fire-and-forget by api-gateway keypolicy middleware when a key crosses
+	// the 80% warning or 100% tripped threshold. The handler owns the
+	// once-per-month SETNX dedupe (keystate:apikey:cap_*_notified:{id}),
+	// resolves the user's email/locale/display_name + key name via auth-svc
+	// GetCapNotificationContext, and dispatches the localized SendEmail.
+	NotifyMonthlyCapThreshold(context.Context, *connect.Request[v1.NotifyMonthlyCapThresholdRequest]) (*connect.Response[v1.NotifyMonthlyCapThresholdResponse], error)
 }
 
 // NewNotificationServiceClient constructs a client for the he.notification.v1.NotificationService
@@ -93,14 +103,21 @@ func NewNotificationServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(notificationServiceMethods.ByName("GetCurrentExport")),
 			connect.WithClientOptions(opts...),
 		),
+		notifyMonthlyCapThreshold: connect.NewClient[v1.NotifyMonthlyCapThresholdRequest, v1.NotifyMonthlyCapThresholdResponse](
+			httpClient,
+			baseURL+NotificationServiceNotifyMonthlyCapThresholdProcedure,
+			connect.WithSchema(notificationServiceMethods.ByName("NotifyMonthlyCapThreshold")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // notificationServiceClient implements NotificationServiceClient.
 type notificationServiceClient struct {
-	sendEmail         *connect.Client[v1.SendEmailRequest, v1.SendEmailResponse]
-	requestDataExport *connect.Client[v1.RequestDataExportRequest, v1.RequestDataExportResponse]
-	getCurrentExport  *connect.Client[v1.GetCurrentExportRequest, v1.GetCurrentExportResponse]
+	sendEmail                 *connect.Client[v1.SendEmailRequest, v1.SendEmailResponse]
+	requestDataExport         *connect.Client[v1.RequestDataExportRequest, v1.RequestDataExportResponse]
+	getCurrentExport          *connect.Client[v1.GetCurrentExportRequest, v1.GetCurrentExportResponse]
+	notifyMonthlyCapThreshold *connect.Client[v1.NotifyMonthlyCapThresholdRequest, v1.NotifyMonthlyCapThresholdResponse]
 }
 
 // SendEmail calls he.notification.v1.NotificationService.SendEmail.
@@ -118,6 +135,11 @@ func (c *notificationServiceClient) GetCurrentExport(ctx context.Context, req *c
 	return c.getCurrentExport.CallUnary(ctx, req)
 }
 
+// NotifyMonthlyCapThreshold calls he.notification.v1.NotificationService.NotifyMonthlyCapThreshold.
+func (c *notificationServiceClient) NotifyMonthlyCapThreshold(ctx context.Context, req *connect.Request[v1.NotifyMonthlyCapThresholdRequest]) (*connect.Response[v1.NotifyMonthlyCapThresholdResponse], error) {
+	return c.notifyMonthlyCapThreshold.CallUnary(ctx, req)
+}
+
 // NotificationServiceHandler is an implementation of the he.notification.v1.NotificationService
 // service.
 type NotificationServiceHandler interface {
@@ -129,6 +151,13 @@ type NotificationServiceHandler interface {
 	// Story 2.6 — read the user's most-recent in-flight export (if any),
 	// for AC1 BR-1.5 CTA-disabled hydration.
 	GetCurrentExport(context.Context, *connect.Request[v1.GetCurrentExportRequest]) (*connect.Response[v1.GetCurrentExportResponse], error)
+	// Story 5.4 — monthly-cost-cap threshold-crossing notification. Called
+	// fire-and-forget by api-gateway keypolicy middleware when a key crosses
+	// the 80% warning or 100% tripped threshold. The handler owns the
+	// once-per-month SETNX dedupe (keystate:apikey:cap_*_notified:{id}),
+	// resolves the user's email/locale/display_name + key name via auth-svc
+	// GetCapNotificationContext, and dispatches the localized SendEmail.
+	NotifyMonthlyCapThreshold(context.Context, *connect.Request[v1.NotifyMonthlyCapThresholdRequest]) (*connect.Response[v1.NotifyMonthlyCapThresholdResponse], error)
 }
 
 // NewNotificationServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -156,6 +185,12 @@ func NewNotificationServiceHandler(svc NotificationServiceHandler, opts ...conne
 		connect.WithSchema(notificationServiceMethods.ByName("GetCurrentExport")),
 		connect.WithHandlerOptions(opts...),
 	)
+	notificationServiceNotifyMonthlyCapThresholdHandler := connect.NewUnaryHandler(
+		NotificationServiceNotifyMonthlyCapThresholdProcedure,
+		svc.NotifyMonthlyCapThreshold,
+		connect.WithSchema(notificationServiceMethods.ByName("NotifyMonthlyCapThreshold")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/he.notification.v1.NotificationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case NotificationServiceSendEmailProcedure:
@@ -164,6 +199,8 @@ func NewNotificationServiceHandler(svc NotificationServiceHandler, opts ...conne
 			notificationServiceRequestDataExportHandler.ServeHTTP(w, r)
 		case NotificationServiceGetCurrentExportProcedure:
 			notificationServiceGetCurrentExportHandler.ServeHTTP(w, r)
+		case NotificationServiceNotifyMonthlyCapThresholdProcedure:
+			notificationServiceNotifyMonthlyCapThresholdHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -183,4 +220,8 @@ func (UnimplementedNotificationServiceHandler) RequestDataExport(context.Context
 
 func (UnimplementedNotificationServiceHandler) GetCurrentExport(context.Context, *connect.Request[v1.GetCurrentExportRequest]) (*connect.Response[v1.GetCurrentExportResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.notification.v1.NotificationService.GetCurrentExport is not implemented"))
+}
+
+func (UnimplementedNotificationServiceHandler) NotifyMonthlyCapThreshold(context.Context, *connect.Request[v1.NotifyMonthlyCapThresholdRequest]) (*connect.Response[v1.NotifyMonthlyCapThresholdResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.notification.v1.NotificationService.NotifyMonthlyCapThreshold is not implemented"))
 }

@@ -243,3 +243,11 @@ Story 4.8 introduces test-only shared types under `apps/api-gateway/tests/`. The
   - Fixtures: `gateway_url` / `api_key` / `openai_client` (function-scoped per cross-vendor independence rule) / `httpx_client` / `expected_vendor_models_present` (session-scoped probe).
 - **Module `openai_sdk_protocol_completeness_test`** (`apps/api-gateway/tests/openai_sdk_protocol_completeness_test.py`):
   - Constants: `MATRIX_MODELS: list[str]` (10 entries — BR-2.8 single-source-of-truth; appending here auto-grows the matrix), `MATRIX_STREAM: list[bool] = [False, True]`, `MATRIX_CELLS: list[tuple[str, bool]]` (20 entries), `VIRTUAL_HE_ROUTER_MODELS` (3-tuple of `he-router-*` ids EXCLUDED per OQ-4.8-6).
+
+## Cost-Cap Types (Story 5.4)
+
+- **Proto** (`packages/proto/he/{notification,auth}/v1`): `EmailTemplate{=7,=8}`, `ThresholdLevel{UNSPECIFIED,WARNING_80,TRIPPED}`, `NotifyMonthlyCapThreshold{Request,Response}`, `GetCapNotificationContext{Request,Response}`. Vendored stubs regenerated via `buf generate`.
+- **Gateway** (`apps/api-gateway/internal`): NEW `notifyclient` package (`Client`, `Threshold{Warning80,Tripped}`, `NotifyCapThresholdAsync`); keypolicy `CapTrippedSentinel` interface + `RedisCapSentinel`, `CapThresholdNotifier` interface, named constants `MonthlyCapWarningThresholdRatio=0.80` / `MonthlyCapTrippedThresholdRatio=1.00`, Redis prefix constants.
+- **auth-svc** (`apps/auth-svc/internal`): `repository.CapNotificationContext` + `LookupCapNotificationContext` + `ResetMonthlyCosts`; `handlers.GetCapNotificationContext`; `redisclient.PurgeMonthlyState` + `PurgeCounts` (cluster-aware via `ForEachMaster`, m-1) + cap-prefix constants; NEW binary `cmd/monthly-cost-reset`.
+- **notification-svc** (`apps/notification-svc/internal`): NEW `authsvcclient` package (`Client`, `CapContext`); `handlers.CapThresholdServer` + `NotifyMonthlyCapThreshold` + `resolveDisplayName` (BR-2.5) + `CapDedupeStore`/`RedisDedupeStore`; `templates.TemplateMonthlyCapWarning`/`TemplateMonthlyCapTripped` (40 template files, 10 locales × 2 templates × {html,txt}).
+- **console i18n**: NEW `account.keys.cap.email.{warning,tripped}.{subject,description}` across 10 locales (en + zh-CN full; 8 `[en-pending]`).
