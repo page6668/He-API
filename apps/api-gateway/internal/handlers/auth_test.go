@@ -263,6 +263,10 @@ func (f *fakeAuthClient) RevokeApiKey(_ context.Context, _ *connect.Request[auth
 	return nil, errFakeUnimplemented
 }
 
+func (f *fakeAuthClient) UpdateApiKey(_ context.Context, _ *connect.Request[authv1.UpdateApiKeyRequest]) (*connect.Response[authv1.UpdateApiKeyResponse], error) {
+	return nil, errFakeUnimplemented
+}
+
 var _ authv1connect.AuthServiceClient = (*fakeAuthClient)(nil)
 
 // --- helpers -------------------------------------------------------------

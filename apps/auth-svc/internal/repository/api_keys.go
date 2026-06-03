@@ -52,7 +52,7 @@ const (
 	// lookupAPIKeysByPrefixSQL drives the AC2 Validate hot path. ORDER BY id
 	// ASC for deterministic bcrypt iteration (BR-2.3). LIMIT bounds the
 	// candidate fanout (BR-2.3 max_candidates=100).
-	lookupAPIKeysByPrefixSQL = `SELECT id, user_id, team_id, key_prefix, key_hash, scope, revoked_at, created_at
+	lookupAPIKeysByPrefixSQL = `SELECT id, user_id, team_id, key_prefix, key_hash, scope, monthly_cost_cap_usd, revoked_at, created_at
 FROM he_api.api_keys
 WHERE key_prefix = $1
 ORDER BY id ASC
@@ -113,6 +113,34 @@ FOR UPDATE`
 SET revoked_at = NOW()
 WHERE id = $1
 RETURNING revoked_at`
+
+	// selectAPIKeyConfigForUpdateSQL drives the Story-5.2 UpdateApiKey RPC
+	// (AC1). Selects the FULL row (minus key_hash per BR-2.5 defence-in-depth)
+	// so the handler can (a) apply the BR-1.8 anti-enumeration owner/revoke
+	// guard, (b) read the current `scope` JSONB for the BR-1.7 partial-merge,
+	// and (c) carry forward monthly_cost_cap_usd when the patch omits it.
+	// FOR UPDATE serializes concurrent config writes on the same id
+	// (last-writer-wins per Architect Q-G).
+	selectAPIKeyConfigForUpdateSQL = `SELECT id, user_id, team_id, name, key_prefix, scope,
+       monthly_cost_cap_usd, current_month_cost_usd, last_used_at, revoked_at, created_at
+FROM he_api.api_keys
+WHERE id = $1
+LIMIT 1
+FOR UPDATE`
+
+	// updateAPIKeyConfigSQL drives the Story-5.2 UpdateApiKey RPC UPDATE path.
+	// The WHERE clause re-asserts `user_id = $2 AND revoked_at IS NULL` against
+	// TOCTOU (a concurrent revoke between the SELECT and the UPDATE) — 0 rows
+	// returned ⇒ the handler maps to NotFound (BR-1.8). NO updated_at write —
+	// the schema carries `created_at` only (Architect Q-K ratified 2026-05-25;
+	// the Kafka api_key.config_updated event `ts` is the last-modified SoT).
+	// Returns the full updated row so the handler builds the response without
+	// a re-SELECT.
+	updateAPIKeyConfigSQL = `UPDATE he_api.api_keys
+SET scope = $3, monthly_cost_cap_usd = $4
+WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL
+RETURNING id, user_id, team_id, name, key_prefix, scope,
+          monthly_cost_cap_usd, current_month_cost_usd, last_used_at, revoked_at, created_at`
 )
 
 // LookupAPIKeysByPrefix returns every api_keys row whose key_prefix matches
@@ -139,7 +167,7 @@ func LookupAPIKeysByPrefix(ctx context.Context, q Querier, prefix string) ([]Api
 		if err := rows.Scan(
 			&r.ID, &r.UserID, &r.TeamID,
 			&r.KeyPrefix, &r.KeyHash, &r.Scope,
-			&r.RevokedAt, &r.CreatedAt,
+			&r.MonthlyCostCapUSD, &r.RevokedAt, &r.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -269,4 +297,50 @@ func UpdateAPIKeyRevokedAt(ctx context.Context, q Querier, apiKeyID uuid.UUID) (
 		return time.Time{}, err
 	}
 	return revokedAt, nil
+}
+
+// scanAPIKeyConfigRow scans the full-row projection shared by
+// selectAPIKeyConfigForUpdateSQL and updateAPIKeyConfigSQL. key_hash is
+// NEVER selected (BR-2.5) so the field is left zero-valued.
+func scanAPIKeyConfigRow(row pgx.Row) (ApiKeyRow, error) {
+	var r ApiKeyRow
+	if err := row.Scan(
+		&r.ID, &r.UserID, &r.TeamID, &r.Name, &r.KeyPrefix, &r.Scope,
+		&r.MonthlyCostCapUSD, &r.CurrentMonthCostUSD, &r.LastUsedAt, &r.RevokedAt, &r.CreatedAt,
+	); err != nil {
+		return ApiKeyRow{}, err
+	}
+	return r, nil
+}
+
+// SelectAPIKeyConfigForUpdate fetches the full api_keys row (minus key_hash)
+// under a FOR UPDATE row-lock for the Story-5.2 UpdateApiKey RPC (AC1).
+// Returns ErrAPIKeyNotFound when WHERE id=$1 matches zero rows. The caller
+// MUST hold a pgx.Tx for the lock to outlive this call (see
+// SelectAPIKeyForUpdate's note on pool-vs-tx lock degradation).
+func SelectAPIKeyConfigForUpdate(ctx context.Context, q Querier, apiKeyID uuid.UUID) (ApiKeyRow, error) {
+	r, err := scanAPIKeyConfigRow(q.QueryRow(ctx, selectAPIKeyConfigForUpdateSQL, apiKeyID))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ApiKeyRow{}, ErrAPIKeyNotFound
+		}
+		return ApiKeyRow{}, err
+	}
+	return r, nil
+}
+
+// UpdateAPIKeyConfig writes the merged scope JSONB + monthly_cost_cap_usd for
+// the Story-5.2 UpdateApiKey RPC (AC1). The WHERE clause re-asserts ownership
+// + revoke-state against TOCTOU; a concurrent revoke between SELECT and
+// UPDATE collapses to ErrAPIKeyNotFound (BR-1.8). Returns the full updated
+// row. `cap` with Valid=false stores SQL NULL ("no cap" per BR-4.1).
+func UpdateAPIKeyConfig(ctx context.Context, q Querier, apiKeyID, userID uuid.UUID, scope []byte, cap pgtype.Numeric) (ApiKeyRow, error) {
+	r, err := scanAPIKeyConfigRow(q.QueryRow(ctx, updateAPIKeyConfigSQL, apiKeyID, userID, scope, cap))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ApiKeyRow{}, ErrAPIKeyNotFound
+		}
+		return ApiKeyRow{}, err
+	}
+	return r, nil
 }

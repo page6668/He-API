@@ -100,6 +100,21 @@ service AuthService {
   rpc CreateApiKey(CreateApiKeyRequest) returns (CreateApiKeyResponse);
   rpc ListApiKeys(ListApiKeysRequest) returns (ListApiKeysResponse);
   rpc RevokeApiKey(RevokeApiKeyRequest) returns (RevokeApiKeyResponse);
+
+  // Story 5.2 — API Key configuration (partial update of scope + cost cap).
+  //
+  // UpdateApiKey: partial-update of api_keys.scope (models[] + ip_whitelist[])
+  // and monthly_cost_cap_usd. Only fields PRESENT in the patch mutate
+  // (BR-1.7 merge semantics). SELECT ... FOR UPDATE re-asserts ownership +
+  // revoke-state (anti-enumeration NotFound collapse per BR-1.8 cascade from
+  // Story-5.1 BR-3.2); the UPDATE WHERE clause re-asserts revoked_at IS NULL
+  // against TOCTOU. On commit: SET auth:apikey:config_updated:{api_key_id}
+  // sentinel EX 300 for cross-pod cache-invalidation (BR-1.9; mirrors the
+  // Story-5.1 revoke sentinel) + Kafka audit.event api_key.config_updated
+  // (BR-1.11; PII-safe; changed_fields[]). users.status='pending_deletion'
+  // → FailedPrecondition account_pending_deletion (Q-I). No updated_at write
+  // (Architect Q-K — the schema has no such column).
+  rpc UpdateApiKey(UpdateApiKeyRequest) returns (UpdateApiKeyResponse);
 }
 
 // --- RegisterUser --------------------------------------------------------
@@ -509,6 +524,11 @@ message ValidateApiKeyResponse {
   // single 401 envelope (AC2 BR-2.4 anti-enumeration parity between
   // NOT_FOUND and REVOKED).
   ApiKeyValidationReason reason = 6;
+  // Story 5.2 — the key's monthly_cost_cap_usd (string-decimal; null when the
+  // DB column is NULL = "no cap"). Carried on the Validate hot path so the
+  // api-gateway keypolicy middleware (AC4) enforces the cap from the bearer
+  // cache WITHOUT a per-request PG round-trip (Q-A cache-shape extension).
+  optional string monthly_cost_cap_usd = 7;
 }
 
 enum ApiKeyValidationReason {
@@ -581,4 +601,51 @@ message RevokeApiKeyResponse {
   string api_key_id = 1;
   google.protobuf.Timestamp revoked_at = 2;
   bool was_already_revoked = 3;
+}
+
+// --- Story 5.2 — UpdateApiKey (configure scope + monthly cost cap) --------
+
+// ScopePatch carries the optional scope mutation. proto3's "no native
+// presence for repeated fields" means absent-vs-empty cannot be inferred
+// from the slice alone — the explicit *_present booleans distinguish "field
+// omitted from the patch (preserve existing)" from "field present and empty
+// (clear the list)" per BR-1.7 merge semantics.
+message ScopePatch {
+  repeated string models = 1;
+  bool models_present = 2;        // true → mutate scope.models (even to [])
+  repeated string ip_whitelist = 3;
+  bool ip_whitelist_present = 4;  // true → mutate scope.ip_whitelist (even to [])
+}
+
+// UpdateApiKeyRequest. user_id is the gateway-extracted JWT sub claim — the
+// client request body MUST NOT carry it (BR-1.1 IDOR defence). api_key_id is
+// the path parameter (UUID v4). The gateway validates models[] against its
+// in-process registry + ip_whitelist[] CIDR shape + cap range BEFORE this
+// RPC; auth-svc re-validates cap range + CIDR shape (stdlib net/netip) as
+// defence-in-depth. monthly_cost_cap_usd is a string-decimal (BR-1.6 /
+// Q-Spec-4 cascade); clear_monthly_cap=true clears the cap to NULL.
+message UpdateApiKeyRequest {
+  string user_id = 1;
+  string api_key_id = 2;
+  ScopePatch scope = 3;                       // nil → scope untouched
+  optional string monthly_cost_cap_usd = 4;   // present & !clear → set value
+  bool clear_monthly_cap = 5;                 // true → set monthly_cost_cap_usd = NULL
+  string client_ip = 6;                       // audit (hashed)
+  string user_agent = 7;                      // audit (hashed)
+}
+
+// UpdateApiKeyResponse mirrors ApiKeyEntry's field set (minus key_hash) so
+// the Console UI renders the post-update row with the same component as
+// ListApiKeys. revoked_at is always null on a successful UPDATE (revoked
+// rows are not updatable per the WHERE clause).
+message UpdateApiKeyResponse {
+  string api_key_id = 1;
+  string name = 2;
+  string key_prefix = 3;
+  string scope = 4;                                   // JSON-encoded scope JSONB
+  optional string monthly_cost_cap_usd = 5;           // null when DB NULL
+  string current_month_cost_usd = 6;                  // string-decimal; "0" default
+  optional google.protobuf.Timestamp last_used_at = 7;
+  optional google.protobuf.Timestamp revoked_at = 8;  // always null on UPDATE
+  google.protobuf.Timestamp created_at = 9;
 }

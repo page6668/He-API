@@ -338,6 +338,9 @@ func main() {
 		auditPub,
 		redisclient.NewRevokeSentinel(rdb),
 	)
+	// Story 5.2 — wire the config-updated sentinel store (BR-1.9). Same Redis
+	// client as the revoke sentinel; UpdateApiKey is nil-safe + fail-open.
+	apiKeyService.ConfigSentinel = redisclient.NewConfigUpdatedSentinel(rdb)
 
 	// === AuthServer =========================================================
 	authServer := handlers.NewAuthServer(handlers.AuthServer{

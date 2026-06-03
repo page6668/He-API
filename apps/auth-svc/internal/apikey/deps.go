@@ -37,3 +37,13 @@ type AuditPublisher interface {
 type SentinelStore interface {
 	SetRevokedSentinel(ctx context.Context, apiKeyID uuid.UUID) error
 }
+
+// ConfigSentinelStore is the narrow Story-5.2 BR-1.9 config-update sentinel
+// surface. Production wires *redisclient.ConfigUpdatedSentinel which thinly
+// wraps a *redis.Client. On nil receiver Service.UpdateApiKey skips the write
+// + logs WARN (fail-open cascade from Story-5.1 BR-3.13); the lag falls back
+// to the 5-minute positive-cache natural expiry. TTL invariant identical to
+// SentinelStore: SET TTL ≥ the api-gateway positive-cache TTL (300 s).
+type ConfigSentinelStore interface {
+	SetConfigUpdatedSentinel(ctx context.Context, apiKeyID uuid.UUID) error
+}

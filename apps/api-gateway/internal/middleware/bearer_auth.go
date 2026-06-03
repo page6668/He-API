@@ -78,6 +78,15 @@ const (
 	// gateway MUST purge the cached positive before serving (the
 	// Story-3.2 Validate path will then return REVOKED → 401).
 	SentinelKeyPrefix = "auth:apikey:revoked:"
+
+	// ConfigUpdatedSentinelKeyPrefix is the Story-5.2 BR-1.9 config-update
+	// cache-invalidation key prefix. MUST match the auth-svc redisclient
+	// constant of the same value. On a positive cache hit the gateway
+	// EXISTS-checks this key alongside the revoke sentinel (single MULTI
+	// round-trip); presence means the auth-svc mutated the key's scope/cap
+	// since the cache was filled, so the gateway purges the stale extended-
+	// shape entry and falls through to Validate (which returns the new shape).
+	ConfigUpdatedSentinelKeyPrefix = "auth:apikey:config_updated:"
 )
 
 // CodeInvalidAPIKey + the partner codes are the OpenAI-compatible envelope
@@ -104,7 +113,23 @@ var (
 	bearerUserIDKey = ctxKey{name: "bearerUserID"}
 	teamIDKey       = ctxKey{name: "teamID"}
 	scopeKey        = ctxKey{name: "apiKeyScope"}
+	cacheValueKey   = ctxKey{name: "apiKeyCacheValue"}
 )
+
+// WithCacheValue attaches the full resolved CachedClaims to ctx (Story 5.2
+// T3.4) so the keypolicy middleware (AC2/AC3/AC4) reads the structured policy
+// fields without re-deriving them. Stored as a pointer; never mutated after
+// attach.
+func WithCacheValue(ctx context.Context, c *CachedClaims) context.Context {
+	return context.WithValue(ctx, cacheValueKey, c)
+}
+
+// CacheValueFromContext retrieves the resolved CachedClaims attached by
+// RequireAPIKey. Returns (nil, false) if the bearer middleware did not run.
+func CacheValueFromContext(ctx context.Context) (*CachedClaims, bool) {
+	v, ok := ctx.Value(cacheValueKey).(*CachedClaims)
+	return v, ok && v != nil
+}
 
 // WithAPIKeyID attaches the validated api_keys.id UUID string to ctx.
 func WithAPIKeyID(ctx context.Context, id string) context.Context {
@@ -167,6 +192,43 @@ type CachedClaims struct {
 	UserID   string `json:"user_id"`
 	TeamID   string `json:"team_id"`
 	Scope    string `json:"scope"`
+
+	// Story 5.2 (Q-A) — extended policy shape for the keypolicy middleware
+	// (AC2/AC3/AC4). All `omitempty` — the tags ARE the backward-compat
+	// mechanism: a pre-Story-5.2 cache entry (which lacks these keys)
+	// deserialises with these fields zero-valued during the 5-min rollout
+	// window (Go's json.Unmarshal ignores missing fields). The legacy
+	// `Scope` string is PRESERVED verbatim so deprecated WithScope/
+	// ScopeFromContext callers don't regress (Architect M3/M4 fix).
+	ScopeModels       []string `json:"scope_models,omitempty"`
+	ScopeIPWhitelist  []string `json:"scope_ip_whitelist,omitempty"`
+	MonthlyCostCapUSD *string  `json:"monthly_cost_cap_usd,omitempty"`
+}
+
+// scopeJSON is the api_keys.scope JSONB shape the gateway parses from the
+// Validate response to populate the structured ScopeModels/ScopeIPWhitelist
+// cache fields (Q-A). Unknown keys are ignored.
+type scopeJSON struct {
+	Models      []string `json:"models"`
+	IPWhitelist []string `json:"ip_whitelist"`
+}
+
+// applyExtendedScope parses the scope JSON string + cap into the structured
+// Story-5.2 cache fields. A malformed scope JSON leaves the slices nil
+// (semantically "no enforcement" — empty whitelist + empty scope both mean
+// "allow"); the legacy Scope string is still stored verbatim by the caller.
+func applyExtendedScope(c *CachedClaims, scope string, cap *string) {
+	if scope != "" {
+		var s scopeJSON
+		if err := json.Unmarshal([]byte(scope), &s); err == nil {
+			c.ScopeModels = s.Models
+			c.ScopeIPWhitelist = s.IPWhitelist
+		}
+	}
+	if cap != nil {
+		v := *cap
+		c.MonthlyCostCapUSD = &v
+	}
 }
 
 // APIKeyAuthenticator is the concrete middleware. Construct once at startup
@@ -310,6 +372,9 @@ func (a *APIKeyAuthenticator) RequireAPIKey(next http.Handler) http.Handler {
 			TeamID:   resp.Msg.GetTeamId(),
 			Scope:    resp.Msg.GetScope(),
 		}
+		// Story 5.2 (Q-A) — derive the structured policy fields for the
+		// keypolicy middleware + carry the monthly cap onto the hot path.
+		applyExtendedScope(&newClaims, resp.Msg.GetScope(), resp.Msg.MonthlyCostCapUsd)
 		if setErr := a.cacheSet(ctx, cacheKey, &newClaims); setErr != nil {
 			a.logger.WarnContext(
 				ctx, "bearer_auth redis SETEX failed",
@@ -358,6 +423,7 @@ func (a *APIKeyAuthenticator) applyContext(r *http.Request, c *CachedClaims) {
 	ctx = BearerWithUserID(ctx, c.UserID)
 	ctx = WithTeamID(ctx, c.TeamID)
 	ctx = WithScope(ctx, c.Scope)
+	ctx = WithCacheValue(ctx, c) // Story 5.2 — keypolicy reads the policy shape
 	*r = *r.WithContext(ctx)
 }
 
@@ -416,10 +482,13 @@ func (a *APIKeyAuthenticator) cacheDelete(ctx context.Context, key string) error
 	return rdb.Del(ctx, key).Err()
 }
 
-// sentinelExists implements the Story 5.1 BR-3.8 sentinel check. Returns
-// (true, nil) when `SentinelKeyPrefix+apiKeyID` is present in Redis;
-// (false, nil) when absent (the cached positive is still valid); (false,
-// err) on Redis transport error (caller fail-open serves the cache).
+// sentinelExists implements the Story 5.1 BR-3.8 revoke-sentinel check AND
+// the Story 5.2 BR-1.9 config-updated-sentinel check in a SINGLE Redis
+// EXISTS round-trip (the hot path is one op total). Returns (true, nil) when
+// EITHER `auth:apikey:revoked:{id}` OR `auth:apikey:config_updated:{id}` is
+// present (the cached positive is stale → purge + fall through to Validate);
+// (false, nil) when both absent; (false, err) on Redis transport error
+// (caller fail-open serves the cache).
 func (a *APIKeyAuthenticator) sentinelExists(ctx context.Context, apiKeyID string) (bool, error) {
 	rdb := a.redisClient()
 	if rdb == nil {
@@ -431,7 +500,11 @@ func (a *APIKeyAuthenticator) sentinelExists(ctx context.Context, apiKeyID strin
 		// prefix key. Treat as "no sentinel" rather than a false match.
 		return false, nil
 	}
-	n, err := rdb.Exists(ctx, SentinelKeyPrefix+apiKeyID).Result()
+	n, err := rdb.Exists(
+		ctx,
+		SentinelKeyPrefix+apiKeyID,
+		ConfigUpdatedSentinelKeyPrefix+apiKeyID,
+	).Result()
 	if err != nil {
 		return false, err
 	}

@@ -64,6 +64,42 @@ export const RevokeKeyResponseSchema = z.object({
 export type RevokeKeyResponse = z.infer<typeof RevokeKeyResponseSchema>;
 
 /**
+ * UpdateKeyResponse — PATCH /v1/me/keys/{id} (Story 5.2 BR-1.13 field order).
+ * Mirrors apps/api-gateway/internal/handlers/me_keys_update_types.go
+ * UpdateKeyResponse (byte-identical to KeyEntry so the Story-5.5 listing
+ * re-renders the mutated row with the same component). Degrades gracefully
+ * on shape drift (.safeParse → success=false; never throws).
+ */
+export const UpdateKeyResponseSchema = z.object({
+  api_key_id: z.string().uuid(),
+  name: z.string(),
+  key_prefix: z.string(),
+  scope: z.unknown(),
+  monthly_cost_cap_usd: z.string().nullable(),
+  current_month_cost_usd: z.string(),
+  last_used_at: z.string().nullable(),
+  revoked_at: z.string().nullable(),
+  created_at: z.string(),
+});
+export type UpdateKeyResponse = z.infer<typeof UpdateKeyResponseSchema>;
+
+/**
+ * KeyConfigPatch is the PATCH request body (Story 5.2). All fields optional —
+ * only present fields mutate (BR-1.7). monthly_cost_cap_usd is a string-decimal
+ * or null (clear the cap); a JSON number is rejected server-side (BR-1.6).
+ */
+export const KeyConfigPatchSchema = z.object({
+  scope: z
+    .object({
+      models: z.array(z.string()).optional(),
+      ip_whitelist: z.array(z.string()).optional(),
+    })
+    .optional(),
+  monthly_cost_cap_usd: z.string().nullable().optional(),
+});
+export type KeyConfigPatch = z.infer<typeof KeyConfigPatchSchema>;
+
+/**
  * KeyName validator — parity with Story-2.5 BR-2.3 display_name (per
  * Architect Q10 ratified L-1 share-by-import cascade). 1-100 runes
  * after NFC; allowed code-point classes L/M/N/P/Sc/space.

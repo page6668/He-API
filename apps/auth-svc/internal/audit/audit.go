@@ -105,6 +105,13 @@ const (
 	// Plaintext key + key_hash are NEVER part of the payload.
 	EventAPIKeyCreated EventType = "api_key.created" // LOW
 	EventAPIKeyRevoked EventType = "api_key.revoked" // MEDIUM
+	// EventAPIKeyConfigUpdated (Story 5.2 BR-1.11) carries the same PII-safe
+	// payload shape PLUS a `changed_fields` []string in Metadata enumerating
+	// the top-level paths that mutated (e.g. ["scope.ip_whitelist",
+	// "monthly_cost_cap_usd"]) for compliance lineage. NEVER plaintext / hash
+	// of the key. Distinct event_type so audit-svc routes by type with no
+	// consumer code change.
+	EventAPIKeyConfigUpdated EventType = "api_key.config_updated" // LOW
 )
 
 // Severity classification for the 10 Story 2.4 event types per BR-5.7.

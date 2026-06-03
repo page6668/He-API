@@ -31,6 +31,22 @@
       "success": "API 密钥已吊销。",
       "already_revoked": "该密钥已被吊销。",
       "not_found": "API 密钥不存在或已被移除。"
+    },
+    "edit": {
+      "title": "编辑 API 密钥",
+      "confirm": {
+        "cta": "保存更改"
+      },
+      "success": "API 密钥已更新。",
+      "errors": {
+        "invalid_cidr": "一个或多个 IP 地址或 CIDR 范围无效。",
+        "unknown_model": "一个或多个所选模型不可用。",
+        "cap_out_of_range": "每月费用上限必须介于 $0.01 与 $999,999.99 之间。",
+        "not_found": "未找到 API 密钥，或已被删除。",
+        "account_pending_deletion": "您的账户正在等待删除，配置更改已禁用。",
+        "invalid_request": "部分配置值无效。",
+        "generic": "出现错误，请重试。"
+      }
     }
   },
   "profile": {

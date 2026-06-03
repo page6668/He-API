@@ -10,6 +10,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/crypto/bcrypt"
@@ -55,6 +56,10 @@ type Repository interface {
 	SelectAPIKeyForUpdate(ctx context.Context, apiKeyID uuid.UUID) (repository.ApiKeyRow, error)
 	UpdateAPIKeyRevokedAt(ctx context.Context, apiKeyID uuid.UUID) (time.Time, error)
 	GetUserStatus(ctx context.Context, userID uuid.UUID) (string, error)
+
+	// Story 5.2 — UpdateApiKey config-mutation surface.
+	SelectAPIKeyConfigForUpdate(ctx context.Context, apiKeyID uuid.UUID) (repository.ApiKeyRow, error)
+	UpdateAPIKeyConfig(ctx context.Context, apiKeyID, userID uuid.UUID, scope []byte, cap pgtype.Numeric) (repository.ApiKeyRow, error)
 }
 
 // QuerierRepository adapts a repository.Querier into the Repository
@@ -97,6 +102,16 @@ func (a QuerierRepository) UpdateAPIKeyRevokedAt(ctx context.Context, apiKeyID u
 	return repository.UpdateAPIKeyRevokedAt(ctx, a.Q, apiKeyID)
 }
 
+// SelectAPIKeyConfigForUpdate delegates the Story-5.2 UpdateApiKey SELECT.
+func (a QuerierRepository) SelectAPIKeyConfigForUpdate(ctx context.Context, apiKeyID uuid.UUID) (repository.ApiKeyRow, error) {
+	return repository.SelectAPIKeyConfigForUpdate(ctx, a.Q, apiKeyID)
+}
+
+// UpdateAPIKeyConfig delegates the Story-5.2 UpdateApiKey UPDATE.
+func (a QuerierRepository) UpdateAPIKeyConfig(ctx context.Context, apiKeyID, userID uuid.UUID, scope []byte, cap pgtype.Numeric) (repository.ApiKeyRow, error) {
+	return repository.UpdateAPIKeyConfig(ctx, a.Q, apiKeyID, userID, scope, cap)
+}
+
 // GetUserStatus returns the user's status column ('active' /
 // 'pending_deletion' / etc) for the Story-5.1 Q9 gate. Returns
 // repository.ErrUserNotFound on no-such-user (caller maps to gRPC
@@ -123,6 +138,9 @@ type Service struct {
 	Logger   *slog.Logger
 	Audit    AuditPublisher // Story 5.1 — nil-safe; Create/Revoke fail gracefully (WARN log) when nil
 	Sentinel SentinelStore  // Story 5.1 — nil-safe; Revoke logs WARN per BR-3.13 fail-open
+	// ConfigSentinel is the Story-5.2 config-update sentinel store. nil-safe;
+	// UpdateApiKey logs WARN + continues when nil (BR-1.9 fail-open).
+	ConfigSentinel ConfigSentinelStore
 	// Clock is injectable for deterministic tests; production wires time.Now.
 	Clock func() time.Time
 }
@@ -310,7 +328,7 @@ func okResponse(row *repository.ApiKeyRow) *authv1.ValidateApiKeyResponse {
 	if row.TeamID.Valid {
 		teamID = uuid.UUID(row.TeamID.Bytes).String()
 	}
-	return &authv1.ValidateApiKeyResponse{
+	resp := &authv1.ValidateApiKeyResponse{
 		Ok:       true,
 		ApiKeyId: row.ID.String(),
 		UserId:   row.UserID.String(),
@@ -318,4 +336,12 @@ func okResponse(row *repository.ApiKeyRow) *authv1.ValidateApiKeyResponse {
 		Scope:    string(row.Scope),
 		Reason:   authv1.ApiKeyValidationReason_API_KEY_VALIDATION_REASON_UNSPECIFIED,
 	}
+	// Story 5.2 — carry the monthly cost cap on the hot path so the gateway
+	// keypolicy middleware (AC4) enforces it from cache. NULL column → field
+	// absent ("no cap" per BR-4.1).
+	if row.MonthlyCostCapUSD.Valid {
+		cap := numericToDecimalString(row.MonthlyCostCapUSD)
+		resp.MonthlyCostCapUsd = &cap
+	}
+	return resp
 }

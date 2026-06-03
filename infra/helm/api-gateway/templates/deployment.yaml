@@ -38,6 +38,12 @@ spec:
               value: {{ .Values.ratelimit.freeTierDefaults.rpmMax | quote }}
             - name: RATELIMIT_FREE_TIER_TPM_MAX
               value: {{ .Values.ratelimit.freeTierDefaults.tpmMax | quote }}
+          envFrom:
+            # Story 5.2 (Q-E) — trusted-proxy CIDRs for the keypolicy XFF
+            # walker (CLOUDFLARE_CIDRS + INGRESS_CIDRS). Snapshot read at
+            # process init; ConfigMap edit needs a rollout restart.
+            - configMapRef:
+                name: api-gateway-trusted-proxies
           readinessProbe:
             httpGet:
               path: {{ .Values.probes.readiness.httpGet.path }}

@@ -31,6 +31,22 @@
       "success": "[en-pending] API key revoked.",
       "already_revoked": "[en-pending] This key was already revoked.",
       "not_found": "[en-pending] API key not found or already removed."
+    },
+    "edit": {
+      "title": "[en-pending] Edit API key",
+      "confirm": {
+        "cta": "[en-pending] Save changes"
+      },
+      "success": "[en-pending] API key updated.",
+      "errors": {
+        "invalid_cidr": "[en-pending] One or more IP addresses or CIDR ranges are invalid.",
+        "unknown_model": "[en-pending] One or more selected models are not available.",
+        "cap_out_of_range": "[en-pending] Monthly cost cap must be between $0.01 and $999,999.99.",
+        "not_found": "[en-pending] API key not found or already removed.",
+        "account_pending_deletion": "[en-pending] Your account is scheduled for deletion; configuration changes are disabled.",
+        "invalid_request": "[en-pending] Some of the configuration values are invalid.",
+        "generic": "[en-pending] Something went wrong. Please try again."
+      }
     }
   },
   "profile": {

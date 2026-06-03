@@ -1,0 +1,28 @@
+# Story 5.2 (Architect Round 1 Q-E PARTIAL APPROVE 2026-05-25) — trusted-proxy
+# CIDR source for the keypolicy XFF walker (AC2 client-IP discovery).
+#
+# CLOUDFLARE_CIDRS + INGRESS_CIDRS are comma-separated CIDR lists. The
+# api-gateway parses them at process init (keypolicy.ParseTrustedProxies) and
+# walks X-Forwarded-For across only these hops to discover the real client IP.
+#
+# Defaults are EMPTY by design (failsafe-against-misconfig): with no CIDRs the
+# walker ignores XFF entirely and uses r.RemoteAddr — a public-IP attacker
+# cannot spoof XFF to satisfy an IP whitelist. Operators populate per-env:
+#   - CLOUDFLARE_CIDRS from https://www.cloudflare.com/ips/
+#   - INGRESS_CIDRS    from the cluster network plan (ingress pod CIDR)
+#
+# Rotation runbook (Q-E): edit the values overlay (or `kubectl edit configmap
+# api-gateway-trusted-proxies`) THEN `kubectl rollout restart
+# deployment/api-gateway` — the env-var snapshot is read at process init, so a
+# ConfigMap edit without a restart is silently ignored.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-gateway-trusted-proxies
+  labels:
+    app.kubernetes.io/name: api-gateway
+    app.kubernetes.io/part-of: he-api
+    he-api/concern: trusted-proxy-cidrs
+data:
+  CLOUDFLARE_CIDRS: {{ .Values.trustedProxies.cloudflareCidrs | quote }}
+  INGRESS_CIDRS: {{ .Values.trustedProxies.ingressCidrs | quote }}

@@ -5,8 +5,8 @@
 
 ## Registry Metadata
 
-**Last Updated**: 2026-05-26
-**Total Stories Tracked**: 3
+**Last Updated**: 2026-06-03
+**Total Stories Tracked**: 4
 **Repository**: He-API
 **Mode**: monolith
 
@@ -14,7 +14,7 @@
 
 | Schema | Table | Story | Migration | Indices | FK Notes | Writers |
 |--------|-------|-------|-----------|---------|----------|---------|
-| `he_api` | `api_keys` | 3.2 | `0006_create_api_keys.sql` | `idx_api_keys_user_id` (user_id) · `idx_api_keys_hash` (key_hash) | `user_id → he_api.users(id) ON DELETE CASCADE`. `team_id` nullable, NO FK (Architect Q3 ratified DEFER — `he_api.teams` table creation + FK ALTER deferred to Epic 6+ when team-collaboration becomes a deliverable). | **Story 3.2**: READ-only on Validate hot path + fire-and-forget `UPDATE last_used_at`. **Story 5.1**: WRITE — `INSERT` (CreateApiKey RPC) + `UPDATE revoked_at=NOW()` (RevokeApiKey RPC). Story 5.1 explicitly OMITS `key_hash` from the ListApiKeys SELECT (BR-2.5 defence-in-depth at the SQL boundary). |
+| `he_api` | `api_keys` | 3.2 | `0006_create_api_keys.sql` | `idx_api_keys_user_id` (user_id) · `idx_api_keys_hash` (key_hash) | `user_id → he_api.users(id) ON DELETE CASCADE`. `team_id` nullable, NO FK (Architect Q3 ratified DEFER — `he_api.teams` table creation + FK ALTER deferred to Epic 6+ when team-collaboration becomes a deliverable). | **Story 3.2**: READ-only on Validate hot path + fire-and-forget `UPDATE last_used_at`. **Story 5.1**: WRITE — `INSERT` (CreateApiKey RPC) + `UPDATE revoked_at=NOW()` (RevokeApiKey RPC). Story 5.1 explicitly OMITS `key_hash` from the ListApiKeys SELECT (BR-2.5 defence-in-depth at the SQL boundary). **Story 5.2**: WRITE — `UPDATE scope, monthly_cost_cap_usd WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL` (UpdateApiKey RPC; NO `updated_at` write — Architect Q-K, the column does not exist). The Validate hot-path SELECT now also reads `monthly_cost_cap_usd` so the cap rides the gateway bearer cache (AC4 enforcement without a per-request PG round-trip). |
 
 ## Schema Evolution Timeline
 
@@ -23,3 +23,4 @@
 | 2026-05-18 | 3.2 | `0006_create_api_keys.sql` | CREATE TABLE `he_api.api_keys` (12 columns) + 2 indices. Forward-only; rollback via `atlas migrate down 1` (dynamic computation per `database-bootstrap.md §2`). |
 | 2026-05-25 | 5.1 | _none_ | No DDL change (`cumulative_context_impact.db_schema=false`). Story 5.1 reuses the existing 3.2 schema; adds INSERT + UPDATE writers on `he_api.api_keys` (see Writers column above). |
 | 2026-05-26 | 5.3 | _none_ | No DDL change (`cumulative_context_impact.db_schema=false`). Story 5.3 introduces 3-axis rate-limit state in Redis ONLY (`ratelimit:key:{api_key_id}:{qps,rpm,tpm}` per data-models.md §4.3 NEW rows); zero PostgreSQL touch. `ResolveCeilings` is a pure constant returning `FreeTierDefaults` per Architect H-1 remediation — no per-request PG SELECT. |
+| 2026-06-03 | 5.2 | _none_ | No DDL change (`cumulative_context_impact.db_schema=false`; Architect Q-K ratified NO `updated_at` add). Story 5.2 adds an `UPDATE scope + monthly_cost_cap_usd` writer (UpdateApiKey RPC) + extends the Validate hot-path SELECT with `monthly_cost_cap_usd`. NEW Redis keys: `auth:apikey:config_updated:{api_key_id}` (TTL 300s, BR-1.9 sentinel) + `usage:apikey:{api_key_id}:month_cost_usd` (Q-D realtime cost counter, no TTL — cron-reset by Story 5.4; gateway READ-only, billing-svc WRITE in Epic 6+). |

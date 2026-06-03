@@ -122,6 +122,21 @@ ratelimit:
     tpmMax: 60000
 
 # -----------------------------------------------------------------------------
+# Story 5.2 (Q-E) — trusted-proxy CIDRs for the keypolicy XFF walker.
+# Comma-separated CIDR lists surfaced to the pod as CLOUDFLARE_CIDRS +
+# INGRESS_CIDRS via the api-gateway-trusted-proxies ConfigMap. EMPTY by design
+# (failsafe-against-misconfig): with no CIDRs the walker ignores X-Forwarded-For
+# and trusts only r.RemoteAddr, so a public-IP attacker cannot spoof XFF to
+# satisfy an IP whitelist. Operators set per-env in values-{staging,prod}.yaml
+# (CLOUDFLARE_CIDRS from https://www.cloudflare.com/ips/, INGRESS_CIDRS from the
+# cluster network plan). A ConfigMap edit needs a `kubectl rollout restart
+# deployment/api-gateway` — the env snapshot is read at process init.
+# -----------------------------------------------------------------------------
+trustedProxies:
+  cloudflareCidrs: ""
+  ingressCidrs: ""
+
+# -----------------------------------------------------------------------------
 # Pod Security — K8s 1.29 Pod Security "Restricted" profile baseline.
 # Every field below MUST be present for ACK PSA enforcement to accept the pod.
 # -----------------------------------------------------------------------------

@@ -33,8 +33,10 @@ import (
 	"github.com/he-api/he-api/apps/api-gateway/internal/handlers"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/cors"
+	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/keypolicy"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/ratelimit"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/requestid"
+	"github.com/he-api/he-api/apps/api-gateway/internal/usage"
 	obs "github.com/he-api/he-api/packages/go-observability"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1/authv1connect"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/notification/v1/notificationv1connect"
@@ -228,6 +230,11 @@ func main() {
 	mux.Handle("POST /v1/me/keys", jwtVerifier.RequireJWT(http.HandlerFunc(meKeys.HandleCreate)))
 	mux.Handle("GET /v1/me/keys", jwtVerifier.RequireJWT(http.HandlerFunc(meKeys.HandleList)))
 	mux.Handle("DELETE /v1/me/keys/{api_key_id}", jwtVerifier.RequireJWT(http.HandlerFunc(meKeys.HandleRevoke)))
+	// Story 5.2 — PATCH config (scope / ip_whitelist / monthly cost cap).
+	// JWT-only (parity with the other /v1/me/keys routes); the global
+	// origin-based CSRF middleware covers the PATCH mutation (BR; no per-route
+	// CSRF wrap, matching POST/DELETE above).
+	mux.Handle("PATCH /v1/me/keys/{api_key_id}", jwtVerifier.RequireJWT(http.HandlerFunc(meKeys.HandleUpdate)))
 
 	// Story 2.6 — GDPR data-export routes (AC2). Proxies to notification-svc.
 	// Both routes are aal>=1 (parity with Story 2.5 — user-visible
@@ -303,11 +310,36 @@ func main() {
 		handlers.WithAdapterRegistry(adapterRegistry),
 		handlers.WithTokenDeducter(rateLimitMW),
 	)
+
+	// Story 5.2 — key-policy enforcement gates (AC2 IP whitelist / AC3 model
+	// scope / AC4 monthly cap). Runs AFTER bearer-auth (reads the extended
+	// cache claims via middleware.CacheValueFromContext) and BEFORE ratelimit
+	// + the chat/embeddings handlers so denied requests short-circuit at zero
+	// upstream cost. Trusted-proxy CIDRs are sourced from the
+	// `api-gateway-trusted-proxies` ConfigMap env vars (Q-E); empty → XFF
+	// ignored, RemoteAddr wins (failsafe-against-misconfig).
+	trustedProxies, badCIDRs := keypolicy.ParseTrustedProxies(
+		os.Getenv("CLOUDFLARE_CIDRS"), os.Getenv("INGRESS_CIDRS"))
+	for _, b := range badCIDRs {
+		logger.Warn("apikey_trusted_proxy_cidr_parse_failed", slog.String("cidr", b))
+	}
+	logger.Info("apikey_trusted_proxies_loaded", slog.Int("count", len(trustedProxies)))
+	keyPolicyRedis := redis.NewClient(mustRedisOptions(redisURL, logger))
+	keyPolicy := keypolicy.New(keypolicy.Options{
+		Logger:         logger,
+		TrustedProxies: trustedProxies,
+		CostReader: func(ctx context.Context, apiKeyID string) (string, bool, error) {
+			return usage.ReadMonthlyCostUSD(ctx, keyPolicyRedis, apiKeyID)
+		},
+		Metrics: keypolicy.NewPolicyMetrics(),
+	})
+
 	// Story 5.3 BR-X.4 / Architect Q9 — ratelimit runs AFTER bearer-auth
 	// (needs the resolved api_key_id from context) and BEFORE the
-	// chat-completions handler.
+	// chat-completions handler. Story 5.2 keypolicy sits between bearer-auth
+	// and ratelimit.
 	mux.Handle("POST /v1/chat/completions",
-		bearerAuth.RequireAPIKey(rateLimitMW.Wrap(chatCompletions)))
+		bearerAuth.RequireAPIKey(keyPolicy(rateLimitMW.Wrap(chatCompletions))))
 
 	// Story 3.5 — /v1/models (static catalogue) + /v1/embeddings (mock
 	// vector). Per-route bearer-auth wrap mirrors Story 3.2 BR-1.4 +
@@ -321,9 +353,10 @@ func main() {
 	)
 	// /v1/models is a static catalogue — no token cost, NO ratelimit wrap.
 	mux.Handle("GET /v1/models", bearerAuth.RequireAPIKey(modelsHandler))
-	// /v1/embeddings consumes tokens — Story 5.3 BR-X.8 applies.
+	// /v1/embeddings consumes tokens — Story 5.3 BR-X.8 applies. Story 5.2
+	// keypolicy enforces model-scope + IP-whitelist + cap here too (BR-3.2).
 	mux.Handle("POST /v1/embeddings",
-		bearerAuth.RequireAPIKey(rateLimitMW.Wrap(embeddingsHandler)))
+		bearerAuth.RequireAPIKey(keyPolicy(rateLimitMW.Wrap(embeddingsHandler))))
 
 	// Story 4.7 — unauthenticated mirror of /v1/models. Mounted OUTSIDE
 	// the bearer middleware chain; both handlers share a snapshot built

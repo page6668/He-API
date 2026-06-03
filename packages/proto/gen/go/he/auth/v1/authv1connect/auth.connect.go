@@ -94,6 +94,9 @@ const (
 	// AuthServiceRevokeApiKeyProcedure is the fully-qualified name of the AuthService's RevokeApiKey
 	// RPC.
 	AuthServiceRevokeApiKeyProcedure = "/he.auth.v1.AuthService/RevokeApiKey"
+	// AuthServiceUpdateApiKeyProcedure is the fully-qualified name of the AuthService's UpdateApiKey
+	// RPC.
+	AuthServiceUpdateApiKeyProcedure = "/he.auth.v1.AuthService/UpdateApiKey"
 )
 
 // AuthServiceClient is a client for the he.auth.v1.AuthService service.
@@ -177,6 +180,20 @@ type AuthServiceClient interface {
 	CreateApiKey(context.Context, *connect.Request[v1.CreateApiKeyRequest]) (*connect.Response[v1.CreateApiKeyResponse], error)
 	ListApiKeys(context.Context, *connect.Request[v1.ListApiKeysRequest]) (*connect.Response[v1.ListApiKeysResponse], error)
 	RevokeApiKey(context.Context, *connect.Request[v1.RevokeApiKeyRequest]) (*connect.Response[v1.RevokeApiKeyResponse], error)
+	// Story 5.2 — API Key configuration (partial update of scope + cost cap).
+	//
+	// UpdateApiKey: partial-update of api_keys.scope (models[] + ip_whitelist[])
+	// and monthly_cost_cap_usd. Only fields PRESENT in the patch mutate
+	// (BR-1.7 merge semantics). SELECT ... FOR UPDATE re-asserts ownership +
+	// revoke-state (anti-enumeration NotFound collapse per BR-1.8 cascade from
+	// Story-5.1 BR-3.2); the UPDATE WHERE clause re-asserts revoked_at IS NULL
+	// against TOCTOU. On commit: SET auth:apikey:config_updated:{api_key_id}
+	// sentinel EX 300 for cross-pod cache-invalidation (BR-1.9; mirrors the
+	// Story-5.1 revoke sentinel) + Kafka audit.event api_key.config_updated
+	// (BR-1.11; PII-safe; changed_fields[]). users.status='pending_deletion'
+	// → FailedPrecondition account_pending_deletion (Q-I). No updated_at write
+	// (Architect Q-K — the schema has no such column).
+	UpdateApiKey(context.Context, *connect.Request[v1.UpdateApiKeyRequest]) (*connect.Response[v1.UpdateApiKeyResponse], error)
 }
 
 // NewAuthServiceClient constructs a client for the he.auth.v1.AuthService service. By default, it
@@ -304,6 +321,12 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("RevokeApiKey")),
 			connect.WithClientOptions(opts...),
 		),
+		updateApiKey: connect.NewClient[v1.UpdateApiKeyRequest, v1.UpdateApiKeyResponse](
+			httpClient,
+			baseURL+AuthServiceUpdateApiKeyProcedure,
+			connect.WithSchema(authServiceMethods.ByName("UpdateApiKey")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -328,6 +351,7 @@ type authServiceClient struct {
 	createApiKey            *connect.Client[v1.CreateApiKeyRequest, v1.CreateApiKeyResponse]
 	listApiKeys             *connect.Client[v1.ListApiKeysRequest, v1.ListApiKeysResponse]
 	revokeApiKey            *connect.Client[v1.RevokeApiKeyRequest, v1.RevokeApiKeyResponse]
+	updateApiKey            *connect.Client[v1.UpdateApiKeyRequest, v1.UpdateApiKeyResponse]
 }
 
 // RegisterUser calls he.auth.v1.AuthService.RegisterUser.
@@ -425,6 +449,11 @@ func (c *authServiceClient) RevokeApiKey(ctx context.Context, req *connect.Reque
 	return c.revokeApiKey.CallUnary(ctx, req)
 }
 
+// UpdateApiKey calls he.auth.v1.AuthService.UpdateApiKey.
+func (c *authServiceClient) UpdateApiKey(ctx context.Context, req *connect.Request[v1.UpdateApiKeyRequest]) (*connect.Response[v1.UpdateApiKeyResponse], error) {
+	return c.updateApiKey.CallUnary(ctx, req)
+}
+
 // AuthServiceHandler is an implementation of the he.auth.v1.AuthService service.
 type AuthServiceHandler interface {
 	RegisterUser(context.Context, *connect.Request[v1.RegisterUserRequest]) (*connect.Response[v1.RegisterUserResponse], error)
@@ -506,6 +535,20 @@ type AuthServiceHandler interface {
 	CreateApiKey(context.Context, *connect.Request[v1.CreateApiKeyRequest]) (*connect.Response[v1.CreateApiKeyResponse], error)
 	ListApiKeys(context.Context, *connect.Request[v1.ListApiKeysRequest]) (*connect.Response[v1.ListApiKeysResponse], error)
 	RevokeApiKey(context.Context, *connect.Request[v1.RevokeApiKeyRequest]) (*connect.Response[v1.RevokeApiKeyResponse], error)
+	// Story 5.2 — API Key configuration (partial update of scope + cost cap).
+	//
+	// UpdateApiKey: partial-update of api_keys.scope (models[] + ip_whitelist[])
+	// and monthly_cost_cap_usd. Only fields PRESENT in the patch mutate
+	// (BR-1.7 merge semantics). SELECT ... FOR UPDATE re-asserts ownership +
+	// revoke-state (anti-enumeration NotFound collapse per BR-1.8 cascade from
+	// Story-5.1 BR-3.2); the UPDATE WHERE clause re-asserts revoked_at IS NULL
+	// against TOCTOU. On commit: SET auth:apikey:config_updated:{api_key_id}
+	// sentinel EX 300 for cross-pod cache-invalidation (BR-1.9; mirrors the
+	// Story-5.1 revoke sentinel) + Kafka audit.event api_key.config_updated
+	// (BR-1.11; PII-safe; changed_fields[]). users.status='pending_deletion'
+	// → FailedPrecondition account_pending_deletion (Q-I). No updated_at write
+	// (Architect Q-K — the schema has no such column).
+	UpdateApiKey(context.Context, *connect.Request[v1.UpdateApiKeyRequest]) (*connect.Response[v1.UpdateApiKeyResponse], error)
 }
 
 // NewAuthServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -629,6 +672,12 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("RevokeApiKey")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceUpdateApiKeyHandler := connect.NewUnaryHandler(
+		AuthServiceUpdateApiKeyProcedure,
+		svc.UpdateApiKey,
+		connect.WithSchema(authServiceMethods.ByName("UpdateApiKey")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/he.auth.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthServiceRegisterUserProcedure:
@@ -669,6 +718,8 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceListApiKeysHandler.ServeHTTP(w, r)
 		case AuthServiceRevokeApiKeyProcedure:
 			authServiceRevokeApiKeyHandler.ServeHTTP(w, r)
+		case AuthServiceUpdateApiKeyProcedure:
+			authServiceUpdateApiKeyHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -752,4 +803,8 @@ func (UnimplementedAuthServiceHandler) ListApiKeys(context.Context, *connect.Req
 
 func (UnimplementedAuthServiceHandler) RevokeApiKey(context.Context, *connect.Request[v1.RevokeApiKeyRequest]) (*connect.Response[v1.RevokeApiKeyResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.RevokeApiKey is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) UpdateApiKey(context.Context, *connect.Request[v1.UpdateApiKeyRequest]) (*connect.Response[v1.UpdateApiKeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.UpdateApiKey is not implemented"))
 }

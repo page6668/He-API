@@ -24,6 +24,10 @@
 | `ApiKeyEntry` | **5.1** | `api_key_id` + `name` + `key_prefix` + `scope` (JSON string of JSONB) + `monthly_cost_cap_usd` (optional string-decimal) + `current_month_cost_usd` (string-decimal) + `last_used_at` (optional Timestamp) + `revoked_at` (optional Timestamp) + `created_at`. **`key_hash` field INTENTIONALLY ABSENT** per BR-2.5 defence-in-depth at the proto boundary. |
 | `RevokeApiKeyRequest` | **5.1** | `user_id` + `api_key_id` (both UUID v4) + `client_ip` + `user_agent`. |
 | `RevokeApiKeyResponse` | **5.1** | `api_key_id` + `revoked_at` (Timestamp — historical on idempotent re-revoke per BR-3.3) + `was_already_revoked` (bool — true on idempotent path). Architect Q-Spec-1 UPGRADES the rest-api-spec.md §5.2 sketch which previously declared `returns (Empty)`. |
+| `UpdateApiKeyRequest` | **5.2** | `user_id` + `api_key_id` (UUID v4; gateway-extracted) + `scope` (`ScopePatch`; nil → untouched) + `monthly_cost_cap_usd` (proto3 `optional string`; present → set) + `clear_monthly_cap` (bool; true → set NULL) + `client_ip` + `user_agent`. |
+| `ScopePatch` | **5.2** | `models` (repeated string) + `models_present` (bool) + `ip_whitelist` (repeated string) + `ip_whitelist_present` (bool). The `*_present` flags model proto3's lack of repeated-field presence — distinguish "omitted (preserve)" from "present + empty (clear)" per BR-1.7. |
+| `UpdateApiKeyResponse` | **5.2** | Mirrors `ApiKeyEntry`'s field set (minus `key_hash`): `api_key_id` + `name` + `key_prefix` + `scope` + `monthly_cost_cap_usd` (optional) + `current_month_cost_usd` + `last_used_at` (optional) + `revoked_at` (optional; always null on UPDATE) + `created_at`. |
+| `ValidateApiKeyResponse` | **5.2 EXTENDED** | Story 3.2 fields + NEW `monthly_cost_cap_usd` (proto3 `optional string`; carried to the gateway bearer cache so the keypolicy AC4 gate enforces the cap without a per-request PG round-trip). |
 
 ## Protobuf Enums
 

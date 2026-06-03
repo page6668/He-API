@@ -119,6 +119,7 @@ no longer serves all pods.
 | Date | Story | Change |
 |------|-------|--------|
 | 2026-05-25 | 5.1 | **§8.2 Generate + Revoke steps REALISED** (auth-svc CreateApiKey + RevokeApiKey RPCs). **§8.2.1 lag-note UPGRADED**: 5-min worst-case → single-digit-millisecond happy path via per-key-id Redis sentinel (Architect Q2 ratified option-c). 5-min fallback preserved on sentinel-write failure (BR-3.13 fail-open per Q-Spec-3). |
+| 2026-06-03 | 5.2 | **§8.1 layer 4 "授权 RBAC + Key scope (model 范围, IP 白名单)" REALISED** — the architecture promise that stood as a forward-declaration since the initial pass is now enforced by the gateway `keypolicy` middleware: per-request IP-whitelist (CIDR-aware, IPv4+IPv6), model-scope, and monthly-cap gates on the bearer hot path. **§8.2 "Configure" step ADDED** to the key lifecycle (PATCH /v1/me/keys/{id} → UpdateApiKey RPC). Client-IP discovery hardened against X-Forwarded-For spoofing via the Q-E trusted-proxy walker (XFF trusted ONLY when the direct caller is in the `api-gateway-trusted-proxies` CIDR set; empty default = RemoteAddr-only failsafe). PII discipline preserved: all logged IPs are `/24`+`/64`-masked SHA-256 hashes (SECURITY-006). Cap is a soft throttle — fail-OPEN on Redis-counter unavailability (Q-F). |
 
 ## 8.3 GDPR / CCPA 实现
 

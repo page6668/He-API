@@ -290,3 +290,21 @@ he-api/                                  (Monorepo, Turborepo)
 > of-truth) and the matrix auto-grows. Entry added by Story 4.8, 2026-05-20.
 
 ---
+
+> **注**: Story 5.2 — key-policy enforcement + monthly-cost counter packages.
+> - `apps/api-gateway/internal/middleware/keypolicy/` — NEW. The three
+>   per-request enforcement gates (AC2 IP whitelist / AC3 model scope / AC4
+>   monthly cap) running AFTER bearer-auth, BEFORE the chat/embeddings
+>   handlers. Files: `keypolicy.go` (middleware), `checks.go` (pure
+>   predicates), `clientip.go` (Q-E trusted-proxy XFF walker), `bodypeek.go`
+>   (model tee), `metrics.go` (OTel instruments).
+> - `apps/api-gateway/internal/usage/` — NEW. Redis-backed monthly-cost
+>   counter: `counter_reader.go` (production `ReadMonthlyCostUSD`, Q-D Redis
+>   SoT READ) + `counter_publisher.go` (STUB `PublishCostIncrement` — WRITE
+>   contract pending billing-svc Epic 6+).
+> - `infra/helm/api-gateway/templates/configmap-trusted-proxies.yaml` — NEW
+>   ConfigMap `api-gateway-trusted-proxies` (Q-E) exposing `CLOUDFLARE_CIDRS`
+>   + `INGRESS_CIDRS` env vars for the XFF walker; empty default = failsafe.
+> Entry added by Story 5.2 (Architect Round 1 m2), 2026-06-03.
+
+---

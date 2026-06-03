@@ -44,6 +44,12 @@ type fakeRepo struct {
 	updateRevHits    int
 	getUserStatus    func(ctx context.Context, userID uuid.UUID) (string, error)
 	getStatusHits    int
+
+	// Story 5.2 — UpdateApiKey config-mutation surface.
+	selectConfig     func(ctx context.Context, apiKeyID uuid.UUID) (repository.ApiKeyRow, error)
+	selectConfigHits int
+	updateConfig     func(ctx context.Context, apiKeyID, userID uuid.UUID, scope []byte, cap pgtype.Numeric) (repository.ApiKeyRow, error)
+	updateConfigHits int
 }
 
 func (f *fakeRepo) LookupAPIKeysByPrefix(ctx context.Context, prefix string) ([]repository.ApiKeyRow, error) {
@@ -106,6 +112,22 @@ func (f *fakeRepo) GetUserStatus(ctx context.Context, userID uuid.UUID) (string,
 		return "active", nil
 	}
 	return f.getUserStatus(ctx, userID)
+}
+
+func (f *fakeRepo) SelectAPIKeyConfigForUpdate(ctx context.Context, apiKeyID uuid.UUID) (repository.ApiKeyRow, error) {
+	f.selectConfigHits++
+	if f.selectConfig == nil {
+		return repository.ApiKeyRow{}, errors.New("fakeRepo.selectConfig unwired")
+	}
+	return f.selectConfig(ctx, apiKeyID)
+}
+
+func (f *fakeRepo) UpdateAPIKeyConfig(ctx context.Context, apiKeyID, userID uuid.UUID, scope []byte, cap pgtype.Numeric) (repository.ApiKeyRow, error) {
+	f.updateConfigHits++
+	if f.updateConfig == nil {
+		return repository.ApiKeyRow{}, errors.New("fakeRepo.updateConfig unwired")
+	}
+	return f.updateConfig(ctx, apiKeyID, userID, scope, cap)
 }
 
 // newTestService bundles a Service + in-memory tracetest exporter so each

@@ -45,10 +45,25 @@ type stubAuthSvc struct {
 	createHits int32
 	listHits   int32
 	revokeHits int32
+	updateHits int32
 
 	createFn func(req *authv1.CreateApiKeyRequest) (*authv1.CreateApiKeyResponse, error)
 	listFn   func(req *authv1.ListApiKeysRequest) (*authv1.ListApiKeysResponse, error)
 	revokeFn func(req *authv1.RevokeApiKeyRequest) (*authv1.RevokeApiKeyResponse, error)
+	updateFn func(req *authv1.UpdateApiKeyRequest) (*authv1.UpdateApiKeyResponse, error)
+}
+
+// UpdateApiKey backs the Story-5.2 PATCH integration tests.
+func (s *stubAuthSvc) UpdateApiKey(_ context.Context, r *connect.Request[authv1.UpdateApiKeyRequest]) (*connect.Response[authv1.UpdateApiKeyResponse], error) {
+	atomic.AddInt32(&s.updateHits, 1)
+	if s.updateFn == nil {
+		return nil, connect.NewError(connect.CodeUnimplemented, errors.New("updateFn unwired"))
+	}
+	resp, err := s.updateFn(r.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(resp), nil
 }
 
 func (s *stubAuthSvc) CreateApiKey(_ context.Context, r *connect.Request[authv1.CreateApiKeyRequest]) (*connect.Response[authv1.CreateApiKeyResponse], error) {

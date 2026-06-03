@@ -35,6 +35,7 @@ type APIKeyValidator interface {
 	CreateApiKey(ctx context.Context, req *authv1.CreateApiKeyRequest) (*authv1.CreateApiKeyResponse, error)
 	ListApiKeys(ctx context.Context, req *authv1.ListApiKeysRequest) (*authv1.ListApiKeysResponse, error)
 	RevokeApiKey(ctx context.Context, req *authv1.RevokeApiKeyRequest) (*authv1.RevokeApiKeyResponse, error)
+	UpdateApiKey(ctx context.Context, req *authv1.UpdateApiKeyRequest) (*authv1.UpdateApiKeyResponse, error)
 }
 
 // ValidateApiKey implements Story 3.2 AC2. Returns connect.CodeInternal
@@ -93,6 +94,21 @@ func (s *AuthServer) RevokeApiKey(
 		return nil, connect.NewError(connect.CodeInternal, errAPIKeyValidatorUnwired)
 	}
 	resp, err := s.APIKey.RevokeApiKey(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(resp), nil
+}
+
+// UpdateApiKey implements Story 5.2 AC1.
+func (s *AuthServer) UpdateApiKey(
+	ctx context.Context,
+	req *connect.Request[authv1.UpdateApiKeyRequest],
+) (*connect.Response[authv1.UpdateApiKeyResponse], error) {
+	if s.APIKey == nil {
+		return nil, connect.NewError(connect.CodeInternal, errAPIKeyValidatorUnwired)
+	}
+	resp, err := s.APIKey.UpdateApiKey(ctx, req.Msg)
 	if err != nil {
 		return nil, err
 	}
