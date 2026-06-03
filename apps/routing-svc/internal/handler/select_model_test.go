@@ -39,7 +39,7 @@ func newTestServer(t *testing.T, logger *slog.Logger, ids ...string) *RoutingSer
 		reg.Models = append(reg.Models, modelscatalogue.ModelSeed{ID: id, Vendor: "test"})
 		reg.Capabilities[id] = modelscatalogue.Capabilities{Chat: true}
 	}
-	e, err := engine.NewEngine(modelscatalogue.NewFromRegistry(reg), strategy.DefaultStrategies())
+	e, err := engine.NewEngine(modelscatalogue.NewFromRegistry(reg), strategy.DefaultStrategies(strategy.Deps{}))
 	if err != nil {
 		t.Fatalf("NewEngine: %v", err)
 	}

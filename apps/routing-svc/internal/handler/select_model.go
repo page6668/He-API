@@ -61,7 +61,7 @@ func (s *RoutingServer) SelectModel(
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("requested_model must not be empty"))
 	}
 
-	selected, used, err := s.engine.Decide(ctx, strat, engine.SelectionHints{
+	selected, used, scoreSource, err := s.engine.Decide(ctx, strat, engine.SelectionHints{
 		UserID:         msg.GetUserId(),
 		RequestedModel: msg.GetRequestedModel(),
 		ABModels:       msg.GetAbModels(),
@@ -75,6 +75,7 @@ func (s *RoutingServer) SelectModel(
 		slog.String("event", "select_model"),
 		slog.String("strategy", used.String()),
 		slog.String("model_id", selected.ID),
+		slog.String("score_source", scoreSource), // Story 6.2 High-1 (non-PII)
 		slog.String("he_request_id", msg.GetHeRequestId()),
 	)
 
@@ -82,8 +83,9 @@ func (s *RoutingServer) SelectModel(
 		SelectedModel: selected.ID,
 		// AdapterEndpoint left empty — Q-K reserved-for-future.
 		IsAbTest:         false,
-		AbSelectedModels: nil, // A/B is Story 6.4
-		StrategyUsed:     used,
+		AbSelectedModels: nil,         // A/B is Story 6.4
+		StrategyUsed:     used,        // Q-I: actually-fired strategy (truthful under degradation)
+		ScoreSource:      scoreSource, // Story 6.2 High-1: model_pricing|clickhouse|fallback|default
 	}), nil
 }
 

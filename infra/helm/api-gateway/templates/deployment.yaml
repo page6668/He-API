@@ -38,6 +38,14 @@ spec:
               value: {{ .Values.ratelimit.freeTierDefaults.rpmMax | quote }}
             - name: RATELIMIT_FREE_TIER_TPM_MAX
               value: {{ .Values.ratelimit.freeTierDefaults.tpmMax | quote }}
+            {{- if .Values.routing.endpoint }}
+            # Story 6.2 — routing-svc Connect-RPC endpoint. Set → the gateway
+            # consults routing-svc on every chat request (he-router-* + the
+            # X-He-Routing-Strategy header resolve to a real selection). Unset
+            # → the gateway passes req.Model through (pre-6.2 behaviour).
+            - name: ROUTING_SVC_ENDPOINT
+              value: {{ .Values.routing.endpoint | quote }}
+            {{- end }}
           envFrom:
             # Story 5.2 (Q-E) — trusted-proxy CIDRs for the keypolicy XFF
             # walker (CLOUDFLARE_CIDRS + INGRESS_CIDRS). Snapshot read at

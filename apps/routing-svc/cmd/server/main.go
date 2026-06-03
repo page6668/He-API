@@ -25,11 +25,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel"
 
 	obs "github.com/he-api/he-api/packages/go-observability"
 
 	"github.com/he-api/he-api/apps/routing-svc/internal/catalogue"
+	"github.com/he-api/he-api/apps/routing-svc/internal/engine"
+	"github.com/he-api/he-api/apps/routing-svc/internal/pricing"
 	"github.com/he-api/he-api/apps/routing-svc/internal/server"
 	"github.com/he-api/he-api/apps/routing-svc/internal/strategy"
 	modelscatalogue "github.com/he-api/he-api/packages/models-catalogue"
@@ -64,6 +67,14 @@ func main() {
 // The catalogue + listen address are parameters (not loaded internally) so the
 // boot-validation + lifecycle paths are deterministically testable.
 func run(ctx context.Context, logger *slog.Logger, cat modelscatalogue.Catalogue, addr string) error {
+	// AC1 boot guard FIRST — fail fast on an empty catalogue (reusing the
+	// canonical engine.NewEngine invariant) before any subsystem (observability,
+	// pricing) initialises or logs, so the boot error is the sole diagnostic on
+	// this path (6.1-UNIT-003). server.New re-validates as defence-in-depth.
+	if _, err := engine.NewEngine(cat, nil); err != nil {
+		return err
+	}
+
 	tp, err := obs.NewTracerProvider(ctx, serviceName, serviceNS, serviceVersion)
 	if err != nil {
 		return err
@@ -86,9 +97,17 @@ func run(ctx context.Context, logger *slog.Logger, cat modelscatalogue.Catalogue
 		_ = mp.Shutdown(sctx)
 	}()
 
+	// Story 6.2 — pricing snapshot source (cost scoring + quality/latency
+	// degraded fallback). Resilient: an unset DSN or a PG-unavailable boot does
+	// NOT fail routing-svc (BLIND-ERROR-003) — cost degrades to first-
+	// alphabetical and the 60s refresh recovers once PG is reachable. Quality/
+	// latency Scorers stay nil → scoring.NoData (degraded until Epic 9, Q-A).
+	deps, cleanupPricing := buildStrategyDeps(ctx, logger)
+	defer cleanupPricing()
+
 	srv, err := server.New(server.Options{
 		Catalogue:   cat,
-		Strategies:  strategy.DefaultStrategies(),
+		Strategies:  strategy.DefaultStrategies(deps),
 		Logger:      logger,
 		ServiceName: serviceName,
 	})
@@ -130,6 +149,56 @@ func run(ctx context.Context, logger *slog.Logger, cat modelscatalogue.Catalogue
 		return err
 	}
 	return nil
+}
+
+// buildStrategyDeps wires the pricing snapshot source from
+// HE_API_DB_POSTGRES_URI (Q-K read-only pgx pool, mirroring auth-svc). It is
+// deliberately resilient — routing-svc must boot + serve even when pricing is
+// unavailable:
+//
+//   - DSN unset            → pricing disabled; cost degrades to first-alphabetical.
+//   - DSN parse error      → pricing disabled (logged); same degradation.
+//   - PG unreachable @boot → empty snapshot; the 60s refresh recovers (BLIND-ERROR-003).
+//
+// The returned cleanup closes the pool (the refresh goroutine stops on ctx
+// cancel). Quality/latency Scorers are left nil → scoring.NoData (Q-A: degraded
+// until Epic 9 populates ClickHouse).
+func buildStrategyDeps(ctx context.Context, logger *slog.Logger) (strategy.Deps, func()) {
+	noop := func() {}
+
+	uri := os.Getenv("HE_API_DB_POSTGRES_URI")
+	if uri == "" {
+		logger.Warn("HE_API_DB_POSTGRES_URI unset — cost routing degrades to first-alphabetical (pricing disabled)")
+		return strategy.Deps{}, noop
+	}
+
+	cfg, err := pgxpool.ParseConfig(uri)
+	if err != nil {
+		logger.Error("parse postgres uri — pricing disabled", slog.String("error", err.Error()))
+		return strategy.Deps{}, noop
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		logger.Error("create postgres pool — pricing disabled", slog.String("error", err.Error()))
+		return strategy.Deps{}, noop
+	}
+
+	// Best-effort boot snapshot — a failure here is non-fatal (BLIND-ERROR-003).
+	boot, err := pricing.Load(ctx, pool)
+	if err != nil {
+		logger.Warn("pricing boot load failed — starting empty, refresh will recover",
+			slog.String("error", err.Error()))
+		boot = pricing.NewSnapshot(nil)
+	} else {
+		logger.Info("pricing snapshot loaded", slog.Int("models_priced", boot.Len()))
+	}
+
+	provider := pricing.NewProvider(boot, func(c context.Context) (*pricing.Snapshot, error) {
+		return pricing.Load(c, pool)
+	}, pricing.DefaultRefreshInterval, logger)
+	go provider.Run(ctx) // stops on ctx cancel
+
+	return strategy.Deps{Prices: provider}, pool.Close
 }
 
 // envOr returns the value of the named env var or fallback when unset/empty.

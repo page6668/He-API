@@ -47,15 +47,18 @@ func NewEngine(catalogue modelscatalogue.Catalogue, strategies map[routingv1.Str
 }
 
 // Decide resolves the effective strategy, dispatches to its implementation
-// over the boot-loaded catalogue, and returns the selected model plus the
-// strategy that ACTUALLY fired (strategy_used, Q-I).
+// over the boot-loaded catalogue, and returns the selected model, the strategy
+// that ACTUALLY fired (strategy_used, Q-I), and the score source (Story 6.2
+// High-1 — model_pricing|clickhouse|fallback|default).
 //
 //   - STRATEGY_UNSPECIFIED(0) is treated identically to STRATEGY_DEFAULT(1)
 //     and never errors on the zero value (Q-D);
 //   - an enum with no registered implementation -> ErrUnknownStrategy;
 //   - the chosen Strategy.Select error (e.g. ErrNoCandidates) is propagated
-//     verbatim for the handler to map to a gRPC code.
-func (e *Engine) Decide(ctx context.Context, strategy routingv1.Strategy, hints SelectionHints) (modelscatalogue.ModelEntry, routingv1.Strategy, error) {
+//     verbatim for the handler to map to a gRPC code;
+//   - a strategy implementing SourcedStrategy reports its own score source;
+//     a plain Strategy reports ScoreSourceDefault.
+func (e *Engine) Decide(ctx context.Context, strategy routingv1.Strategy, hints SelectionHints) (modelscatalogue.ModelEntry, routingv1.Strategy, string, error) {
 	effective := strategy
 	if effective == routingv1.Strategy_STRATEGY_UNSPECIFIED {
 		effective = routingv1.Strategy_STRATEGY_DEFAULT // Q-D zero-value rule
@@ -63,12 +66,20 @@ func (e *Engine) Decide(ctx context.Context, strategy routingv1.Strategy, hints 
 
 	impl, ok := e.strategies[effective]
 	if !ok {
-		return modelscatalogue.ModelEntry{}, effective, ErrUnknownStrategy
+		return modelscatalogue.ModelEntry{}, effective, "", ErrUnknownStrategy
+	}
+
+	if sourced, ok := impl.(SourcedStrategy); ok {
+		selected, source, err := sourced.SelectSourced(ctx, e.catalogue.List(), hints)
+		if err != nil {
+			return modelscatalogue.ModelEntry{}, effective, "", err
+		}
+		return selected, effective, source, nil
 	}
 
 	selected, err := impl.Select(ctx, e.catalogue.List(), hints)
 	if err != nil {
-		return modelscatalogue.ModelEntry{}, effective, err
+		return modelscatalogue.ModelEntry{}, effective, "", err
 	}
-	return selected, effective, nil
+	return selected, effective, ScoreSourceDefault, nil
 }

@@ -31,6 +31,16 @@ config:
   OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector.monitoring.svc.cluster.local:4317
   PORT: "8080"
 
+# Story 6.2 — read-only PostgreSQL access for the model_pricing cost source
+# (Q-K). The DSN is mounted from the shared DB-creds Secret as
+# HE_API_DB_POSTGRES_URI (same key auth-svc consumes). OPTIONAL: when
+# db.enabled=false the env is absent and routing-svc degrades cost routing to
+# first-alphabetical (BLIND-ERROR-003) — the service still boots and serves.
+db:
+  enabled: false
+  # Secret carrying HE_API_DB_POSTGRES_URI (shared with auth-svc — Story 1.6).
+  credsSecretName: he-api-db-creds
+
 serviceAccount:
   create: true
   name: ""

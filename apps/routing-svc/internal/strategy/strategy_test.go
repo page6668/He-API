@@ -1,13 +1,15 @@
-// Strategy-stub boundary tests — the headline `单测覆盖 3 种策略边界` (Story 6.1 AC2).
+// Shared strategy invariants. Story 6.2 REPLACED the Story-6.1 first-alphabetical
+// stubs with real scoring, so the 6.1 "indistinguishable stub" assertions
+// (6.1-UNIT-010..013) are intentionally retired (Q-G: 6.2 proves the strategies
+// diverge — see cost_test.go / quality_latency_test.go). The boundary
+// invariants that survive the cutover are kept here with their original 6.1
+// scenario ids, updated to the Story-6.2 constructors.
 //
-// Scenario trace -> docs/qa/assessments/6.1-test-design-20260603.md:
+// Scenario trace -> docs/qa/assessments/6.2-test-design-20260603.md:
 //
-//	6.1-UNIT-010/011/012  quality/cost/latency stub -> first-alphabetical (Q-G)
-//	6.1-UNIT-013          quality == cost == latency identical result (Q-G)
-//	6.1-UNIT-017          empty candidate set -> ErrNoCandidates
-//	6.1-UNIT-019          single-candidate -> that entry verbatim for every strategy
-//	6.1-UNIT-020          duplicate/tied candidates -> first-alphabetical deterministic
-//	6.1-UNIT-022          compile-time var _ engine.Strategy for all 4 stubs (in *.go)
+//	6.2-UNIT-015 / 6.1-UNIT-017  empty candidate set -> ErrNoCandidates (all strategies)
+//	6.2-BLIND-BOUNDARY-003       single-candidate -> that entry verbatim
+//	6.1-UNIT-022                 compile-time var _ engine.Strategy / SourcedStrategy (in *.go)
 package strategy
 
 import (
@@ -26,43 +28,19 @@ func entries(ids ...string) []engine.ModelEntry {
 	return out
 }
 
-// named strategies under test (default is exercised separately — different
-// semantics).
+// namedStrategies returns the 3 real named strategies with zero deps (nil
+// prices + nil scorers → fully degraded), exercising the default Epic-6 path.
 func namedStrategies() map[string]engine.Strategy {
 	return map[string]engine.Strategy{
-		"quality": NewQuality(),
-		"cost":    NewCost(),
-		"latency": NewLatency(),
+		"quality": NewQuality(nil, nil),
+		"cost":    NewCost(nil),
+		"latency": NewLatency(nil, nil),
 	}
 }
 
-// 6.1-UNIT-010/011/012 (P0) — each named stub returns first-alphabetical.
-func Test_UNIT_010_011_012_named_stubs_first_alphabetical(t *testing.T) {
-	cands := entries("gpt-y", "claude-x", "ernie-z") // first-alphabetical = claude-x
-	for name, s := range namedStrategies() {
-		got, err := s.Select(context.Background(), cands, engine.SelectionHints{})
-		if err != nil {
-			t.Fatalf("%s.Select err = %v", name, err)
-		}
-		if got.ID != "claude-x" {
-			t.Errorf("%s.Select = %q, want claude-x (first-alphabetical Q-G)", name, got.ID)
-		}
-	}
-}
-
-// 6.1-UNIT-013 (P0) — quality == cost == latency for the same catalogue.
-func Test_UNIT_013_named_stubs_indistinguishable(t *testing.T) {
-	cands := entries("gpt-y", "claude-x", "ernie-z")
-	q, _ := NewQuality().Select(context.Background(), cands, engine.SelectionHints{})
-	c, _ := NewCost().Select(context.Background(), cands, engine.SelectionHints{})
-	l, _ := NewLatency().Select(context.Background(), cands, engine.SelectionHints{})
-	if q.ID != c.ID || c.ID != l.ID {
-		t.Errorf("stubs diverge: quality=%q cost=%q latency=%q (Q-G: must be identical in 6.1)", q.ID, c.ID, l.ID)
-	}
-}
-
-// 6.1-UNIT-017 (P0) — empty candidate set -> ErrNoCandidates (every strategy).
-func Test_UNIT_017_empty_candidates_ErrNoCandidates(t *testing.T) {
+// 6.2-UNIT-015 / 6.1-UNIT-017 — empty candidate set -> ErrNoCandidates.
+func Test_empty_candidates_ErrNoCandidates(t *testing.T) {
+	t.Parallel()
 	all := namedStrategies()
 	all["default"] = NewDefault()
 	for name, s := range all {
@@ -73,11 +51,12 @@ func Test_UNIT_017_empty_candidates_ErrNoCandidates(t *testing.T) {
 	}
 }
 
-// 6.1-UNIT-019 (P1) — single-candidate -> that entry for every strategy.
-func Test_UNIT_019_single_candidate(t *testing.T) {
+// 6.2-BLIND-BOUNDARY-003 — single concrete candidate -> that entry for every
+// named strategy (degraded; no pricing/score data needed).
+func Test_single_candidate(t *testing.T) {
+	t.Parallel()
 	cands := entries("only-one")
-	named := namedStrategies()
-	for name, s := range named {
+	for name, s := range namedStrategies() {
 		got, err := s.Select(context.Background(), cands, engine.SelectionHints{})
 		if err != nil || got.ID != "only-one" {
 			t.Errorf("%s.Select(single) = %q, err=%v; want only-one", name, got.ID, err)
@@ -90,15 +69,17 @@ func Test_UNIT_019_single_candidate(t *testing.T) {
 	}
 }
 
-// 6.1-UNIT-020 (P1) — duplicate/tied ids resolve deterministically to the
-// first-alphabetical (order-independent).
-func Test_UNIT_020_duplicate_tie_breaker_deterministic(t *testing.T) {
-	a := entries("m-b", "m-a", "m-c", "m-a")
-	b := entries("m-c", "m-a", "m-b", "m-a")
-	q := NewQuality()
-	r1, _ := q.Select(context.Background(), a, engine.SelectionHints{})
-	r2, _ := q.Select(context.Background(), b, engine.SelectionHints{})
-	if r1.ID != "m-a" || r2.ID != "m-a" {
-		t.Errorf("tie-breaker not deterministic-first-alphabetical: r1=%q r2=%q, want m-a", r1.ID, r2.ID)
+// Under the default degraded path (no scorer data, no pricing), all three named
+// strategies converge to the same first-alphabetical result — but via the cost
+// ordering, not the retired stub. This documents the degraded-path convergence
+// without asserting the retired stub semantics.
+func Test_degraded_named_strategies_converge_to_cost_ordering(t *testing.T) {
+	t.Parallel()
+	cands := entries("gpt-y", "claude-x", "ernie-z") // all unpriced -> +Inf -> alphabetical
+	q, _ := NewQuality(nil, nil).Select(context.Background(), cands, engine.SelectionHints{})
+	c, _ := NewCost(nil).Select(context.Background(), cands, engine.SelectionHints{})
+	l, _ := NewLatency(nil, nil).Select(context.Background(), cands, engine.SelectionHints{})
+	if q.ID != "claude-x" || c.ID != "claude-x" || l.ID != "claude-x" {
+		t.Errorf("degraded convergence: quality=%q cost=%q latency=%q, want claude-x", q.ID, c.ID, l.ID)
 	}
 }

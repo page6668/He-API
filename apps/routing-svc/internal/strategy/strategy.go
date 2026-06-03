@@ -1,31 +1,22 @@
 // Package strategy holds the 4 routing-strategy implementations registered by
-// routing-svc: quality, cost, latency (Story 6.1 deterministic STUBS) and
-// default (passthrough). Each satisfies engine.Strategy (BR2-1).
+// routing-svc: quality, cost, latency (Story 6.2 REAL scoring) and default
+// (passthrough). Each satisfies engine.Strategy (BR2-1); the three named
+// strategies also satisfy engine.SourcedStrategy (Story 6.2 score_source).
 //
-// STUB NOTICE (Story 6.1, Q-G): quality / cost / latency are INTENTIONALLY
-// INDISTINGUISHABLE — all three return the first-alphabetical-by-model-id
-// candidate. This is deliberately "obviously a stub" so Story 6.2's QA can
-// prove the real scoring replaced it (by asserting the three diverge). Story
-// 6.2 replaces each with its real source (benchmark_results.quality_score /
-// model_pricing / request_logs_hourly_agg.p95_latency_ms).
+// Story 6.2 replaced the Story-6.1 first-alphabetical STUBS with real sources:
+//   - cost    — ranks over he_api.model_pricing (input+output ascending), via
+//     the pricing.Snapshot seam (candidates.go: cheapest).
+//   - quality — ranks benchmark_results.quality_score desc when the Scorer has
+//     data, else DEGRADES to the cost ordering (scored.go: scoredOrDegrade).
+//   - latency — ranks request_logs_hourly_agg.p95_latency_ms asc when the
+//     Scorer has data, else DEGRADES to the cost ordering.
+//
+// quality/latency degrade deterministically until Epic 9 populates their
+// ClickHouse backing stores (Q-A Option A); the scoring.Scorer seam makes the
+// real binding a thin Epic-9 drop-in (BR3-1).
+//
+// Every named-strategy path EXCLUDES the he-router-* virtual entries from
+// candidacy (candidates.go: concreteCandidates) — a he-router-* id returned as
+// selected_model would miss adapterRegistry.Resolve on the gateway hot path
+// (Q-D / BR2-5 correctness gate).
 package strategy
-
-import (
-	"github.com/he-api/he-api/apps/routing-svc/internal/engine"
-)
-
-// firstAlphabetical returns the candidate with the lexicographically smallest
-// model id (Q-G deterministic tie-breaker), or ErrNoCandidates when the set is
-// empty. It does not mutate or require a pre-sorted input.
-func firstAlphabetical(candidates []engine.ModelEntry) (engine.ModelEntry, error) {
-	if len(candidates) == 0 {
-		return engine.ModelEntry{}, engine.ErrNoCandidates
-	}
-	best := candidates[0]
-	for _, c := range candidates[1:] {
-		if c.ID < best.ID {
-			best = c
-		}
-	}
-	return best, nil
-}

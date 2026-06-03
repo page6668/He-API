@@ -1,0 +1,99 @@
+schema: 1
+story: "6.2"
+story_title: "quality / cost / latency 策略实现"
+gate: "PASS"
+status_reason: "All 4 ACs implemented and independently verified; all routing-svc + api-gateway suites green; new-pkg coverage 85.1–100% (≥80% target); all 3 Architect Round-1 High correctness gates confirmed at source + test; zero hot-path regression. Residual: 3 P0 integration gates (testcontainer E2E, buf-breaking, Atlas 0007 up/down) are docker/buf-gated and unexecuted locally — authored, logic-equivalents pass, MUST run in CI (non-blocking)."
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-03T09:49:48Z"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "HIGH"
+  cached_review_mode: "full_testing"
+  cached_project_type: "web_backend"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+# No blocking issues. Items below are CI-execution follow-ups (env-limited), not defects.
+top_issues:
+  - id: "CI-001"
+    severity: low
+    finding: "Testcontainer integration scenarios 6.2-INT-005..014 are docker-gated; docker is not running in the local review environment. Authored at unit level with fakes/pgxmock + an httptest wire round-trip; logic-equivalents pass."
+    suggested_action: "Run the testcontainer integration suite (gateway↔routing-svc↔seeded PG) in CI to obtain the over-the-wire E2E proof."
+  - id: "CI-002"
+    severity: low
+    finding: "buf generate + buf breaking:FILE (6.2-INT-015) could not run — buf is uninstallable in the env. The additive SelectModelResponse.score_source=6 field was hand-applied to the vendored routing.pb.go."
+    suggested_action: "Re-run buf generate + buf breaking:FILE in CI to confirm the additive contract gate. Verified locally via descriptor init-parse (every importing pkg compiles) + a real wire round-trip (TestLoadFromEnv_WireRoundTrip serialises/deserialises field 6)."
+  - id: "CI-003"
+    severity: low
+    finding: "Migration 0007 up/down (6.2-INT-007, BLIND-DATA-003) is Atlas-managed and unexecuted locally (no PG/docker). SQL is CREATE-TABLE-only (additive); reversibility is by construction (Atlas drops the two created tables)."
+    suggested_action: "Run atlas migrate up + down 1 against an ephemeral PG in CI to confirm the reversible/non-destructive cycle."
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 24            # 9 routing-svc pkgs + 15 api-gateway pkgs
+    passed_count: 24
+    failed_count: 0
+    skipped_count: 0
+    pass_rate: 100
+    coverage_percentage: 92   # new-pkg: pricing 92 / scoring 100 / strategy 89.2 / routingclient 85.1
+    failed_tests: []
+  e2e:
+    executed: false
+    passed: true
+    skipped: true
+    skip_reason: "Backend service-to-service story — no UI/browser tier (test-design declares E2E 0). End-to-end proof is at the integration tier via testcontainers (6.2-INT-009..014), which are docker-gated and deferred to CI."
+    scenarios_tested: 0
+    scenarios_passed: 0
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: ""
+  issues: []
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 7
+  security_sensitive: false
+  dev_gate_score: 95
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 3 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "Run the docker/buf-gated integration + contract gates (CI-001/002/003) in CI before deploy."
+
+quality_score: 94
+
+# Verification trace (Step 4.6 AC coverage)
+evidence_trace:
+  ac_covered: [1, 2, 3, 4]
+  ac_gaps: []
+  high_gates_verified:
+    high_1_score_source_wire: "routing.proto:75 score_source=6 + generated getter + rawDesc bytes; TestLoadFromEnv_WireRoundTrip proves field-6 marshal/unmarshal over httptest Connect."
+    high_2_unit013_flip: "chat_completions_test.go UNIT-013 now asserts X-He-Selected-Model == \"qwen-max\" on the mock path (was must-be-absent)."
+    high_3_he_router_exclusion: "strategy/candidates.go concreteCandidates() strips he-router- prefix; TestCost_ExcludesHeRouterMeta + TestQualityLatency_ExcludesHeRouter assert exclusion even when meta is cheapest/best, on cost + degraded + real-data paths."
+  rulings_verified:
+    Q_I_precedence: "routingclient ParseStrategy_{MetaModelWins,Header,Conflict,DefaultPassthrough,UnknownValues,AllMetaSuffixes} PASS"
+    Q_E_deadline: "TestDecide_AppliesDeadline + DeadlineExceeded PASS (100ms)"
+    Q_G_fail_open_closed: "TestDecide_{UnavailableConcreteFailOpen,UnavailableMetaFailClosed} PASS"
+    Q_H_grpc_envelope: "TestDecide_{InvalidArgument,NotFoundMeta502,NotFoundConcrete400} PASS"
+  regression: "keypolicy(5.2) / ratelimit(5.3) / security + full gateway suite green; -race clean; go vet clean on both services."

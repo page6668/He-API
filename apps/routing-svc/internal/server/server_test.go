@@ -23,7 +23,7 @@ func newTestServer(t *testing.T) *Server {
 	t.Helper()
 	s, err := New(Options{
 		Catalogue:  modelscatalogue.DefaultCatalogue,
-		Strategies: strategy.DefaultStrategies(),
+		Strategies: strategy.DefaultStrategies(strategy.Deps{}),
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -35,7 +35,7 @@ func newTestServer(t *testing.T) *Server {
 func Test_New_empty_catalogue_fails_fast(t *testing.T) {
 	_, err := New(Options{
 		Catalogue:  modelscatalogue.NewFromRegistry(modelscatalogue.Registry{}),
-		Strategies: strategy.DefaultStrategies(),
+		Strategies: strategy.DefaultStrategies(strategy.Deps{}),
 	})
 	if err == nil {
 		t.Fatal("New accepted an empty catalogue; want fail-fast error (BR1-2)")

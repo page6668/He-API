@@ -85,7 +85,7 @@ func Test_UNIT_002_NewEngine_fails_on_slug_without_impl(t *testing.T) {
 // 6.1-UNIT-014 (P0)
 func Test_UNIT_014_default_returns_requested_model_verbatim(t *testing.T) {
 	e := mustEngine(t, testCatalogue(t, "alpha", "beta"), withDefault())
-	sel, used, err := e.Decide(context.Background(), routingv1.Strategy_STRATEGY_DEFAULT, SelectionHints{RequestedModel: "beta"})
+	sel, used, _, err := e.Decide(context.Background(), routingv1.Strategy_STRATEGY_DEFAULT, SelectionHints{RequestedModel: "beta"})
 	if err != nil {
 		t.Fatalf("Decide err = %v", err)
 	}
@@ -100,7 +100,7 @@ func Test_UNIT_014_default_returns_requested_model_verbatim(t *testing.T) {
 // 6.1-UNIT-015 + 6.1-UNIT-036 (P0/P1)
 func Test_UNIT_015_unspecified_maps_to_default_never_errors(t *testing.T) {
 	e := mustEngine(t, testCatalogue(t, "alpha", "beta"), withDefault())
-	sel, used, err := e.Decide(context.Background(), routingv1.Strategy_STRATEGY_UNSPECIFIED, SelectionHints{RequestedModel: "alpha"})
+	sel, used, _, err := e.Decide(context.Background(), routingv1.Strategy_STRATEGY_UNSPECIFIED, SelectionHints{RequestedModel: "alpha"})
 	if err != nil {
 		t.Fatalf("zero-value strategy errored: %v (Q-D: must never error)", err)
 	}
@@ -116,7 +116,7 @@ func Test_UNIT_015_unspecified_maps_to_default_never_errors(t *testing.T) {
 func Test_UNIT_016_unknown_enum_returns_ErrUnknownStrategy(t *testing.T) {
 	e := mustEngine(t, testCatalogue(t, "a"), withDefault())
 	for _, slug := range []routingv1.Strategy{routingv1.Strategy(5), routingv1.Strategy(99)} {
-		_, _, err := e.Decide(context.Background(), slug, SelectionHints{})
+		_, _, _, err := e.Decide(context.Background(), slug, SelectionHints{})
 		if !errors.Is(err, ErrUnknownStrategy) {
 			t.Errorf("Decide(%d) err = %v, want ErrUnknownStrategy", slug, err)
 		}
@@ -126,10 +126,64 @@ func Test_UNIT_016_unknown_enum_returns_ErrUnknownStrategy(t *testing.T) {
 // 6.1-UNIT-018 (P0)
 func Test_UNIT_018_default_miss_returns_ErrNoCandidates(t *testing.T) {
 	e := mustEngine(t, testCatalogue(t, "alpha"), withDefault())
-	_, _, err := e.Decide(context.Background(), routingv1.Strategy_STRATEGY_DEFAULT, SelectionHints{RequestedModel: "not-in-catalogue"})
+	_, _, _, err := e.Decide(context.Background(), routingv1.Strategy_STRATEGY_DEFAULT, SelectionHints{RequestedModel: "not-in-catalogue"})
 	if !errors.Is(err, ErrNoCandidates) {
 		t.Errorf("err = %v, want ErrNoCandidates", err)
 	}
+}
+
+// 6.2 — Decide reports score_source: a plain Strategy yields ScoreSourceDefault;
+// a SourcedStrategy yields its own reported source (High-1 wire-field plumbing).
+func Test_Decide_reports_score_source(t *testing.T) {
+	cat := testCatalogue(t, "alpha", "beta")
+
+	// Plain Strategy → default.
+	ePlain := mustEngine(t, cat, withDefault())
+	if _, _, src, err := ePlain.Decide(context.Background(), routingv1.Strategy_STRATEGY_DEFAULT, SelectionHints{RequestedModel: "beta"}); err != nil || src != ScoreSourceDefault {
+		t.Errorf("plain Decide src=%q err=%v, want %q", src, err, ScoreSourceDefault)
+	}
+
+	// SourcedStrategy → its reported source; strategy_used stays truthful.
+	strategies := map[routingv1.Strategy]Strategy{
+		routingv1.Strategy_STRATEGY_DEFAULT: verbatimDefault{},
+		routingv1.Strategy_STRATEGY_QUALITY: sourcedPick{id: "alpha", source: ScoreSourceFallback},
+		routingv1.Strategy_STRATEGY_COST:    sourcedPick{id: "alpha", source: ScoreSourceModelPricing},
+		routingv1.Strategy_STRATEGY_LATENCY: sourcedPick{id: "alpha", source: ScoreSourceFallback},
+	}
+	e, err := NewEngine(cat, strategies)
+	if err != nil {
+		t.Fatalf("NewEngine: %v", err)
+	}
+	_, used, src, err := e.Decide(context.Background(), routingv1.Strategy_STRATEGY_COST, SelectionHints{})
+	if err != nil {
+		t.Fatalf("Decide: %v", err)
+	}
+	if used != routingv1.Strategy_STRATEGY_COST {
+		t.Errorf("strategy_used = %v, want COST (truthful)", used)
+	}
+	if src != ScoreSourceModelPricing {
+		t.Errorf("score_source = %q, want %q", src, ScoreSourceModelPricing)
+	}
+}
+
+// sourcedPick is a test SourcedStrategy returning a fixed id + score source.
+type sourcedPick struct {
+	id     string
+	source string
+}
+
+func (p sourcedPick) Select(ctx context.Context, candidates []ModelEntry, hints SelectionHints) (ModelEntry, error) {
+	m, _, err := p.SelectSourced(ctx, candidates, hints)
+	return m, err
+}
+
+func (p sourcedPick) SelectSourced(_ context.Context, candidates []ModelEntry, _ SelectionHints) (ModelEntry, string, error) {
+	for _, c := range candidates {
+		if c.ID == p.id {
+			return c, p.source, nil
+		}
+	}
+	return ModelEntry{}, "", ErrNoCandidates
 }
 
 // 6.1-UNIT-021 (P1)
@@ -152,7 +206,7 @@ func Test_BLIND_CONCURRENCY_001_concurrent_Decide(t *testing.T) {
 	for i := 0; i < n; i++ {
 		go func(i int) {
 			defer wg.Done()
-			sel, _, err := e.Decide(context.Background(), routingv1.Strategy_STRATEGY_DEFAULT, SelectionHints{RequestedModel: "beta"})
+			sel, _, _, err := e.Decide(context.Background(), routingv1.Strategy_STRATEGY_DEFAULT, SelectionHints{RequestedModel: "beta"})
 			if err == nil {
 				results[i] = sel.ID
 			}

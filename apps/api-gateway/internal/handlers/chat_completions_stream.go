@@ -42,15 +42,14 @@ import (
 // serveStream is invoked from ServeHTTP when validateChatRequest succeeds
 // AND req.Stream == true. The caller has already enforced bearer-auth +
 // body-size + JSON parse + role validation.
-func (h *ChatCompletionsHandler) serveStream(w http.ResponseWriter, r *http.Request, req *ChatRequest, apiKeyID string) {
+func (h *ChatCompletionsHandler) serveStream(w http.ResponseWriter, r *http.Request, req *ChatRequest, apiKeyID, selected string) {
 	ctx := r.Context()
 	// Story 4.1 BR-2.1 — dispatch fork BEFORE the writer/chunker is built.
-	// Registry hit → real adapter Connect-RPC server-stream; miss → fall
-	// through to the Story-3.4 MockChunker. Phase-A non-streaming path
-	// already calls serveAdapterNonStream; this is the parallel for stream=true.
+	// Registry hit (on the Story-6.2 ROUTED model) → real adapter Connect-RPC
+	// server-stream; miss → fall through to the Story-3.4 MockChunker.
 	if h.adapterRegistry != nil {
-		if handle, ok := h.adapterRegistry.Resolve(req.Model); ok {
-			h.serveAdapterStream(w, r, req, apiKeyID, handle)
+		if handle, ok := h.adapterRegistry.Resolve(selected); ok {
+			h.serveAdapterStream(w, r, req, apiKeyID, selected, handle)
 			return
 		}
 	}
@@ -63,8 +62,12 @@ func (h *ChatCompletionsHandler) serveStream(w http.ResponseWriter, r *http.Requ
 	id := h.newID()
 	created := h.now().UTC().Unix()
 
+	// BR1-2 — X-He-Selected-Model on the mock STREAM success path too (Story
+	// 6.2: was unset). MUST precede the first WriteEvent (the streaming.Writer
+	// flushes headers lazily on first event — FLOW-001).
+	w.Header().Set("X-He-Selected-Model", selected)
 	writer := streaming.NewWriter(w)
-	chunker := streaming.NewMockChunker(req.Model, MockContent, id, created)
+	chunker := streaming.NewMockChunker(selected, MockContent, id, created)
 
 	chunksEmitted, firstFlushAt, streamErr := chunker.Stream(ctx, writer)
 	_ = writer.Close() // BR-4.4 Close is a no-op for this Story; future Writer impls may hold resources.
@@ -124,12 +127,12 @@ func isWriteOrFlushFailure(err error) bool {
 //	BR-2.6 (post-flush): chunker err with HeadersFlushed()=true → emit
 //	  inline `data: {"error":...}\n\n` + `data: [DONE]\n\n` and keep
 //	  HTTP status 200.
-func (h *ChatCompletionsHandler) serveAdapterStream(w http.ResponseWriter, r *http.Request, req *ChatRequest, apiKeyID string, handle adapterclient.ClientHandle) {
+func (h *ChatCompletionsHandler) serveAdapterStream(w http.ResponseWriter, r *http.Request, req *ChatRequest, apiKeyID, selected string, handle adapterclient.ClientHandle) {
 	ctx := r.Context()
 	realStart := time.Now()
 	heRequestID, _ := requestid.FromContext(ctx)
 
-	adapterReq := buildAdapterRequest(req, heRequestID)
+	adapterReq := buildAdapterRequest(req, selected, heRequestID)
 	adapterReq.Stream = true // BR-2.1 streaming branch
 	headers := http.Header{}
 	if heRequestID != "" {
@@ -155,13 +158,14 @@ func (h *ChatCompletionsHandler) serveAdapterStream(w http.ResponseWriter, r *ht
 	defer func() { _ = stream.Close() }()
 
 	writer := streaming.NewWriter(w)
-	chunker := streaming.NewAdapterChunker(stream, req.Model)
+	chunker := streaming.NewAdapterChunker(stream, selected)
 
-	// BR-1.6 — gateway sets X-He-Selected-Model on streaming success path.
-	// MUST set BEFORE the first chunk emit so the header reaches the wire
-	// alongside the SSE response headers (the streaming.writer flushes
-	// headers lazily on the first WriteEvent).
-	w.Header().Set("X-He-Selected-Model", req.Model)
+	// BR1-2 — gateway sets X-He-Selected-Model = the ROUTED model on the
+	// streaming success path (Story 6.2 — was req.Model). MUST set BEFORE the
+	// first chunk emit so the header reaches the wire alongside the SSE response
+	// headers (the streaming.writer flushes headers lazily on the first
+	// WriteEvent — FLOW-001).
+	w.Header().Set("X-He-Selected-Model", selected)
 
 	chunksEmitted, firstFlushAt, streamErr := chunker.Stream(ctx, writer)
 	_ = writer.Close()
@@ -244,11 +248,11 @@ func (h *ChatCompletionsHandler) writeSSEErrorFrame(_ http.ResponseWriter, ctx c
 	heRequestID, _ := requestid.FromContext(ctx)
 	body := map[string]any{
 		"error": map[string]any{
-			"code":           code,
-			"message":        "Upstream model service interruption during streaming.",
-			"type":           openaierrTypeFor(code),
-			"param":          nil,
-			"he_request_id":  heRequestID,
+			"code":          code,
+			"message":       "Upstream model service interruption during streaming.",
+			"type":          openaierrTypeFor(code),
+			"param":         nil,
+			"he_request_id": heRequestID,
 		},
 	}
 	_ = message // message intentionally collapsed into the streaming-specific BR-2.6 wording above

@@ -34,7 +34,7 @@ func newWireClient(t *testing.T) (routingv1connect.RoutingServiceClient, func())
 	t.Helper()
 	srv, err := server.New(server.Options{
 		Catalogue:  modelscatalogue.DefaultCatalogue,
-		Strategies: strategy.DefaultStrategies(),
+		Strategies: strategy.DefaultStrategies(strategy.Deps{}),
 	})
 	if err != nil {
 		t.Fatalf("server.New: %v", err)

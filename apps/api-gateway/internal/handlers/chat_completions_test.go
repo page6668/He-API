@@ -108,11 +108,18 @@ func TestChatCompletions_HappyPath_OpenAIShape(t *testing.T) {
 	if got := rr.Header().Get("Content-Type"); got != "application/json; charset=utf-8" {
 		t.Errorf("Content-Type = %q, want application/json; charset=utf-8", got)
 	}
-	// UNIT-013 — no extra headers (Set-Cookie / X-He-Request-Id / X-He-Selected-Model)
-	for _, k := range []string{"Set-Cookie", "X-He-Request-Id", "X-He-Selected-Model"} {
+	// UNIT-013 (Story 6.2 FLIP — 6.2-INT-003 / BR1-5 EXCEPTION / Architect
+	// High-2): the mock path now routes through the routing decision, so
+	// X-He-Selected-Model IS a universal success-path invariant (BR1-2). With
+	// no routing-svc wired (passthrough Decider) the decision == req.Model, so
+	// the header equals "qwen-max". Set-Cookie / X-He-Request-Id stay absent.
+	for _, k := range []string{"Set-Cookie", "X-He-Request-Id"} {
 		if v := rr.Header().Get(k); v != "" {
 			t.Errorf("unexpected header %s = %q", k, v)
 		}
+	}
+	if got := rr.Header().Get("X-He-Selected-Model"); got != "qwen-max" {
+		t.Errorf("X-He-Selected-Model = %q, want qwen-max (BR1-2 universal invariant; passthrough == req.Model)", got)
 	}
 	// UNIT-003 — field ordering id → object → created → model → choices → usage.
 	// json.Marshal preserves struct field declaration order, so a substring

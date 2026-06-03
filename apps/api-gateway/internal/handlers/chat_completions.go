@@ -37,6 +37,7 @@ import (
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/requestid"
 	"github.com/he-api/he-api/apps/api-gateway/internal/openaierr"
+	"github.com/he-api/he-api/apps/api-gateway/internal/routingclient"
 	adapterv1 "github.com/he-api/he-api/packages/proto/gen/go/he/adapter/v1"
 )
 
@@ -184,6 +185,22 @@ func WithAdapterRegistry(reg *adapterclient.Registry) ChatHandlerOption {
 	}
 }
 
+// WithRouter wires the Story-6.2 routing Decider. When set, the handler
+// consults routing-svc on every chat request to derive the selected model
+// (resolving he-router-* meta-models + the X-He-Routing-Strategy header) and
+// surfaces it on X-He-Selected-Model (BR1-2).
+//
+// Nil is silently ignored — the constructor installs a passthrough Decider
+// (nil client) by default, so a handler built without this option behaves
+// exactly as it did pre-6.2: selected == req.Model on every path.
+func WithRouter(d *routingclient.Decider) ChatHandlerOption {
+	return func(h *ChatCompletionsHandler) {
+		if d != nil {
+			h.router = d
+		}
+	}
+}
+
 // WithTokenDeducter wires the Story-5.3 TPM post-deduction hook. The
 // handler invokes deducter.TPMDeduct(ctx, apiKeyID, usage.total_tokens)
 // after the upstream returns on the non-streaming success paths (mock
@@ -207,7 +224,8 @@ type ChatCompletionsHandler struct {
 	newID           func() string // injected via WithIDFactory; production default newMockCompletionID
 	now             func() time.Time
 	adapterRegistry *adapterclient.Registry
-	tokenDeducter   TokenDeducter // Story 5.3 — post-response TPM deduction; nil → nop
+	tokenDeducter   TokenDeducter          // Story 5.3 — post-response TPM deduction; nil → nop
+	router          *routingclient.Decider // Story 6.2 — routing decision; default passthrough
 }
 
 // NewChatCompletionsHandler builds the handler. logger may be nil — falls
@@ -223,6 +241,9 @@ func NewChatCompletionsHandler(logger *slog.Logger, opts ...ChatHandlerOption) *
 	if h.logger == nil {
 		h.logger = slog.Default()
 	}
+	// Story 6.2 — default to a passthrough Decider (nil client): selected ==
+	// req.Model on every path until WithRouter wires a real routing-svc client.
+	h.router = routingclient.NewDecider(nil, h.logger)
 	for _, opt := range opts {
 		opt(h)
 	}
@@ -292,22 +313,32 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Story 6.2 AC1 — routing decision. The gateway consults routing-svc to
+	// derive the selected model (resolving he-router-* meta-models + the
+	// X-He-Routing-Strategy header, Q-I) BEFORE the stream/adapter fork; the
+	// returned `selected` replaces req.Model for adapter resolution, the
+	// X-He-Selected-Model header, and the response model echo. A fail-closed /
+	// invalid outcome (Q-G/Q-H) writes the §5.1.2 envelope and returns.
+	selected, ok := h.routeOrWriteError(w, r, &req, apiKeyID)
+	if !ok {
+		return
+	}
+
 	// Story 3.4 BR-1.1 dispatch fork — stream=true requests serve SSE; the
 	// non-streaming path below is preserved byte-for-byte for stream=false
 	// (and stream omitted, which defaults to false via Go's bool zero-value).
 	if req.Stream {
-		h.serveStream(w, r, &req, apiKeyID)
+		h.serveStream(w, r, &req, apiKeyID, selected)
 		return
 	}
 
 	// Story 4.1 BR-1.2 adapter-dispatch fork — BEFORE the existing mock-
-	// write block, check the model-id resolver. Hit → real adapter; miss
-	// → fall through to the Story-3.3 mock path. Phase A only covers
-	// non-streaming; streaming adapter dispatch lands in Phase B
-	// (serveStream is patched separately).
+	// write block, check the model-id resolver against the ROUTED model
+	// (Story 6.2 — was req.Model). Hit → real adapter; miss → fall through to
+	// the Story-3.3 mock path.
 	if h.adapterRegistry != nil {
-		if handle, ok := h.adapterRegistry.Resolve(req.Model); ok {
-			h.serveAdapterNonStream(w, r, &req, apiKeyID, handle)
+		if handle, ok := h.adapterRegistry.Resolve(selected); ok {
+			h.serveAdapterNonStream(w, r, &req, apiKeyID, selected, handle)
 			return
 		}
 	}
@@ -318,11 +349,15 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		ctx, "chat_completions_mock",
 		slog.String("event", "chat_completions_mock"),
 		slog.String("model", req.Model),
+		slog.String("selected_model", selected),
 		slog.String("api_key_id", apiKeyID),
 		slog.Int("messages_count", len(req.Messages)),
 	)
 
-	resp := mockChatCompletionResponse(&req, h.newID(), h.now())
+	// BR1-2 — X-He-Selected-Model is a universal success-path invariant (set on
+	// the mock path too; Story 6.2 High-2 / UNIT-013 flip).
+	w.Header().Set("X-He-Selected-Model", selected)
+	resp := mockChatCompletionResponse(&req, selected, h.newID(), h.now())
 	writeChatJSON(w, http.StatusOK, resp)
 	// Story 5.3 BR-3.4 / Architect Q3 — post-deduction on success. Fire-
 	// and-forget; errors are absorbed by the deducter (slog WARN inside
@@ -330,14 +365,62 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	h.tokenDeducter.TPMDeduct(ctx, apiKeyID, resp.Usage.TotalTokens)
 }
 
+// routeOrWriteError runs the Story-6.2 routing decision and returns the model
+// the request should dispatch to. On a fail-closed / invalid decision (Q-G/Q-H)
+// it writes the canonical §5.1.2 envelope (BR4-3) and returns ok=false. The
+// 100ms deadline (Q-E) is applied inside the Decider. The decision is echoed to
+// slog (non-PII) here so every dispatch path shares one decision log.
+func (h *ChatCompletionsHandler) routeOrWriteError(w http.ResponseWriter, r *http.Request, req *ChatRequest, apiKeyID string) (string, bool) {
+	ctx := r.Context()
+	heRequestID, _ := requestid.FromContext(ctx)
+	userID, _ := middleware.BearerUserIDFromContext(ctx)
+
+	decision, err := h.router.Decide(ctx, req.Model, r.Header, userID, heRequestID)
+	if err != nil {
+		var ee *routingclient.EnvelopeError
+		if errors.As(err, &ee) {
+			_ = openaierr.Write(w, ctx, 0, ee.Code, routingEnvelopeMessage(ee.Code), nil)
+			return "", false
+		}
+		// Defensive — an unexpected non-envelope error degrades to 502.
+		_ = openaierr.Write(w, ctx, 0, "502_upstream_unavailable",
+			"Upstream model service is unavailable, please retry.", nil)
+		return "", false
+	}
+
+	h.logger.LogAttrs(ctx, slog.LevelInfo, "chat_completions_routing_decision",
+		slog.String("event", "chat_completions_routing_decision"),
+		slog.String("requested_model", req.Model),
+		slog.String("selected_model", decision.SelectedModel),
+		slog.String("strategy", decision.Strategy.String()),
+		slog.String("score_source", decision.ScoreSource),
+		slog.Bool("bypassed", decision.Bypassed),
+		slog.String("he_request_id", heRequestID),
+	) // BR4-2 non-PII: NEVER user_id / api_key content.
+	return decision.SelectedModel, true
+}
+
+// routingEnvelopeMessage returns the user-facing message for a routing envelope
+// code (Q-H). Reuses the wording from the adapter-error mapping (§5.1.2).
+func routingEnvelopeMessage(code string) string {
+	switch code {
+	case "400_invalid_request":
+		return "The requested model is not available."
+	case "502_upstream_unavailable":
+		return "No upstream model is available for the requested routing strategy."
+	default:
+		return "Upstream model service is unavailable, please retry."
+	}
+}
+
 // serveAdapterNonStream dispatches a stream=false request to the adapter
 // Connect-RPC client, collects the single terminal chunk, and writes the
 // OpenAI chat.completion response body. Errors map per BR-1.4.
-func (h *ChatCompletionsHandler) serveAdapterNonStream(w http.ResponseWriter, r *http.Request, req *ChatRequest, apiKeyID string, handle adapterclient.ClientHandle) {
+func (h *ChatCompletionsHandler) serveAdapterNonStream(w http.ResponseWriter, r *http.Request, req *ChatRequest, apiKeyID, selected string, handle adapterclient.ClientHandle) {
 	ctx := r.Context()
 	heRequestID, _ := requestid.FromContext(ctx)
 
-	adapterReq := buildAdapterRequest(req, heRequestID)
+	adapterReq := buildAdapterRequest(req, selected, heRequestID)
 	headers := http.Header{}
 	if heRequestID != "" {
 		// BR-1.5 — propagate to the adapter Connect-RPC as a header AND
@@ -381,10 +464,11 @@ func (h *ChatCompletionsHandler) serveAdapterNonStream(w http.ResponseWriter, r 
 		return
 	}
 
-	resp := adapterChunkToResponse(chunk, req.Model, h.now())
+	resp := adapterChunkToResponse(chunk, selected, h.now())
 
-	// BR-1.6 — gateway sets X-He-Selected-Model on success.
-	w.Header().Set("X-He-Selected-Model", req.Model)
+	// BR1-2 — gateway sets X-He-Selected-Model = the ROUTED model on success
+	// (Story 6.2 — was req.Model).
+	w.Header().Set("X-He-Selected-Model", selected)
 	writeChatJSON(w, http.StatusOK, resp)
 
 	// Story 5.3 BR-3.4 / Architect Q3 — post-deduction on success.
@@ -405,7 +489,7 @@ func (h *ChatCompletionsHandler) serveAdapterNonStream(w http.ResponseWriter, r 
 // buildAdapterRequest translates the OpenAI-shape ChatRequest into the
 // proto-shape adapterv1.ChatRequest. JSON passthrough fields are forwarded
 // verbatim (BR-1.7 (f) identity-mapping at the gateway boundary).
-func buildAdapterRequest(req *ChatRequest, heRequestID string) *adapterv1.ChatRequest {
+func buildAdapterRequest(req *ChatRequest, model, heRequestID string) *adapterv1.ChatRequest {
 	messages := make([]*adapterv1.ChatMessage, len(req.Messages))
 	for i := range req.Messages {
 		messages[i] = &adapterv1.ChatMessage{
@@ -414,7 +498,7 @@ func buildAdapterRequest(req *ChatRequest, heRequestID string) *adapterv1.ChatRe
 		}
 	}
 	adapterReq := &adapterv1.ChatRequest{
-		Model:       req.Model,
+		Model:       model, // Story 6.2 — the ROUTED model (== req.Model on passthrough)
 		Messages:    messages,
 		Stream:      false, // non-streaming branch
 		HeRequestId: heRequestID,
@@ -551,16 +635,16 @@ func classifyAdapterError(err error) (status int, code, message string) {
 	return http.StatusBadGateway, "502_upstream_unavailable", "Upstream model service is unavailable, please retry."
 }
 
-// mockChatCompletionResponse builds the deterministic mock body. Per
-// BR-4.3 the response depends only on req.Model (echoed) — same input
-// always produces the same output modulo id randomness + created
-// timestamp. No "echo last user message", no "vary by temperature".
-func mockChatCompletionResponse(req *ChatRequest, id string, now time.Time) *ChatResponse {
+// mockChatCompletionResponse builds the deterministic mock body. Per BR-4.3 the
+// response depends only on the served `model` (echoed) — same input always
+// produces the same output modulo id randomness + created timestamp. Story 6.2:
+// `model` is the ROUTED selection (== req.Model on the default/passthrough path).
+func mockChatCompletionResponse(req *ChatRequest, model, id string, now time.Time) *ChatResponse {
 	return &ChatResponse{
 		ID:      id,
 		Object:  "chat.completion",
 		Created: now.UTC().Unix(),
-		Model:   req.Model,
+		Model:   model,
 		Choices: []ChatChoice{
 			{
 				Index: 0,

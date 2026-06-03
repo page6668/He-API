@@ -86,4 +86,11 @@ spec:
       ports:
         - protocol: TCP
           port: 4317
+    {{- if .Values.db.enabled }}
+    # Story 6.2 — PostgreSQL egress for the read-only model_pricing source (Q-K).
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 5432
+    {{- end }}
 {{- end }}

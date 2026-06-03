@@ -32,10 +32,17 @@ spec:
               containerPort: 8080
               protocol: TCP
           envFrom:
-            # Non-secret runtime config (OTel endpoint, PORT). routing-svc is
-            # stateless — no DB/Redis/Kafka/JWT Secret references in 6.1.
+            # Non-secret runtime config (OTel endpoint, PORT).
             - configMapRef:
                 name: {{ include "routing-svc.fullname" . }}-config
+            {{- if .Values.db.enabled }}
+            # Story 6.2 — read-only PostgreSQL DSN (HE_API_DB_POSTGRES_URI) for
+            # the model_pricing cost source (Q-K). Shared DB-creds Secret
+            # (mirrors auth-svc). Optional: omit to degrade cost routing to
+            # first-alphabetical (BLIND-ERROR-003).
+            - secretRef:
+                name: {{ .Values.db.credsSecretName }}
+            {{- end }}
           # Liveness: process-up only (AC1 — GET /livez returns 200
           # unconditionally once the process is running).
           livenessProbe:

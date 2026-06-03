@@ -33,10 +33,43 @@ type SelectionHints struct {
 
 // Strategy selects exactly one model from the candidate set. The signature is
 // the Story 6.1 cascade-lock (BR2-1) — `Select(ctx, []ModelEntry, hints) ->
-// (ModelEntry, error)`. Implementations MUST be pure (no I/O, no mutation of
-// candidates) and deterministic for a given input.
+// (ModelEntry, error)`. Implementations MUST be pure (no I/O beyond a read of
+// an immutable snapshot, no mutation of candidates) and deterministic for a
+// given input + snapshot.
 type Strategy interface {
 	Select(ctx context.Context, candidates []ModelEntry, hints SelectionHints) (ModelEntry, error)
+}
+
+// Score-source labels reported on SelectModelResponse.score_source (Story 6.2
+// High-1). They are observability facts (slog + the he_routing_decisions_total
+// metric), not part of the routing contract's behaviour.
+const (
+	// ScoreSourceModelPricing — the cost strategy ranked over he_api.model_pricing.
+	ScoreSourceModelPricing = "model_pricing"
+	// ScoreSourceClickHouse — a quality/latency strategy used real ClickHouse
+	// scores (reachable once Epic 9 populates the backing store / under a
+	// seeded test Scorer).
+	ScoreSourceClickHouse = "clickhouse"
+	// ScoreSourceFallback — a quality/latency strategy degraded to the
+	// deterministic cost-then-alphabetical ordering because its Scorer had no
+	// data (the default Epic-6 path, Q-A Option A).
+	ScoreSourceFallback = "fallback"
+	// ScoreSourceDefault — the passthrough (default) strategy; no scoring.
+	ScoreSourceDefault = "default"
+)
+
+// SourcedStrategy is an OPTIONAL Story-6.2 capability layered on Strategy: a
+// strategy that reports the score source (ScoreSource* above) it used for THIS
+// decision. The data-availability of quality/latency is per-request, so the
+// source cannot be a static property — it is reported alongside the selection.
+//
+// The cascade-locked Strategy.Select (BR2-1) is UNCHANGED: 6.3 (failover) / 6.4
+// (A/B) strategies need only satisfy Strategy. Engine.Decide prefers
+// SelectSourced when a strategy implements it, and reports ScoreSourceDefault
+// for strategies that only satisfy Strategy.
+type SourcedStrategy interface {
+	Strategy
+	SelectSourced(ctx context.Context, candidates []ModelEntry, hints SelectionHints) (ModelEntry, string, error)
 }
 
 // Exported sentinels (BR2-4) — compared with errors.Is by the handler to map

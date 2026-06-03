@@ -34,9 +34,10 @@ import (
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/cors"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/keypolicy"
-	"github.com/he-api/he-api/apps/api-gateway/internal/notifyclient"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/ratelimit"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/requestid"
+	"github.com/he-api/he-api/apps/api-gateway/internal/notifyclient"
+	"github.com/he-api/he-api/apps/api-gateway/internal/routingclient"
 	"github.com/he-api/he-api/apps/api-gateway/internal/usage"
 	obs "github.com/he-api/he-api/packages/go-observability"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1/authv1connect"
@@ -291,7 +292,7 @@ func main() {
 		os.Exit(1)
 	}
 	rateLimitMW := ratelimit.New(ratelimit.Config{
-		Redis: redis.NewClient(mustRedisOptions(redisURL, logger)),
+		Redis:            redis.NewClient(mustRedisOptions(redisURL, logger)),
 		FreeTierDefaults: rlCeilings,
 		FailOpenTimeout:  ratelimit.DefaultFailOpenTimeout,
 	}, logger)
@@ -306,9 +307,13 @@ func main() {
 	// Empty env → registry omits the entry → all models fall through to
 	// the Story-3.3 mock. Stories 4.2-4.6 add sibling env-var lookups.
 	adapterRegistry := adapterclient.LoadFromEnv()
+	// Story 6.2 — routing decision client. ROUTING_SVC_ENDPOINT unset → nil
+	// client → the Decider passes req.Model through (pre-6.2 behaviour).
+	routingDecider := routingclient.NewDecider(routingclient.LoadFromEnv(), logger)
 	chatCompletions := handlers.NewChatCompletionsHandler(
 		logger,
 		handlers.WithAdapterRegistry(adapterRegistry),
+		handlers.WithRouter(routingDecider),
 		handlers.WithTokenDeducter(rateLimitMW),
 	)
 

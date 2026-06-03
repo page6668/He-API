@@ -121,6 +121,14 @@ ratelimit:
     rpmMax: 300
     tpmMax: 60000
 
+# Story 6.2 — routing-svc Connect-RPC endpoint. EMPTY by design (back-compat):
+# with no endpoint the gateway passes req.Model through (pre-6.2 behaviour, no
+# routing-svc round-trip). Set per-env in values-{staging,prod}.yaml to the
+# in-cluster routing-svc Service, e.g.
+# "http://routing-svc.he-api-staging.svc.cluster.local:8080".
+routing:
+  endpoint: ""
+
 # -----------------------------------------------------------------------------
 # Story 5.2 (Q-E) — trusted-proxy CIDRs for the keypolicy XFF walker.
 # Comma-separated CIDR lists surfaced to the pod as CLOUDFLARE_CIDRS +
