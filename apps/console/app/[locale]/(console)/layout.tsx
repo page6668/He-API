@@ -15,6 +15,7 @@ import { getTranslations } from 'next-intl/server';
 
 import { defaultLocale, isLocale } from '@/i18n/config';
 import { ACCESS_COOKIE } from '@/lib/auth/cookies';
+import { ConsoleSidebarNav } from '@/components/ConsoleSidebarNav';
 
 interface ConsoleLayoutProps {
   children: ReactNode;
@@ -40,26 +41,14 @@ export default async function ConsoleLayout({
   return (
     <div className="mx-auto flex max-w-5xl gap-6 px-6 py-8">
       <aside className="w-48 shrink-0" aria-label={t('settings.sidebar.label')}>
-        <nav className="flex flex-col gap-1 text-sm">
-          <a
-            href={`/${resolvedLocale}/settings/profile`}
-            className="rounded px-3 py-2 hover:bg-neutral-100"
-          >
-            {t('settings.sidebar.profile')}
-          </a>
-          <a
-            href={`/${resolvedLocale}/settings/security`}
-            className="rounded px-3 py-2 hover:bg-neutral-100"
-          >
-            {t('settings.sidebar.security')}
-          </a>
-          <a
-            href={`/${resolvedLocale}/settings/data`}
-            className="rounded px-3 py-2 hover:bg-neutral-100"
-          >
-            {t('settings.sidebar.data')}
-          </a>
-        </nav>
+        <ConsoleSidebarNav
+          items={[
+            { href: `/${resolvedLocale}/keys`, label: t('keys.nav.sidebar') },
+            { href: `/${resolvedLocale}/settings/profile`, label: t('settings.sidebar.profile') },
+            { href: `/${resolvedLocale}/settings/security`, label: t('settings.sidebar.security') },
+            { href: `/${resolvedLocale}/settings/data`, label: t('settings.sidebar.data') },
+          ]}
+        />
       </aside>
       <section className="flex-1">{children}</section>
     </div>

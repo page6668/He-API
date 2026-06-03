@@ -307,4 +307,27 @@ he-api/                                  (Monorepo, Turborepo)
 >   + `INGRESS_CIDRS` env vars for the XFF walker; empty default = failsafe.
 > Entry added by Story 5.2 (Architect Round 1 m2), 2026-06-03.
 
+> **注**: Story 5.5 — Console Keys page (CRUD + config UI; frontend-only).
+> - `apps/console/app/[locale]/(console)/keys/page.tsx` — list Server Component
+>   (SSR `listMyKeys` + `fetchPublicModels`; `<KeysPanel>` or error banner).
+> - `apps/console/app/[locale]/(console)/keys/[api_key_id]/created/page.tsx` —
+>   one-time plaintext display SC (`force-dynamic`, noindex/no-referrer; BR-PD-4
+>   shape guard → `notFound()`). Cache-Control no-store added in `middleware.ts`.
+> - `apps/console/components/business/` — NEW: `KeysPanel` (client orchestrator,
+>   router.refresh coherence), `KeysTable`, `KeysTableSkeleton`, `KeysEmptyState`,
+>   `CapBudgetBar` (client cap heuristic, Q-E5 overrule), `ScopeChips`,
+>   `CreateKeyModal`, `ApiKeyDisplay` (FIRST realization), `ConfigureKeyDrawer`,
+>   `IpWhitelistEditor`, `RevokeKeyDialog`.
+> - `apps/console/components/ui/{dialog,toast}.tsx` — NEW shared a11y primitives
+>   (focus-trap Dialog/Drawer + Toast); `Button` gains a `destructive` variant.
+> - `apps/console/components/ConsoleSidebarNav.tsx` — NEW client nav (aria-current).
+> - `apps/console/lib/api/{money,ip}.ts` — NEW pure helpers; `me-keys.ts` EXTENDED
+>   (`readScope`, `PLAINTEXT_RE`, completed `KeyNameSchema`, tightened cap regex).
+> - `apps/console/messages/{10}/account.json` — `account.keys.*` extended;
+>   `packages/i18n-keys/src/account.ts` regenerated (163 keys).
+> - Tests: `apps/console/__tests__/5.5-console-keys-page-crud-config-ui.test.tsx`
+>   (71 Vitest blocks, all green); `apps/console/e2e/5.5-keys-page{,-a11y}.spec.ts`
+>   (authored, skip-gated pending the integrated stack + `@axe-core/playwright`).
+> Entry added by Story 5.5 (Dev / Linus), 2026-06-03.
+
 ---

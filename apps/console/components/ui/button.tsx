@@ -11,6 +11,8 @@ const buttonVariants = cva(
         default: 'bg-primary text-primary-foreground hover:bg-primary/90',
         outline: 'border border-input bg-background hover:bg-muted',
         ghost: 'hover:bg-muted',
+        // Story 5.5 BR-R-4 — destructive (revoke) action; red, high-emphasis.
+        destructive: 'bg-red-600 text-white hover:bg-red-700',
       },
       size: {
         default: 'h-9 px-4 py-2',

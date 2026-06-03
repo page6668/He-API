@@ -1,0 +1,139 @@
+schema: 1
+story: "5.5"
+story_title: "控制台 Keys 页面（CRUD + 配置 UI）"
+gate: "PASS"
+status_reason: >
+  Frontend-only Story; all 4 ACs implemented and covered by 71/71 green Vitest
+  scenarios, typecheck clean, zero regressions. Security-critical plaintext
+  discipline (BR-PD-1..7), HTML-escape, NFC type-name revoke guard, and Q-E5 cap
+  heuristic verified at code + unit/integration level. CONCERNS (non-blocking):
+  the Comprehensive E2E/security-persistence/a11y/visual lanes are authored but
+  skip-gated (need integrated stack + @axe-core/playwright — Story 4.7 precedent);
+  console `lint`/`build` are blocked by PRE-EXISTING non-5.5 tech debt in
+  app/[locale]/_actions/auth.ts (owned by Story 2.x). 5.5's own code is clean.
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-03T06:34:19Z"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "HIGH"
+  cached_review_mode: "full_testing"
+  cached_project_type: "web_frontend"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+top_issues:
+  - id: "QA-5.5-001"
+    severity: medium
+    finding: >
+      Comprehensive E2E/security/a11y/visual lanes (T5.1-T5.4, T7.4) authored with
+      full scenario-ID coverage but test.skip-gated — runtime persistence scans
+      (5.5-SEC-001/002: localStorage/sessionStorage/IndexedDB/cookie), IDOR
+      (5.5-SEC-004), axe-core a11y (5.5-A11Y-*), and 28 visual baselines were NOT
+      executed (no integrated gateway+auth-svc+PG+Redis stack and no
+      @axe-core/playwright in the dev sandbox).
+    suggested_action: >
+      Run the 5.5 Playwright lanes in the integrated CI environment and add
+      @axe-core/playwright as a console devDependency (carry-forward from Story
+      4.7). Mitigated this round by code-level verification: zero client-side
+      persistence sinks in 5.5 components (only the documented transient clipboard
+      write) and unit-level HTML-escape / NFC / plaintext-regex assertions pass.
+  - id: "QA-5.5-002"
+    severity: medium
+    finding: >
+      `pnpm --filter @he-api/console lint` and `build` fail, but the sole lint
+      error (app/[locale]/_actions/auth.ts:30 unused NotYetImplemented) and the
+      build blocker (non-async maskEmail export from a 'use server' module) are
+      PRE-EXISTING and committed at HEAD in a file Story 5.5 never touched
+      (confirmed absent from 5.5 git diff). 5.5's own code is lint-clean and
+      typecheck-clean. This blocks the entire console `next build` regardless of 5.5.
+    suggested_action: >
+      Open a fix owned by the Story that owns app/[locale]/_actions/auth.ts
+      (2.x / 2fa generator): make maskEmail async or move it out of the
+      'use server' module, and prefix/remove the unused NotYetImplemented. Release
+      blocker for the console app — track independently of 5.5.
+  - id: "QA-5.5-003"
+    severity: low
+    finding: >
+      Full console Vitest suite shows 1 failing test (2.2-UNIT-063 AuthKeys union
+      completeness in __tests__/2.2-email-...test.ts) — PRE-EXISTING; caused by a
+      stale packages/i18n-keys/src/auth.ts generated union, unmodified by 5.5
+      (5.5 regenerated the `account` namespace only). Same auth.ts root cause as
+      QA-5.5-002.
+    suggested_action: >
+      Regenerate packages/i18n-keys/src/auth.ts under the owning Story 2.x. Not a
+      5.5 defect.
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 71
+    passed_count: 71
+    failed_count: 0
+    skipped_count: 0
+    pass_rate: 100
+    coverage_percentage: 0  # not measured; Dev claims 100% on the 7 new components
+    failed_tests: []
+    notes: >
+      5.5 suite (5.5-console-keys-page-crud-config-ui.test.tsx) run independently:
+      71/71 PASS. Full console suite: 270 pass / 1 fail / 33 skipped — the single
+      failure (2.2-UNIT-063) is pre-existing and unrelated to 5.5 (see QA-5.5-003).
+      Dev integrity check: claims verified honest.
+  e2e:
+    executed: false
+    passed: false
+    skipped: true
+    skip_reason: >
+      Playwright E2E/security/a11y/visual specs authored but test.skip-gated;
+      require integrated stack + @axe-core/playwright not available in dev sandbox
+      (see QA-5.5-001). Story 4.7 precedent.
+    scenarios_tested: 0
+    scenarios_passed: 0
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: ""
+  issues: []
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 4
+  security_sensitive: true
+  dev_gate_score: 95
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 2, low: 1 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "Run 5.5 Playwright E2E/security/a11y/visual lanes in integrated CI (QA-5.5-001)"
+      - "Fix pre-existing auth.ts build/lint blocker — console release blocker (QA-5.5-002)"
+
+nfr_validation:
+  security: { status: PASS, notes: "Plaintext discipline (zero persistence sinks, code+unit verified); HTML-escape via JSX + 5.5-INT-015/SEC-003; NFC type-name revoke guard; force-dynamic+no-store+noindex on one-time-display sub-page. Runtime persistence E2E deferred (QA-5.5-001)." }
+  performance: { status: PASS, notes: "RSC + Server Actions; no client data-fetch on first paint. Build size-limit (T7.5) not measured — build blocked by pre-existing auth.ts." }
+  reliability: { status: PASS, notes: "Zero regressions; typecheck clean; router.refresh coherence after mutations." }
+  maintainability: { status: PASS, notes: "Followed shipped repo patterns (no new deps; native money/ip helpers; hand-rolled focus-trap Dialog). 4 Architect factual corrections applied." }
+
+quality_score: 88
+
+history:
+  - at: "2026-06-03T06:34:19Z"
+    gate: PASS
+    note: "Round 1 full review. 71/71 Vitest PASS, typecheck clean, security verified at code+unit level. 2 medium (deferred E2E lane + pre-existing auth.ts blocker) + 1 low (pre-existing 2.2 test), none from 5.5's own code."

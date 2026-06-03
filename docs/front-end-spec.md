@@ -599,7 +599,7 @@ Done!
 | `<PaymentMethodGrid>` | Recharge 页 5 通道网格 |
 | `<UsageChart>` | Dashboard 用量趋势图（基于 Recharts） |
 | `<CodeSnippet>` | 多语言代码块 + 一键复制 + Run in Playground |
-| `<ApiKeyDisplay>` | 一次性明文展示 + 自动 mask + 复制 |
+| `<ApiKeyDisplay>` | 一次性明文展示 + 自动 mask + 复制 — **REALIZED by Story 5.5** (`apps/console/components/business/ApiKeyDisplay.tsx`; mask/reveal/copy/confirm + one-shot aria-live + plaintext discipline BR-PD-1..7) |
 | `<BenchmarkBar>` | Benchmark 页评分柱状图 |
 | `<BalancePill>` | 顶栏余额徽章；点击跳 Billing |
 | `<LocaleSwitch>` | 顶栏语言切换；下拉显示原生语言名（English / 中文 / 日本語 / 한국어 / Español / Français / Deutsch / Português / Русский / العربية） |

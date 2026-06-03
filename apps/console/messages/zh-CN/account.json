@@ -10,7 +10,8 @@
   "keys": {
     "empty": {
       "title": "还没有 API 密钥",
-      "cta": "创建第一个 API 密钥"
+      "cta": "创建第一个 API 密钥",
+      "body": "创建你的第一个 API 密钥，开始调用 He-API。"
     },
     "errors": {
       "name": {
@@ -21,7 +22,16 @@
       },
       "generic": "出错了,请稍后再试。",
       "plaintext_one_time": "明文密钥仅显示一次,请立即保存——之后将无法再次获取。",
-      "rate_limited": "创建过于频繁,请稍后再试。"
+      "rate_limited": "创建过于频繁,请稍后再试。",
+      "ip": {
+        "invalid_format": "请输入有效的 IP 地址或 CIDR 范围。",
+        "degenerate_cidr": "不允许使用 0.0.0.0/0 和 ::/0。",
+        "zone_id_rejected": "不允许使用 IPv6 zone ID。"
+      },
+      "cap": {
+        "out_of_range": "月度消费上限必须介于 $0.01 与 $999,999.99 之间。",
+        "invalid_format": "请输入有效的金额。"
+      }
     },
     "revoke": {
       "confirm": {
@@ -30,7 +40,11 @@
       },
       "success": "API 密钥已吊销。",
       "already_revoked": "该密钥已被吊销。",
-      "not_found": "API 密钥不存在或已被移除。"
+      "not_found": "API 密钥不存在或已被移除。",
+      "warning": "此操作不可逆。密钥一旦吊销将无法恢复。使用该密钥的应用会立即收到 401 错误。",
+      "confirm_label": "输入密钥名称以确认：{name}",
+      "confirm_aria": "输入密钥名称 {name} 以确认吊销",
+      "cancel": "取消"
     },
     "edit": {
       "title": "编辑 API 密钥",
@@ -58,6 +72,112 @@
           "subject": "您的 API 密钥已暂停 — 已达到月度消费上限",
           "description": "达到上限并暂停密钥时通知"
         }
+      },
+      "none": "未设置上限",
+      "tripped": "已熔断",
+      "tripped_sr": "API 密钥已达月度上限——将暂停至下月。",
+      "usage_aria": "已使用 {current}（共 {cap}）"
+    },
+    "page": {
+      "title": "API 密钥",
+      "description": "管理用于通过 He-API 进行身份验证的 API 密钥。",
+      "new_key": "新建密钥"
+    },
+    "nav": {
+      "sidebar": "API 密钥"
+    },
+    "footer": {
+      "count": "共显示 {count} 个密钥"
+    },
+    "banner": {
+      "retry": "重试"
+    },
+    "loading": {
+      "aria": "正在加载你的 API 密钥…"
+    },
+    "table": {
+      "header": {
+        "name": "名称",
+        "prefix": "前缀",
+        "scope": "范围",
+        "created": "创建时间",
+        "last_used": "最近使用",
+        "cap": "月度上限",
+        "status": "状态",
+        "actions": "操作"
+      }
+    },
+    "status": {
+      "active": "启用",
+      "revoked": "已吊销"
+    },
+    "last_used": {
+      "never": "从未使用"
+    },
+    "actions": {
+      "configure": "配置 {name}",
+      "revoke": "吊销 {name}"
+    },
+    "row": {
+      "aria": "API 密钥 {name}"
+    },
+    "scope": {
+      "all_models": "全部模型",
+      "ip_count": "+{count} 个 IP"
+    },
+    "create": {
+      "title": "创建 API 密钥",
+      "name_label": "密钥名称",
+      "name_placeholder": "例如：Production API",
+      "submit": "创建密钥",
+      "cancel": "取消",
+      "rate_limited": "创建密钥过于频繁。请在 {seconds} 秒后重试。"
+    },
+    "created": {
+      "title": "请立即保存你的 API 密钥",
+      "warning": "这是你唯一一次看到该密钥。请立即复制并妥善保存——之后将无法再次获取。",
+      "label": "你的 API 密钥",
+      "reveal": "显示",
+      "hide": "隐藏",
+      "copy": "复制",
+      "copied": "API 密钥已复制到剪贴板。",
+      "copy_failed": "复制失败。请手动选择密钥文本进行复制。",
+      "saved_cta": "我已保存",
+      "close_without_saving": "不保存并关闭",
+      "confirm_close": {
+        "title": "你尚未保存该密钥",
+        "body": "如果现在关闭，该密钥将永久丢失。",
+        "cancel": "取消",
+        "confirm": "仍然关闭"
+      }
+    },
+    "configure": {
+      "models": {
+        "heading": "模型范围",
+        "all_toggle": "允许全部模型",
+        "select_label": "允许的模型",
+        "unavailable": "模型目录暂不可用——请稍后重试。"
+      },
+      "ip": {
+        "heading": "IP 白名单",
+        "empty": "允许任意 IP",
+        "add": "添加另一个 IP",
+        "add_first": "添加 IP",
+        "remove": "移除 IP {value}",
+        "row_label": "IP {index}"
+      },
+      "cap": {
+        "heading": "月度消费上限",
+        "label": "月度消费上限（美元）",
+        "no_cap": "无上限",
+        "help": "留空表示无上限。"
+      },
+      "cancel": "取消",
+      "discard": {
+        "title": "放弃未保存的更改？",
+        "body": "你有未保存的更改。",
+        "cancel": "取消",
+        "confirm": "放弃"
       }
     }
   },

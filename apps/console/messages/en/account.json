@@ -10,7 +10,8 @@
   "keys": {
     "empty": {
       "title": "No API keys yet",
-      "cta": "Create your first API key"
+      "cta": "Create your first API key",
+      "body": "Create your first API key to start calling the He-API."
     },
     "errors": {
       "name": {
@@ -21,7 +22,16 @@
       },
       "generic": "Something went wrong. Please try again.",
       "plaintext_one_time": "This plaintext is shown ONCE. Store it now — it cannot be retrieved later.",
-      "rate_limited": "Too many key creations. Please wait and try again."
+      "rate_limited": "Too many key creations. Please wait and try again.",
+      "ip": {
+        "invalid_format": "Enter a valid IP address or CIDR range.",
+        "degenerate_cidr": "0.0.0.0/0 and ::/0 are not allowed.",
+        "zone_id_rejected": "IPv6 zone IDs are not allowed."
+      },
+      "cap": {
+        "out_of_range": "Monthly cost cap must be between $0.01 and $999,999.99.",
+        "invalid_format": "Enter a valid amount."
+      }
     },
     "revoke": {
       "confirm": {
@@ -30,7 +40,11 @@
       },
       "success": "API key revoked.",
       "already_revoked": "This key was already revoked.",
-      "not_found": "API key not found or already removed."
+      "not_found": "API key not found or already removed.",
+      "warning": "This action is permanent. Once revoked, this key cannot be reactivated. Apps using this key will receive 401 errors immediately.",
+      "confirm_label": "Type the key name to confirm: {name}",
+      "confirm_aria": "Type the key name {name} to confirm revoke",
+      "cancel": "Cancel"
     },
     "edit": {
       "title": "Edit API key",
@@ -58,6 +72,112 @@
           "subject": "Your API key has been paused — monthly spend cap reached",
           "description": "Notify when the cap is reached and the key is paused"
         }
+      },
+      "none": "No cap set",
+      "tripped": "Tripped",
+      "tripped_sr": "API key cap tripped — pausing until next month.",
+      "usage_aria": "{current} of {cap} used"
+    },
+    "page": {
+      "title": "API Keys",
+      "description": "Manage the API keys you use to authenticate with the He-API.",
+      "new_key": "New key"
+    },
+    "nav": {
+      "sidebar": "API Keys"
+    },
+    "footer": {
+      "count": "Showing {count} keys"
+    },
+    "banner": {
+      "retry": "Retry"
+    },
+    "loading": {
+      "aria": "Loading your API keys…"
+    },
+    "table": {
+      "header": {
+        "name": "Name",
+        "prefix": "Prefix",
+        "scope": "Scope",
+        "created": "Created",
+        "last_used": "Last used",
+        "cap": "Monthly cap",
+        "status": "Status",
+        "actions": "Actions"
+      }
+    },
+    "status": {
+      "active": "Active",
+      "revoked": "Revoked"
+    },
+    "last_used": {
+      "never": "Never"
+    },
+    "actions": {
+      "configure": "Configure {name}",
+      "revoke": "Revoke {name}"
+    },
+    "row": {
+      "aria": "API key {name}"
+    },
+    "scope": {
+      "all_models": "All models",
+      "ip_count": "+{count} IPs"
+    },
+    "create": {
+      "title": "Create API key",
+      "name_label": "Key name",
+      "name_placeholder": "e.g. Production API",
+      "submit": "Create key",
+      "cancel": "Cancel",
+      "rate_limited": "Too many key creations. Try again in {seconds} seconds."
+    },
+    "created": {
+      "title": "Save your API key now",
+      "warning": "This is the only time you'll see this key. Copy it and store it securely — you cannot retrieve it later.",
+      "label": "Your API key",
+      "reveal": "Reveal",
+      "hide": "Hide",
+      "copy": "Copy",
+      "copied": "API key copied to clipboard.",
+      "copy_failed": "Copy failed. Select the key text manually to copy.",
+      "saved_cta": "I've saved it",
+      "close_without_saving": "Close without saving",
+      "confirm_close": {
+        "title": "You haven't saved the key",
+        "body": "If you close now, the key is gone forever.",
+        "cancel": "Cancel",
+        "confirm": "Close anyway"
+      }
+    },
+    "configure": {
+      "models": {
+        "heading": "Models scope",
+        "all_toggle": "All models allowed",
+        "select_label": "Allowed models",
+        "unavailable": "Model catalogue unavailable — try again later."
+      },
+      "ip": {
+        "heading": "IP whitelist",
+        "empty": "Any IP allowed",
+        "add": "Add another IP",
+        "add_first": "Add IP",
+        "remove": "Remove IP {value}",
+        "row_label": "IP {index}"
+      },
+      "cap": {
+        "heading": "Monthly cost cap",
+        "label": "Monthly cost cap in USD",
+        "no_cap": "No cap",
+        "help": "Leave empty for no cap."
+      },
+      "cancel": "Cancel",
+      "discard": {
+        "title": "Discard unsaved changes?",
+        "body": "You have unsaved changes.",
+        "cancel": "Cancel",
+        "confirm": "Discard"
       }
     }
   },
