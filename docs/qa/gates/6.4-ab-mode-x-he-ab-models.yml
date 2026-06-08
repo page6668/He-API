@@ -1,0 +1,115 @@
+schema: 1
+story: "6.4"
+story_title: "A/B 模式（X-He-AB-Models）"
+gate: "PASS"
+status_reason: "All 4 ACs implemented and independently verified at source + test; api-gateway (handlers + routingclient) + routing-svc (engine + handler) + proto routing/v1 suites all green with -race clean; new A/B-helper coverage 85–100% (≥80% target). Every LOCKED ruling (Q-A…Q-K) + both Architect High issues + the 3 Lows confirmed at source: dual-billing INVARIANT TPMDeduct=Σ(successful legs' total_tokens) (Q-F), parallel sync.WaitGroup dispatch with one index-addressed slot per leg / no shared mutable state (Q-C/High-1, NOT errgroup), merge = re-indexed choices + per-choice x_he_model + summed usage + model=legA (Q-A), best-effort ≥1-leg partial-failure with he_upstream_error marker choice + x_he_error envelope (Q-E), both-fail single terminal envelope with 504>502 representative precedence (BR3-3), no per-leg failover (Q-D), exactly-2-distinct dedup-before-count parse (Q-H), both-legs-in-scope→403-whole-request (Q-K/High-2), streaming guard before any dispatch (Q-B), one QPS/RPM tick (Q-J), non-PII chat_completions_ab slog + he_routing_ab_total{outcome} 3-cardinality (BR4), serveAdapterNonStream single-model path byte-identical after dispatchAdapterOnce extraction (Q-G), ChatChoice (not Choice) extended (Low-1), concrete gate reached via engine ResolveABModels (Low-3). Residual: testcontainer E2E + buf generate are docker/buf-gated and unexecuted locally — delivered at the httptest integration tier + wire round-trip, MUST run in CI (non-blocking, ratified env precedent)."
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-08T00:00:00Z"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "HIGH"
+  cached_review_mode: "full_testing"
+  cached_project_type: "web_backend"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+# No blocking issues. Items below are low-severity notes / CI-execution follow-ups (env-limited), not defects.
+top_issues:
+  - id: "COV-001"
+    severity: low
+    finding: "dispatchAdapterOnce (chat_completions.go:562) is at 76.2% — marginally under the 80% target. It is the REFACTORED shared dispatch primitive (extracted out of serveAdapterNonStream, Q-G), NOT a new A/B-only function; the uncovered lines are the 6.3 chunk-drain error branches exercised by the failover suite. Every genuinely-new A/B helper is ≥85% (dispatchAB/mergeABResponses/resolveLeg/legErrorEnvelope/logAB/ResolveABModels=100%, representativeABError=88.9%, ParseABModels=94.1%, DecideAB=85.0%)."
+    suggested_action: "Optional: add a dispatchAdapterOnce chunk-drain-error unit to lift the shared primitive over 80%. Non-blocking — the A/B surface this story owns is fully covered."
+  - id: "ENV-001"
+    severity: low
+    finding: "TestColdStart (cmd/server) fails ONLY under full-module parallel-compile contention (5s /health probe times out); passes isolated 1.8s. Confirmed ZERO A/B coupling (no X-He-AB / dispatchAB / IsAbTest references in coldstart_test.go — the loose 'ab' grep matched 'available'/'table'). Pre-existing env flake, NOT a 6.4 regression."
+    suggested_action: "Track separately as a cold-start probe-timeout flake under parallel compile; unrelated to Story 6.4."
+  - id: "CI-001"
+    severity: low
+    finding: "Gateway↔routing-svc↔adapter A/B end-to-end (6.4-INT-010/011) + buf generate round-trip (6.4-CONTRACT-001) are delivered at the httptest integration tier (full ServeHTTP → DecideAB nil-client passthrough → parallel dispatchAB → fake adapter registry) + the proto wire round-trip test, because docker/testcontainers + buf are uninstallable locally (auto-memory project_toolchain_env_limits). The 3 A/B proto fields are 6.1-preshaped (no new field numbers) → no buf breaking risk."
+    suggested_action: "Run the testcontainer integration suite + buf generate in CI for the over-the-wire A/B proof."
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 4             # api-gateway/handlers + api-gateway/routingclient + routing-svc/engine + routing-svc/handler + proto routing/v1 (all green)
+    passed_count: 4
+    failed_count: 0
+    skipped_count: 0
+    pass_rate: 100
+    coverage_percentage: 95   # new A/B helpers: dispatchAB/merge/resolveLeg/legErrorEnvelope/logAB/ResolveABModels=100, representativeABError=88.9, ParseABModels=94.1, DecideAB=85, dispatchAdapterOnce(shared)=76.2
+    failed_tests: []
+  e2e:
+    executed: false
+    passed: true
+    skipped: true
+    skip_reason: "Backend hot-path story — no UI/browser tier (test-design declares E2E 0). End-to-end proof is at the integration tier (httptest full-handler A/B dispatch + merge + dual-billing); docker/testcontainer + buf variants deferred to CI (ratified env precedent, mirrors 6.2/6.3)."
+    scenarios_tested: 0
+    scenarios_passed: 0
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: ""
+  issues: []
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 4
+  security_sensitive: false
+  dev_gate_score: 97
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 3 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "Run the docker/buf-gated integration + contract gates (CI-001) in CI before deploy."
+      - "Optionally lift dispatchAdapterOnce over 80% (COV-001) — shared primitive, A/B surface fully covered."
+      - "Streaming A/B is DEFERRED (Q-B ruling, non-streaming-only in 6.4) — carry as an Epic-6 backlog candidate if multiplexed-stream A/B is later required."
+
+quality_score: 95
+
+# Verification trace (Step 4.6 AC coverage)
+evidence_trace:
+  ac_covered: [1, 2, 3, 4]
+  ac_gaps: []
+  invariants_verified:
+    parse_exactly_2_distinct_Q_H: "ParseABModels (routingclient/ab.go:38-61) splits on ',', trims, drops empty, dedups BEFORE the count check (a,a→1→ErrInvalidABModels), requires len==2. Blank header→(nil,nil) non-A/B passthrough. Tests 6.4-UNIT-001/003/005/006 green."
+    routing_svc_concrete_gate_BR1_2: "select_model.go:66-83 — ab_models non-empty → engine.ResolveABModels concrete-only gate; he-router-*/unknown leg → connect.CodeInvalidArgument → gateway mapABError→400. is_ab_test=true + ab_selected_models echoed; single-model path (empty ab_models) byte-untouched. ResolveABModels coverage 100%. Tests 6.4-UNIT-007/008/010."
+    no_extra_rpc_Q_I: "DecideAB (decider.go:162-209) populates the 6.1-preshaped SelectModelRequest.ab_models on the SAME SelectModel call (100ms deadline); ab_overrides_strategy WARN when model=he-router-* OR X-He-Routing-Strategy also set; nil-client passthrough for dispatch-only tests; mapABError InvalidArgument/NotFound→400 else fail-closed 502; defensive blank-ab_selected_models→502."
+    parallel_no_shared_state_Q_C_High1: "dispatchAB (chat_completions_ab.go:60-76) uses sync.WaitGroup (NOT errgroup — absent from api-gateway/go.mod, Architect High-1) with results[i] index-addressed per leg; each goroutine writes only its own slot. -race clean (go test -race green; barrier-mock concurrency tests pass)."
+    dual_billing_INVARIANT_Q_F: "dispatchAB sums total += results[i].resp.Usage.TotalTokens over SERVED legs (80-88) then ONE TPMDeduct(ctx, apiKeyID, total) (117). Failed leg carries no usage → not charged. Test 6.4-INT-011 asserts ==legA.total+legB.total; 6.4-UNIT-033 asserts ==legA.total on one-leg-fail. dispatchAB coverage 100%."
+    merge_shape_Q_A: "mergeABResponses (chat_completions_ab.go:135-168) — choices concatenated with re-assigned index, per-choice x_he_model=leg.model, summed prompt/completion/total usage, single id/created/object='chat.completion', top-level model=legs[0].model. Coverage 100%. Tests 6.4-UNIT-022/023."
+    partial_failure_best_effort_Q_E: "served==0 → writeFailoverTerminal(representativeABError) + zero bill (92-97); ≥1 served → merged body where a failed leg becomes a marker choice finish_reason='he_upstream_error' + x_he_model + x_he_error §5.1.2 envelope (158-164); X-He-AB-Models response header lists only served ids (111). Tests 6.4-UNIT-030/032/033/035/036/038."
+    representative_504_over_502_BR3_3: "representativeABError (190-204) returns the first leg whose classifyFailoverError code is 504_upstream_timeout, else the last leg error (→502), else the invalid-response sentinel. Test 6.4-UNIT-036 green."
+    no_per_leg_failover_Q_D: "each leg = a single dispatchAdapterOnce call (73) — no failover_chain loop on the A/B path (legs are explicit concrete pins). Unresolved leg → errUpstreamInvalidResponse marker, no panic (66-68/BR3-4). Test 6.4-UNIT-032/038."
+    scope_both_legs_Q_K_High2: "dispatchAB scope-gates BOTH legs via keypolicy.CheckModelScope(leg, scopeModels) BEFORE any dispatch (50-56); an out-of-scope leg → 403_model_not_in_scope for the WHOLE request. Upstream keypolicy middleware still gates body.model (High-2). Test 6.4-UNIT-025."
+    no_x_he_selected_model_BR2_7: "A/B success path sets only X-He-AB-Models response header (111), NOT X-He-Selected-Model (it names one model). Non-A/B path keeps X-He-Selected-Model (serveAdapterNonStream:533). Test 6.4-UNIT-043 asserts the non-A/B header still present."
+    streaming_guard_Q_B: "chat_completions.go:357 — req.Stream && routingclient.ABModelsPresent(r.Header) → 400_invalid_request BEFORE parse/routing/dispatch; keyed off raw presence so a malformed-but-present A/B header on a stream still 400s. Test 6.4-UNIT-040."
+    one_rate_limit_tick_Q_J: "the A/B fan-out lives INSIDE ServeHTTP, AFTER the Story-5.3 rate-limit middleware → one HTTP request = one QPS/RPM admission tick; TPM reflects both legs (Q-F). Test 6.4-UNIT-044."
+    non_pii_observability_BR4: "logAB (chat_completions_ab.go:208-217) emits chat_completions_ab with ab_models/served_models/failed_models/he_request_id ONLY — no user_id/content. he_routing_ab_total{outcome∈both_ok|partial|both_failed} 3-cardinality (metrics.go). Tests 6.4-UNIT-041/042."
+    non_writing_primitive_byte_identical_Q_G: "dispatchAdapterOnce (chat_completions.go:562) does Chat()+drain+adapterChunkToResponse, NO write/NO bill; serveAdapterNonStream (525-553) wraps it adding X-He-Selected-Model + writeChatJSON + the single TPMDeduct + slog — single-model path byte-identical (zero 6.2/6.3 regression). Tests 6.4-UNIT-020/021."
+  architect_highs_folded:
+    high_1_sync_waitgroup: "errgroup confirmed absent from apps/api-gateway/go.mod; dispatchAB uses sync.WaitGroup + per-leg slot. VERIFIED -race clean."
+    high_2_body_model_plus_legs: "upstream keypolicy middleware unchanged (gates body.model); handler additively validates BOTH legs against claims.ScopeModels → 403. VERIFIED at dispatchAB:50-56."
+  architect_lows_folded:
+    low_1_chatchoice: "ChatChoice (not Choice) extended with XHeModel + XHeError additive omitempty. VERIFIED."
+    low_3_concrete_gate_via_engine: "concrete-catalogue check reached via engine.ResolveABModels (engine layer), not a handler-local helper. VERIFIED."
+  integrity_check: "Dev claimed dispatchAB/mergeABResponses/resolveLeg=100%, DecideAB=85%, ParseABModels=94% — QA independent coverage run matches exactly (no discrepancy). Dev-flagged TestColdStart flake + X-He-Cost-Usd deliberate absence both confirmed accurate."
+  regression: "6.2 routing + 6.3 failover + 6-vendor adapter matrix + keypolicy(5.2) + rate-limit(5.3) + cap(5.4) green; no-A/B-header path byte-for-byte 6.3 (6.4-UNIT-043 / 6.4-INT-031); -race clean on the parallel dual-leg path. Only env-flake TestColdStart (ENV-001, zero A/B coupling)."

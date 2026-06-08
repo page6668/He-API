@@ -107,12 +107,34 @@ type ChatResponse struct {
 	Usage   ChatUsage    `json:"usage"`
 }
 
-// ChatChoice is one of the (currently always single-element) choices array
-// entries.
+// ChatChoice is one of the choices array entries. On the single-model path it
+// is the (always single-element) OpenAI choice; on the Story-6.4 A/B path the
+// merged body carries one entry per leg with the additive He-API extension
+// fields populated.
 type ChatChoice struct {
 	Index        int         `json:"index"`
 	Message      ChatMessage `json:"message"`
 	FinishReason string      `json:"finish_reason"`
+	// XHeModel (Story 6.4 Q-A) attributes an A/B choice to its source leg model.
+	// Additive He-API extension (appended after the OpenAI-canonical fields;
+	// precedent Story 4.7 capabilities / 3.6 error.he_request_id). `omitempty`
+	// keeps the single-model body BYTE-IDENTICAL (zero regression).
+	XHeModel string `json:"x_he_model,omitempty"`
+	// XHeError (Story 6.4 Q-E) marks a FAILED A/B leg: the choice carries
+	// finish_reason="he_upstream_error" + this §5.1.2-shaped envelope, so the
+	// body stays a parseable chat.completion and the client sees both legs' fate.
+	XHeError *XHeError `json:"x_he_error,omitempty"`
+}
+
+// XHeError mirrors the canonical §5.1.2 5-field error envelope (openaierr.body)
+// for the Story-6.4 partial-failure marker choice (Q-E). Field order matches the
+// canonical sequence (code → message → type → param → he_request_id).
+type XHeError struct {
+	Code        string `json:"code"`
+	Message     string `json:"message"`
+	Type        string `json:"type"`
+	Param       any    `json:"param"`
+	HeRequestID string `json:"he_request_id"`
 }
 
 // ChatUsage carries the synthetic mock token counts. Per BR-4.1 the
@@ -328,16 +350,48 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Story 6.4 BR4-2 — A/B streaming guard (Q-B). A/B is NON-STREAMING-only in
+	// 6.4: stream=true + an X-He-AB-Models header → 400, BEFORE any routing or
+	// dispatch. Keyed off raw header presence (not the exactly-2 parse), so a
+	// malformed-but-present A/B header on a stream request still 400s here.
+	if req.Stream && routingclient.ABModelsPresent(r.Header) {
+		_ = openaierr.Write(w, ctx, http.StatusBadRequest, "400_invalid_request",
+			"A/B mode is not supported with streaming responses.", nil)
+		return
+	}
+
+	// Story 6.4 AC1 — parse X-He-AB-Models into EXACTLY-2-distinct legs (Q-H).
+	// A blank/absent header → (nil, nil): the non-A/B path proceeds unchanged.
+	// A malformed header (count ≠ 2 after dedup) → 400 before any dispatch.
+	abModels, abErr := routingclient.ParseABModels(r.Header)
+	if abErr != nil {
+		_ = openaierr.Write(w, ctx, http.StatusBadRequest, "400_invalid_request",
+			"X-He-AB-Models requires exactly 2 distinct models.", nil)
+		return
+	}
+
 	// Story 6.2 AC1 — routing decision. The gateway consults routing-svc to
 	// derive the selected model (resolving he-router-* meta-models + the
 	// X-He-Routing-Strategy header, Q-I) BEFORE the stream/adapter fork; the
 	// returned `selected` replaces req.Model for adapter resolution, the
-	// X-He-Selected-Model header, and the response model echo. A fail-closed /
-	// invalid outcome (Q-G/Q-H) writes the §5.1.2 envelope and returns.
-	selected, failoverChain, strategyLabel, ok := h.routeOrWriteError(w, r, &req, apiKeyID)
+	// X-He-Selected-Model header, and the response model echo. On the A/B path
+	// (abModels populated) it instead resolves the dual-leg decision. A
+	// fail-closed / invalid outcome (Q-G/Q-H) writes the §5.1.2 envelope.
+	decision, failoverChain, scopeModels, ok := h.routeOrWriteError(w, r, &req, apiKeyID, abModels)
 	if !ok {
 		return
 	}
+
+	// Story 6.4 BR2-1 — A/B fork. When routing-svc resolved a dual-leg decision,
+	// dispatch BOTH legs in parallel + merge (non-streaming-only; the guard above
+	// already rejected stream=true + A/B). The non-A/B path below is UNCHANGED.
+	if decision.IsAbTest {
+		h.dispatchAB(w, r, &req, apiKeyID, decision.AbSelectedModels, scopeModels)
+		return
+	}
+
+	selected := decision.SelectedModel
+	strategyLabel := decision.Strategy.String()
 
 	// Story 3.4 BR-1.1 dispatch fork — stream=true requests serve SSE; the
 	// non-streaming path below is preserved byte-for-byte for stream=false
@@ -388,33 +442,48 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 // it writes the canonical §5.1.2 envelope (BR4-3) and returns ok=false. The
 // 100ms deadline (Q-E) is applied inside the Decider. The decision is echoed to
 // slog (non-PII) here so every dispatch path shares one decision log.
-func (h *ChatCompletionsHandler) routeOrWriteError(w http.ResponseWriter, r *http.Request, req *ChatRequest, apiKeyID string) (selected string, failoverChain []string, strategy string, ok bool) {
+func (h *ChatCompletionsHandler) routeOrWriteError(w http.ResponseWriter, r *http.Request, req *ChatRequest, apiKeyID string, abModels []string) (decision routingclient.Decision, failoverChain, scopeModels []string, ok bool) {
 	ctx := r.Context()
 	heRequestID, _ := requestid.FromContext(ctx)
 	userID, _ := middleware.BearerUserIDFromContext(ctx)
 
-	decision, err := h.router.Decide(ctx, req.Model, r.Header, userID, heRequestID)
+	// scope.models from the Story-5.2 keypolicy cache claims (empty → all models
+	// allowed). Used to scope-filter the 6.3 failover tail and to gate BOTH A/B
+	// legs (Q-K) in dispatchAB.
+	if claims, hasClaims := middleware.CacheValueFromContext(ctx); hasClaims {
+		scopeModels = claims.ScopeModels
+	}
+
+	var err error
+	if len(abModels) > 0 {
+		// Story 6.4 — A/B decision (Q-I A/B-overrides-strategy). Populates
+		// ab_models on the SAME SelectModel call; reads back is_ab_test + legs.
+		decision, err = h.router.DecideAB(ctx, req.Model, abModels, r.Header, userID, heRequestID)
+	} else {
+		decision, err = h.router.Decide(ctx, req.Model, r.Header, userID, heRequestID)
+	}
 	if err != nil {
 		var ee *routingclient.EnvelopeError
 		if errors.As(err, &ee) {
 			_ = openaierr.Write(w, ctx, 0, ee.Code, routingEnvelopeMessage(ee.Code), nil)
-			return "", nil, "", false
+			return routingclient.Decision{}, nil, nil, false
 		}
 		// Defensive — an unexpected non-envelope error degrades to 502.
 		_ = openaierr.Write(w, ctx, 0, "502_upstream_unavailable",
 			"Upstream model service is unavailable, please retry.", nil)
-		return "", nil, "", false
+		return routingclient.Decision{}, nil, nil, false
+	}
+
+	// A/B path: no single-model failover chain + no selected-model decision log
+	// (dispatchAB owns the A/B slog line + metric). Return early.
+	if decision.IsAbTest {
+		return decision, nil, scopeModels, true
 	}
 
 	// Story 6.3 Q-K / BR2-5 — scope-filter the failover tail BEFORE dispatch so
-	// failover NEVER targets a model the key is not authorised for. The key's
-	// scope.models comes from the Story-5.2 keypolicy cache claims; an empty
-	// scope means "all models allowed". selected_model (chain[0]) already passed
-	// the gate via 6.2, so it is dispatched as-is.
-	var scopeModels []string
-	if claims, hasClaims := middleware.CacheValueFromContext(ctx); hasClaims {
-		scopeModels = claims.ScopeModels
-	}
+	// failover NEVER targets a model the key is not authorised for.
+	// selected_model (chain[0]) already passed the gate via 6.2, so it is
+	// dispatched as-is.
 	failoverChain = routingclient.FilterByScope(decision.FailoverChain, scopeModels)
 
 	h.logger.LogAttrs(ctx, slog.LevelInfo, "chat_completions_routing_decision",
@@ -427,7 +496,7 @@ func (h *ChatCompletionsHandler) routeOrWriteError(w http.ResponseWriter, r *htt
 		slog.Int("failover_chain_len", len(failoverChain)), // Story 6.3 (non-PII)
 		slog.String("he_request_id", heRequestID),
 	) // BR4-2 non-PII: NEVER user_id / api_key content.
-	return decision.SelectedModel, failoverChain, decision.Strategy.String(), true
+	return decision, failoverChain, scopeModels, true
 }
 
 // routingEnvelopeMessage returns the user-facing message for a routing envelope
@@ -454,6 +523,43 @@ func routingEnvelopeMessage(code string) string {
 // ctx is the failover-budgeted context (Q-G); servedModel is the model this hop
 // dispatches to (== the model echoed in the body + header on success).
 func (h *ChatCompletionsHandler) serveAdapterNonStream(ctx context.Context, w http.ResponseWriter, req *ChatRequest, apiKeyID, servedModel string, handle adapterclient.ClientHandle) error {
+	resp, err := h.dispatchAdapterOnce(ctx, req, servedModel, handle)
+	if err != nil {
+		return err
+	}
+
+	// BR1-2 / Q-F — gateway sets X-He-Selected-Model = the model that actually
+	// SERVED (after any failover hops; == the body `model` echo).
+	w.Header().Set("X-He-Selected-Model", servedModel)
+	writeChatJSON(w, http.StatusOK, resp)
+
+	// Story 5.3 BR-3.4 / Architect Q3 — post-deduction on success. BR2-4: this
+	// is the ONLY TPMDeduct per request; failed attempts carry no usage and
+	// never reach here.
+	h.tokenDeducter.TPMDeduct(ctx, apiKeyID, resp.Usage.TotalTokens)
+
+	h.logger.InfoContext(
+		ctx, "chat_completions_adapter",
+		slog.String("event", "chat_completions_adapter"),
+		slog.String("model", req.Model),
+		slog.String("served_model", servedModel), // Story 6.3 Q-F (non-PII)
+		slog.String("api_key_id", apiKeyID),
+		slog.Int("messages_count", len(req.Messages)),
+		slog.Int("prompt_tokens", resp.Usage.PromptTokens),
+		slog.Int("completion_tokens", resp.Usage.CompletionTokens),
+		slog.Int("total_tokens", resp.Usage.TotalTokens),
+	)
+	return nil
+}
+
+// dispatchAdapterOnce is the Story-6.4 NON-WRITING dispatch primitive (Q-G/BR2-2).
+// It performs ONE upstream attempt against handle — the adapter Chat() + chunk
+// drain + adapterChunkToResponse conversion — and RETURNS the leg's ChatResponse
+// WITHOUT writing to w and WITHOUT billing. On an upstream fault it returns the
+// error (the caller classifies + decides). It is the seam that lets the A/B path
+// COLLECT two legs' responses before merging (serveAdapterNonStream wraps it
+// with the single-model write + bill, keeping that path byte-identical).
+func (h *ChatCompletionsHandler) dispatchAdapterOnce(ctx context.Context, req *ChatRequest, servedModel string, handle adapterclient.ClientHandle) (*ChatResponse, error) {
 	heRequestID, _ := requestid.FromContext(ctx)
 
 	adapterReq := buildAdapterRequest(req, servedModel, heRequestID)
@@ -467,16 +573,16 @@ func (h *ChatCompletionsHandler) serveAdapterNonStream(ctx context.Context, w ht
 
 	stream, err := handle.Chat(ctx, adapterReq, headers)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer func() { _ = stream.Close() }()
 
 	if !stream.Receive() {
 		// No chunk emitted — treat as upstream invalid response per BR-1.4.
 		if e := stream.Err(); e != nil {
-			return e
+			return nil, e
 		}
-		return errUpstreamInvalidResponse
+		return nil, errUpstreamInvalidResponse
 	}
 	chunk := stream.Msg()
 	// Drain any subsequent chunks defensively — non-streaming path expects
@@ -485,36 +591,13 @@ func (h *ChatCompletionsHandler) serveAdapterNonStream(ctx context.Context, w ht
 		// ignore extras
 	}
 	if e := stream.Err(); e != nil {
-		return e
+		return nil, e
 	}
 	if chunk == nil || chunk.Usage == nil || len(chunk.Choices) == 0 {
-		return errUpstreamInvalidResponse
+		return nil, errUpstreamInvalidResponse
 	}
 
-	resp := adapterChunkToResponse(chunk, servedModel, h.now())
-
-	// BR1-2 / Q-F — gateway sets X-He-Selected-Model = the model that actually
-	// SERVED (after any failover hops; == the body `model` echo).
-	w.Header().Set("X-He-Selected-Model", servedModel)
-	writeChatJSON(w, http.StatusOK, resp)
-
-	// Story 5.3 BR-3.4 / Architect Q3 — post-deduction on success. BR2-4: this
-	// is the ONLY TPMDeduct per request; failed attempts carry no usage and
-	// never reach here.
-	h.tokenDeducter.TPMDeduct(ctx, apiKeyID, int(chunk.Usage.GetTotalTokens()))
-
-	h.logger.InfoContext(
-		ctx, "chat_completions_adapter",
-		slog.String("event", "chat_completions_adapter"),
-		slog.String("model", req.Model),
-		slog.String("served_model", servedModel), // Story 6.3 Q-F (non-PII)
-		slog.String("api_key_id", apiKeyID),
-		slog.Int("messages_count", len(req.Messages)),
-		slog.Int("prompt_tokens", int(chunk.Usage.GetPromptTokens())),
-		slog.Int("completion_tokens", int(chunk.Usage.GetCompletionTokens())),
-		slog.Int("total_tokens", int(chunk.Usage.GetTotalTokens())),
-	)
-	return nil
+	return adapterChunkToResponse(chunk, servedModel, h.now()), nil
 }
 
 // dispatchNonStreamWithFailover is the Story-6.3 non-streaming failover loop

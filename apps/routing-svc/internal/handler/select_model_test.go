@@ -158,20 +158,25 @@ func Test_UNIT_036_strategy_used_echoes_default_for_unspecified(t *testing.T) {
 	}
 }
 
-// 6.1-BLIND-BOUNDARY-003 (P2)
-func Test_BLIND_BOUNDARY_003_ab_models_ignored(t *testing.T) {
+// 6.1-BLIND-BOUNDARY-003 (P2) — REALISED in Story 6.4. In 6.1 ab_models was
+// preshaped-but-ignored (is_ab_test=false); Story 6.4 wires the A/B decision so
+// populated ab_models now OVERRIDES strategy selection (Q-I) and yields
+// is_ab_test=true + ab_selected_models=[legs]. See Test_AB_UNIT_007_decision for
+// the full 6.4 contract; this boundary asserts ab_models is no longer ignored.
+func Test_BLIND_BOUNDARY_003_ab_models_realised_in_6_4(t *testing.T) {
 	s := newTestServer(t, slog.Default())
 	resp, err := call(s, &routingv1.SelectModelRequest{
-		Strategy: routingv1.Strategy_STRATEGY_QUALITY,
-		AbModels: []string{"alpha", "beta"}, // populated but ignored in 6.1
+		Strategy: routingv1.Strategy_STRATEGY_QUALITY, // overridden by A/B (Q-I)
+		AbModels: []string{"alpha", "beta"},           // concrete legs in the test catalogue
 	})
 	if err != nil {
 		t.Fatalf("SelectModel err = %v", err)
 	}
-	if resp.GetIsAbTest() {
-		t.Error("is_ab_test = true, want false (A/B is Story 6.4)")
+	if !resp.GetIsAbTest() {
+		t.Error("is_ab_test = false, want true (A/B realised in Story 6.4)")
 	}
-	if len(resp.GetAbSelectedModels()) != 0 {
-		t.Errorf("ab_selected_models = %v, want empty", resp.GetAbSelectedModels())
+	got := resp.GetAbSelectedModels()
+	if len(got) != 2 || got[0] != "alpha" || got[1] != "beta" {
+		t.Errorf("ab_selected_models = %v, want [alpha beta]", got)
 	}
 }

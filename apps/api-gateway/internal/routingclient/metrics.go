@@ -22,11 +22,17 @@ import (
 //
 //	he_routing_failover_total{from_model,to_model,reason}
 //	he_routing_failover_attempts  (histogram, integer buckets [1,2,3] — m-2)
+//
+// Story 6.4 adds the A/B outcome instrument (AC4/BR4-4), same bounded-cardinality
+// discipline (outcome ∈ {both_ok, partial, both_failed} — 3 values):
+//
+//	he_routing_ab_total{outcome}
 type metrics struct {
 	decisions        metric.Int64Counter
 	selectDur        metric.Float64Histogram
 	failoverTotal    metric.Int64Counter
 	failoverAttempts metric.Int64Histogram
+	abTotal          metric.Int64Counter
 }
 
 func newMetrics() *metrics {
@@ -51,7 +57,22 @@ func newMetrics() *metrics {
 		metric.WithDescription("Upstream attempts per chat request (1 = happy path, >1 = failover)"),
 		metric.WithExplicitBucketBoundaries(1, 2, 3),
 	)
-	return &metrics{decisions: dec, selectDur: dur, failoverTotal: failTotal, failoverAttempts: failAttempts}
+	abTotal, _ := m.Int64Counter(
+		"he_routing_ab_total",
+		metric.WithDescription("A/B dual-leg requests by outcome (both_ok|partial|both_failed)"),
+	)
+	return &metrics{decisions: dec, selectDur: dur, failoverTotal: failTotal, failoverAttempts: failAttempts, abTotal: abTotal}
+}
+
+// ab records one A/B request outcome (AC4/BR4-4). outcome ∈ {both_ok, partial,
+// both_failed} — bounded cardinality 3.
+func (m *metrics) ab(ctx context.Context, outcome string) {
+	if m == nil {
+		return
+	}
+	m.abTotal.Add(ctx, 1, metric.WithAttributes(
+		attribute.String("outcome", outcome),
+	))
 }
 
 // failover records one failover hop (from_model → to_model) with the retriable

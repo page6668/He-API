@@ -31,6 +31,7 @@
 - 高并发流式响应不串流（race condition）
 - 余额扣减并发安全（同一用户多并发请求）
 - 上游 502 时 failover 正确切换
+- **A/B 双腿并行调度（Story 6.4 REALISED）**：`X-He-AB-Models: a,b` → 两腿 `sync.WaitGroup` 并行调度（barrier mock 断言两腿先于任一返回进入 `Chat()`，`-race` clean）、合并响应（`choices[]` 重排 + `x_he_model` + usage 求和）、双计费不变量（`TPMDeduct == legA.total + legB.total`）、部分失败（一腿失败 → 200 + 失败腿 marker；两腿失败 → 单一 terminal envelope，504>502）、流式守卫（`stream=true`+header → 400）、scope 双腿门（越界腿 → 403）、零非-A/B 回归
 - 内容过滤流式拦截不漏检
 - 多语言文案完整性（CI 检测缺失 i18n key）
 - 5 个支付通道沙箱集成测试

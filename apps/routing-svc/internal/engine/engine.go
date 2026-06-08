@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	modelscatalogue "github.com/he-api/he-api/packages/models-catalogue"
 	routingv1 "github.com/he-api/he-api/packages/proto/gen/go/he/routing/v1"
@@ -104,4 +105,27 @@ func (e *Engine) Decide(ctx context.Context, strategy routingv1.Strategy, hints 
 		return modelscatalogue.ModelEntry{}, nil, effective, "", err
 	}
 	return selected, nil, effective, ScoreSourceDefault, nil
+}
+
+// ResolveABModels validates the Story-6.4 A/B comparison legs against the boot
+// catalogue (AC1/BR1-2). Each id MUST be a concrete catalogue model: present in
+// the catalogue AND not a he-router-* virtual meta-entry (a meta id would miss
+// adapterRegistry.Resolve on the gateway hot path — the correctness gate). It
+// returns the validated ids in input order, or ErrABModelNotConcrete on the
+// first leg that is unknown or a meta-model. It does NOT enforce the exactly-2
+// count — the gateway owns the parse-time count check (BR1-4); the engine owns
+// routability. It does not consult any Strategy: A/B overrides strategy
+// selection (Q-I), so the legs ARE the selection.
+func (e *Engine) ResolveABModels(ids []string) ([]string, error) {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if strings.HasPrefix(id, metaModelPrefix) {
+			return nil, ErrABModelNotConcrete
+		}
+		if _, ok := e.catalogue.Find(id); !ok {
+			return nil, ErrABModelNotConcrete
+		}
+		out = append(out, id)
+	}
+	return out, nil
 }

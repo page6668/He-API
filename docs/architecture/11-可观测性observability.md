@@ -44,6 +44,15 @@
     # Cardinality bounded (~8×8 catalogue for from×to). A high
     # he_routing_failover_total rate is the canonical "upstream degraded but
     # users transparent" signal (RTO 0 target, infrastructure-deployment §灾备).
+    #
+    # Story 6.4 A/B REALISED — an A/B request (X-He-AB-Models: a,b) emits a
+    # non-PII slog line {event:chat_completions_ab, ab_models, served_models,
+    # failed_models, he_request_id} (NEVER user_id / message content) +
+    # Prometheus:
+    #   he_routing_ab_total{outcome∈{both_ok,partial,both_failed}}  (counter)
+    # Cardinality bounded (3 outcomes). A rising `partial`/`both_failed` share is
+    # the A/B upstream-health signal; dual-billing means TPM (not QPS) reflects
+    # both legs (one A/B request = one QPS/RPM tick).
     
 - alert: DataExportSuspect
   expr: increase(network_egress_to_overseas_bytes[10m]) > 0

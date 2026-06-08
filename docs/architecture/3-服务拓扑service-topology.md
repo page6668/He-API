@@ -8,7 +8,7 @@
 | `auth-svc` | Go | 用户注册/登录、OAuth、Session、2FA、Key 管理 | K8s Deployment |
 | `billing-svc` | Go | 计费引擎、订单、订阅、退款、余额扣减 | K8s Deployment |
 | `payment-svc` | Go | 5 通道支付集成、Webhook 处理、对账 | K8s Deployment |
-| `routing-svc` | Go | 智能路由策略（quality/cost/latency）、failover、A/B<br>**REALISED 6.1** (server-side skeleton) · **6.2** (real scoring + gateway wiring) · **6.3 failover REALISED** (gateway sequential failover over the ranked `failover_chain` on 502/504 — max 3 attempts / 30s; NEW optional `RankedStrategy` engine capability; pre-flush-only on the streaming path) · A/B lands in 6.4 | K8s Deployment |
+| `routing-svc` | Go | 智能路由策略（quality/cost/latency）、failover、A/B<br>**REALISED 6.1** (server-side skeleton) · **6.2** (real scoring + gateway wiring) · **6.3 failover REALISED** (gateway sequential failover over the ranked `failover_chain` on 502/504 — max 3 attempts / 30s; NEW optional `RankedStrategy` engine capability; pre-flush-only on the streaming path) · **6.4 A/B REALISED** (gateway parses `X-He-AB-Models`, routing-svc validates the 2 concrete legs → `is_ab_test`/`ab_selected_models`; gateway dispatches BOTH legs in PARALLEL via `sync.WaitGroup` + merges into one OpenAI `chat.completion` with per-choice `x_he_model`; non-streaming-only; dual-billing; no per-leg failover) | K8s Deployment |
 | `safety-svc` | Go | 内容安全过滤（敏感词 + 模型分类器） | K8s Deployment |
 | `quota-svc` | Go | 限流（QPS/RPM/TPM）、配额、月度上限熔断 | K8s Deployment |
 | `adapter-qwen` | Go | Qwen 模型适配器 | K8s Deployment（独立 pod 池） |

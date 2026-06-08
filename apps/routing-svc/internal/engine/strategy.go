@@ -105,4 +105,15 @@ var (
 	// gateway path (UNSPECIFIED maps to DEFAULT), only a misconfiguration or an
 	// out-of-range enum value.
 	ErrUnknownStrategy = errors.New("routing: unknown strategy")
+	// ErrABModelNotConcrete is returned by ResolveABModels (Story 6.4) when an
+	// A/B leg id is unknown to the catalogue OR is a he-router-* virtual
+	// meta-entry — neither is a routable upstream A/B leg (BR1-2 correctness
+	// gate). The handler maps it to InvalidArgument -> gateway 400 (Q-H).
+	ErrABModelNotConcrete = errors.New("routing: a/b leg is not a concrete catalogue model")
 )
+
+// metaModelPrefix marks the he-router-* virtual catalogue entries. They are
+// routing DIRECTIVES, not routable upstream targets, so they are never valid
+// A/B legs (BR1-2). Mirrors strategy.MetaModelPrefix; defined locally because
+// the strategy package imports engine (no reverse import).
+const metaModelPrefix = "he-router-"

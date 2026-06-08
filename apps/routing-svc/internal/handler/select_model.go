@@ -55,6 +55,33 @@ func (s *RoutingServer) SelectModel(
 	msg := req.Msg
 	strat := msg.GetStrategy()
 
+	// Story 6.4 AC1 — A/B path. When ab_models is populated the request is a
+	// dual-leg comparison that OVERRIDES strategy selection (Q-I): validate each
+	// leg is a concrete catalogue model (BR1-2 correctness gate; a he-router-* or
+	// unknown id is rejected as InvalidArgument -> gateway 400) and echo the
+	// resolved legs back via is_ab_test=true + ab_selected_models. The
+	// single-model path below is left UNTOUCHED (empty ab_models -> 6.1/6.2/6.3
+	// behaviour byte-for-byte). The gateway enforces exactly-2 at parse time
+	// (BR1-4); the engine validates routability.
+	if ab := msg.GetAbModels(); len(ab) > 0 {
+		resolved, err := s.engine.ResolveABModels(ab)
+		if err != nil {
+			// Any A/B leg validation failure is a client error — the caller named
+			// a non-routable model (BR1-2 / Q-H).
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
+		s.logger.InfoContext(
+			ctx, "select_model_ab",
+			slog.String("event", "select_model_ab"),
+			slog.Int("ab_models_count", len(resolved)), // non-PII; bounded at 2
+			slog.String("he_request_id", msg.GetHeRequestId()),
+		)
+		return connect.NewResponse(&routingv1.SelectModelResponse{
+			IsAbTest:         true,
+			AbSelectedModels: resolved,
+		}), nil
+	}
+
 	// requested_model is required only on the default/unspecified path; the
 	// named strategies select from the catalogue and ignore it in 6.1.
 	if isDefaultPath(strat) && strings.TrimSpace(msg.GetRequestedModel()) == "" {

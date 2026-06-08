@@ -41,6 +41,15 @@ type Decision struct {
 	// fallbacks) and on a single-candidate catalogue. The handler scope-filters
 	// it (Q-K) and iterates it on a retriable 502/504 (Q-A Option A).
 	FailoverChain []string
+	// IsAbTest (Story 6.4) is true when the request carried an X-He-AB-Models
+	// header that resolved to a dual-leg A/B comparison (Q-I A/B-overrides). The
+	// handler forks on it into dispatchAB; FALSE on every non-A/B path
+	// (single-model 6.2/6.3 behaviour byte-for-byte).
+	IsAbTest bool
+	// AbSelectedModels (Story 6.4) carries the 2 resolved concrete leg ids on the
+	// A/B path (empty otherwise). The legs ARE the selection — SelectedModel is
+	// not meaningful on the A/B path.
+	AbSelectedModels []string
 }
 
 // EnvelopeError signals the handler to write an OpenAI §5.1.2 error envelope
@@ -136,6 +145,82 @@ func (d *Decider) Decide(ctx context.Context, model string, header http.Header, 
 	return dec, nil
 }
 
+// DecideAB resolves the Story-6.4 A/B decision (Q-I A/B-overrides-strategy). The
+// gateway has already parsed X-He-AB-Models into exactly-2-distinct legs
+// (ParseABModels); this populates SelectModelRequest.ab_models (BR1-1 — the
+// 6.1-preshaped field 4, empty before 6.4) and reads back is_ab_test +
+// ab_selected_models (the resolved concrete legs). `model` is the request's
+// body.model, used ONLY to detect+WARN a strategy/meta-model specified alongside
+// A/B (the model field + X-He-Routing-Strategy are ignored for selection).
+//
+// Error mapping: a leg validation failure (routing-svc InvalidArgument/NotFound —
+// a he-router-* or unknown leg, BR1-2) -> 400_invalid_request envelope (Q-H). A
+// transport fault (Unavailable/DeadlineExceeded/Internal) fails CLOSED -> 502:
+// unlike a concrete single-model request (which fails OPEN to req.Model), A/B
+// cannot dispatch unvalidated legs because the concrete-catalogue gate lives in
+// routing-svc.
+func (d *Decider) DecideAB(ctx context.Context, model string, abModels []string, header http.Header, userID, heRequestID string) (Decision, error) {
+	// Q-I — WARN when a strategy directive was ALSO specified (A/B wins). A
+	// directive is a he-router-* meta-model in `model` OR an X-He-Routing-Strategy
+	// header.
+	if strings.HasPrefix(model, MetaModelPrefix) || strings.TrimSpace(header.Get(RoutingStrategyHeader)) != "" {
+		d.logger.WarnContext(ctx, "ab_overrides_strategy",
+			slog.String("event", "ab_overrides_strategy"),
+			slog.String("model", model),
+			slog.String("header", header.Get(RoutingStrategyHeader)),
+			slog.String("he_request_id", heRequestID),
+		)
+	}
+
+	// Routing disabled -> passthrough A/B over the gateway-parsed concrete legs
+	// (preserves the pre-6.2 nil-client behaviour; dispatch tests need no
+	// routing-svc). The concrete-gate is then skipped — the caller supplied
+	// concrete ids.
+	if d.client == nil {
+		return Decision{IsAbTest: true, AbSelectedModels: abModels, Bypassed: true}, nil
+	}
+
+	callCtx, cancel := context.WithTimeout(ctx, d.deadline) // Q-E 100ms
+	defer cancel()
+
+	hdr := http.Header{}
+	if heRequestID != "" {
+		hdr.Set("X-He-Request-Id", heRequestID)
+	}
+	req := &routingv1.SelectModelRequest{
+		UserId:      userID,
+		AbModels:    abModels, // BR1-1 — POPULATE the 6.1-preshaped field 4
+		HeRequestId: heRequestID,
+	}
+
+	start := time.Now()
+	resp, err := d.client.SelectModel(callCtx, req, hdr)
+	d.metrics.recordDuration(ctx, time.Since(start).Seconds())
+	if err != nil {
+		return d.mapABError(ctx, err, heRequestID)
+	}
+	legs := resp.GetAbSelectedModels()
+	if !resp.GetIsAbTest() || len(legs) == 0 {
+		// Defensive: routing-svc must echo the resolved legs on the A/B path.
+		d.logNoRoute(ctx, model, heRequestID, "blank_ab_selected_models")
+		return Decision{}, &EnvelopeError{Code: "502_upstream_unavailable"}
+	}
+	return Decision{IsAbTest: true, AbSelectedModels: legs}, nil
+}
+
+// mapABError maps a routing-svc SelectModel failure on the A/B path to a §5.1.2
+// envelope (Q-H). A leg validation failure (InvalidArgument/NotFound) is a
+// client error -> 400; any transport/availability fault fails CLOSED -> 502.
+func (d *Decider) mapABError(ctx context.Context, err error, heRequestID string) (Decision, error) {
+	switch connectCode(err) {
+	case connect.CodeInvalidArgument, connect.CodeNotFound:
+		return Decision{}, &EnvelopeError{Code: "400_invalid_request"}
+	default:
+		d.logNoRoute(ctx, "", heRequestID, "ab_routing_unavailable")
+		return Decision{}, &EnvelopeError{Code: "502_upstream_unavailable"}
+	}
+}
+
 // FilterByScope returns the chain entries the key is authorised for, preserving
 // order (Story 6.3 BR2-5 / Q-K). An empty scope means "all models allowed"
 // (Story 5.2 keypolicy BR-3.1), so the chain is returned unchanged. Matching is
@@ -170,6 +255,25 @@ func (d *Decider) RecordFailover(ctx context.Context, fromModel, toModel, reason
 		return
 	}
 	d.metrics.failover(ctx, fromModel, toModel, reason)
+}
+
+// A/B outcome labels for he_routing_ab_total (Story 6.4 BR4-4 — bounded
+// cardinality 3).
+const (
+	ABOutcomeBothOK     = "both_ok"
+	ABOutcomePartial    = "partial"
+	ABOutcomeBothFailed = "both_failed"
+)
+
+// RecordABOutcome emits the Story-6.4 he_routing_ab_total{outcome} instrument
+// (AC4/BR4-4). It lives beside the routing/failover counters so all routing
+// instruments share one registration point + bounded-cardinality discipline.
+// Safe on a nil Decider (routing disabled → no-op).
+func (d *Decider) RecordABOutcome(ctx context.Context, outcome string) {
+	if d == nil {
+		return
+	}
+	d.metrics.ab(ctx, outcome)
 }
 
 // RecordFailoverAttempts observes the per-request upstream attempt count (Q-I /
