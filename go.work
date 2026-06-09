@@ -12,6 +12,7 @@ use (
 	./apps/auth-svc
 	./apps/billing-svc
 	./apps/notification-svc
+	./apps/payment-svc
 	./apps/routing-svc
 	./apps/sample-grpc-app
 	./apps/sample-otel-app

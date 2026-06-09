@@ -1,0 +1,80 @@
+// payment.proto — He-API payment contract for Epic 7 (计费、定价与多通道支付).
+// Story 7.3 — FIRST realisation of payment-svc (service-topology §3.2). Defines:
+//   - PaymentEvent — the `payment.completed` Kafka payload (data-models §4.4).
+//     payment-svc is the PRODUCER (on a signature-verified provider webhook);
+//     billing-svc (credit / subscription renew) + notification-svc (receipt
+//     email) are CONSUMERS. settled_amount is the PROVIDER-CONFIRMED amount
+//     (string-decimal, Q-AMOUNT) — never the client create-order intent.
+//   - PaymentService.CreateCheckout / CreateSubscription — sync RPCs the gateway
+//     calls to obtain a provider-hosted checkout URL / client token. There is NO
+//     webhook RPC: per the Architect Q-WEBHOOK-INGRESS ruling the gateway
+//     transparently reverse-proxies the RAW webhook bytes to payment-svc's own
+//     HTTP webhook handler (raw-body integrity for HMAC), so no `bytes raw_body`
+//     RPC is needed here.
+//
+// NEW package `he.payment.v1` — a NEW file, so `buf breaking: FILE` is not
+// crossed. buf/protoc cannot run in this environment ([[project_toolchain_env_-
+// limits]]); the vendored *.pb.go is hand-authored from a descriptorpb-built
+// FileDescriptorProto (the rawDesc is byte-exact protoc-v1.36 wire output) and
+// verified by a round-trip marshal/unmarshal test (7.3-CONTRACT-001/002/003).
+
+syntax = "proto3";
+
+package he.payment.v1;
+
+option go_package = "github.com/he-api/he-api/packages/proto/gen/go/he/payment/v1;paymentv1";
+
+// PaymentEvent is the `payment.completed` Kafka payload (JSON-serialized on the
+// wire, mirroring the billing usage.recorded precedent). Money is string-decimal
+// (Q-Spec-4) — NEVER a JSON number.
+message PaymentEvent {
+  string order_id = 1;                 // our internal recharge_orders.id (recharge) or subscriptions.id (subscription)
+  string user_id = 2;                  // the credited subject (server-resolved, never client-asserted — BR-R-4)
+  string payment_provider = 3;         // stripe / paypal
+  string external_order_id = 4;        // provider charge/intent/session id (the provider TRUTH binding)
+  string settled_amount = 5;           // provider-confirmed settled amount, string-decimal (Q-AMOUNT) — the credited value
+  string currency = 6;                 // ISO-4217 of settled_amount
+  string status = 7;                   // paid / failed / cancelled / past_due
+  string event_type = 8;               // recharge | subscription_renew | subscription_cancel | subscription_past_due
+  string external_subscription_id = 9; // provider subscription id (subscription events only)
+  string ts = 10;                      // RFC3339 event timestamp
+}
+
+// CreateCheckoutRequest asks payment-svc to open a provider-hosted checkout for a
+// PENDING recharge order. order_id (our recharge_orders.id) is carried into the
+// provider as metadata so the webhook resolves OUR order, never a client value.
+message CreateCheckoutRequest {
+  string order_id = 1;
+  string user_id = 2;
+  string amount = 3;                   // string-decimal intent (display) — the CREDIT amount is the webhook truth (BR-R-1)
+  string currency = 4;
+  string payment_provider = 5;         // stripe / paypal
+}
+
+message CreateCheckoutResponse {
+  string checkout_url = 1;             // provider-hosted checkout URL (Stripe Checkout / PayPal approve)
+  string client_token = 2;             // alternative to a redirect URL (provider-dependent)
+  string external_order_id = 3;        // provider session/order/intent id
+}
+
+// CreateSubscriptionRequest asks payment-svc to create a provider subscription.
+// 7.3 ships the RAIL only (Q-SUBSCOPE) — plan is an opaque string here; the
+// tier→entitlement mapping is Story 7.8.
+message CreateSubscriptionRequest {
+  string subscription_id = 1;          // our subscriptions.id
+  string user_id = 2;
+  string plan = 3;                     // opaque ('free'|'pro'|'team'|'enterprise')
+  string payment_provider = 4;
+}
+
+message CreateSubscriptionResponse {
+  string checkout_url = 1;
+  string external_subscription_id = 2;
+}
+
+service PaymentService {
+  // CreateCheckout opens a provider-hosted checkout for a pending recharge order.
+  rpc CreateCheckout(CreateCheckoutRequest) returns (CreateCheckoutResponse);
+  // CreateSubscription creates a provider subscription (RAIL only — Q-SUBSCOPE).
+  rpc CreateSubscription(CreateSubscriptionRequest) returns (CreateSubscriptionResponse);
+}

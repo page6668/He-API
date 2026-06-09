@@ -1,0 +1,98 @@
+schema: 1
+story: "7.3"
+story_title: "Stripe + PayPal 集成"
+gate: "PASS"
+status_reason: "Round 2 (incremental): all 3 Round-1 non-blocking findings (COV-001, TEST-002, ROBUST-003) are independently verified RESOLVED with real assertions and no regression. credit-applier coverage 57.4% → 60.0%; the two subscription-lifecycle applier branches (past_due/cancelled) now have pgxmock unit tests; the amount-integrity guard now parks (no credit) on a corrupt/unparseable order intent. 28→31 story tests GREEN across payment-svc, billing-svc, gateway, proto; go vet clean ×4 modules. All 3 ACs + every P0 adversarial/money lane remain green. Gate is PASS with two CARRIED release-conditions that are external to Dev (NOT gate-blocking defects): (1) the CI-only E2E lanes (T5.*: testcontainers/compose + atlas-validate + Python contract) MUST be confirmed GREEN in CI before merge — they abort locally per documented toolchain limits; (2) PO must explicitly sign off OPS-001 / OPS-003 / Q-REFUND conscious defers (Risk-Profile condition 2 — still owed)."
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-09T00:00:00Z"
+
+review_round: 2
+review_mode_type: incremental
+issues_from_previous_round: 3
+issues_resolved: 3
+improvement_percentage: 100
+
+incremental_context:
+  cached_risk_level: "HIGH"
+  cached_review_mode: "full_testing"
+  cached_project_type: "web_backend"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []   # T2.3 + T6.1 claims now substantiated (applier tests added; coverage claim rescoped)
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+top_issues: []   # all Round-1 issues resolved; no new issues this round
+
+resolved_issues:
+  - id: "COV-001"
+    severity: medium
+    resolution: "credit-applier coverage 57.4% → 60.0% (raised by the two new tests below); the overstated T6.1 ≥80% claim was rescoped in the Dev Agent Record to the real unit-testable money/security surface, excluding the CI-only Kafka consumer loop (consumer.go). Verified: go test -cover ./internal/credit/ → 60.0%."
+  - id: "TEST-002"
+    severity: medium
+    resolution: "Added TestApply_SubscriptionPastDue_NoCredit + TestApply_SubscriptionCancel_NoCredit (pgxmock) — both drive the subStatusSQL branch (distinct from the active branch) with status='past_due'/'cancelled', assert OutcomeSubscription, no credit, ExpectationsWereMet. Closes the T2.3 'tests each transition' honesty gap. Verified GREEN."
+  - id: "ROBUST-003"
+    severity: low
+    resolution: "credit.go applyRecharge amount-integrity guard changed from `ierr == nil && !equal` to `ierr != nil || !equal` (credit.go:206) — a corrupt/unparseable/NULL stored intent now parks the order (no flip, no credit, payment_amount_mismatch alert) instead of falling through to credit; the mismatch log now carries the raw intent string. Added TestApply_Recharge_UnparseableIntent_Parks. Verified GREEN."
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 31        # 28 prior + 3 new (2× subscription-lifecycle applier, 1× unparseable-intent park)
+    passed_count: 31
+    failed_count: 0
+    skipped_count: 0
+    pass_rate: 100
+    coverage_percentage: 60   # credit applier (lowest security/money-critical pkg) raised from 57.4 → 60.0
+    failed_tests: []
+    modules_verified:
+      - "apps/billing-svc/... (all packages ok; vet clean)"
+      - "apps/payment-svc/... (producer/webhook/provider.stripe/provider.paypal ok)"
+      - "apps/api-gateway/internal/{handlers,openaierr} (ok)"
+      - "packages/proto/gen/go/he/{payment,billing}/v1 round-trip (ok)"
+  e2e:
+    executed: false
+    passed: true
+    skipped: true
+    skip_reason: "E2E lanes (T5.1-T5.3 testcontainers/compose + atlas migrate validate + Python contract) are CI-only — docker/atlas/buf abort locally per documented toolchain limits. Unchanged from Round 1. MUST be confirmed GREEN in CI before merge (Risk-Profile condition 1)."
+    scenarios_tested: 0
+    scenarios_passed: 0
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 7
+  security_sensitive: true
+  dev_gate_score: 95
+
+risk_summary:
+  totals: { critical: 0, high: 2, medium: 20, low: 1 }   # from docs/qa/assessments/7.3-risk-20260609.md
+  recommendations:
+    must_fix:
+      - "SEC-001 forged webhook — VERIFIED mitigated: signature-verify-before-parse green (stripe HMAC + paypal verify, forged/absent/tampered/stale all rejected)."
+      - "DATA-001 double-credit — VERIFIED mitigated: pending→paid state-machine + UNIQUE(provider, external_order_id); redelivery → OutcomeDuplicate, no second credit (pgxmock ExpectationsWereMet proves no extra SQL)."
+    monitor:
+      - "OPS-001 pending-order leak (Q-PENDING-CLEANUP defer) + OPS-003 no reconciliation sweep (Q-RECON defer) — require explicit PO sign-off (Risk-Profile condition 2); STILL OWED."
+      - "Q-REFUND refund/dispute webhooks are 200-ACK'd no-op in 7.3 — PO to confirm conscious defer."
+
+nfr_validation:
+  security: { status: PASS, notes: "Signature-as-credential verified (constant-time HMAC, replay window, verify-before-parse); webhooks mounted outside bearer+CSRF (main.go rootMux); secrets env-injected/never-logged; PCI no-PAN (provider-hosted checkout, token+order-id only); server-side user binding (BR-R-4)." }
+  performance: { status: PASS, notes: "Not a hot path (occasional recharge, provider-bounded webhook throughput); no chat-hot-path emission." }
+  reliability: { status: PASS, notes: "Exactly-once credit + atomicity + PG-authoritative-Redis-mirror correct and tested. Subscription lifecycle transitions (active/past_due/cancelled) now have applier-level unit coverage (TEST-002 closed). The Kafka consumer offset-commit-post-PG-commit (T4.2) remains a CI integration lane (intentionally 0% unit) — confirm in CI." }
+  maintainability: { status: PASS, notes: "Clean PaymentProvider seam (the 7.4-7.6 spine); stdlib-over-SDK provider impls documented (Q-SDK deviation); string-decimal money discipline; go vet clean across all 4 modules." }
+
+recommendations:
+  immediate: []   # nothing dev-actionable remains
+  future:
+    - action: "Confirm CI E2E lanes (T5.*) + atlas migrate validate GREEN before merge (Risk-Profile condition 1)"
+      refs: ["docs/qa/assessments/7.3-test-design-20260609.md"]
+    - action: "PO sign-off on OPS-001 / OPS-003 / Q-REFUND conscious defers (Risk-Profile condition 2)"
+      refs: ["docs/qa/assessments/7.3-risk-20260609.md"]

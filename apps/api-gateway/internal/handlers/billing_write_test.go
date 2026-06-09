@@ -1,0 +1,155 @@
+// Story 7.3 (AC1) gateway recharge handler. Validates the request, calls
+// billing-svc CreateRechargeOrder + payment-svc CreateCheckout, and maps
+// downstream Connect errors to §5.1.2 envelopes. 7.3 enables USD only (Q-CURRENCY
+// m3); provider ∈ {stripe,paypal}; amount must be a positive decimal string.
+package handlers
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"connectrpc.com/connect"
+
+	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
+	billingv1 "github.com/he-api/he-api/packages/proto/gen/go/he/billing/v1"
+	"github.com/he-api/he-api/packages/proto/gen/go/he/billing/v1/billingv1connect"
+	paymentv1 "github.com/he-api/he-api/packages/proto/gen/go/he/payment/v1"
+	"github.com/he-api/he-api/packages/proto/gen/go/he/payment/v1/paymentv1connect"
+)
+
+// fakeBilling implements billingv1connect.BillingServiceClient.
+type fakeBilling struct {
+	orderID string
+	err     error
+	gotReq  *billingv1.CreateRechargeOrderRequest
+}
+
+func (f *fakeBilling) CheckBalance(context.Context, *connect.Request[billingv1.CheckBalanceRequest]) (*connect.Response[billingv1.CheckBalanceResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, nil)
+}
+func (f *fakeBilling) CreateRechargeOrder(_ context.Context, req *connect.Request[billingv1.CreateRechargeOrderRequest]) (*connect.Response[billingv1.CreateRechargeOrderResponse], error) {
+	f.gotReq = req.Msg
+	if f.err != nil {
+		return nil, f.err
+	}
+	return connect.NewResponse(&billingv1.CreateRechargeOrderResponse{OrderId: f.orderID, Status: "pending"}), nil
+}
+
+var _ billingv1connect.BillingServiceClient = (*fakeBilling)(nil)
+
+// fakePayment implements paymentv1connect.PaymentServiceClient.
+type fakePayment struct {
+	checkoutURL string
+	err         error
+	gotCheckout *paymentv1.CreateCheckoutRequest
+}
+
+func (f *fakePayment) CreateCheckout(_ context.Context, req *connect.Request[paymentv1.CreateCheckoutRequest]) (*connect.Response[paymentv1.CreateCheckoutResponse], error) {
+	f.gotCheckout = req.Msg
+	if f.err != nil {
+		return nil, f.err
+	}
+	return connect.NewResponse(&paymentv1.CreateCheckoutResponse{CheckoutUrl: f.checkoutURL, ExternalOrderId: "pi_1"}), nil
+}
+func (f *fakePayment) CreateSubscription(context.Context, *connect.Request[paymentv1.CreateSubscriptionRequest]) (*connect.Response[paymentv1.CreateSubscriptionResponse], error) {
+	return connect.NewResponse(&paymentv1.CreateSubscriptionResponse{}), nil
+}
+
+var _ paymentv1connect.PaymentServiceClient = (*fakePayment)(nil)
+
+func postRecharge(h *BillingWriteHandler, userID, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, "/v1/billing/recharge", strings.NewReader(body))
+	if userID != "" {
+		req = req.WithContext(middleware.BearerWithUserID(req.Context(), userID))
+	}
+	rec := httptest.NewRecorder()
+	h.Recharge(rec, req)
+	return rec
+}
+
+func TestRecharge_Happy(t *testing.T) {
+	fb := &fakeBilling{orderID: "order-1"}
+	fp := &fakePayment{checkoutURL: "https://checkout.stripe.com/x"}
+	h := NewBillingWriteHandler(nil, fb, fp, nil)
+
+	rec := postRecharge(h, "user-1", `{"amount":"50.00","currency":"USD","provider":"stripe"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d (%s), want 200", rec.Code, rec.Body.String())
+	}
+	var resp rechargeResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.OrderID != "order-1" || resp.CheckoutURL == "" || resp.Provider != "stripe" {
+		t.Fatalf("unexpected response: %+v", resp)
+	}
+	// The order is bound to the authenticated user SERVER-SIDE (BR-R-4) and the
+	// amount is normalised to 4dp string-decimal (BR-R-5).
+	if fb.gotReq.GetUserId() != "user-1" || fb.gotReq.GetAmount() != "50.0000" {
+		t.Errorf("billing req mismatch: %+v", fb.gotReq)
+	}
+	// The order id is carried to the provider as metadata (the webhook resolves it).
+	if fp.gotCheckout.GetOrderId() != "order-1" {
+		t.Errorf("checkout order id = %q, want order-1", fp.gotCheckout.GetOrderId())
+	}
+}
+
+func TestRecharge_BadProvider_400(t *testing.T) {
+	h := NewBillingWriteHandler(nil, &fakeBilling{}, &fakePayment{}, nil)
+	rec := postRecharge(h, "user-1", `{"amount":"50.00","currency":"USD","provider":"dogecoin"}`)
+	assertCode(t, rec, http.StatusBadRequest, "400_unsupported_payment_provider")
+}
+
+func TestRecharge_NonUSD_Rejected(t *testing.T) {
+	// Q-CURRENCY m3 — 7.3 enables USD only.
+	h := NewBillingWriteHandler(nil, &fakeBilling{}, &fakePayment{}, nil)
+	rec := postRecharge(h, "user-1", `{"amount":"360.00","currency":"CNY","provider":"stripe"}`)
+	assertCode(t, rec, http.StatusBadRequest, "400_unsupported_currency")
+}
+
+func TestRecharge_BadAmount_400(t *testing.T) {
+	h := NewBillingWriteHandler(nil, &fakeBilling{}, &fakePayment{}, nil)
+	for _, amt := range []string{"0", "-5", "abc"} {
+		rec := postRecharge(h, "user-1", `{"amount":"`+amt+`","currency":"USD","provider":"stripe"}`)
+		assertCode(t, rec, http.StatusBadRequest, "400_invalid_payment_request")
+	}
+}
+
+func TestRecharge_ProviderError_402(t *testing.T) {
+	// payment-svc reports the provider could not process → 402_payment_failed (NOT 5xx).
+	fp := &fakePayment{err: connect.NewError(connect.CodeUnavailable, nil)}
+	h := NewBillingWriteHandler(nil, &fakeBilling{orderID: "order-1"}, fp, nil)
+	rec := postRecharge(h, "user-1", `{"amount":"50.00","currency":"USD","provider":"stripe"}`)
+	assertCode(t, rec, http.StatusPaymentRequired, "402_payment_failed")
+}
+
+func TestRecharge_NoBearer_500(t *testing.T) {
+	h := NewBillingWriteHandler(nil, &fakeBilling{}, &fakePayment{}, nil)
+	rec := postRecharge(h, "", `{"amount":"50.00","currency":"USD","provider":"stripe"}`)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", rec.Code)
+	}
+}
+
+// assertCode checks the §5.1.2 envelope status + code.
+func assertCode(t *testing.T, rec *httptest.ResponseRecorder, status int, code string) {
+	t.Helper()
+	if rec.Code != status {
+		t.Fatalf("status = %d, want %d (body=%s)", rec.Code, status, rec.Body.String())
+	}
+	var env struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("decode envelope: %v", err)
+	}
+	if env.Error.Code != code {
+		t.Fatalf("code = %q, want %q", env.Error.Code, code)
+	}
+}

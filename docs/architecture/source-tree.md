@@ -19,7 +19,11 @@ he-api/                                  (Monorepo, Turborepo)
 │   │   ├── internal/{pricing,ledger,consumer,balance,grpc,server}/
 │   │   ├── go.mod
 │   │   └── cmd/server/Dockerfile
-│   ├── payment-svc/
+│   ├── payment-svc/                    Go service (Story 7.3 REALISED — 通道支付集成: PaymentProvider seam {stripe,paypal} + 入站 webhook 验签 + payment.completed 生产者)
+│   │   ├── cmd/server/main.go
+│   │   ├── internal/{provider,provider/stripe,provider/paypal,webhook,producer,paymentgrpc,server}/
+│   │   ├── go.mod
+│   │   └── cmd/server/Dockerfile
 │   ├── routing-svc/
 │   ├── safety-svc/
 │   ├── quota-svc/

@@ -37,11 +37,15 @@ const (
 	// BillingServiceCheckBalanceProcedure is the fully-qualified name of the BillingService's
 	// CheckBalance RPC.
 	BillingServiceCheckBalanceProcedure = "/he.billing.v1.BillingService/CheckBalance"
+	// BillingServiceCreateRechargeOrderProcedure is the fully-qualified name of the BillingService's
+	// CreateRechargeOrder RPC (Story 7.3 additive).
+	BillingServiceCreateRechargeOrderProcedure = "/he.billing.v1.BillingService/CreateRechargeOrder"
 )
 
 // BillingServiceClient is a client for the he.billing.v1.BillingService service.
 type BillingServiceClient interface {
 	CheckBalance(context.Context, *connect.Request[v1.CheckBalanceRequest]) (*connect.Response[v1.CheckBalanceResponse], error)
+	CreateRechargeOrder(context.Context, *connect.Request[v1.CreateRechargeOrderRequest]) (*connect.Response[v1.CreateRechargeOrderResponse], error)
 }
 
 // NewBillingServiceClient constructs a client for the he.billing.v1.BillingService service. By
@@ -58,12 +62,19 @@ func NewBillingServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(billingServiceMethods.ByName("CheckBalance")),
 			connect.WithClientOptions(opts...),
 		),
+		createRechargeOrder: connect.NewClient[v1.CreateRechargeOrderRequest, v1.CreateRechargeOrderResponse](
+			httpClient,
+			baseURL+BillingServiceCreateRechargeOrderProcedure,
+			connect.WithSchema(billingServiceMethods.ByName("CreateRechargeOrder")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // billingServiceClient implements BillingServiceClient.
 type billingServiceClient struct {
-	checkBalance *connect.Client[v1.CheckBalanceRequest, v1.CheckBalanceResponse]
+	checkBalance        *connect.Client[v1.CheckBalanceRequest, v1.CheckBalanceResponse]
+	createRechargeOrder *connect.Client[v1.CreateRechargeOrderRequest, v1.CreateRechargeOrderResponse]
 }
 
 // CheckBalance calls he.billing.v1.BillingService.CheckBalance.
@@ -71,9 +82,15 @@ func (c *billingServiceClient) CheckBalance(ctx context.Context, req *connect.Re
 	return c.checkBalance.CallUnary(ctx, req)
 }
 
+// CreateRechargeOrder calls he.billing.v1.BillingService.CreateRechargeOrder.
+func (c *billingServiceClient) CreateRechargeOrder(ctx context.Context, req *connect.Request[v1.CreateRechargeOrderRequest]) (*connect.Response[v1.CreateRechargeOrderResponse], error) {
+	return c.createRechargeOrder.CallUnary(ctx, req)
+}
+
 // BillingServiceHandler is an implementation of the he.billing.v1.BillingService service.
 type BillingServiceHandler interface {
 	CheckBalance(context.Context, *connect.Request[v1.CheckBalanceRequest]) (*connect.Response[v1.CheckBalanceResponse], error)
+	CreateRechargeOrder(context.Context, *connect.Request[v1.CreateRechargeOrderRequest]) (*connect.Response[v1.CreateRechargeOrderResponse], error)
 }
 
 // NewBillingServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -86,10 +103,18 @@ func NewBillingServiceHandler(svc BillingServiceHandler, opts ...connect.Handler
 		connect.WithSchema(billingServiceMethods.ByName("CheckBalance")),
 		connect.WithHandlerOptions(opts...),
 	)
+	billingServiceCreateRechargeOrderHandler := connect.NewUnaryHandler(
+		BillingServiceCreateRechargeOrderProcedure,
+		svc.CreateRechargeOrder,
+		connect.WithSchema(billingServiceMethods.ByName("CreateRechargeOrder")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/he.billing.v1.BillingService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case BillingServiceCheckBalanceProcedure:
 			billingServiceCheckBalanceHandler.ServeHTTP(w, r)
+		case BillingServiceCreateRechargeOrderProcedure:
+			billingServiceCreateRechargeOrderHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -101,4 +126,8 @@ type UnimplementedBillingServiceHandler struct{}
 
 func (UnimplementedBillingServiceHandler) CheckBalance(context.Context, *connect.Request[v1.CheckBalanceRequest]) (*connect.Response[v1.CheckBalanceResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.billing.v1.BillingService.CheckBalance is not implemented"))
+}
+
+func (UnimplementedBillingServiceHandler) CreateRechargeOrder(context.Context, *connect.Request[v1.CreateRechargeOrderRequest]) (*connect.Response[v1.CreateRechargeOrderResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.billing.v1.BillingService.CreateRechargeOrder is not implemented"))
 }

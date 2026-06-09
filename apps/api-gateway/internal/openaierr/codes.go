@@ -113,4 +113,15 @@ var CodeMetadata = map[string]struct {
 	// money defect, BR-B-5). Registered here in the runtime mirror per the
 	// Story-3.6 single-canonical-writer rule, not the §5.1.2 spec table only.
 	"400_unsupported_currency": {400, "invalid_request_error"},
+
+	// Payment surface (Story 7.3 — Architect §5.1.2 ratification). Recharge /
+	// subscription create + inbound webhook. A provider CreateCheckout/Subscription
+	// API error surfaces as 402_payment_failed (a payment-domain failure to the
+	// user), NOT a 502 — 5xx is reserved for our-own-infra faults (BR-W-5). The
+	// webhook signature-verification failure (forged/replayed/tampered) is
+	// 400_webhook_signature_invalid (the body is never parsed — BR-W-1).
+	"400_invalid_payment_request":      {400, "invalid_request_error"},
+	"400_unsupported_payment_provider": {400, "invalid_request_error"},
+	"402_payment_failed":               {402, "invalid_request_error"},
+	"400_webhook_signature_invalid":    {400, "invalid_request_error"},
 }

@@ -6,8 +6,8 @@
 ## Registry Metadata
 
 **Last Updated**: 2026-06-09
-**Total Stories Tracked**: 9
-**Total Endpoints**: 9 (+ GET /v1/balance, GET /v1/usage — Story 7.1)
+**Total Stories Tracked**: 10
+**Total Endpoints**: 9 (+ GET /v1/balance, GET /v1/usage — Story 7.1; + POST /v1/billing/recharge, /v1/billing/subscriptions, /v1/billing/webhooks/{stripe,paypal} — Story 7.3)
 **Repository**: He-API
 **Mode**: monolith
 
@@ -28,19 +28,31 @@
 | GET | `/v1/balance` | Bearer API key (`middleware.RequireAPIKey`) | **7.1** / **7.2** | **7.1 NEW** — PG-authoritative balance read (BR-A-2 reads `he_api.balances`, NOT Redis). Money is a JSON **string-decimal** (BR-A-3 / Q-Spec-4). Absent row → `"0.0000"` (Q-LAZY). **7.2 EXTEND (additive, no new endpoint)** — currency-aware via stateless `?currency=usd\|rmb` (USD default, Q-PREF; case-insensitive, trimmed). Adds `current_display`/`fx_rate`/`fx_as_of` (+ `fx_degraded` on the cold-start guard) — all string-decimals (BR-B-4). USD default is byte-compatible (`fx_rate:"1.00000000"`, `current_display==current_usd` at 4dp, BR-B-7). RMB converts USD→CNY HALF-UP 2dp from the gateway `internal/fxrate` snapshot (display-only, Q-SOT — `current_usd` always present, BR-B-3). Unsupported `?currency` → 400 `400_unsupported_currency` before any PG read (BR-B-5). |
 | GET | `/v1/usage` | Bearer API key (`middleware.RequireAPIKey`) | **7.1** / **7.2** | **7.1 NEW** — current-UTC-month aggregate from `he_api.usage_ledger` (BR-A-5). String-decimal money. Zero rows → zero-aggregate. **7.2 EXTEND** — same `?currency=` selector + additive `currency`/`total_cost_display`/`fx_rate`/`fx_as_of` on the TOP LINE only; `by_model[].cost_usd` STAYS USD on `?currency=rmb` (documented MVP cut, Architect M-2 / Q-APISHAPE). Same `400_unsupported_currency` rejection. |
 | POST | `/v1/chat/completions` (7.1 behaviour change) | _(see row above)_ | **7.1** | **Story 7.1** adds: (a) a pre-flight `402_balance_insufficient` gate (Q-GATE — fast Redis `balance:user:{id}:realtime` read BEFORE dispatch; FAIL-OPEN on Redis outage, BR-A-4); (b) a fire-and-forget `usage.recorded` Kafka emit on EVERY success path (non-stream mock + adapter, stream post-final-chunk, A/B one-per-leg) — RAW inputs only, NO cost (Q-CH); a producer error never affects the 200 response (BR-D-4). NO change to the OpenAI-compatible response body. |
+| POST | `/v1/billing/recharge` | Bearer API key (`middleware.RequireAPIKey`) | **7.3** | **NEW** — create a recharge top-up. Body `{amount: string-decimal, currency, provider}`; `provider ∈ {stripe,paypal}` (else `400_unsupported_payment_provider`), `currency == USD` (Q-CURRENCY m3 — else `400_unsupported_currency`), `amount > 0` (else `400_invalid_payment_request`). Calls billing-svc `CreateRechargeOrder` (pending order, Q-ORDEROWNER) → payment-svc `CreateCheckout` (provider checkout, order id carried as metadata, BR-R-4). Returns `{order_id, checkout_url, provider}`. A provider failure → `402_payment_failed` (NOT 5xx). Money is string-decimal (BR-R-5). |
+| POST | `/v1/billing/subscriptions` | Bearer API key (`middleware.RequireAPIKey`) | **7.3** | **NEW** (RAIL only — Q-SUBSCOPE). Body `{plan, provider}`; `plan ∈ {free,pro,team,enterprise}`. Persists a `subscriptions` row (`status='past_due'` until the active webhook) over the shared billing pool, then payment-svc `CreateSubscription`. Returns `{subscription_id, checkout_url}`. NO balance side-effect; entitlement mapping is Story 7.8. |
+| POST | `/v1/billing/webhooks/stripe` · `/v1/billing/webhooks/paypal` | **NONE (provider signature IS the credential)** — mounted OUTSIDE the bearer AND CSRF chain (rootMux, mirrors probeMux bypass) | **7.3** | **NEW** — inbound provider webhooks. The gateway is a TRANSPARENT reverse proxy (Q-WEBHOOK-INGRESS): it reads the raw body bytes ONCE and forwards them BYTE-FOR-BYTE to payment-svc `/webhooks/{provider}` (NO json decode — raw-body integrity for HMAC, BR-W-2), relaying the downstream status verbatim (BR-W-5). payment-svc verifies the signature (forged/replayed/tampered → 400 `400_webhook_signature_invalid`, body never parsed, BR-W-1) and on success emits `payment.completed`. |
 
-### Internal Connect/gRPC RPCs (billing-svc — NEW, Story 7.1)
+### Internal Connect/gRPC RPCs (billing-svc — Story 7.1, EXTENDED 7.3)
 
 | Service | RPC | Story | Notes |
 |---------|-----|-------|-------|
-| `he.billing.v1.BillingService` | `CheckBalance(CheckBalanceRequest{user_id}) returns (CheckBalanceResponse{current_usd: string, sufficient: bool})` | **7.1** | **NEW** — sync, PG-authoritative balance read for console / reconciliation callers (the hot-path 402 gate uses Redis, NOT this RPC). `current_usd` is string-decimal (Q-Spec-4); `sufficient = current_usd > 0` (hard-zero, BR-A-6). NEW package `he.billing.v1` (`buf breaking: FILE` not crossed). `DeductBalance` / `CreateRechargeOrder` from the §5.2 sketch are DEFERRED. |
+| `he.billing.v1.BillingService` | `CheckBalance(CheckBalanceRequest{user_id}) returns (CheckBalanceResponse{current_usd: string, sufficient: bool})` | **7.1** | **NEW** — sync, PG-authoritative balance read for console / reconciliation callers (the hot-path 402 gate uses Redis, NOT this RPC). `current_usd` is string-decimal (Q-Spec-4); `sufficient = current_usd > 0` (hard-zero, BR-A-6). NEW package `he.billing.v1` (`buf breaking: FILE` not crossed). |
+| `he.billing.v1.BillingService` | `CreateRechargeOrder(CreateRechargeOrderRequest{user_id, amount: string, currency, payment_provider}) returns (CreateRechargeOrderResponse{order_id, status})` | **7.3** | **NEW (additive RPC — passes `buf breaking: FILE`)** — realises the §5.2-sketched RPC. billing-svc is the SOLE writer of `recharge_orders` (Q-ORDEROWNER): INSERT pending (external_order_id NULL, bound at credit time), RETURN the internal order id. Hand-edited vendored pb.go (round-trip verified, 7.3-CONTRACT-001). |
 
-### Kafka topics (NEW, Story 7.1)
+### Internal Connect/gRPC RPCs (payment-svc — NEW, Story 7.3)
+
+| Service | RPC | Story | Notes |
+|---------|-----|-------|-------|
+| `he.payment.v1.PaymentService` | `CreateCheckout(CreateCheckoutRequest{order_id, user_id, amount, currency, payment_provider}) returns (CreateCheckoutResponse{checkout_url, client_token, external_order_id})` | **7.3** | **NEW** — open a provider-hosted checkout for a pending order via the `PaymentProvider` seam (stripe/paypal). NEW package `he.payment.v1`. |
+| `he.payment.v1.PaymentService` | `CreateSubscription(CreateSubscriptionRequest{subscription_id, user_id, plan, payment_provider}) returns (CreateSubscriptionResponse{checkout_url, external_subscription_id})` | **7.3** | **NEW** — create a provider subscription (RAIL only). NO webhook RPC (Q-WEBHOOK-INGRESS — the gateway reverse-proxies raw bytes to payment-svc's HTTP `/webhooks/{provider}`). |
+
+### Kafka topics (Story 7.1, + payment.completed 7.3)
 
 | Topic | Producer | Consumer(s) | Story | Notes |
 |-------|----------|-------------|-------|-------|
 | `usage.recorded` | **api-gateway** (Q-PRODUCER) | billing-svc (7.1) · audit-svc/analytics-svc (Epic 9) | **7.1** | `UsageEvent` payload (protojson) — RAW token inputs, NO cost (Q-CH). Producer config `acks=all` (Q-KCLIENT). 7-day retention. |
 | `usage.recorded.dlq` | billing-svc | _(alerting)_ | **7.1** | Dead-letter for `ErrNoPricing` / malformed events (Q-DLQ — NOT infinite backoff). |
+| `payment.completed` | **payment-svc** (on a signature-verified webhook) | billing-svc (7.3 credit / subscription lifecycle) · notification-svc (receipt email — §4.4, no code change) | **7.3** | `PaymentEvent` payload (protojson) — `{order_id, user_id, payment_provider, external_order_id, settled_amount(string-decimal, provider TRUTH — Q-AMOUNT), currency, status, event_type, external_subscription_id, ts}`. Producer `acks=all`, keyed by order id (per-order ordering). billing-svc credit consumer (`he.billing.v1`-group `billing-svc-credit`) applies exactly-once pending→paid + balance credit. |
 
 ### Internal Connect/gRPC RPCs (auth-svc)
 

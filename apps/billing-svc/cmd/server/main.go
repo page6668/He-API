@@ -40,6 +40,7 @@ import (
 	obs "github.com/he-api/he-api/packages/go-observability"
 
 	"github.com/he-api/he-api/apps/billing-svc/internal/consumer"
+	"github.com/he-api/he-api/apps/billing-svc/internal/credit"
 	billinggrpc "github.com/he-api/he-api/apps/billing-svc/internal/grpc"
 	"github.com/he-api/he-api/apps/billing-svc/internal/ledger"
 	"github.com/he-api/he-api/apps/billing-svc/internal/pricing"
@@ -116,6 +117,11 @@ func run(ctx context.Context, logger *slog.Logger, addr string) error {
 	// Kafka brokers are configured.
 	stopConsumer := startConsumer(ctx, logger, pool, rdb, pricer)
 	defer stopConsumer()
+
+	// Story 7.3 — payment.completed consumer → credit.Apply (exactly-once balance
+	// CREDIT + subscription lifecycle). Wired only when PG + Kafka are configured.
+	stopCredit := startCreditConsumer(ctx, logger, pool, rdb)
+	defer stopCredit()
 
 	// gRPC handler — CheckBalance reads PG authoritatively. With no pool it falls
 	// back to Unimplemented (health still serves).
@@ -205,6 +211,42 @@ func startConsumer(ctx context.Context, logger *slog.Logger, pool *pgxpool.Pool,
 		_ = reader.Close()
 		_ = dlq.Close()
 	}
+}
+
+// startCreditConsumer wires the payment.completed Kafka reader + the credit
+// applier and runs the consume loop in a goroutine. Returns a stop func. A no-op
+// when PG or Kafka brokers are unavailable.
+func startCreditConsumer(ctx context.Context, logger *slog.Logger, pool *pgxpool.Pool, rdb *redis.Client) func() {
+	noop := func() {}
+	if pool == nil {
+		logger.Warn("credit consumer disabled — PG unavailable")
+		return noop
+	}
+	brokersEnv := os.Getenv("HE_API_KAFKA_BROKERS")
+	if brokersEnv == "" {
+		logger.Warn("credit consumer disabled — HE_API_KAFKA_BROKERS unset")
+		return noop
+	}
+	brokers := strings.Split(brokersEnv, ",")
+	reader := kafka.NewReader(kafka.ReaderConfig{
+		Brokers: brokers,
+		GroupID: credit.ConsumerGroup,
+		Topic:   credit.Topic,
+	})
+	applier := credit.New(pool, creditRedisOrNil(rdb), logger)
+	c := credit.NewConsumer(reader, applier, logger)
+	go c.Run(ctx)
+	logger.Info("billing credit consumer started", slog.String("topic", credit.Topic))
+	return func() { _ = reader.Close() }
+}
+
+// creditRedisOrNil adapts a possibly-nil *redis.Client to the credit.Redis seam
+// (typed-nil avoidance, as with redisOrNil).
+func creditRedisOrNil(rdb *redis.Client) credit.Redis {
+	if rdb == nil {
+		return nil
+	}
+	return rdb
 }
 
 // redisOrNil adapts a possibly-nil *redis.Client to the ledger.Redis seam

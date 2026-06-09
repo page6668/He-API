@@ -160,4 +160,6 @@ He-API **不存储任何信用卡数据**：
 - 用户卡信息直接发送至 Stripe/PayPal（client-side tokenization）
 - 我方仅存储 token 与订单 ID
 
+**Story 7.3 REALISED (SAQ-A)** — payment-svc 集成 Stripe + PayPal：用户在 provider 托管的 checkout 页面付款，卡数据 browser→provider 直达，**永不经过 He-API**；我方仅持久化 `recharge_orders.external_order_id`（provider token/id）与内部订单 id；无任何端点接受 PAN/CVV（7.3-UNIT-009 断言）。**Webhook 认证模型（NEW）**：入站 `POST /v1/billing/webhooks/{stripe,paypal}` 挂在 bearer + CSRF 链**之外**——provider 的**签名即凭证**（Stripe-Signature HMAC-SHA256，constant-time + timestamp tolerance；PayPal verify-webhook-signature）；验签**先于任何 body 解析**，伪造/重放/篡改 → 400，body 永不入账（BR-W-1/W-4）。webhook 签名密钥与 API 密钥**分离**（独立爆炸半径，Q-SECRETS）；全部 env 注入、slog 脱敏、永不落日志。详见 `docs/dev/secrets/payment-provider.md`。
+
 ---

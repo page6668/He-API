@@ -45,7 +45,9 @@ import (
 	"github.com/he-api/he-api/apps/api-gateway/internal/usage"
 	obs "github.com/he-api/he-api/packages/go-observability"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1/authv1connect"
+	"github.com/he-api/he-api/packages/proto/gen/go/he/billing/v1/billingv1connect"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/notification/v1/notificationv1connect"
+	"github.com/he-api/he-api/packages/proto/gen/go/he/payment/v1/paymentv1connect"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
@@ -422,8 +424,23 @@ func main() {
 		mux.Handle("GET /v1/balance", bearerAuth.RequireAPIKey(http.HandlerFunc(billingRead.Balance)))
 		mux.Handle("GET /v1/usage", bearerAuth.RequireAPIKey(http.HandlerFunc(billingRead.Usage)))
 		logger.Info("billing read endpoints wired (GET /v1/balance, GET /v1/usage; currency-aware)")
+
+		// Story 7.3 (AC1/AC2) — billing WRITE endpoints. POST /v1/billing/recharge
+		// calls billing-svc CreateRechargeOrder (Q-ORDEROWNER) + payment-svc
+		// CreateCheckout; POST /v1/billing/subscriptions persists a subscriptions
+		// row (direct-PG, as billing_read does) + payment-svc CreateSubscription.
+		// Both behind bearer-auth (user_id from the validated key, BR-R-4). Wired
+		// only when both downstream endpoints are configured.
+		if billingClient, paymentClient := buildBillingClient(logger), buildPaymentClient(logger); billingClient != nil && paymentClient != nil {
+			billingWrite := handlers.NewBillingWriteHandler(logger, billingClient, paymentClient, billingPool)
+			mux.Handle("POST /v1/billing/recharge", bearerAuth.RequireAPIKey(http.HandlerFunc(billingWrite.Recharge)))
+			mux.Handle("POST /v1/billing/subscriptions", bearerAuth.RequireAPIKey(http.HandlerFunc(billingWrite.Subscription)))
+			logger.Info("billing write endpoints wired (POST /v1/billing/recharge, /v1/billing/subscriptions)")
+		} else {
+			logger.Warn("BILLING_SVC_ENDPOINT or PAYMENT_SVC_ENDPOINT unset — POST /v1/billing/{recharge,subscriptions} disabled")
+		}
 	} else {
-		logger.Warn("HE_API_DB_POSTGRES_URI unset — GET /v1/balance + /v1/usage disabled")
+		logger.Warn("HE_API_DB_POSTGRES_URI unset — GET /v1/balance + /v1/usage + POST /v1/billing/* disabled")
 	}
 
 	// Story 3.5 — /v1/models (static catalogue) + /v1/embeddings (mock
@@ -493,6 +510,22 @@ func main() {
 	rootMux := http.NewServeMux()
 	rootMux.Handle("/health", probeMux)
 	rootMux.Handle("/healthz", probeMux)
+
+	// Story 7.3 (AC3) — inbound provider webhooks. Mounted on rootMux so they
+	// BYPASS the SecurityHeaders + CSRF + bearer chain (the provider signature is
+	// the sole credential; a provider POST carries no Origin/cookie, so CSRF must
+	// not apply — mirrors the probeMux bypass). The gateway forwards the RAW body
+	// byte-for-byte to payment-svc, which verifies the signature (Q-WEBHOOK-INGRESS,
+	// BR-W-1/W-2). Wired only when PAYMENT_SVC_ENDPOINT is configured.
+	if paymentBase := strings.TrimSpace(os.Getenv("PAYMENT_SVC_ENDPOINT")); paymentBase != "" {
+		webhookProxy := handlers.NewWebhookProxyHandler(logger, paymentBase, nil)
+		rootMux.Handle("POST /v1/billing/webhooks/stripe", webhookProxy.Handle("stripe"))
+		rootMux.Handle("POST /v1/billing/webhooks/paypal", webhookProxy.Handle("paypal"))
+		logger.Info("payment webhook ingress wired (POST /v1/billing/webhooks/{stripe,paypal}; outside bearer+CSRF)")
+	} else {
+		logger.Warn("PAYMENT_SVC_ENDPOINT unset — POST /v1/billing/webhooks/* disabled")
+	}
+
 	rootMux.Handle("/", handler)
 
 	srv := &http.Server{
@@ -653,6 +686,29 @@ func buildBillingPool(logger *slog.Logger) *pgxpool.Pool {
 		return nil
 	}
 	return pool
+}
+
+// buildBillingClient constructs the billing-svc Connect client (Story 7.3 —
+// CreateRechargeOrder). Returns nil when BILLING_SVC_ENDPOINT is unset.
+func buildBillingClient(logger *slog.Logger) billingv1connect.BillingServiceClient {
+	endpoint := strings.TrimSpace(os.Getenv("BILLING_SVC_ENDPOINT"))
+	if endpoint == "" {
+		return nil
+	}
+	logger.Info("billing-svc client wired", slog.String("endpoint", endpoint))
+	return billingv1connect.NewBillingServiceClient(&http.Client{Timeout: 10 * time.Second}, endpoint)
+}
+
+// buildPaymentClient constructs the payment-svc Connect client (Story 7.3 —
+// CreateCheckout / CreateSubscription). Returns nil when PAYMENT_SVC_ENDPOINT is
+// unset (the same base URL the webhook reverse-proxy forwards to).
+func buildPaymentClient(logger *slog.Logger) paymentv1connect.PaymentServiceClient {
+	endpoint := strings.TrimSpace(os.Getenv("PAYMENT_SVC_ENDPOINT"))
+	if endpoint == "" {
+		return nil
+	}
+	logger.Info("payment-svc client wired", slog.String("endpoint", endpoint))
+	return paymentv1connect.NewPaymentServiceClient(&http.Client{Timeout: 15 * time.Second}, endpoint)
 }
 
 // mustRedisOptions parses a Redis URL; on parse failure it logs WARN and

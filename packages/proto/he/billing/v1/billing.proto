@@ -11,9 +11,14 @@
 //     NO cost_usd field (Architect Q-CH: billing-svc is the sole cost authority).
 //   - BillingService.CheckBalance — a sync, PG-authoritative balance read for
 //     console / reconciliation callers (the hot-path 402 gate uses a fast Redis
-//     read, NOT this RPC). DeductBalance + CreateRechargeOrder from the §5.2
-//     sketch are DEFERRED (deduction is the async Kafka path in 7.1; recharge is
-//     Stories 7.3+).
+//     read, NOT this RPC). DeductBalance stays DEFERRED (deduction is the async
+//     Kafka path).
+//
+// Story 7.3 ADDS (additive — passes `buf breaking: FILE`):
+//   - BillingService.CreateRechargeOrder — realises the §5.2-sketched RPC.
+//     billing-svc is the SOLE writer of recharge_orders (Q-ORDEROWNER);
+//     payment-svc calls this to persist the PENDING order, then carries the
+//     returned order_id into the provider checkout as metadata.
 //
 // NEW package `he.billing.v1` (not `he.api.v1`) — since this is a NEW file (not
 // an edit to an existing proto), `buf breaking: FILE` is not crossed.
@@ -71,7 +76,26 @@ message CheckBalanceResponse {
   bool sufficient = 2;
 }
 
+// CreateRechargeOrderRequest creates a PENDING recharge order (Story 7.3,
+// Q-ORDEROWNER). external_order_id is NOT supplied at create — it is bound at
+// credit time from the provider-verified webhook (the UNIQUE(payment_provider,
+// external_order_id) fence guards against two orders binding one charge).
+message CreateRechargeOrderRequest {
+  string user_id = 1;
+  string amount = 2;           // string-decimal intent (Q-Spec-4)
+  string currency = 3;         // ISO-4217 (7.3 enables USD only — Q-CURRENCY)
+  string payment_provider = 4; // stripe / paypal
+}
+
+// CreateRechargeOrderResponse returns our internal order id + its initial status.
+message CreateRechargeOrderResponse {
+  string order_id = 1; // recharge_orders.id (UUID) — carried as provider metadata
+  string status = 2;   // always 'pending' at create
+}
+
 service BillingService {
   // CheckBalance returns the PG-authoritative current_usd for a user.
   rpc CheckBalance(CheckBalanceRequest) returns (CheckBalanceResponse);
+  // CreateRechargeOrder persists a PENDING recharge order (Story 7.3 additive).
+  rpc CreateRechargeOrder(CreateRechargeOrderRequest) returns (CreateRechargeOrderResponse);
 }
