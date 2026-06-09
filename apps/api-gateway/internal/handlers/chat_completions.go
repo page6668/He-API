@@ -29,16 +29,19 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"connectrpc.com/connect"
 
 	"github.com/he-api/he-api/apps/api-gateway/internal/adapterclient"
+	"github.com/he-api/he-api/apps/api-gateway/internal/billingemit"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/requestid"
 	"github.com/he-api/he-api/apps/api-gateway/internal/openaierr"
 	"github.com/he-api/he-api/apps/api-gateway/internal/routingclient"
 	adapterv1 "github.com/he-api/he-api/packages/proto/gen/go/he/adapter/v1"
+	billingv1 "github.com/he-api/he-api/packages/proto/gen/go/he/billing/v1"
 )
 
 // MockContent is the literal assistant-message content the mock returns.
@@ -239,6 +242,56 @@ func WithTokenDeducter(d TokenDeducter) ChatHandlerOption {
 	}
 }
 
+// WithUsageEmitter wires the Story-7.1 usage.recorded producer. After each
+// successful completion (non-stream mock + adapter, stream post-flush, and each
+// successful A/B leg) the handler emits a UsageEvent fire-and-forget (BR-D-4 —
+// a producer error never affects the already-served response).
+//
+// Nil is silently ignored — the constructor installs a billingemit.Nop default,
+// so a handler built without this option never emits (pre-7.1 behaviour).
+func WithUsageEmitter(e billingemit.UsageEmitter) ChatHandlerOption {
+	return func(h *ChatCompletionsHandler) {
+		if e != nil {
+			h.usageEmitter = e
+		}
+	}
+}
+
+// emitUsage builds and fire-and-forget-emits one usage.recorded UsageEvent for a
+// successfully-served (leg of a) completion. RAW inputs only — NO cost (Q-CH).
+// ledgerKey is the Q-ABKEY dedup key: he_request_id for a single request,
+// {he_request_id}:{leg} for an A/B leg. Called ONLY on success paths (BR-D-7: a
+// failed completion emits nothing).
+func (h *ChatCompletionsHandler) emitUsage(ctx context.Context, apiKeyID, servedModel string, usage ChatUsage, streaming, abLeg bool, legIndex int) {
+	heRequestID, _ := requestid.FromContext(ctx)
+	userID, _ := middleware.BearerUserIDFromContext(ctx)
+
+	ledgerKey := heRequestID
+	if abLeg {
+		ledgerKey = heRequestID + ":" + strconv.Itoa(legIndex)
+	}
+	var teamID string
+	if claims, ok := middleware.CacheValueFromContext(ctx); ok {
+		teamID = claims.TeamID
+	}
+
+	h.usageEmitter.Emit(ctx, &billingv1.UsageEvent{
+		LedgerKey:        ledgerKey,
+		HeRequestId:      heRequestID,
+		UserId:           userID,
+		ApiKeyId:         apiKeyID,
+		TeamId:           teamID,
+		Model:            servedModel,
+		PromptTokens:     uint32(usage.PromptTokens),
+		CompletionTokens: uint32(usage.CompletionTokens),
+		TotalTokens:      uint32(usage.TotalTokens),
+		IsStreaming:      streaming,
+		IsAbLeg:          abLeg,
+		Ts:               h.now().UTC().Format(time.RFC3339),
+		BillingMode:      billingv1.BillingMode_BILLING_MODE_PER_TOKEN,
+	})
+}
+
 // WithFailoverBudget overrides the Story-6.3 total wall-clock failover budget
 // (default FailoverBudget=30s). It exists so the budget-exhaustion behaviour
 // (Q-B/Q-G, 6.3-UNIT-018) is testable deterministically with a small budget +
@@ -262,6 +315,7 @@ type ChatCompletionsHandler struct {
 	tokenDeducter   TokenDeducter          // Story 5.3 — post-response TPM deduction; nil → nop
 	router          *routingclient.Decider // Story 6.2 — routing decision; default passthrough
 	failoverBudget  time.Duration          // Story 6.3 — total wall-clock failover budget (default FailoverBudget)
+	usageEmitter    billingemit.UsageEmitter // Story 7.1 — usage.recorded producer; nil → nop
 }
 
 // NewChatCompletionsHandler builds the handler. logger may be nil — falls
@@ -274,6 +328,7 @@ func NewChatCompletionsHandler(logger *slog.Logger, opts ...ChatHandlerOption) *
 		now:            time.Now,
 		tokenDeducter:  nopTokenDeducter{},
 		failoverBudget: FailoverBudget, // Story 6.3 default; WithFailoverBudget overrides for tests
+		usageEmitter:   billingemit.Nop{}, // Story 7.1 default; WithUsageEmitter wires Kafka
 	}
 	if h.logger == nil {
 		h.logger = slog.Default()
@@ -435,6 +490,8 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	// and-forget; errors are absorbed by the deducter (slog WARN inside
 	// the ratelimit package).
 	h.tokenDeducter.TPMDeduct(ctx, apiKeyID, resp.Usage.TotalTokens)
+	// Story 7.1 — usage.recorded emit on the mock success path (fire-and-forget).
+	h.emitUsage(ctx, apiKeyID, selected, resp.Usage, false, false, 0)
 }
 
 // routeOrWriteError runs the Story-6.2 routing decision and returns the model
@@ -537,6 +594,8 @@ func (h *ChatCompletionsHandler) serveAdapterNonStream(ctx context.Context, w ht
 	// is the ONLY TPMDeduct per request; failed attempts carry no usage and
 	// never reach here.
 	h.tokenDeducter.TPMDeduct(ctx, apiKeyID, resp.Usage.TotalTokens)
+	// Story 7.1 — usage.recorded emit on the adapter non-stream success path.
+	h.emitUsage(ctx, apiKeyID, servedModel, resp.Usage, false, false, 0)
 
 	h.logger.InfoContext(
 		ctx, "chat_completions_adapter",

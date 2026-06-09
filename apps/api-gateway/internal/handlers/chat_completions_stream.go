@@ -258,6 +258,20 @@ func (h *ChatCompletionsHandler) attemptAdapterStream(ctx context.Context, w htt
 	// fires once, on the committed stream only).
 	h.maybeStreamTPMDeduct(ctx, apiKeyID, req.Model, chunker.TailUsage(), streamErr, clientDisconnected)
 
+	// Story 7.1 — usage.recorded emit AFTER the final chunk with the final token
+	// totals (Decision 8B (j) — never pre-flush). Emitted ONLY on a clean
+	// completion (streamErr==nil, not client-disconnected, tail usage present);
+	// a failed/partial stream emits nothing (BR-D-7).
+	if streamErr == nil && !clientDisconnected {
+		if tu := chunker.TailUsage(); tu != nil {
+			h.emitUsage(ctx, apiKeyID, servedModel, ChatUsage{
+				PromptTokens:     int(tu.GetPromptTokens()),
+				CompletionTokens: int(tu.GetCompletionTokens()),
+				TotalTokens:      int(tu.GetTotalTokens()),
+			}, true, false, 0)
+		}
+	}
+
 	attrs := []slog.Attr{
 		slog.String("event", "chat_completions_stream"),
 		slog.String("model", req.Model),

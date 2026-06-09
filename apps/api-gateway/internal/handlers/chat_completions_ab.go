@@ -115,6 +115,16 @@ func (h *ChatCompletionsHandler) dispatchAB(w http.ResponseWriter, r *http.Reque
 	// total_tokens (two real upstream calls → two real costs). A failed leg
 	// carries no usage → not charged.
 	h.tokenDeducter.TPMDeduct(ctx, apiKeyID, total)
+
+	// Story 7.1 — A/B dual-billing: emit ONE usage.recorded event per SUCCESSFUL
+	// leg (is_ab_leg=true, ledger_key={he_request_id}:{i}) so billing-svc writes
+	// two ledger rows → summed deduction (parity with the 6.4 TPM dual-billing).
+	// A failed leg carries no usage → no event (BR-D-7 partial parity).
+	for i := range results {
+		if results[i].err == nil && results[i].resp != nil {
+			h.emitUsage(ctx, apiKeyID, results[i].model, results[i].resp.Usage, false, true, i)
+		}
+	}
 	h.logAB(ctx, legs, served, failed)
 }
 

@@ -10,6 +10,7 @@ use (
 	./apps/analytics-svc
 	./apps/api-gateway
 	./apps/auth-svc
+	./apps/billing-svc
 	./apps/notification-svc
 	./apps/routing-svc
 	./apps/sample-grpc-app

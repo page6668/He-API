@@ -5,9 +5,9 @@
 
 ## Registry Metadata
 
-**Last Updated**: 2026-05-26
-**Total Stories Tracked**: 8
-**Total Endpoints**: 7
+**Last Updated**: 2026-06-09
+**Total Stories Tracked**: 9
+**Total Endpoints**: 9 (+ GET /v1/balance, GET /v1/usage — Story 7.1)
 **Repository**: He-API
 **Mode**: monolith
 
@@ -24,6 +24,23 @@
 | POST | `/v1/me/keys` | JWT cookie (`middleware.JWTVerifier.RequireJWT`) + Origin-CSRF (inherited from gateway middleware chain) | **5.1** | **NEW** — API Key create. Body strict-field `{name}` only (BR-1.2); strict-reject unknown fields. Plaintext generation: `crypto/rand` 32B → base62 → `"he-" + 43 chars` → bcrypt cost=12 (security.md §8.2). Response carries plaintext ONCE (BR-1.5); subsequent paths surface only `key_prefix`. Rate-limit ceiling 10 creates/hour/user (BR-1.10 — `ratelimit:apikey:create:{user_id}` Redis INCR+EXPIRE 3600; fail-open per Story-2.3 OQ3 cascade). Kafka `audit.event api_key.created` emitted post-PG-commit (BR-3.5; graceful-degradation per Story-2.5 BR-2.9). `Cache-Control: no-store, no-cache, must-revalidate` + `Pragma: no-cache`. |
 | GET | `/v1/me/keys` | JWT cookie (`middleware.JWTVerifier.RequireJWT`) | **5.1** | **NEW** — API Key list. `key_hash` is INTENTIONALLY OMITTED from the SQL SELECT list (BR-2.5 defence-in-depth at the SQL boundary); `key_hash` field is also INTENTIONALLY ABSENT from the proto `ApiKeyEntry` message. Strict-reject any query-string parameter (BR-2.1 IDOR defence). LIMIT 100 rows; ORDER BY `created_at DESC, id ASC` (BR-2.3 stable tie-break). Money fields rendered as JSON strings (BR-2.10 — Stripe precedent; preserves NUMERIC(10,2) precision). Empty response `{"object":"list","data":[]}` (BR-2.8 — NEVER 404). `Cache-Control: no-store`. |
 | DELETE | `/v1/me/keys/{api_key_id}` | JWT cookie (`middleware.JWTVerifier.RequireJWT`) + Origin-CSRF | **5.1** | **NEW** — API Key revoke. Idempotent terminal-state UPDATE: re-revoke returns `was_already_revoked=true` + historical `revoked_at` (BR-3.3; NO new Kafka emit on idempotent path per BR-3.4). Anti-enumeration collapse: cross-user / nonexistent → SAME `404_api_key_not_found` envelope (BR-3.2 / Architect Q4 ratified). Sentinel write `SET auth:apikey:revoked:{api_key_id} 1 EX 300` for cross-pod cache-invalidation (BR-3.8 / Architect Q2 ratified option-c — gateway bearer_auth.go reads this on cache hit; ≤5s SLA for revoke→401 lag). Fail-open per BR-3.13: sentinel-write failure logs WARN + continues; lag falls back to security.md §8.2.1 5-min baseline. UUID-v4 path-shape validated; non-UUID → `400_invalid_request`. `Cache-Control: no-store`. |
+
+| GET | `/v1/balance` | Bearer API key (`middleware.RequireAPIKey`) | **7.1** | **NEW** — PG-authoritative balance read (BR-A-2 reads `he_api.balances`, NOT Redis). Returns `{"current_usd":"12.3400","currency":"USD","updated_at":<RFC3339>}`. Money is a JSON **string-decimal** (BR-A-3 / Q-Spec-4 — never a number). Absent row → `"0.0000"` (Q-LAZY lazy-create). |
+| GET | `/v1/usage` | Bearer API key (`middleware.RequireAPIKey`) | **7.1** | **NEW** — current-UTC-month aggregate from `he_api.usage_ledger` (BR-A-5, `ts >= date_trunc('month', now() AT TIME ZONE 'UTC')` — aligns with the 5.4 reset boundary). Returns `{"period":"2026-06","total_cost_usd":"4.5600","total_requests":N,"total_tokens":N,"by_model":[{model,cost_usd,requests,tokens}]}`. String-decimal money. Zero rows → zero-aggregate. |
+| POST | `/v1/chat/completions` (7.1 behaviour change) | _(see row above)_ | **7.1** | **Story 7.1** adds: (a) a pre-flight `402_balance_insufficient` gate (Q-GATE — fast Redis `balance:user:{id}:realtime` read BEFORE dispatch; FAIL-OPEN on Redis outage, BR-A-4); (b) a fire-and-forget `usage.recorded` Kafka emit on EVERY success path (non-stream mock + adapter, stream post-final-chunk, A/B one-per-leg) — RAW inputs only, NO cost (Q-CH); a producer error never affects the 200 response (BR-D-4). NO change to the OpenAI-compatible response body. |
+
+### Internal Connect/gRPC RPCs (billing-svc — NEW, Story 7.1)
+
+| Service | RPC | Story | Notes |
+|---------|-----|-------|-------|
+| `he.billing.v1.BillingService` | `CheckBalance(CheckBalanceRequest{user_id}) returns (CheckBalanceResponse{current_usd: string, sufficient: bool})` | **7.1** | **NEW** — sync, PG-authoritative balance read for console / reconciliation callers (the hot-path 402 gate uses Redis, NOT this RPC). `current_usd` is string-decimal (Q-Spec-4); `sufficient = current_usd > 0` (hard-zero, BR-A-6). NEW package `he.billing.v1` (`buf breaking: FILE` not crossed). `DeductBalance` / `CreateRechargeOrder` from the §5.2 sketch are DEFERRED. |
+
+### Kafka topics (NEW, Story 7.1)
+
+| Topic | Producer | Consumer(s) | Story | Notes |
+|-------|----------|-------------|-------|-------|
+| `usage.recorded` | **api-gateway** (Q-PRODUCER) | billing-svc (7.1) · audit-svc/analytics-svc (Epic 9) | **7.1** | `UsageEvent` payload (protojson) — RAW token inputs, NO cost (Q-CH). Producer config `acks=all` (Q-KCLIENT). 7-day retention. |
+| `usage.recorded.dlq` | billing-svc | _(alerting)_ | **7.1** | Dead-letter for `ErrNoPricing` / malformed events (Q-DLQ — NOT infinite backoff). |
 
 ### Internal Connect/gRPC RPCs (auth-svc)
 

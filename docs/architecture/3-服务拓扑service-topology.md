@@ -39,7 +39,7 @@
 7. 流式响应反向链路:
    adapter → api-gateway → safety-svc 出参过滤 (流式 chunk-by-chunk) → client
 8. 异步事件:
-   - billing-svc 写入 Kafka topic `usage.recorded`
+   - api-gateway 写入 Kafka topic `usage.recorded` (Story 7.1 Q-PRODUCER — 仅网关在响应时持有 per-request token 计数 + he_request_id + selected_model；billing-svc 是消费者，详见 data-models §4.4)
    - billing-svc 消费 Kafka 扣减余额 (PostgreSQL)
    - audit-svc 消费 Kafka 写入 ClickHouse `request_logs`
    - notification-svc 监听余额阈值，触发预警邮件

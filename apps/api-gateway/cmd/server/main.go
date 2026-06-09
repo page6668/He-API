@@ -26,12 +26,15 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/he-api/he-api/apps/api-gateway/internal/adapterclient"
+	"github.com/he-api/he-api/apps/api-gateway/internal/billingemit"
 	"github.com/he-api/he-api/apps/api-gateway/internal/handlers"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
+	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/billinggate"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/cors"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/keypolicy"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/ratelimit"
@@ -43,7 +46,9 @@ import (
 	"github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1/authv1connect"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/notification/v1/notificationv1connect"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+	"github.com/segmentio/kafka-go"
 	"go.opentelemetry.io/otel"
 )
 
@@ -310,11 +315,30 @@ func main() {
 	// Story 6.2 — routing decision client. ROUTING_SVC_ENDPOINT unset → nil
 	// client → the Decider passes req.Model through (pre-6.2 behaviour).
 	routingDecider := routingclient.NewDecider(routingclient.LoadFromEnv(), logger)
+
+	// Story 7.1 — usage.recorded PRODUCER (Q-PRODUCER: the gateway emits, billing-
+	// svc consumes). HE_API_KAFKA_BROKERS unset → Nop emitter (no emission). The
+	// writer is acks=all (Q-KCLIENT — a lost charge event is unacceptable).
+	var usageEmitter billingemit.UsageEmitter = billingemit.Nop{}
+	if brokersEnv := os.Getenv("HE_API_KAFKA_BROKERS"); brokersEnv != "" {
+		usageWriter := &kafka.Writer{
+			Addr:         kafka.TCP(splitCSV(brokersEnv)...),
+			Topic:        billingemit.Topic,
+			Balancer:     &kafka.Hash{},
+			RequiredAcks: kafka.RequireAll, // acks=all — money path (Q-KCLIENT)
+		}
+		usageEmitter = billingemit.NewKafkaEmitter(usageWriter, logger)
+		logger.Info("usage.recorded producer wired", slog.String("topic", billingemit.Topic))
+	} else {
+		logger.Warn("HE_API_KAFKA_BROKERS unset — usage.recorded emission disabled")
+	}
+
 	chatCompletions := handlers.NewChatCompletionsHandler(
 		logger,
 		handlers.WithAdapterRegistry(adapterRegistry),
 		handlers.WithRouter(routingDecider),
 		handlers.WithTokenDeducter(rateLimitMW),
+		handlers.WithUsageEmitter(usageEmitter),
 	)
 
 	// Story 5.2 — key-policy enforcement gates (AC2 IP whitelist / AC3 model
@@ -350,12 +374,36 @@ func main() {
 		Notifier:    capNotifier,
 	})
 
+	// Story 7.1 (Q-GATE) — pre-flight 402 balance gate. Reads the fast Redis
+	// realtime mirror (balance:user:{id}:realtime); rejects when ≤ 0 BEFORE
+	// upstream dispatch; FAIL-OPEN on a Redis outage (BR-A-4). Innermost wrap
+	// around the chat handler so it runs just before dispatch with the resolved
+	// user_id in context.
+	billingGate := billinggate.New(billinggate.Options{
+		Logger: logger,
+		Reader: func(ctx context.Context, userID string) (string, bool, error) {
+			return usage.ReadRealtimeBalance(ctx, keyPolicyRedis, userID)
+		},
+	})
+
 	// Story 5.3 BR-X.4 / Architect Q9 — ratelimit runs AFTER bearer-auth
 	// (needs the resolved api_key_id from context) and BEFORE the
 	// chat-completions handler. Story 5.2 keypolicy sits between bearer-auth
-	// and ratelimit.
+	// and ratelimit. Story 7.1 billingGate is the innermost wrap (pre-dispatch).
 	mux.Handle("POST /v1/chat/completions",
-		bearerAuth.RequireAPIKey(keyPolicy(rateLimitMW.Wrap(chatCompletions))))
+		bearerAuth.RequireAPIKey(keyPolicy(rateLimitMW.Wrap(billingGate(chatCompletions)))))
+
+	// Story 7.1 (AC3) — read-only billing endpoints. Mounted behind bearer-auth
+	// (user_id from the validated key). Wired only when a PG DSN is configured;
+	// without it the routes are absent (404) rather than nil-panicking.
+	if billingPool := buildBillingPool(logger); billingPool != nil {
+		billingRead := handlers.NewBillingReadHandler(logger, billingPool)
+		mux.Handle("GET /v1/balance", bearerAuth.RequireAPIKey(http.HandlerFunc(billingRead.Balance)))
+		mux.Handle("GET /v1/usage", bearerAuth.RequireAPIKey(http.HandlerFunc(billingRead.Usage)))
+		logger.Info("billing read endpoints wired (GET /v1/balance, GET /v1/usage)")
+	} else {
+		logger.Warn("HE_API_DB_POSTGRES_URI unset — GET /v1/balance + /v1/usage disabled")
+	}
 
 	// Story 3.5 — /v1/models (static catalogue) + /v1/embeddings (mock
 	// vector). Per-route bearer-auth wrap mirrors Story 3.2 BR-1.4 +
@@ -551,6 +599,39 @@ func parseRateLimitEnv(name string, fallback, maxBound int) (int, error) {
 		return 0, fmt.Errorf("env %s=%d out of range [1, %d]", name, v, maxBound)
 	}
 	return v, nil
+}
+
+// splitCSV splits a comma-separated env value into trimmed non-empty parts.
+func splitCSV(v string) []string {
+	parts := strings.Split(v, ",")
+	out := parts[:0]
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// buildBillingPool builds the read pool for GET /v1/balance + /v1/usage from
+// HE_API_DB_POSTGRES_URI. Returns nil (endpoints disabled) when unset / on a
+// parse/connect error — a missing billing pool never blocks gateway boot.
+func buildBillingPool(logger *slog.Logger) *pgxpool.Pool {
+	uri := os.Getenv("HE_API_DB_POSTGRES_URI")
+	if uri == "" {
+		return nil
+	}
+	cfg, err := pgxpool.ParseConfig(uri)
+	if err != nil {
+		logger.Error("parse postgres uri — billing read endpoints disabled", slog.String("error", err.Error()))
+		return nil
+	}
+	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
+	if err != nil {
+		logger.Error("create postgres pool — billing read endpoints disabled", slog.String("error", err.Error()))
+		return nil
+	}
+	return pool
 }
 
 // mustRedisOptions parses a Redis URL; on parse failure it logs WARN and

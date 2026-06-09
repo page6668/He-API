@@ -1,0 +1,77 @@
+// billing.proto — He-API billing contract for Epic 7 (计费、定价与多通道支付).
+// Realises the rest-api-spec.md §5.2 `BillingService` sketch (pre-declared,
+// never implemented) as a concrete proto under the Story-1.5-ratified layout
+// `packages/proto/he/<domain>/v1/<service>.proto`.
+//
+// Story 7.1 defines:
+//   - UsageEvent — the `usage.recorded` Kafka payload. The api-gateway is the
+//     PRODUCER (Architect Q-PRODUCER — only the gateway holds per-request token
+//     counts + he_request_id at response time); billing-svc/audit-svc/analytics-
+//     svc are CONSUMERS (data-models §4.4). The event carries RAW inputs ONLY —
+//     NO cost_usd field (Architect Q-CH: billing-svc is the sole cost authority).
+//   - BillingService.CheckBalance — a sync, PG-authoritative balance read for
+//     console / reconciliation callers (the hot-path 402 gate uses a fast Redis
+//     read, NOT this RPC). DeductBalance + CreateRechargeOrder from the §5.2
+//     sketch are DEFERRED (deduction is the async Kafka path in 7.1; recharge is
+//     Stories 7.3+).
+//
+// NEW package `he.billing.v1` (not `he.api.v1`) — since this is a NEW file (not
+// an edit to an existing proto), `buf breaking: FILE` is not crossed.
+//
+// Toolchain note: buf/protoc cannot run in this environment
+// ([[project_toolchain_env_limits]]); the vendored *.pb.go is hand-authored from
+// a descriptorpb-built FileDescriptorProto and verified by a round-trip
+// marshal/unmarshal test (7.1-CONTRACT-002).
+
+syntax = "proto3";
+
+package he.billing.v1;
+
+option go_package = "github.com/he-api/he-api/packages/proto/gen/go/he/billing/v1;billingv1";
+
+// BillingMode selects the cost model. PER_TOKEN is the only billed mode in 7.1;
+// PER_CALL is reserved (Architect Q-PERCALL — the model_pricing.per_call_price_usd
+// column lands additive+nullable but UNWIRED). UNSPECIFIED(0) ≡ PER_TOKEN.
+enum BillingMode {
+  BILLING_MODE_UNSPECIFIED = 0; // proto3 zero-value; engine treats it as PER_TOKEN
+  BILLING_MODE_PER_TOKEN = 1;
+  BILLING_MODE_PER_CALL = 2; // reserved — OFF in 7.1
+}
+
+// UsageEvent is the `usage.recorded` Kafka payload (JSON-serialized on the wire,
+// mirroring the notification-svc audit.event precedent). RAW inputs only — each
+// consumer computes cost from the shared pricing logic (Q-CH).
+message UsageEvent {
+  // ledger_key is the exactly-once dedup key (Q-ABKEY): he_request_id for a
+  // single request, `{he_request_id}:{leg_index}` for an A/B leg.
+  string ledger_key = 1;
+  string he_request_id = 2;
+  string user_id = 3;
+  string api_key_id = 4;
+  string team_id = 5; // nullable — empty string when absent
+  string model = 6;
+  uint32 prompt_tokens = 7;
+  uint32 completion_tokens = 8;
+  uint32 total_tokens = 9;
+  bool is_streaming = 10;
+  bool is_ab_leg = 11;
+  string ts = 12; // RFC3339 event timestamp (post-flush)
+  BillingMode billing_mode = 13;
+}
+
+// CheckBalanceRequest asks for a user's PG-authoritative balance.
+message CheckBalanceRequest {
+  string user_id = 1;
+}
+
+// CheckBalanceResponse carries string-decimal money (Q-Spec-4 — never a JSON
+// number) + a sufficiency flag (current_usd > 0).
+message CheckBalanceResponse {
+  string current_usd = 1; // string-decimal, e.g. "12.3400"
+  bool sufficient = 2;
+}
+
+service BillingService {
+  // CheckBalance returns the PG-authoritative current_usd for a user.
+  rpc CheckBalance(CheckBalanceRequest) returns (CheckBalanceResponse);
+}

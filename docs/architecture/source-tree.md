@@ -14,7 +14,11 @@ he-api/                                  (Monorepo, Turborepo)
 │   │   ├── go.mod
 │   │   └── Dockerfile
 │   ├── auth-svc/                        gRPC service
-│   ├── billing-svc/
+│   ├── billing-svc/                     Go service (Story 7.1 — 计费引擎: usage.recorded consumer + BillingService.CheckBalance)
+│   │   ├── cmd/server/main.go
+│   │   ├── internal/{pricing,ledger,consumer,balance,grpc,server}/
+│   │   ├── go.mod
+│   │   └── cmd/server/Dockerfile
 │   ├── payment-svc/
 │   ├── routing-svc/
 │   ├── safety-svc/

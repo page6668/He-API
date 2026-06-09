@@ -1,0 +1,118 @@
+schema: 1
+story: "7.1"
+story_title: "计费引擎（按 token / 按调用 + markup 5-15%）"
+gate: "PASS"
+status_reason: "All 3 ACs implemented and independently verified at source + test on the money path. billing-svc (pricing/ledger/consumer/grpc) + api-gateway (billingemit/billinggate/usage/handlers) + proto he/billing/v1 suites all green; pricing 84.0% + ledger 84.6% coverage (≥80% T5.1). Every money-correctness invariant proven by a real (non-stub) test: AC1 golden vectors byte-exact (qwen-max 1500/800→0.0343, deepseek-v3→0.0322, round-to-zero→0.0000) with the M-1 float-slip guard asserting 0.00275→HALF-UP 0.0028 vs 0.0027 truncation; AC2 EXACTLY-ONCE (ON CONFLICT(ledger_key)→0 rows→rollback, no second deduction), ATOMICITY (balance-update error→rollback BOTH, no orphan/phantom), PG-down→no-ACK, Redis-down-post-commit→PG charge stands, lazy UPSERT, NoPricing→no-tx-DLQ; AC3 string-money (StringFixed(4)), PG-authoritative balance read, current-UTC-month usage aggregate, 402 pre-flight gate fail-OPEN at hard-zero. All 14 Architect Round-1 rulings confirmed in code: M-1 (shopspring/decimal end-to-end, NEVER float64), M-2 (api_keys cap counter LEFT at NUMERIC(10,2); reconcile target = SUM(usage_ledger.cost_usd) vs balances), Q-PRODUCER (gateway producer + topology §3.2 doc fix landed), Q-CH (UsageEvent carries NO cost_usd field — billing-svc sole authority), Q-LEDGER, Q-ABKEY (composite ledger_key TEXT PK), Q-RECON (SET-from-PG, not DECRBYFLOAT), Q-KCLIENT (segmentio + RequiredAcks=RequireAll on the money producer), Q-ROUND (HALF-UP), Q-DECIMAL, Q-LAZY, Q-DLQ (usage.recorded.dlq), Q-GATE (fail-open), Q-PERCALL (nullable column additive, OFF/replace). Emit hooks fire on all success paths (non-stream/stream-post-final-chunk/A/B-per-leg); failure path emits nothing (no-charge); consumer commits offset ONLY after a successful apply. gofmt + go vet clean. Residual: service-level E2E (T4.1-4.3 reconciliation/A/B/negative-bound) + atlas migration round-trip + golangci-lint are docker/atlas/golangci-gated and unexecuted locally (auto-memory project_toolchain_env_limits) — the behaviours hold by construction (ledger-insert + balance-UPDATE one atomic tx) and are covered at the unit/integration tier; MUST run in CI before deploy (non-blocking, ratified env precedent mirroring 6.2/6.3/6.4)."
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-09T00:00:00Z"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "HIGH"
+  cached_review_mode: "full_testing"
+  cached_project_type: "web_backend"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+# No blocking issues. Items below are low/medium-severity notes / CI-execution follow-ups (env-limited), not defects.
+top_issues:
+  - id: "ENV-001"
+    severity: medium
+    finding: "TestColdStart (api-gateway/cmd/server) fails ONLY under full-module parallel-compile contention: P95=2.67s>1000ms budget, but 9 of 10 samples are ~17-23ms and ONLY the first sample is 4.83s (cold-cache first-iteration outlier under concurrent package builds). Passes 3/3 isolated (~2s, samples ~17ms). Confirmed ZERO 7.1 coupling: the new gateway PG pool (buildBillingPool) is env-gated on HE_API_DB_POSTGRES_URI (unset in the test → pool skipped, warning logged) and segmentio kafka.NewWriter dials lazily — 7.1 adds no boot work in this test. Identical flake was recorded against Story 6.4 (gate 6.4 ENV-001) — a pre-existing recurring env flake, NOT a 7.1 regression."
+    suggested_action: "Track separately as a cold-start probe/perf flake under parallel compile (e.g. discard the first warmup sample or compute P95 over isolated runs); unrelated to Story 7.1."
+  - id: "CI-001"
+    severity: low
+    finding: "T4.1-T4.3 service-level E2E (reconciliation invariant SUM(ledger.cost)==amount-deducted / A/B dual-billing two-rows-summed / negative-balance-bound) are correctly left UNCHECKED and deferred to CI because docker/testcontainers cannot run locally (auto-memory project_toolchain_env_limits). The behaviours are covered at the unit/integration tier: the reconciliation invariant holds BY CONSTRUCTION (ledger-insert + balance-UPDATE are ONE atomic tx — INT-001/004), A/B dual-billing via the composite ledger_key + per-leg emit (chat_completions_ab_emit_test), negative-bound via lazy UPSERT (no floor) + hard-zero fail-open gate (billinggate BOUNDARY-004)."
+    suggested_action: "Run the testcontainer E2E suite (real Kafka+PG+Redis) in CI for the over-the-wire reconciliation + dual-billing + negative-bound proof before deploy."
+  - id: "CI-002"
+    severity: low
+    finding: "T5.2 migration round-trip (atlas migrate up/down on a scratch PG) + atlas.sum consistency + golangci-lint are atlas/docker/golangci-gated and unexecuted locally; 0008 is additive + reversible BY CONSTRUCTION (2× CREATE TABLE + 1 nullable column ADD; down = DROP column + 2 tables; api_keys.current_month_cost_usd untouched per M-2). atlas.sum carries a placeholder hash regenerated by CI/operator per repo convention. gofmt + go vet ARE clean locally."
+    suggested_action: "Run atlas migrate up/down + atlas hash + golangci-lint in CI; regenerate the atlas.sum row."
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 7             # billing-svc{pricing,ledger,consumer,grpc} + api-gateway{billingemit,billinggate,usage,handlers} + proto he/billing/v1 (all green)
+    passed_count: 7
+    failed_count: 0
+    skipped_count: 0
+    pass_rate: 100
+    coverage_percentage: 84   # internal/pricing 84.0% + internal/ledger 84.6% (both ≥80% T5.1 money-path target)
+    failed_tests: []
+  e2e:
+    executed: false
+    passed: true
+    skipped: true
+    skip_reason: "Backend money-path story — no UI/browser tier (test-design declares browser E2E 0). Service-level E2E (testcontainers: real Kafka+PG+Redis) is docker-gated and deferred to CI (CI-001), mirroring the ratified 6.2/6.3/6.4 env precedent. End-to-end reconciliation/atomicity is proven at the unit/integration tier (one atomic tx)."
+    scenarios_tested: 0
+    scenarios_passed: 0
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: ""
+  issues: []
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 7
+  security_sensitive: false   # financial_focus: true — money-correctness lane substitutes for the security lane
+  dev_gate_score: 90
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 1, low: 2 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "Run the docker/atlas-gated service E2E (CI-001) + migration round-trip/golangci (CI-002) in CI before deploy."
+      - "Track the TestColdStart parallel-compile flake (ENV-001) separately — zero 7.1 coupling (PG pool env-gated, kafka writer lazy)."
+      - "Negative-balance window is bounded by in-flight cost × consumer lag (fail-open hard-zero gate + 5.4 cap); a true balance floor is Story 7.8 scope — carry as Epic-7 backlog."
+      - "Q-EMIT-DURABILITY: no outbox in 7.1 — a truly-lost usage.recorded event is a missed charge bounded by acks=all + retry + he_billing_emit_failures_total alerting; add an outbox only if emit-loss is observed (fast-follow)."
+
+quality_score: 92
+
+# Verification trace (Step 4.6 AC coverage)
+evidence_trace:
+  ac_covered: [1, 2, 3]
+  ac_gaps: []
+  invariants_verified:
+    ac1_decimal_not_float_M1: "pricing.ComputeCost (pricing.go:109-137) is pure shopspring/decimal end-to-end — base=prompt/1000×in+completion/1000×out, ×(1+markup/100), .Round(4) HALF-UP. NO float64 on the money path. UNIT-014 float-slip guard asserts 0.00275→0.0028 (HALF-UP) and that truncation would give 0.0027 — fails loudly if float64 is reintroduced (the M-1 routing-svc REUSE trap)."
+    ac1_golden_vectors: "TestComputeCost_GoldenVectors (pricing_test.go:42-82) — UNIT-004 qwen-max(1500,800,10%)=0.0343 (AC1 worked example), UNIT-005 deepseek-v3(10000,5000,15%)=0.0322 (AC1 Example 1), UNIT-011 round-to-zero(1,0)=0.0000 (AC1 Example 2 + Architect Low — explicitly present), UNIT-006/007/008 markup 5/10/15 boundaries, UNIT-009 zero-completion, UNIT-013 large-token 17.6000. UNIT-012 HALF-UP boundary 0.00275→0.0028. All green."
+    ac1_no_pricing_and_markup_range: "UNIT-015 unknown model → typed ErrNoPricing (nil snapshot too, no panic); UNIT-016 markup ∉[5,15] → MarkupOutOfRange flag set + billed AS-IS (4.99→0.0105, 15.01→0.0115), never silently dropped. Caller (ledger.Apply:149-156) emits slog billing_markup_out_of_range. ErrNoPricing → OutcomeNoPricing → consumer DLQ (never zero-charge)."
+    ac1_purity_BR_C_5: "TestComputeCost_Purity (50 iterations identical) + ComputeCost takes no clock/no I/O — the pure golden-vector seam. UNIT-017 confirms per_call column is read ONLY in PER_CALL mode (OFF in 7.1: PER_TOKEN ignores it → 0.0343 not 0.5000) and REPLACES (Q-PERCALL)."
+    ac2_exactly_once_BR_D_1: "ledger.deduct (ledger.go:198-219) INSERT he_api.usage_ledger ... ON CONFLICT (ledger_key) DO NOTHING; tag.RowsAffected()==0 → OutcomeDuplicate, rollback, NO balance UPDATE/commit/api_keys. INT-002 asserts redelivery → ExpectExec INSERT(0 rows)+ExpectRollback, no second deduction, Duplicate outcome."
+    ac2_atomicity_BR_D_2: "INSERT ledger + balance UPSERT share ONE tx (Begin→Exec→QueryRow→Commit; defer Rollback safety net). INT-004 injects a balance-INSERT error → ExpectRollback, NO commit, NO api_keys increment, Apply surfaces error so the consumer does NOT ACK. No orphan ledger row, no phantom charge."
+    ac2_pg_authoritative_BR_D_3: "mirror (mirror.go:41-60) runs POST-commit best-effort: Redis SET balance:user:{id}:realtime = post-deduction PG value (Q-RECON SET-from-PG, NOT DECRBYFLOAT), INCRBYFLOAT usage:apikey:{id}:month_cost_usd, UPDATE api_keys.current_month_cost_usd. INT-006 closes Redis pre-fan-out → Apply still returns Applied (no error); the durable PG charge stands, mirror failure swallowed + he_billing_redis_mirror_failed_total."
+    ac2_lazy_upsert_Q_LAZY: "deductBalanceSQL = INSERT he_api.balances VALUES(user,0-cost) ON CONFLICT(user_id) DO UPDATE SET current_usd=b.current_usd-cost RETURNING current_usd::text. INT-007 absent row → created at -0.0343, realtime mirror=-0.0343 (lazy negative). No backfill migration."
+    ac2_offset_after_commit_BR_D_2: "consumer.go FetchMessage does NOT auto-commit; CommitMessages called ONLY after a successful apply (process→(true,nil)→commit; PG fault→(false,err)→retain offset→Kafka redelivers→ledger dedups). NoPricing/malformed → DLQ park usage.recorded.dlq + commit (Q-DLQ, no head-of-line block); DLQ-write failure retains offset (BLIND-ERROR-003)."
+    ac2_producer_fire_and_forget_BR_D_4: "billingemit.KafkaEmitter.Emit (emitter.go:81-102) marshals protojson then writes in a DETACHED goroutine (context.WithoutCancel + 10s bounded timeout) — never blocks/​fails the already-flushed response; marshal/write error → swallowed + he_billing_emit_failures_total + slog billing_emit_failed. INT-013 fire-and-forget. RAW event, NO cost_usd field (Q-CH). main.go RequiredAcks=kafka.RequireAll (Q-KCLIENT money path)."
+    ac2_emit_all_success_paths: "emitUsage call sites: non-stream chat_completions.go:494/598, stream chat_completions_stream.go:267 (post-final-chunk, final token totals), A/B chat_completions_ab.go:125 (one event per SUCCESSFUL leg, abLeg=true legIndex=i → composite ledger_key). Failed completion emits nothing (BR-D-7 no-charge). INT-014 one-event, INT-016 A/B dual-billing, INT-017 no-event-on-failure."
+    ac3_string_money_BR_A_3: "billing_read.go moneyString (181-187) → decimal.StringFixed(4) → '12.3400'; balanceResponse.CurrentUSD/usageResponse.TotalCostUSD/usageByModel.CostUSD are JSON `string` fields, never numbers. INT-021/UNIT-019 string-money assertion."
+    ac3_pg_authoritative_read_BR_A_2: "GET /v1/balance reads he_api.balances (current_usd::text) — PG authoritative, NOT Redis (BR-A-2). Lazily-absent row (pgx.ErrNoRows) → 200 {current_usd:'0.0000'} (Q-LAZY). INT-022 absent-row."
+    ac3_usage_month_aggregate_BR_A_5: "GET /v1/usage aggregates usage_ledger WHERE ts >= date_trunc('month', now() AT TIME ZONE 'UTC') — current-UTC-month, aligned with the 5.4 cap reset; totals + per-model breakdown, zero-aggregate → '0.0000'/0. INT-023/024."
+    ac3_preflight_gate_fail_open_Q_GATE_BR_A_4: "billinggate.New (billinggate.go:47-100) reads balance:user:{id}:realtime (fast Redis, NO billing-svc round-trip); bal ≤ 0 → 402 402_balance_insufficient (§5.1.2) BEFORE upstream dispatch. FAIL-OPEN on every degraded path: nil reader / no-user / reader-error / not-found / parse-error → allow + he_billing_gate_fail_open_total. Hard-zero threshold (BR-A-6). INT-026/027/028/029 + BOUNDARY-004 zero-boundary."
+    contract_proto_roundtrip: "packages/proto/he/billing/v1 round-trip (CONTRACT-002/003) green — hand-authored pb.go (descriptorpb+proto.Marshal byte-exact wire) verified; UsageEvent has NO cost_usd field (Q-CH); CheckBalance gRPC PG-authoritative (CONTRACT-001 round-trip/absent/negative/empty)."
+    migration_0008_additive_M2: "0008_create_balances.sql — CREATE he_api.balances (user_id PK, current_usd NUMERIC(12,4)) + he_api.usage_ledger (ledger_key TEXT PK Q-ABKEY, he_request_id non-unique index, cost_usd NUMERIC(12,4)) + idx_user_ts/idx_he_request_id + ALTER model_pricing ADD per_call_price_usd NUMERIC(10,6) nullable. api_keys.current_month_cost_usd LEFT at NUMERIC(10,2) (M-2 no-widen — NOT the reconcile target). Additive + reversible + non-destructive."
+  architect_rulings_folded:
+    M1_decimal_not_float: "shopspring/decimal end-to-end; UNIT-014 float-slip guard. VERIFIED — no float64 on the money path."
+    M2_cap_counter_precision: "api_keys.current_month_cost_usd untouched at NUMERIC(10,2); reconciliation invariant compares SUM(usage_ledger.cost_usd) vs balances.current_usd (both NUMERIC(12,4)). VERIFIED at mirror.go + 0008 + billing_read usage SQL."
+    Q_PRODUCER_doc_fix: "topology §3.2 L42 corrected to 'api-gateway 写入 Kafka topic usage.recorded (Story 7.1 Q-PRODUCER ...)'. VERIFIED."
+    Q_CH_raw_event: "UsageEvent carries raw tokens/model/mode only, NO cost_usd; billing-svc sole cost authority. VERIFIED in proto + emitter."
+    Q_KCLIENT_acks_all: "main.go usageWriter RequiredAcks=kafka.RequireAll (NOT acks=1) on the money producer. VERIFIED."
+  integrity_check: "Dev claimed pricing 84.0% + ledger 84.6% — QA independent coverage run matches exactly (no discrepancy). Dev-flagged docker/atlas/golangci env-limits + the TestColdStart flake both confirmed accurate. No FAIL-but-claimed-PASS, no stub tests (INT-001 asserts the golden 0.0343 flows as the exact balance bind value + mirror 9.9657)."
+  regression: "Full api-gateway suite green EXCEPT the pre-existing TestColdStart parallel-compile flake (ENV-001, zero 7.1 coupling — PG pool env-gated, kafka writer lazy). 6.2 routing pricing-snapshot pattern (structural reuse, Decimal not float per M-1), 5.2 month-cost counter (7.1 is the writer), 5.4 cap counter (7.1 increments, untouched type) all consistent; no billing-path regression in handlers/middleware/streaming/usage packages (all ok)."
