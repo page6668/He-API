@@ -123,6 +123,7 @@ Each event is `data: <single-line JSON>\n\n` per W3C EventSource §9.2.6. The te
 | 403 | `403_model_not_in_scope` | Key 无权调用该模型 |
 | 400 | `400_content_filter` | 命中内容安全过滤 |
 | 400 | `400_invalid_request` | 参数错误 |
+| 400 | `400_unsupported_currency` | GET /v1/balance\|usage — `?currency=` 不在 {usd, rmb}（fail-loud，无静默回退 USD）— Story 7.2 Architect M-1 ratified |
 | 429 | `429_rate_limit_qps` | QPS 超限（每秒请求数）|
 | 429 | `429_rate_limit_rpm` | RPM 超限（每分钟请求数）— Story 5.3 Architect Q5 ratified |
 | 429 | `429_rate_limit_tpm` | TPM 超限（每分钟上游 token 数）|
@@ -190,9 +191,17 @@ POST /v1/embeddings                文本 embedding
 POST /v1/audio/transcriptions      ASR (Whisper 兼容)
 POST /v1/audio/speech              TTS
 POST /v1/images/generations        V1.1
-GET  /v1/usage                     查询本月用量（自定义端点）
-GET  /v1/balance                   查询余额
+GET  /v1/usage                     查询本月用量（自定义端点；Story 7.2：`?currency=usd|rmb` 币种感知）
+GET  /v1/balance                   查询余额（Story 7.2：`?currency=usd|rmb` 币种感知）
 ```
+
+**Story 7.2 — `GET /v1/balance` + `GET /v1/usage` 币种感知（additive，无新端点）**
+
+- 选择器：stateless `?currency=usd|rmb`（缺省 `usd`；大小写不敏感、trim；Q-PREF）。MVP 仅支持 `{usd, rmb}`，其它值 → `400_unsupported_currency`（在任何 PG 读取之前 reject，BR-B-5）。
+- 追加字段（全部 string-decimal，Q-Spec-4 / BR-B-4）：`currency`（复用 7.1 seam，现反映选择）、`current_display`/`total_cost_display`、`fx_rate`（8dp）、`fx_as_of`（RFC3339，= 汇率行 `fetched_at`，暴露 staleness，BR-B-8）。冷启动降级时追加 `fx_degraded:true`。
+- USD 缺省路径与 7.1 字节兼容（`fx_rate:"1.00000000"`、`current_display==current_usd` 按 4dp echo SoT，BR-B-7）。RMB 路径 USD→CNY HALF-UP 2dp（display-only，Q-SOT — `current_usd` 永远在场，BR-B-3）。
+- **混合币种约定（M-2 / Q-APISHAPE，MVP cut）**：`?currency=rmb` 时仅顶行 `total_cost_display` 转 RMB，`by_model[].cost_usd` 仍为 USD（per-model 转换 deferred 到 Console story）。
+- 换算仅 read-side display（Q-SOT）：扣费/ledger/402 预检/对账与 7.1 字节一致，绝不写 `balances.*` / `usage_ledger`。汇率来自网关 `internal/fxrate` 进程内快照（boot+60s，最新行 `ORDER BY fetched_at DESC LIMIT 1`），绝不在读热路径调用 FX provider（BR-C-5）。
 
 ## 5.2 内部 gRPC 服务（protobuf 节选）
 
@@ -266,6 +275,7 @@ service QuotaService {
 
 | Date | Story | Change |
 |------|-------|--------|
+| 2026-06-09 | Story 7.2 (Dev / Linus) | **§5.1.2 NEW envelope code**: `400_unsupported_currency` (Architect M-1 ratified — `?currency=` ∉ {usd, rmb}; fail-loud, no silent USD fallback, BR-B-5). Registered in the runtime mirror `apps/api-gateway/internal/openaierr.CodeMetadata` as `invalid_request_error` per the Story-3.6 single-canonical-writer rule (NOT spec-table only). **§5.1.3 `GET /v1/balance` + `GET /v1/usage` EXTENDED (additive, NO new endpoint)**: currency-aware via stateless `?currency=usd\|rmb` (USD default, case-insensitive, trimmed — Q-PREF). Additive string-decimal fields `currency`/`current_display`/`total_cost_display`/`fx_rate`(8dp)/`fx_as_of`(RFC3339 = rate `fetched_at`) + `fx_degraded` on the cold-start guard (BR-B-4). USD default byte-compatible with 7.1 (`fx_rate:"1.00000000"`, display echoes the 4dp SoT — BR-B-7; verified extra-field-tolerant, 4.7-CONTRACT-001 precedent). RMB = USD→CNY HALF-UP 2dp (Q-ROUND); `current_usd` always present (BR-B-3). **Mixed-currency MVP cut (M-2 / Q-APISHAPE)**: on `?currency=rmb`, only the top-line `total_cost_display` converts; `by_model[].cost_usd` stays USD (documented). **Display-only (Q-SOT)**: conversion is read-side only — NO write to `balances.*`/`usage_ledger`; the deduction/ledger/402-gate/reconciliation are byte-identical to 7.1. Rate read from the gateway `internal/fxrate` in-proc snapshot (boot+60s, latest `ORDER BY fetched_at DESC LIMIT 1`); the FX provider is NEVER on the read hot path (BR-C-5). NO new gRPC RPC, NO new proto field, NO deduction-path change. |
 | 2026-05-18 | Story 3.3 (Wright Round 1 OQ2 ruling) | §5.1.2 4 rows added: `413_payload_too_large` + `501_streaming_not_implemented` (Story 3.3 introductions) + `501_not_implemented` (Story 3.2 backfill) + `500_gateway_misconfigured` (Story 2.4 backfill). |
 | 2026-05-18 | Story 3.4 (Linus / Dev) | §5.1.1 appended new subsection §5.1.1.1 documenting the SSE streaming response shape (Content-Type, event framing, `[DONE]` terminator); §5.1.2 row `501_streaming_not_implemented` annotated **RETIRED** (preserved for git-blame). |
 | 2026-05-19 | Story 3.6 (SM + Dev) | §5.1.1 + §5.1.2 ratified: `X-He-Request-Id` taxonomy (`req_<12 hex>`) + 5-field envelope SHAPE now enforced gateway-wide via `apps/api-gateway/internal/openaierr` (single canonical writer) + `apps/api-gateway/internal/middleware/requestid` (single canonical stamper). Pre-Story-3.6 divergent writers (`writeError`, `writeChatError`, `writeAPIKeyError`, `writeJWTError`, inline `http.Error` in `csrf.go` + `oauth_ratelimit.go`) all deleted in favour of `openaierr.Write`. §5.1.2 PROMOTED non-OpenAI auth/account codes (formerly per-handler local constants across Stories 2.2-2.6 + 3.2) into the single canonical superset per Architect Round 1 ruling — `openaierr.CodeMetadata` is now the runtime mirror of §5.1.2's full active row-set. Dev discovered an additional 19 codes already used by source callers beyond the SM-enumerated 22 (see Story 3.6 Dev Log → Implementation Decisions Log "codeMetadata superset expansion") — these are also promoted in this row. |

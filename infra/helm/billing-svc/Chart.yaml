@@ -1,0 +1,15 @@
+apiVersion: v2
+name: billing-svc
+description: He-API billing service (Epic 7). This chart currently ships the Story-7.2 fx-refresh CronJob (daily USD→CNY rate refresh); the billing-svc Deployment is provisioned separately.
+type: application
+version: 0.1.0
+appVersion: "0.0.1"
+kubeVersion: ">=1.29.0-0"
+
+keywords:
+  - he-api
+  - billing
+  - fx
+
+maintainers:
+  - name: He-API platform team

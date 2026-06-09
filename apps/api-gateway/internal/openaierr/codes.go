@@ -29,16 +29,16 @@ var CodeMetadata = map[string]struct {
 	// Story 4.7 OQ-4.7-6 ratified — NEW envelope code for the 405 path
 	// introduced by the unauthenticated GET /public/models endpoint
 	// (Story-3.6 §5.1.2 "one envelope code per HTTP scenario" precedent).
-	"405_method_not_allowed":     {405, "invalid_request_error"},
-	"402_quota_exhausted":        {402, "invalid_request_error"},
-	"403_ip_not_whitelisted":     {403, "invalid_request_error"},
-	"403_model_not_in_scope":     {403, "invalid_request_error"},
-	"413_payload_too_large":      {413, "invalid_request_error"},
-	"429_rate_limit_qps":         {429, "invalid_request_error"},
+	"405_method_not_allowed": {405, "invalid_request_error"},
+	"402_quota_exhausted":    {402, "invalid_request_error"},
+	"403_ip_not_whitelisted": {403, "invalid_request_error"},
+	"403_model_not_in_scope": {403, "invalid_request_error"},
+	"413_payload_too_large":  {413, "invalid_request_error"},
+	"429_rate_limit_qps":     {429, "invalid_request_error"},
 	// Story 5.3 Architect Q5 ratified — fills the missing third member of
 	// the QPS/RPM/TPM triplet (§5.1.2 "one envelope code per HTTP scenario").
-	"429_rate_limit_rpm": {429, "invalid_request_error"},
-	"429_rate_limit_tpm": {429, "invalid_request_error"},
+	"429_rate_limit_rpm":         {429, "invalid_request_error"},
+	"429_rate_limit_tpm":         {429, "invalid_request_error"},
 	"429_rate_limit_gdpr_export": {429, "invalid_request_error"},
 	"500_gateway_misconfigured":  {500, "server_error"},
 	"500_internal_error":         {500, "server_error"},
@@ -106,4 +106,11 @@ var CodeMetadata = map[string]struct {
 	"400_invalid_key_name":      {400, "invalid_request_error"},
 	"404_api_key_not_found":     {404, "invalid_request_error"},
 	"429_rate_limit_key_create": {429, "invalid_request_error"},
+
+	// Multi-currency display surface (Story 7.2 — Architect M-1 ruling). The
+	// display-currency selector ?currency= accepts exactly {usd, rmb}; any other
+	// value fails loud (no silent USD fallback — a wrong-currency display is a
+	// money defect, BR-B-5). Registered here in the runtime mirror per the
+	// Story-3.6 single-canonical-writer rule, not the §5.1.2 spec table only.
+	"400_unsupported_currency": {400, "invalid_request_error"},
 }

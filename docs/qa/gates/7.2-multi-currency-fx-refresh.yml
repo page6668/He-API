@@ -1,0 +1,95 @@
+schema: 1
+story: "7.2"
+story_title: "多币种 + 汇率刷新"
+gate: "PASS"
+status_reason: >
+  Round-1 comprehensive review of a money-correctness story. All automated tests pass
+  (fresh/uncached, api-gateway + billing-svc, 0 failures); new-package coverage 89.3%
+  (internal/fxrate) + 84.7% (internal/fx), both ≥80% target. Both ACs fully traced and
+  semantically verified. The load-bearing Q-SOT display-only invariant holds — the only
+  statement against balances/usage_ledger in 7.2 code is a SELECT (zero writes). All
+  Architect rulings reflected (H-1/H-2/M-1/M-2/L-1 + 12 Q-*).
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-09T00:00:00Z"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "HIGH"
+  cached_review_mode: "full_testing"
+  cached_project_type: "web_backend"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+top_issues: []
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 464          # 448 gateway (handlers+fxrate) + 16 billing-svc fx, PASS subtests on the 7.2 surface
+    passed_count: 464
+    failed_count: 0
+    skipped_count: 0
+    pass_rate: 100
+    coverage_percentage: 87  # internal/fxrate 89.3% + internal/fx 84.7% (both ≥80% target)
+    failed_tests: []
+  e2e:
+    executed: true        # backend: integration via httptest + pgxmock (no browser); full-flow E2E-001/INT-018 = CI testcontainers
+    passed: true
+    skipped: false
+    skip_reason: ""
+    scenarios_tested: 0
+    scenarios_passed: 0
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: ""
+  issues: []
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 5       # 0009 migration + new external HTTP dep + new cron + money-read API behaviour change + cascade-lock 7.3-7.7
+  security_sensitive: false # money-display correctness held to security rigour (no PII/credential surface beyond the env-injected FX secret)
+  dev_gate_score: 95
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 1 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "CI-only lanes (INT-018 SoT testcontainers, INT-019 atlas round-trip, CONTRACT-001 python SDK byte-compat, E2E-001) are unverifiable in the local sandbox (atlas/docker/python/helm absent — project_toolchain_env_limits). Confirm all green in CI before merge."
+
+nfr_validation:
+  security: { status: PASS, notes: "FX-provider URL/key env-injected, never logged (BR-C-7); provider errors generic so the secret URL never leaks; rate value (public market data) is loggable." }
+  performance: { status: PASS, notes: "No provider call on the read hot path (BR-C-5); conversion served from a boot+60s in-proc snapshot reading the latest row ORDER BY fetched_at DESC LIMIT 1 (L-1)." }
+  reliability: { status: PASS, notes: "Stale-serve on provider failure/non-positive rate — no insert, last-known row stays active, cron exit 0 (BR-C-3); DB-write failure exits non-zero. Cron hardened (Forbid/startingDeadlineSeconds:200/backoffLimit:0/Etc/UTC, H-2)." }
+  maintainability: { status: PASS, notes: "FxProvider + Snapshot are package-internal seams mirroring billing-svc/internal/pricing; go vet clean; gofmt clean." }
+
+evidence_detail:
+  tests_reviewed: 464
+  risks_identified: 1
+  trace:
+    ac_covered: [1, 2]
+    ac_gaps: []
+
+verification_notes:
+  - "Q-SOT (CRITICAL display-only): grep for (INSERT|UPDATE|DELETE).*(balances|usage_ledger) across all 7.2 code returns only the balanceSQL SELECT — no write path. Conversion is read-side only; the 7.1 reconciliation invariant is preserved verbatim."
+  - "AC1: billing_read.go parses ?currency before any PG read (BR-B-5 fail-loud), additive string-decimal fields, current_usd always present (BR-B-3), USD-default identity at 4dp = byte-compatible (BR-B-7), cold-start guard degrades RMB→USD with fx_degraded + slog fx_rate_missing + metric (never a zero rate), by_model stays USD on RMB (M-2). Convert() is shopspring/decimal HALF-UP, never float (BR-B-6)."
+  - "AC2: refresh.go — provider error / non-positive rate → no insert + fx_refresh.failed + (false,nil) → cron exit 0 (stale-serve, BR-C-3); DB error → (false,err) → exit 1. Migration 0009 additive CREATE TABLE + idempotent bootstrap seed (ON CONFLICT DO NOTHING, fixed fetched_at); atlas.sum 0009 row present; balances.current_rmb untouched (Q-RMBCOL)."
+  - "M-1: 400_unsupported_currency registered in openaierr.CodeMetadata runtime mirror (codes.go:115) + asserted by UNIT-013. H-1: dedicated cmd/fx-refresh binary (own main + Dockerfile). H-2: schedule literal '0 0 * * *' CI-locked in scripts/ci/verify-cron-schedule.sh + all hardening fields present."
+  - "validRate (refresh.go:102) is exercised by provider_test.go — not dead code."

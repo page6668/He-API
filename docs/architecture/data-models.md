@@ -81,6 +81,27 @@ CREATE TABLE balances (
   auto_recharge_payment_method_id UUID,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+-- NOTE (Story 7.2): current_rmb stays reserved/DEFAULT 0 (Q-RMBCOL — RMB is a
+-- compute-on-read display conversion over the single USD SoT, NOT a stored
+-- mirror). Supersedes 7.1's "until Story 7.2" comment: a stored-RMB column is
+-- deferred to a future story, not activated by 7.2.
+
+-- 汇率快照 (Story 7.2) — append-only, effective-dated USD-base FX rates. The
+-- active rate per (base,quote) pair is the latest fetched_at row
+-- (ORDER BY fetched_at DESC LIMIT 1, Architect L-1; model_pricing parity). The
+-- daily fx-refresh cron INSERTs a new row on success; a provider failure inserts
+-- nothing (STALE-SERVE, BR-C-3). rate is NUMERIC(18,8) read as ::text →
+-- shopspring/decimal (NEVER float64, M-1). Migration 0009 seeds one
+-- source='bootstrap' USD→CNY row so cold-start display reads convert before the
+-- first cron (BR-C-6).
+CREATE TABLE fx_rates (
+  base_currency  CHAR(3) NOT NULL,            -- ISO-4217, e.g. USD
+  quote_currency CHAR(3) NOT NULL,            -- ISO-4217, e.g. CNY
+  rate           NUMERIC(18,8) NOT NULL,      -- units of quote per 1 base; > 0
+  source         VARCHAR(50) NOT NULL,        -- provider id, or 'bootstrap'
+  fetched_at     TIMESTAMPTZ NOT NULL,        -- effective ts; exposed as fx_as_of
+  PRIMARY KEY (base_currency, quote_currency, fetched_at)
+);
 
 -- 充值订单
 CREATE TABLE recharge_orders (
@@ -249,6 +270,7 @@ flag:beta_mode                                  bool, 实时 Feature Flag
 | 2026-05-26 | 5.3 | Dev (Linus) | **§4.3 per-key rate-limit siblings realised**: `ratelimit:key:{api_key_id}:rpm` (TTL 60s NX) and `ratelimit:key:{api_key_id}:tpm` (TTL 60s NX, post-deduction model) — previously implied by `同上` on the `:qps` row. Atomic operations via two Lua scripts: `check_and_incr.lua` (3-axis CHECK + INCR(QPS,RPM) + EXPIRE NX; TPM check-only, no INCR) and `tpm_deduct.lua` (INCRBY + EXPIRE 60 NX) — strict NX semantics matching BR-3.2 / Architect H-2. Per Architect Q4 ratification, MVP ships per-key only; per-user counters (`ratelimit:user:*`) remain reserved for future team-scoped Story. |
 | 2026-06-03 | 5.2 | Dev (Linus) | **§4.1 `api_keys` UPDATE writers** — `UPDATE scope, monthly_cost_cap_usd` (UpdateApiKey RPC); NO `updated_at` write (Architect Q-K — column does not exist; the Kafka `api_key.config_updated` `ts` is the last-modified SoT). No DDL change. **§4.3 NEW Redis keys**: `auth:apikey:config_updated:{api_key_id}` (TTL 300s — BR-1.9 config-update sentinel mirroring the Story-5.1 revoke sentinel; gateway EXISTS-checks it alongside the revoke sentinel in ONE round-trip) + `usage:apikey:{api_key_id}:month_cost_usd` (Q-D realtime cost counter, NO TTL — cron-reset by Story 5.4; gateway `GET` READ-only on every bearer request; billing-svc `INCRBYFLOAT` WRITE in Epic 6+). **§4.3 EXTENDED** `auth:apikey:{sha256(plaintext)}` cache value shape (Q-A): ADDS `scope_models[]`, `scope_ip_whitelist[]`, `monthly_cost_cap_usd` (all `omitempty`); existing `{api_key_id, user_id, team_id, scope}` PRESERVED for legacy back-compat; TTL UNCHANGED (300s). **§4.4 NEW `audit.event` event_type**: `api_key.config_updated` (PII-safe; payload adds `changed_fields[]`). |
 | 2026-06-03 | 6.2 | Dev (Linus) | **§4.1 `he_api.models` + `he_api.model_pricing` REALISED** via `migrations/postgres/0007_create_models_and_pricing.sql` (Story-6.1 Q-C carry-over) — additive (CREATE TABLE only, no ALTER/DROP), REVERSIBLE (Atlas dynamic down drops `model_pricing` then `models`), NON-DESTRUCTIVE; `atlas.sum` row added. Tables match §4.1 lines 101-119. Idempotent seed (ON CONFLICT DO NOTHING) for the 8 concrete catalogue models (DefaultRegistry MINUS the 3 `he-router-*` virtual entries, Q-D) + one `effective_at` pricing row each. **NEW READ source** (routing-svc `internal/pricing`, Q-K read-only pgx pool, mirrors auth-svc): the `cost` strategy ranks by `(upstream_price_per_1k_input_tokens + upstream_price_per_1k_output_tokens)` ascending using the latest-`effective_at` row per model (Q-J); loaded as a boot snapshot + 60s refresh (Q-E), NEVER a per-request query (BR2-2). Stale pricing → suboptimal routing only, never a wrong charge (billing reads pricing independently — Epic 7). §4.2 ClickHouse `benchmark_results` / `request_logs_hourly_agg` remain REFERENCED-not-created (quality/latency degrade behind the `Scorer` seam until Epic 9 — Q-A Option A); the `request_logs.routing_strategy`/`selected_by_strategy` write stays Epic-9 scope (Q-B). |
+| 2026-06-09 | 7.2 | Dev (Linus) | **§4.1 NEW table `he_api.fx_rates`** via `migrations/postgres/0009_create_fx_rates.sql` — append-only, effective-dated USD-base FX rates (`base_currency CHAR(3)`, `quote_currency CHAR(3)`, `rate NUMERIC(18,8)`, `source VARCHAR(50)`, `fetched_at TIMESTAMPTZ`, PK `(base,quote,fetched_at)` — Q-FXTABLE). Active rate = latest `ORDER BY fetched_at DESC LIMIT 1` per pair (Architect L-1). Additive (CREATE TABLE + idempotent `source='bootstrap'` USD→CNY seed via `ON CONFLICT DO NOTHING` with a fixed `fetched_at`), REVERSIBLE (Atlas dynamic down drops `fx_rates`), NON-DESTRUCTIVE; `atlas.sum` row added (BR-C-6). **§4.1 `balances.current_rmb` clarification** (Architect Q-RMBCOL): the column STAYS reserved/DEFAULT 0 — RMB is a compute-on-read display conversion over the single USD SoT, NOT a stored mirror; this supersedes 7.1's "until Story 7.2" note (a stored-RMB column is deferred to a future story). **WRITE** by the `fx-refresh` cron (`billing-svc/cmd/fx-refresh` → `internal/fx.Refresh`; STALE-SERVE on provider failure = no insert, BR-C-3). **READ** (display-only, Q-SOT) by gateway `internal/fxrate` boot+60s snapshot for `GET /v1/balance\|usage ?currency=rmb` — NEVER on the deduction/reconciliation path; the 7.1 USD reconciliation invariant is preserved verbatim. NO new Redis key (Q-FXCACHE — in-proc snapshot, no Redis). NO new Kafka topic. |
 | 2026-06-03 | 5.4 | Dev (Linus) | No DDL change. **§4.1 `api_keys` cron-reset writer** — `UPDATE current_month_cost_usd = 0 WHERE revoked_at IS NULL` (`repository.ResetMonthlyCosts`, run by the `monthly-cost-reset` CronJob at `0 0 1 * *` UTC; column-level idempotent). **§4.3 NEW Redis keys** (no TTL — cron-cleared): `keystate:apikey:cap_tripped:{api_key_id}` (sticky-trip breaker — presence ⇒ 402 fast-path; SET NX on first cross), `keystate:apikey:cap_warning_80_notified:{api_key_id}` + `keystate:apikey:cap_tripped_notified:{api_key_id}` (once-per-month email-dedupe sentinels SET NX inside notification-svc). The cron SCAN+DELs these three families PLUS the Story-5.2 `usage:apikey:*:month_cost_usd` counter family (cluster-mode-aware via `ClusterClient.ForEachMaster`, Architect m-1). **§4.4 NEW `audit.event` event_types**: `monthly_cost_reset.completed` + `monthly_cost_reset.redis_only.completed` (+ `.failed` variants; 3-retry best-effort emit per BR-3.9; audit-svc routes by type, no consumer change). |
 
 ---

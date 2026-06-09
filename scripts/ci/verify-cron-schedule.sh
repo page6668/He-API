@@ -1,39 +1,52 @@
 #!/usr/bin/env bash
-# verify-cron-schedule.sh — Story 5.4 BR-3.1 single-source-of-truth gate.
+# verify-cron-schedule.sh — single-source-of-truth schedule gate for He-API's
+# money-adjacent CronJobs. A drifted schedule on either cron is a cost-control
+# compromise (monthly-cost-reset resets cap breakers; fx-refresh refreshes the
+# display rate), so this golden-file check fails CI on any change to a literal.
 #
-# Asserts the monthly-cost-reset CronJob schedule is EXACTLY "0 0 1 * *" (00:00
-# UTC on day 1 of each month). A drifted schedule could reset the cost-cap
-# breakers mid-month (a cost-control compromise), so this golden-file check
-# fails CI on any change to the literal.
+#   - Story 5.4 BR-3.1: monthly-cost-reset MUST be EXACTLY "0 0 1 * *".
+#   - Story 7.2 H-2:    fx-refresh         MUST be EXACTLY "0 0 * * *".
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TEMPLATE="$ROOT/infra/helm/auth-svc/templates/cronjob-monthly-cost-reset.yaml"
-VALUES="$ROOT/infra/helm/auth-svc/values.yaml"
-EXPECTED='0 0 1 * *'
 
 note() { printf '[verify-cron-schedule] %s\n' "$*"; }
-
 fail() { note "FAIL: $*"; exit 1; }
 
-[ -f "$TEMPLATE" ] || fail "CronJob template not found: $TEMPLATE"
-[ -f "$VALUES" ]   || fail "values.yaml not found: $VALUES"
+# verify_schedule <name> <template> <values> <values-key> <expected-literal>
+# Asserts the expected literal is bound to the `schedule:` key in values.yaml
+# (anchored so a stray comment cannot satisfy the gate) and that the template
+# does not hard-code a different literal.
+verify_schedule() {
+  local name="$1" template="$2" values="$3" key="$4" expected="$5"
+  [ -f "$template" ] || fail "$name: CronJob template not found: $template"
+  [ -f "$values" ]   || fail "$name: values.yaml not found: $values"
 
-# The template references the schedule via .Values.monthlyCostReset.schedule;
-# the literal lives in values.yaml. Assert the exact string is bound to the
-# `schedule:` key (anchored so a stray comment containing the literal cannot
-# satisfy the gate).
-if ! grep -Eq "^[[:space:]]*schedule:[[:space:]]*\"0 0 1 \* \*\"[[:space:]]*(#.*)?$" "$VALUES"; then
-  fail "schedule key in $VALUES is not exactly \"$EXPECTED\""
-fi
-
-# Defence-in-depth: ensure no rogue alternate schedule literal slipped into the
-# template (it must NOT hard-code a different cron expression).
-if grep -E 'schedule:\s*"[0-9*/, ]+"' "$TEMPLATE" | grep -qvF "$EXPECTED" ; then
-  # Only flag if a quoted literal schedule that ISN'T the expected one exists.
-  if grep -E 'schedule:\s*"[0-9*/, ]+"' "$TEMPLATE" | grep -qv 'Values.monthlyCostReset.schedule'; then
-    fail "template hard-codes a schedule literal other than \"$EXPECTED\""
+  # Escape the cron literal's regex-special chars (* -> \*) for an anchored match.
+  local esc
+  esc="$(printf '%s' "$expected" | sed 's/[*]/\\*/g')"
+  if ! grep -Eq "^[[:space:]]*schedule:[[:space:]]*\"${esc}\"[[:space:]]*(#.*)?$" "$values"; then
+    fail "$name: schedule key in $values is not exactly \"$expected\""
   fi
-fi
 
-note "OK — monthly-cost-reset schedule is \"$EXPECTED\" (BR-3.1)"
+  # Defence-in-depth: the template must reference the values key, not a literal.
+  if grep -E 'schedule:\s*"[0-9*/, ]+"' "$template" | grep -qv "Values.${key}.schedule"; then
+    fail "$name: template hard-codes a schedule literal other than \"$expected\""
+  fi
+
+  note "OK — $name schedule is \"$expected\""
+}
+
+verify_schedule "monthly-cost-reset" \
+  "$ROOT/infra/helm/auth-svc/templates/cronjob-monthly-cost-reset.yaml" \
+  "$ROOT/infra/helm/auth-svc/values.yaml" \
+  "monthlyCostReset" \
+  "0 0 1 * *"
+
+verify_schedule "fx-refresh" \
+  "$ROOT/infra/helm/billing-svc/templates/cronjob-fx-refresh.yaml" \
+  "$ROOT/infra/helm/billing-svc/values.yaml" \
+  "fxRefresh" \
+  "0 0 * * *"
+
+note "OK — all money-adjacent cron schedules locked (BR-3.1 + H-2)"

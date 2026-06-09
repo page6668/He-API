@@ -1,0 +1,87 @@
+{{- if .Values.fxRefresh.enabled }}
+# Story 7.2 AC2 — fx-refresh CronJob. Fetches the latest USD→CNY rate from the
+# configured FX provider and APPENDS a he_api.fx_rates row at 00:00 UTC daily.
+# Dedicated binary (Architect H-1 — NOT a billing-svc server subcommand); mirrors
+# the Story-5.4 monthly-cost-reset cron posture: concurrencyPolicy: Forbid +
+# backoffLimit: 0 → one cron, one outcome, on-call investigates on failure. A
+# provider failure is STALE-SERVE (no row inserted, exit 0) — money-display safety.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "billing-svc.fullname" . }}-fx-refresh
+  labels:
+    {{- include "billing-svc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: fx-refresh
+spec:
+  # NOTE: the literal schedule below is the single-source-of-truth asserted by
+  # scripts/ci/verify-cron-schedule.sh (H-2). Schedule drift on a money-adjacent
+  # cron is gated. Do not template it away.
+  schedule: {{ .Values.fxRefresh.schedule | quote }}
+  timeZone: {{ .Values.fxRefresh.timeZone | quote }}
+  concurrencyPolicy: {{ .Values.fxRefresh.concurrencyPolicy }}
+  startingDeadlineSeconds: {{ .Values.fxRefresh.startingDeadlineSeconds }}
+  successfulJobsHistoryLimit: {{ .Values.fxRefresh.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.fxRefresh.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      backoffLimit: {{ .Values.fxRefresh.backoffLimit }}
+      activeDeadlineSeconds: 90  # > the binary's 1-min ctx deadline (runDeadline)
+      template:
+        metadata:
+          labels:
+            {{- include "billing-svc.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: fx-refresh
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ include "billing-svc.serviceAccountName" . }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: fx-refresh
+              image: "{{ .Values.fxRefresh.image.repository }}:{{ .Values.fxRefresh.image.tag }}"
+              imagePullPolicy: {{ .Values.fxRefresh.image.pullPolicy }}
+              env:
+                - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                  value: {{ .Values.env.OTEL_EXPORTER_OTLP_ENDPOINT | quote }}
+                {{- if .Values.fxRefresh.manualUsdCny }}
+                # Dev / CI / air-gapped override — bypasses the HTTP provider.
+                # Empty (default) in staging/prod so the real provider is used.
+                - name: FX_MANUAL_USD_CNY
+                  value: {{ .Values.fxRefresh.manualUsdCny | quote }}
+                {{- end }}
+                {{- if .Values.fxRefresh.source }}
+                - name: FX_PROVIDER_SOURCE
+                  value: {{ .Values.fxRefresh.source | quote }}
+                {{- end }}
+              envFrom:
+                # PG URI (HE_API_DB_POSTGRES_URI) from the shared Story-1.6 Secret.
+                - secretRef:
+                    name: {{ .Values.db.credsSecretName }}
+                {{- if .Values.fxRefresh.providerSecretName }}
+                # BR-C-7 — the FX-provider base-URL/key is a NEW secret, env-
+                # injected (HE_API_FX_PROVIDER_URL), NEVER rendered into the
+                # manifest or logged. Provisioned out-of-band (docs/dev/secrets).
+                - secretRef:
+                    name: {{ .Values.fxRefresh.providerSecretName }}
+                {{- end }}
+              securityContext:
+                runAsNonRoot: true
+                runAsUser: 65532
+                readOnlyRootFilesystem: true
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                seccompProfile:
+                  type: RuntimeDefault
+              resources:
+                requests:
+                  cpu: {{ .Values.fxRefresh.resources.requests.cpu }}
+                  memory: {{ .Values.fxRefresh.resources.requests.memory }}
+                limits:
+                  cpu: {{ .Values.fxRefresh.resources.limits.cpu }}
+                  memory: {{ .Values.fxRefresh.resources.limits.memory }}
+{{- end }}

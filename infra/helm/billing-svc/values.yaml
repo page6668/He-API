@@ -1,0 +1,50 @@
+# Default values for billing-svc (Story 7.2). Currently scopes the fx-refresh
+# CronJob only; the billing-svc Deployment is provisioned separately.
+
+env:
+  OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector.monitoring.svc.cluster.local:4317
+
+# DB creds reused from Story 1.6 he-api-db-creds Secret.
+# billing-svc consumes HE_API_DB_POSTGRES_URI via envFrom.
+db:
+  credsSecretName: he-api-db-creds
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Story 7.2 AC2 — fx-refresh CronJob. Appends a he_api.fx_rates USD→CNY row at
+# the UTC day boundary. The schedule string is a CI single-source-of-truth
+# (scripts/ci/verify-cron-schedule.sh locks the literal "0 0 * * *"); changing
+# it requires updating that gate (H-2 — money-adjacent schedule-drift gold-gate).
+fxRefresh:
+  enabled: true
+  schedule: "0 0 * * *"        # 00:00 UTC daily (BR-C-2)
+  timeZone: "Etc/UTC"          # K8s 1.27+ CronJob TimeZone
+  concurrencyPolicy: Forbid    # BR-C-4 (no overlap; append-only guard)
+  startingDeadlineSeconds: 200 # parity with 5.4
+  backoffLimit: 0              # BR-C-3 (no auto-retry; stale-serve + on-call)
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  image:
+    repository: he-api/fx-refresh
+    tag: "0.0.1"
+    pullPolicy: IfNotPresent
+  # FX provider secret (BR-C-7) — a K8s Secret holding HE_API_FX_PROVIDER_URL
+  # (the base-URL/key), env-injected via envFrom. Provisioned out-of-band; see
+  # docs/dev/secrets/fxrate-provider.md. Empty disables the secretRef (dev uses
+  # the manual override below instead).
+  providerSecretName: he-api-fxrate-provider
+  # Dev / CI / air-gapped manual override (FX_MANUAL_USD_CNY). EMPTY in
+  # staging/prod so the real provider is used; set in a dev values overlay.
+  manualUsdCny: ""
+  # Optional row `source` label (defaults to manual|http in the binary).
+  source: ""
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi

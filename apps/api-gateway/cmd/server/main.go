@@ -32,6 +32,7 @@ import (
 
 	"github.com/he-api/he-api/apps/api-gateway/internal/adapterclient"
 	"github.com/he-api/he-api/apps/api-gateway/internal/billingemit"
+	"github.com/he-api/he-api/apps/api-gateway/internal/fxrate"
 	"github.com/he-api/he-api/apps/api-gateway/internal/handlers"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/billinggate"
@@ -397,10 +398,30 @@ func main() {
 	// (user_id from the validated key). Wired only when a PG DSN is configured;
 	// without it the routes are absent (404) rather than nil-panicking.
 	if billingPool := buildBillingPool(logger); billingPool != nil {
-		billingRead := handlers.NewBillingReadHandler(logger, billingPool)
+		// Story 7.2 (Q-CONVLOC gateway-side) — boot+~60s-refresh FX rate snapshot
+		// over the same read pool (mirrors billing-svc/internal/pricing). The
+		// conversion read never calls the FX provider (BR-C-5); the provider is
+		// touched only by the daily cron. A boot-load failure starts empty and the
+		// refresh recovers — RMB requests degrade to USD until then (cold-start guard).
+		var fxOpt []handlers.Option
+		boot, ferr := fxrate.Load(ctx, billingPool)
+		if ferr != nil {
+			logger.Warn("fx-rate boot load failed — starting empty, refresh will recover",
+				slog.String("error", ferr.Error()))
+			boot = fxrate.NewSnapshot(nil)
+		} else {
+			logger.Info("fx-rate snapshot loaded", slog.Int("pairs", boot.Len()))
+		}
+		fxProvider := fxrate.NewProvider(boot, func(c context.Context) (*fxrate.Snapshot, error) {
+			return fxrate.Load(c, billingPool)
+		}, fxrate.DefaultRefreshInterval, logger)
+		go fxProvider.Run(ctx)
+		fxOpt = append(fxOpt, handlers.WithFxRateSource(fxProvider))
+
+		billingRead := handlers.NewBillingReadHandler(logger, billingPool, fxOpt...)
 		mux.Handle("GET /v1/balance", bearerAuth.RequireAPIKey(http.HandlerFunc(billingRead.Balance)))
 		mux.Handle("GET /v1/usage", bearerAuth.RequireAPIKey(http.HandlerFunc(billingRead.Usage)))
-		logger.Info("billing read endpoints wired (GET /v1/balance, GET /v1/usage)")
+		logger.Info("billing read endpoints wired (GET /v1/balance, GET /v1/usage; currency-aware)")
 	} else {
 		logger.Warn("HE_API_DB_POSTGRES_URI unset — GET /v1/balance + /v1/usage disabled")
 	}
