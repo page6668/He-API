@@ -523,7 +523,8 @@ func main() {
 		rootMux.Handle("POST /v1/billing/webhooks/paypal", webhookProxy.Handle("paypal"))
 		rootMux.Handle("POST /v1/billing/webhooks/coinbase", webhookProxy.Handle("coinbase")) // Story 7.4 (USDC)
 		rootMux.Handle("POST /v1/billing/webhooks/alipay", webhookProxy.Handle("alipay"))     // Story 7.5 (Alipay+)
-		logger.Info("payment webhook ingress wired (POST /v1/billing/webhooks/{stripe,paypal,coinbase,alipay}; outside bearer+CSRF)")
+		rootMux.Handle("POST /v1/billing/webhooks/wechat", webhookProxy.Handle("wechat"))     // Story 7.6 (WeChat Pay HK)
+		logger.Info("payment webhook ingress wired (POST /v1/billing/webhooks/{stripe,paypal,coinbase,alipay,wechat}; outside bearer+CSRF)")
 	} else {
 		logger.Warn("PAYMENT_SVC_ENDPOINT unset — POST /v1/billing/webhooks/* disabled")
 	}

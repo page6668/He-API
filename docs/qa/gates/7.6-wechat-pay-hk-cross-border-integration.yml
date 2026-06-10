@@ -1,0 +1,96 @@
+schema: 1
+story: "7.6"
+story_title: "微信支付 WeChat Pay HK / Cross-border"
+gate: "PASS"
+status_reason: "All 3 ACs implemented and independently verified. The 5th and FINAL payment channel lands as a pure-additive wechat.Provider on the proven 7.3 seam — closing the Epic-7 5-channel DoD. payment-svc (wechat 86.0% cover + webhook ingress) + billing-svc credit (HKD/CNY fx-at-credit + missing-rate park) + gateway billing (wechat USD/HKD/CNY accept + bad-currency 400) suites ALL green on a fresh -count=1 run; go vet clean on all 3 modules. The 3 High risks are mitigated AND verified at source + test: SEC-001 (⭐ AES-256-GCM decrypt fail-closed on tampered ciphertext/nonce/AAD + wrong APIv3Key → tag mismatch → ErrSignatureInvalid, NEVER a partial-plaintext parse), SEC-002 (forged callback / unknown-Wechatpay-Serial rejected BEFORE any decrypt; verify-then-decrypt — no decrypt oracle), DATA-001 (table-driven minor-unit {USD,HKD,CNY:2}, fail-closed both directions, no hardcoded /100). REUSE discipline is EXEMPLARY and exceeds 7.5: git diff confirms provider.go (seam) / webhook handler.go / billing-svc credit.go / he.payment.v1 proto / migrations ALL byte-unchanged — unlike 7.5, 7.6 needed ZERO credit.go change (the 7.5 paid-currency guard fix is inherited; HKD credits out-of-the-box). Residual: full-stack testcontainers E2E (T4.1) is docker-gated and CI-deferred per the 7.3/7.4/7.5 precedent — composition is covered offline by the producer-boundary ingress test + the credit-applier USD/HKD/CNY tests (non-blocking)."
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-10T18:05:00Z"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "HIGH"
+  cached_review_mode: "full_testing"
+  cached_project_type: "web_backend"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+# No blocking issues. CI-001 is an env-limited execution follow-up; OPS-001 is an honestly
+# flagged data-prerequisite, fail-safe by construction (absent HKD rate parks — never mis-credits).
+top_issues:
+  - id: "CI-001"
+    severity: low
+    finding: "Full-stack testcontainers E2E (7.6-E2E-001/002, T4.1) is docker-gated; docker cannot run in the local review env (project_toolchain_env_limits). The AC1→AC2→AC3 journey is covered in composition by offline integration pieces: webhook/wechat_ingress_test.go (verify→decrypt→emit boundary: forged→400+no-emit, SUCCESS→one recharge_paid emit, in-progress→no-emit, tampered-ciphertext→400, stale-replay→400) + credit_test.go (applier USD pass-through + HKD/CNY→USD fx-at-credit + missing-HKD-rate park)."
+    suggested_action: "Run the full-stack recharge→signed+encrypted SUCCESS callback→verify→decrypt→credit→GET /v1/balance journey (USD 1:1 / HKD@fx) in CI to obtain over-the-wire E2E proof, mirroring the 7.3/7.4/7.5 CI deferral."
+  - id: "OPS-001"
+    severity: low
+    finding: "HKD is the FIRST HKD→USD fx-at-credit pair; credit conversion reads the latest he_api.fx_rates HKD row at settlement. Dev seeded it via scripts/dev/seed-hkd-fxrate.sql (idempotent, ON CONFLICT) for dev/CI, but left the 7.2 single-quote (USD→CNY) refresh CronJob UNCHANGED — a multi-quote refresh that auto-maintains the HKD rate is a flagged 7.2-component follow-up (per KISS / no-unsolicited-refactor). Until it lands, the HKD rate is seed/manually-maintained and may go stale. Fail-safe: an ABSENT HKD rate parks the order (no credit at unknown rate, verified by TestApply_Recharge_HKD_MissingRate_Parks); a stale-but-present rate converts — never a mis-credit."
+    suggested_action: "Land the 7.2 multi-quote fx-refresh follow-up so HKD (and future pairs) auto-refresh in prod; until then ensure the HKD fx_rates row is seeded in every deploy env. No code change required for MVP — the missing-rate path is fail-closed."
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 4              # packages: wechat, payment-svc/webhook, billing-svc/credit, gateway/handlers(wechat subset)
+    passed_count: 4
+    failed_count: 0
+    skipped_count: 0
+    pass_rate: 100
+    coverage_percentage: 86   # wechat provider impl (CreateCheckout/VerifyWebhook/RSA sign+verify/AES-256-GCM decrypt/minor-unit/trade_state), fresh -count=1, exceeds the ~65-70% 7.4/7.5 bar (T5.1)
+    failed_tests: []
+    notes: "Fresh -count=1 run (cache busted). wechat provider 86.0% cover; TestAC3_VerifyWebhook full adversarial lane (020-035: forged/absent/wrong-key/unknown-serial/signed-string-tamper/stale/in-window/GCM-happy/GCM-adversarial×3/verify-before-decrypt/secret-discipline) all PASS; TestAC2_TradeStateMapping (SUCCESS/NOTPAY/USERPAYING/CLOSED/PAYERROR/REVOKED/unknown/REFUND) all PASS; TestMinorUnits + TestAC1_CreateCheckout PASS. webhook/wechat_ingress (Forged/Success-once/InProgress/TamperedCiphertext/StaleReplay) PASS. billing-svc credit (HKD+CNY FxAtCredit, HKD MissingRate park) PASS. gateway (WeChat_Accepted USD/HKD/CNY + BadCurrency_400) PASS."
+  e2e:
+    executed: false
+    passed: true
+    skipped: true
+    skip_reason: "Backend-only MVP (no UI/browser tier; 7.6 returns the WeChat Native code_url consumed by a deferred Console story). Full-stack testcontainers E2E is docker-gated and CI-deferred per the 7.3/7.4/7.5 precedent (CI-001). Offline composition covers the journey."
+    scenarios_tested: 0
+    scenarios_passed: 0
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: ""
+  issues: []
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 5
+  security_sensitive: true
+  dev_gate_score: 95
+
+risk_summary:
+  totals: { critical: 0, high: 3, medium: 9, low: 3 }   # from docs/qa/assessments/7.6-risk-profile-20260610.md
+  recommendations:
+    must_fix: []   # all 3 High risks mitigated AND verified at source + test (see high_gates_verified)
+    monitor:
+      - "Run the docker-gated full-stack E2E (CI-001) in CI before deploy."
+      - "Land the 7.2 multi-quote fx-refresh so HKD auto-maintains in prod (OPS-001) — fail-safe either way."
+
+quality_score: 95
+
+# Verification trace (Step 4.6 AC coverage)
+evidence_trace:
+  ac_covered: [1, 2, 3]
+  ac_gaps: []
+  high_gates_verified:
+    SEC_001_aes_gcm_fail_closed: "wechat.go:311-337 decryptResource: aes.NewCipher(apiV3Key) + cipher.NewGCM; gcm.Open consumes the trailing 16B auth tag → any tampered ciphertext/nonce/AAD or wrong APIv3Key returns a non-nil error. wechat.go:293-306 decryptAndParse maps a decrypt error → provider.ErrSignatureInvalid (fail-closed, NEVER parses a partial plaintext). Nonce length checked == gcm.NonceSize(); algorithm gated to AEAD_AES_256_GCM. TestAC3_VerifyWebhook 7.6-UNIT-030/031/032/033 (happy + tampered-ciphertext + tampered-nonce/AAD + wrong-APIv3Key) all green; webhook/wechat_ingress TamperedCiphertext_Rejected green."
+    SEC_002_forged_unknown_serial: "wechat.go:245-288 VerifyWebhook: fail-closed on nil/garbage platform key or APIv3Key (keyErr), missing Wechatpay-Signature/Timestamp/Nonce/Serial, unknown/mismatched Wechatpay-Serial (serial != p.platSerial, line 259), unparseable/stale Wechatpay-Timestamp (freshness BEFORE verify), bad base64 sig, and rsa.VerifyPKCS1v15 failure — every path returns ErrSignatureInvalid and reaches decryptAndParse ONLY after the signature verifies. TestAC3 7.6-UNIT-021/022/023/024/025/027 + TestWechatIngress_Forged_Rejected green."
+    SEC_004_no_decrypt_oracle: "wechat.go:283-287 — decryptAndParse is called ONLY after rsa.VerifyPKCS1v15 passes; a forged signature is rejected BEFORE any aes.NewCipher/gcm.Open attempt. verify-THEN-decrypt-THEN-parse, no decrypt oracle. TestAC3 7.6-UNIT-034 asserts a forged-sig + valid-ciphertext is rejected at verify without a decrypt attempt."
+    DATA_001_minor_unit: "wechat.go:94 minorUnitDigits{USD:2,HKD:2,CNY:2} table-driven (no hardcoded /100); decimalToMinor (wechat.go:464-479) fails CLOSED on sub-minor precision via decimal.Shift + Truncate equality; minorToDecimal (wechat.go:490-503) fails CLOSED on a non-integer minor value → no 100× mis-scale (BR-W-8). parseTransaction SUCCESS branch surfaces a settled-amount scale error as an error (no credit). TestMinorUnits 7.6-UNIT-006/007 green."
+  reuse_discipline: "EXEMPLARY — exceeds 7.5. git diff --stat HEAD confirms provider.go (seam), webhook/handler.go, billing-svc/credit/credit.go (incl. toUSD + paid-currency guard:194-204), packages/proto/*, and migrations/* ALL byte-unchanged. Unlike 7.5 (which justifiably fixed the credit.go guard), 7.6 needed ZERO credit.go change — the 7.5 paid-currency fix is inherited, so HKD/CNY credit out-of-the-box. wechat is purely additive: new provider impl + conditional registry entry (gated on WECHAT_PAY_MCH_ID, graceful-disable warning) + supportedProviders/providerCurrencies{USD,HKD,CNY} entry + 2 webhook route mounts (gateway outside bearer+CSRF, payment-svc) + secrets + an idempotent HKD fx_rates DATA seed (not a migration). credit_test.go change is TEST-ONLY (HKD/CNY re-assert lanes)."
+  seam_parity: "wechat satisfies the same PaymentProvider contract (Name=\"wechat\"/CreateCheckout/VerifyWebhook/CreateSubscription); CreateSubscription returns a not-supported error (mirrors coinbase/alipay, Q-SUBSCOPE); no wechat branch leaks into the recharge handler or credit.go. Closes the Epic-7 5-channel seam proof (Stripe/PayPal/USDC/Alipay+/WeChat all on one provider-agnostic spine)."
+  toolchain: "go vet clean on payment-svc(wechat,webhook) + billing-svc(credit) + api-gateway(handlers); all referenced AC-traceability-matrix test functions confirmed to EXIST and PASS on a fresh -count=1 run; deliverable bindings verified present (wechat.New DI inject, both webhook route mounts, supportedProviders/providerCurrencies config-read, WECHAT_PAY_* config-read)."

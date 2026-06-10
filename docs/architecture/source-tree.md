@@ -19,9 +19,9 @@ he-api/                                  (Monorepo, Turborepo)
 │   │   ├── internal/{pricing,ledger,consumer,balance,grpc,server}/
 │   │   ├── go.mod
 │   │   └── cmd/server/Dockerfile
-│   ├── payment-svc/                    Go service (Story 7.3 REALISED — 通道支付集成: PaymentProvider seam {stripe,paypal} + 入站 webhook 验签 + payment.completed 生产者; Story 7.4 加入 coinbase（USDC）impl; Story 7.5 加入 alipay（Alipay+/Antom，FIRST 非对称 RSA2 验签）impl，均复用 seam/handler/applier 不变)
+│   ├── payment-svc/                    Go service (Story 7.3 REALISED — 通道支付集成: PaymentProvider seam {stripe,paypal} + 入站 webhook 验签 + payment.completed 生产者; Story 7.4 加入 coinbase（USDC）impl; Story 7.5 加入 alipay（Alipay+/Antom，FIRST 非对称 RSA2 验签）impl; Story 7.6 加入 wechat（WeChat Pay HK，FIRST 加密回调 AES-256-GCM resource 解密 + 平台证书 serial 选择验签）impl — 5th/FINAL 通道，均复用 seam/handler/applier 不变)
 │   │   ├── cmd/server/main.go
-│   │   ├── internal/{provider,provider/stripe,provider/paypal,provider/coinbase,provider/alipay,webhook,producer,paymentgrpc,server}/
+│   │   ├── internal/{provider,provider/stripe,provider/paypal,provider/coinbase,provider/alipay,provider/wechat,webhook,producer,paymentgrpc,server}/
 │   │   ├── go.mod
 │   │   └── cmd/server/Dockerfile
 │   ├── routing-svc/

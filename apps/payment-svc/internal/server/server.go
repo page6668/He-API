@@ -1,6 +1,6 @@
 // Package server assembles payment-svc's HTTP surface: the PaymentService
 // Connect-RPC handler (CreateCheckout / CreateSubscription) + the inbound webhook
-// routes (/webhooks/stripe, /webhooks/paypal, /webhooks/coinbase, /webhooks/alipay — the gateway
+// routes (/webhooks/stripe, /webhooks/paypal, /webhooks/coinbase, /webhooks/alipay, /webhooks/wechat — the gateway
 // reverse-proxies the raw bytes here, Q-WEBHOOK-INGRESS) + /livez + /ready, wrapped with the shared
 // observability middleware (which serves /metrics). Mirrors apps/billing-svc/
 // internal/server.
@@ -67,6 +67,7 @@ func New(opts Options) *Server {
 		mux.HandleFunc("POST /webhooks/paypal", opts.WebhookHandler.Handle("paypal"))
 		mux.HandleFunc("POST /webhooks/coinbase", opts.WebhookHandler.Handle("coinbase")) // Story 7.4 (USDC)
 		mux.HandleFunc("POST /webhooks/alipay", opts.WebhookHandler.Handle("alipay"))     // Story 7.5 (Alipay+)
+		mux.HandleFunc("POST /webhooks/wechat", opts.WebhookHandler.Handle("wechat"))     // Story 7.6 (WeChat Pay HK)
 	}
 
 	mux.HandleFunc("/livez", func(w http.ResponseWriter, _ *http.Request) {

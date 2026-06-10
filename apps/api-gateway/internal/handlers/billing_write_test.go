@@ -142,6 +142,49 @@ func TestRecharge_Alipay_BadCurrency_400(t *testing.T) {
 	assertCode(t, rec, http.StatusBadRequest, "400_unsupported_currency")
 }
 
+// 7.6-INT-002/003/005 — provider:"wechat" is accepted (added to supportedProviders)
+// for USD/HKD/CNY (Q-CURRENCY: 港澳=HKD, 海外华人=USD/CNY); the pending order is created
+// and bound to wechat + the authenticated user server-side (BR-A-3/A-6). The
+// code_url maps to checkout_url; no usdc_address leaks (coinbase-only field).
+func TestRecharge_WeChat_Accepted(t *testing.T) {
+	for _, currency := range []string{"USD", "HKD", "CNY"} {
+		t.Run(currency, func(t *testing.T) {
+			fb := &fakeBilling{orderID: "order-wx"}
+			fp := &fakePayment{checkoutURL: "weixin://wxpay/bizpayurl?pr=abc123"}
+			h := NewBillingWriteHandler(nil, fb, fp, nil)
+
+			rec := postRecharge(h, "user-1", `{"amount":"50.00","currency":"`+currency+`","provider":"wechat"}`)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d (%s), want 200", rec.Code, rec.Body.String())
+			}
+			var resp rechargeResponse
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if resp.Provider != "wechat" || resp.CheckoutURL != "weixin://wxpay/bizpayurl?pr=abc123" {
+				t.Fatalf("unexpected response: %+v", resp)
+			}
+			if resp.UsdcAddress != "" {
+				t.Errorf("usdc_address = %q, want empty for wechat", resp.UsdcAddress)
+			}
+			if fb.gotReq.GetPaymentProvider() != "wechat" || fb.gotReq.GetCurrency() != currency || fb.gotReq.GetUserId() != "user-1" {
+				t.Errorf("billing req mismatch: %+v", fb.gotReq)
+			}
+			if fp.gotCheckout.GetPaymentProvider() != "wechat" {
+				t.Errorf("checkout provider = %q, want wechat", fp.gotCheckout.GetPaymentProvider())
+			}
+		})
+	}
+}
+
+// 7.6-INT-005 — an unsupported currency for wechat (EUR) is rejected before any
+// provider call (reuses 7.2 400_unsupported_currency).
+func TestRecharge_WeChat_BadCurrency_400(t *testing.T) {
+	h := NewBillingWriteHandler(nil, &fakeBilling{orderID: "x"}, &fakePayment{}, nil)
+	rec := postRecharge(h, "user-1", `{"amount":"50.00","currency":"EUR","provider":"wechat"}`)
+	assertCode(t, rec, http.StatusBadRequest, "400_unsupported_currency")
+}
+
 // 7.4-INT-002 — provider:"coinbase" is accepted (added to supportedProviders); the
 // pending order is created and the response surfaces the USDC deposit address
 // (Q-ADDRESS) carried through CreateCheckoutResponse.client_token. Money fields

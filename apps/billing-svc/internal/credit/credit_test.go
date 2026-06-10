@@ -256,6 +256,73 @@ func TestApply_Recharge_CNY_ShortSettle_ParksPreFx(t *testing.T) {
 	}
 }
 
+// 7.6-INT-012 — HKD→USD fx-at-credit (the FIRST HKD exercise, Story 7.6; 港澳).
+// REUSES the SAME inherited toUSD branch + paid-currency guard as CNY (credit.go
+// UNCHANGED — the clean-reuse proof). A HKD settlement passes the integrity guard
+// in the PAID currency (settled 390 HKD == intent 390 HKD), THEN converts at the
+// latest 7.2 fx_rate (390 / 7.80 = 50.0000, HALF-UP) and credits current_usd.
+// current_rmb is untouched (7.2 Q-SOT, single USD accounting).
+func TestApply_Recharge_HKD_FxAtCredit(t *testing.T) {
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	rdb := newRedis(t)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT user_id::text, amount::text, currency FROM he_api.recharge_orders").
+		WithArgs(orderID).
+		WillReturnRows(pgxmock.NewRows([]string{"user_id", "amount", "currency"}).AddRow(userID, "390.0000", "HKD"))
+	mock.ExpectQuery("SELECT rate::text FROM he_api.fx_rates").
+		WithArgs("HKD").
+		WillReturnRows(pgxmock.NewRows([]string{"rate"}).AddRow("7.80000000"))
+	mock.ExpectExec("UPDATE he_api.recharge_orders").
+		WithArgs(orderID, "pi_123").
+		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+	mock.ExpectQuery("INSERT INTO he_api.balances").
+		WithArgs(userID, "50.0000"). // 390 HKD / 7.80 = 50.0000 USD credited
+		WillReturnRows(pgxmock.NewRows([]string{"current_usd"}).AddRow("50.0000"))
+	mock.ExpectCommit()
+
+	a := New(mock, rdb, nil)
+	out, err := a.Apply(context.Background(), rechargeEvent("390.00", "HKD"))
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if out != OutcomeCredited {
+		t.Fatalf("outcome = %v, want Credited (HKD→USD fx-at-credit)", out)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+// 7.6-INT-017 — Q-HKD-FX: an HKD settlement with NO HKD fx_rate row parks
+// (fail-closed; no credit at an unknown rate). The fx read errors → Apply rolls
+// back with no flip/credit. Inherited behaviour, HKD-first-exercised.
+func TestApply_Recharge_HKD_MissingRate_Parks(t *testing.T) {
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT user_id::text, amount::text, currency FROM he_api.recharge_orders").
+		WithArgs(orderID).
+		WillReturnRows(pgxmock.NewRows([]string{"user_id", "amount", "currency"}).AddRow(userID, "390.0000", "HKD"))
+	// Integrity passes in HKD → the fx read finds NO HKD rate → error → fail-closed.
+	mock.ExpectQuery("SELECT rate::text FROM he_api.fx_rates").
+		WithArgs("HKD").
+		WillReturnError(errors.New("no rows in result set"))
+	mock.ExpectRollback()
+
+	a := New(mock, nil, nil)
+	// Fail-closed: a non-nil error rolls the tx back (no flip, no credit) and the
+	// consumer retries — the order stays pending until an HKD rate exists.
+	if _, err := a.Apply(context.Background(), rechargeEvent("390.00", "HKD")); err == nil {
+		t.Fatal("missing HKD rate must fail-closed (no credit at unknown rate)")
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
 // 7.3-UNIT-003 — CNY→USD conversion at settlement (HALF-UP, decimal, no float).
 // 360 CNY ÷ 7.20 = 50.00 USD. The conversion path is built + tested even though
 // 7.3 enables USD only at the endpoint (Q-CURRENCY).

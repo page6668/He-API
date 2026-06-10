@@ -43,15 +43,18 @@ import (
 )
 
 // supportedProviders is the enabled channel set. 7.3: stripe/paypal. 7.4 adds
-// coinbase (USDC); 7.5 adds alipay (Alipay+); WeChat is 7.6.
-var supportedProviders = map[string]bool{"stripe": true, "paypal": true, "coinbase": true, "alipay": true}
+// coinbase (USDC); 7.5 adds alipay (Alipay+); 7.6 adds wechat (WeChat Pay HK) —
+// the 5th/FINAL channel.
+var supportedProviders = map[string]bool{"stripe": true, "paypal": true, "coinbase": true, "alipay": true, "wechat": true}
 
 // providerCurrencies overrides the default recharge currency set per provider. The
 // default (stripe/paypal/coinbase) is USD-only (7.2 Q-CURRENCY m3); alipay (7.5)
-// enables {USD, CNY} — a CNY settlement converts to the USD single-SoT balance at
+// enables {USD, CNY}; wechat (7.6) enables {USD, HKD, CNY} (港澳=HKD, 海外华人=USD/CNY
+// cross-border) — a non-USD settlement converts to the USD single-SoT balance at
 // the latest 7.2 fx_rate at credit time (Q-CURRENCY).
 var providerCurrencies = map[string]map[string]bool{
 	"alipay": {"USD": true, "CNY": true},
+	"wechat": {"USD": true, "HKD": true, "CNY": true},
 }
 
 // currencySupported reports whether currency is enabled for provider. An absent
@@ -126,7 +129,7 @@ func (h *BillingWriteHandler) Recharge(w http.ResponseWriter, r *http.Request) {
 	provider := strings.ToLower(strings.TrimSpace(req.Provider))
 	if !supportedProviders[provider] {
 		p := req.Provider
-		_ = openaierr.Write(w, ctx, http.StatusBadRequest, "400_unsupported_payment_provider", "Unsupported payment provider. Supported: stripe, paypal, coinbase, alipay.", &p)
+		_ = openaierr.Write(w, ctx, http.StatusBadRequest, "400_unsupported_payment_provider", "Unsupported payment provider. Supported: stripe, paypal, coinbase, alipay, wechat.", &p)
 		return
 	}
 	currency := strings.ToUpper(strings.TrimSpace(req.Currency))

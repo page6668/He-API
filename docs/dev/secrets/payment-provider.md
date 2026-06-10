@@ -1,7 +1,7 @@
-# Stripe + PayPal + Coinbase + Alipay+ Payment Provider Credentials — Vault & Rotation Path
+# Stripe + PayPal + Coinbase + Alipay+ + WeChat Pay Payment Provider Credentials — Vault & Rotation Path
 
 > Story 7.3 — Stripe + PayPal 集成; Story 7.4 — USDC（Coinbase Commerce）集成;
-> Story 7.5 — Alipay+（Antom international）集成.
+> Story 7.5 — Alipay+（Antom international）集成; Story 7.6 — WeChat Pay HK / cross-border 集成.
 > Vault path + rotation runbook for the payment provider secrets consumed by
 > `apps/payment-svc` (Q-SECRETS / BR-W-6).
 >
@@ -69,6 +69,33 @@ highest-value payment secret.
 | — | `ALIPAY_PLUS_NOTIFY_PATH` | optional PUBLIC notify-path override | default `/v1/billing/webhooks/alipay`; the URL Antom signs over (Q-NOTIFY-PATH) — MUST be the **public** gateway path, NOT the internal proxied path. |
 
 ⚠️ The Alipay+ signature is over a CONSTRUCTED string (`POST <publicNotifyPath>\n<Client-Id>.<Request-Time>.<rawBody>`), and `Request-Time` gives a freshness window → replay defence REGAINS a signature-timestamp layer (on par with Stripe; BETTER than Coinbase 7.4 which had none) on top of the inherited `recharge_orders` state-machine (BR-W-4). Rotation is supported via the `keyVersion` field stamped on the `Signature` header.
+
+### WeChat Pay HK / cross-border keys (Story 7.6 — WeChat Pay HK)
+
+⚠️ **FIRST ENCRYPTED webhook body + TWO high-value secrets on ONE channel.** WeChat
+Pay APIv3 signs callbacks ASYMMETRICALLY (RSA-SHA256) with the PLATFORM private key —
+we verify with the platform PUBLIC cert (NOT a secret; a leak cannot forge). BUT the
+callback's `resource` is AES-256-GCM **encrypted**: it MUST be decrypted with the
+symmetric `APIv3Key` AFTER the signature verifies. So this channel holds BOTH an
+asymmetric merchant PRIVATE signing key (broad blast radius — signs ALL our outbound
+calls) AND a NEW symmetric AES-256 decrypt secret (the APIv3Key — decrypts every
+callback resource) that no prior channel held.
+
+| Vault key | Env var | Used by | Notes |
+|---|---|---|---|
+| `mch_id` | `WECHAT_PAY_MCH_ID` | merchant id (sign + body) | gates the channel: unset → wechat not wired → `400_unsupported_payment_provider`. NOT a secret (an identifier). |
+| `merchant_private_key` | `WECHAT_PAY_MERCHANT_PRIVATE_KEY` | RSA-SHA256 **signs OUR outbound** `/v3/pay/transactions/native` calls | ⚠️ **HIGHEST blast radius** — a leak lets an attacker impersonate US to WeChat (create/close/refund). PKCS#8/PKCS#1 PEM or bare base64. **NEVER logged.** |
+| `merchant_cert_serial` | `WECHAT_PAY_MERCHANT_CERT_SERIAL` | `serial_no` in the outbound `Authorization` header | our merchant cert serial. NOT a secret. |
+| `platform_public_key` | `WECHAT_PAY_PLATFORM_PUBLIC_KEY` | RSA-SHA256 **verifies INBOUND** callback `Wechatpay-Signature` | WeChat PLATFORM public key/cert — config-managed but **not a secret** (a leak cannot forge). PKIX/PKCS#1 PEM, an x509 cert PEM, or bare base64. |
+| `platform_cert_serial` | `WECHAT_PAY_PLATFORM_CERT_SERIAL` | selects the verify cert by `Wechatpay-Serial` | the configured platform cert's serial; a callback whose `Wechatpay-Serial` does NOT match → reject (fail-closed, do NOT skip verify, Q-CERT-ROTATION). |
+| `apiv3_key` | `WECHAT_PAY_APIV3_KEY` | AES-256-GCM **decrypts** every callback `resource` (and the `/v3/certificates` response) | ⚠️ **NEW symmetric AES-256 decrypt secret** (exactly 32 bytes). A leak exposes callback contents (amounts, txn ids) but does NOT alone enable forgery (the callback signature is asymmetric). **NEVER logged.** |
+| — | `WECHAT_PAY_APPID` | WeChat appid carried in the Native create body | NOT a secret. |
+| — | `WECHAT_PAY_API_BASE_URL` | optional base override | default `https://apihk.mch.weixin.qq.com` (HK/cross-border); sandbox/global selectable (Q-CROSSBORDER); tests point at an `httptest` stub. |
+| — | `WECHAT_PAY_NOTIFY_URL` | optional PUBLIC callback URL override | the gateway's public `/v1/billing/webhooks/wechat` URL sent to WeChat in the Native create body. |
+
+⚠️ The WeChat APIv3 callback signature is over `<Wechatpay-Timestamp>\n<Wechatpay-Nonce>\n<rawBody>\n` (NO method/URI → NO `r.URL.Path` canonicalisation trap, SIMPLER than Alipay+; the 7.5 #1 risk is eliminated). `Wechatpay-Timestamp` gives a freshness window → stale callbacks are rejected (replay layer 1) on top of the inherited `recharge_orders` state-machine (replay layer 2, BR-W-5). After verify, the `resource` is AES-256-GCM-decrypted with the APIv3Key; a tag mismatch (tampered ciphertext/nonce/AAD OR a wrong APIv3Key) fails CLOSED (NO credit, NEVER a partial-plaintext parse, BR-W-3). The platform cert is selected by `Wechatpay-Serial`; auto-rotation via `GET /v3/certificates` (its response is itself APIv3Key-encrypted) is DEFERRED — MVP uses a configured cert keyed by serial, rotated by redeploy (Q-CERT-ROTATION).
+
+⚠️ **HKD fx-at-credit (Q-HKD-FX)**: WeChat Pay HK is the FIRST channel to settle HKD. The HKD→USD credit reads the latest USD→HKD `he_api.fx_rates` row at settlement (inherited credit.go toUSD); credit.go fail-CLOSES (parks, no credit at an unknown rate) if no HKD row exists. Seed one for local/CI with `scripts/dev/seed-hkd-fxrate.sql`. The 7.2 daily fx-refresh CronJob is single-currency (USD→CNY); extending it to ALSO refresh USD→HKD is a 7.2-component follow-up — until then the HKD rate is config-seeded + redeploy-rotated (a stale-but-present rate converts; an absent rate fail-closes).
 
 The Secret is injected via `envFrom.secretRef` so the keys land in the pod
 environment and NEVER render into a manifest. payment-svc's slog uses the shared

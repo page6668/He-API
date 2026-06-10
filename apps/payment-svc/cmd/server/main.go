@@ -30,6 +30,17 @@
 //	COINBASE_COMMERCE_API_KEY     — Coinbase Commerce REST API key (X-CC-Api-Key; charge create)
 //	COINBASE_COMMERCE_WEBHOOK_SECRET — Coinbase webhook HMAC secret (X-CC-Webhook-Signature; distinct blast radius)
 //	COINBASE_COMMERCE_API_BASE_URL — optional Coinbase Commerce API base override (sandbox/test)
+//	ALIPAY_PLUS_CLIENT_ID         — Alipay+/Antom Client-Id (gates the channel)
+//	ALIPAY_PLUS_MERCHANT_PRIVATE_KEY — RSA key signing OUR outbound Antom calls (⚠️ broad blast radius)
+//	ALIPAY_PLUS_ALIPAY_PUBLIC_KEY — Alipay+'s public key verifying inbound notifications
+//	ALIPAY_PLUS_API_BASE_URL / ALIPAY_PLUS_NOTIFY_PATH — optional base / public-notify-path overrides
+//	WECHAT_PAY_MCH_ID             — WeChat Pay merchant id (gates the channel)
+//	WECHAT_PAY_MERCHANT_PRIVATE_KEY — RSA key signing OUR outbound WeChat calls (⚠️ broad blast radius; NEVER logged)
+//	WECHAT_PAY_MERCHANT_CERT_SERIAL — our merchant cert serial (outbound Authorization serial_no)
+//	WECHAT_PAY_PLATFORM_PUBLIC_KEY  — WeChat platform public key verifying inbound callbacks (not a secret)
+//	WECHAT_PAY_PLATFORM_CERT_SERIAL — platform cert serial matched against Wechatpay-Serial
+//	WECHAT_PAY_APIV3_KEY          — ⚠️ 32B symmetric AES-256 key; decrypts EVERY callback resource (NEVER logged)
+//	WECHAT_PAY_APPID / WECHAT_PAY_API_BASE_URL / WECHAT_PAY_NOTIFY_URL — appid / base (HK vs global) / public callback URL
 package main
 
 import (
@@ -54,6 +65,7 @@ import (
 	"github.com/he-api/he-api/apps/payment-svc/internal/provider/coinbase"
 	"github.com/he-api/he-api/apps/payment-svc/internal/provider/paypal"
 	"github.com/he-api/he-api/apps/payment-svc/internal/provider/stripe"
+	"github.com/he-api/he-api/apps/payment-svc/internal/provider/wechat"
 	"github.com/he-api/he-api/apps/payment-svc/internal/server"
 	"github.com/he-api/he-api/apps/payment-svc/internal/webhook"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/payment/v1/paymentv1connect"
@@ -210,6 +222,36 @@ func buildRegistry(logger *slog.Logger) *provider.Registry {
 		logger.Info("alipay provider wired")
 	} else {
 		logger.Warn("ALIPAY_PLUS_CLIENT_ID unset — alipay (Alipay+) provider disabled")
+	}
+
+	// Story 7.6 — WeChat Pay HK / cross-border (the 5th/FINAL channel). Added only
+	// when the merchant id is set, so a partial config (e.g. no WeChat channel in
+	// dev) still boots. TWO high-value secrets: the merchant PRIVATE key signs OUR
+	// outbound calls (⚠️ broad blast radius) and the symmetric APIv3Key decrypts
+	// EVERY callback resource (⚠️ a NEW decrypt secret no prior channel held); both
+	// are distinct from the platform PUBLIC verify key (a non-secret) and the
+	// mch/cert serials (BR-W-7). The platform serial selects the verify key
+	// (Wechatpay-Serial rotation, Q-CERT-ROTATION).
+	if mch := os.Getenv("WECHAT_PAY_MCH_ID"); mch != "" {
+		opts := []wechat.Option{}
+		if base := os.Getenv("WECHAT_PAY_API_BASE_URL"); base != "" {
+			opts = append(opts, wechat.WithBaseURL(base))
+		}
+		if nu := os.Getenv("WECHAT_PAY_NOTIFY_URL"); nu != "" {
+			opts = append(opts, wechat.WithNotifyURL(nu))
+		}
+		if appID := os.Getenv("WECHAT_PAY_APPID"); appID != "" {
+			opts = append(opts, wechat.WithAppID(appID))
+		}
+		impls = append(impls, wechat.New(mch,
+			os.Getenv("WECHAT_PAY_MERCHANT_PRIVATE_KEY"),
+			os.Getenv("WECHAT_PAY_MERCHANT_CERT_SERIAL"),
+			os.Getenv("WECHAT_PAY_PLATFORM_PUBLIC_KEY"),
+			os.Getenv("WECHAT_PAY_PLATFORM_CERT_SERIAL"),
+			os.Getenv("WECHAT_PAY_APIV3_KEY"), opts...))
+		logger.Info("wechat provider wired")
+	} else {
+		logger.Warn("WECHAT_PAY_MCH_ID unset — wechat (WeChat Pay HK) provider disabled")
 	}
 
 	return provider.NewRegistry(impls...)
