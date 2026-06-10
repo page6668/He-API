@@ -125,10 +125,11 @@ type Match struct {
 // construction nothing is mutated, so all read methods are lock-free and safe
 // for concurrent use from any number of goroutines (BR-3.5).
 type Lexicon struct {
-	exact  map[string]Match // canonical → Match (authoritative membership)
-	terms  []Match          // sorted by Canonical (deterministic; BR-4.1)
-	bloom  *bloomFilter     // §9.3 layer-1 prefilter, derived from terms
-	counts map[Lang]int     // per-language term counts (floor surface)
+	exact   map[string]Match // canonical → Match (authoritative membership)
+	terms   []Match          // sorted by Canonical (deterministic; BR-4.1)
+	bloom   *bloomFilter     // §9.3 layer-1 prefilter, derived from terms
+	counts  map[Lang]int     // per-language term counts (floor surface)
+	lengths []int            // sorted distinct Canonical rune-lengths (8.2 window bound)
 }
 
 // Normalize is the canonical, shared normalization entrypoint (BR-2.2). The
@@ -247,7 +248,24 @@ func NewFromRegistry(reg Registry) Lexicon {
 		bloom.add(m.Canonical)
 	}
 
-	return Lexicon{exact: exact, terms: terms, bloom: bloom, counts: counts}
+	return Lexicon{exact: exact, terms: terms, bloom: bloom, counts: counts, lengths: distinctRuneLengths(terms)}
+}
+
+// distinctRuneLengths returns the sorted, distinct Canonical rune-lengths across
+// terms. Precomputed once at construction so TermLengths() is an O(copy) read.
+func distinctRuneLengths(terms []Match) []int {
+	seen := make(map[int]struct{}, len(terms))
+	var lengths []int
+	for _, m := range terms {
+		n := utf8.RuneCountInString(m.Canonical)
+		if _, ok := seen[n]; ok {
+			continue
+		}
+		seen[n] = struct{}{}
+		lengths = append(lengths, n)
+	}
+	sort.Ints(lengths)
+	return lengths
 }
 
 // MightContain is the §9.3 layer-1 Bloom fast-path (98%+ non-hit exclusion). It
@@ -291,5 +309,24 @@ func (l Lexicon) CountByLang() map[Lang]int {
 func (l Lexicon) Categories() []Category {
 	out := make([]Category, len(closedCategories))
 	copy(out, closedCategories)
+	return out
+}
+
+// TermLengths returns the sorted, distinct Canonical rune-lengths present in the
+// corpus. It is the window-bound surface for a substring scanner (Story 8.2): a
+// consumer that windows free CJK text MUST bound its window lengths by the
+// realized corpus lengths, NOT a magic constant — else a stored term longer than
+// the constant is a silent false-negative (a 备案 compliance breach, the gravest
+// defect class). Windowing over ONLY these realized lengths is both safe
+// (no-false-negative) and tight (no wasted windows on lengths no term has).
+//
+// This accessor is purely additive (Story 8.2 OQ-8.2-2, Architect-ratified):
+// it changes zero existing behaviour, the value is precomputed at construction,
+// and — like CountByLang / Categories — the returned slice is a fresh copy on
+// every call so callers cannot mutate internal state. Segmentation itself stays
+// the consumer's job (8.1 BR-3.4); 8.1 only exposes the length set.
+func (l Lexicon) TermLengths() []int {
+	out := make([]int, len(l.lengths))
+	copy(out, l.lengths)
 	return out
 }

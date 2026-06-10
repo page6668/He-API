@@ -36,12 +36,14 @@ import (
 
 	"github.com/he-api/he-api/apps/api-gateway/internal/adapterclient"
 	"github.com/he-api/he-api/apps/api-gateway/internal/billingemit"
+	"github.com/he-api/he-api/apps/api-gateway/internal/contentsafety"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/requestid"
 	"github.com/he-api/he-api/apps/api-gateway/internal/openaierr"
 	"github.com/he-api/he-api/apps/api-gateway/internal/routingclient"
 	adapterv1 "github.com/he-api/he-api/packages/proto/gen/go/he/adapter/v1"
 	billingv1 "github.com/he-api/he-api/packages/proto/gen/go/he/billing/v1"
+	safetylexicon "github.com/he-api/he-api/packages/safety-lexicon"
 )
 
 // MockContent is the literal assistant-message content the mock returns.
@@ -257,6 +259,58 @@ func WithUsageEmitter(e billingemit.UsageEmitter) ChatHandlerOption {
 	}
 }
 
+// WithSafetyScanner wires the Story-8.2 §9.3 入参 content-safety scanner. When
+// set, every inbound /v1/chat/completions request has its message content scanned
+// against the 8.1 lexicon BEFORE any routing/dispatch; a confirmed hit is rejected
+// with the canonical 400_content_filter envelope (BR-1.1/BR-1.2).
+//
+// Nil is silently ignored — a handler built without this option does NOT scan
+// (pre-8.2 behaviour, byte-identical). Production wires a non-nil
+// DefaultLexicon-backed scanner at startup; focused unit tests may omit it.
+func WithSafetyScanner(s *contentsafety.Scanner) ChatHandlerOption {
+	return func(h *ChatCompletionsHandler) {
+		if s != nil {
+			h.safetyScanner = s
+		}
+	}
+}
+
+// WithSafetyRecorder wires the Story-8.2 interception-event Recorder (the
+// Story-8.5 binding seam). On a content-safety block the handler hands a
+// SafetyEvent to this Recorder (fire-and-forget). Nil is silently ignored — the
+// constructor installs a contentsafety.NopRecorder default (zero-DB this story).
+func WithSafetyRecorder(r contentsafety.Recorder) ChatHandlerOption {
+	return func(h *ChatCompletionsHandler) {
+		if r != nil {
+			h.safetyRecorder = r
+		}
+	}
+}
+
+// recordSafetyBlock builds the Story-8.2 interception SafetyEvent from the
+// confirmed Match + the request-context identity helpers and hands it to the
+// injected Recorder (BR-3.1/BR-3.2). The matched term goes ONLY here (the 8.5
+// seam), NEVER to the caller-facing envelope (no lexicon leak). Fire-and-forget
+// on the reject path — the no-op default persists nothing (zero-DB, BR-3.4).
+func (h *ChatCompletionsHandler) recordSafetyBlock(ctx context.Context, m safetylexicon.Match) {
+	if h.safetyRecorder == nil {
+		return
+	}
+	heRequestID, _ := requestid.FromContext(ctx)
+	userID, _ := middleware.BearerUserIDFromContext(ctx)
+	apiKeyID, _ := middleware.APIKeyIDFromContext(ctx)
+	h.safetyRecorder.Record(ctx, contentsafety.SafetyEvent{
+		Direction:   contentsafety.DirectionInput,
+		MatchedRule: m.Canonical, // == Match.Canonical (≤100 runes, fits VARCHAR(100))
+		Category:    string(m.Category),
+		Severity:    string(m.Severity), // carried for 8.5; does NOT gate the 8.2 decision (8.4 owns strictness)
+		Action:      contentsafety.ActionBlocked,
+		UserID:      userID,
+		APIKeyID:    apiKeyID,
+		HeRequestID: heRequestID,
+	})
+}
+
 // emitUsage builds and fire-and-forget-emits one usage.recorded UsageEvent for a
 // successfully-served (leg of a) completion. RAW inputs only — NO cost (Q-CH).
 // ledgerKey is the Q-ABKEY dedup key: he_request_id for a single request,
@@ -312,10 +366,17 @@ type ChatCompletionsHandler struct {
 	newID           func() string // injected via WithIDFactory; production default newMockCompletionID
 	now             func() time.Time
 	adapterRegistry *adapterclient.Registry
-	tokenDeducter   TokenDeducter          // Story 5.3 — post-response TPM deduction; nil → nop
-	router          *routingclient.Decider // Story 6.2 — routing decision; default passthrough
-	failoverBudget  time.Duration          // Story 6.3 — total wall-clock failover budget (default FailoverBudget)
+	tokenDeducter   TokenDeducter            // Story 5.3 — post-response TPM deduction; nil → nop
+	router          *routingclient.Decider   // Story 6.2 — routing decision; default passthrough
+	failoverBudget  time.Duration            // Story 6.3 — total wall-clock failover budget (default FailoverBudget)
 	usageEmitter    billingemit.UsageEmitter // Story 7.1 — usage.recorded producer; nil → nop
+	// Story 8.2 — §9.3 入参 Filter. safetyScanner resolves inbound message content
+	// against the 8.1 lexicon; nil → scanning disabled (pre-8.2 behaviour for
+	// handlers built without WithSafetyScanner, e.g. focused unit tests).
+	// safetyRecorder receives the interception event on a block (Story-8.5 seam);
+	// nil → no-op. Production wires both in main.go.
+	safetyScanner  *contentsafety.Scanner
+	safetyRecorder contentsafety.Recorder
 }
 
 // NewChatCompletionsHandler builds the handler. logger may be nil — falls
@@ -327,8 +388,9 @@ func NewChatCompletionsHandler(logger *slog.Logger, opts ...ChatHandlerOption) *
 		newID:          newMockCompletionID,
 		now:            time.Now,
 		tokenDeducter:  nopTokenDeducter{},
-		failoverBudget: FailoverBudget, // Story 6.3 default; WithFailoverBudget overrides for tests
-		usageEmitter:   billingemit.Nop{}, // Story 7.1 default; WithUsageEmitter wires Kafka
+		failoverBudget: FailoverBudget,              // Story 6.3 default; WithFailoverBudget overrides for tests
+		usageEmitter:   billingemit.Nop{},           // Story 7.1 default; WithUsageEmitter wires Kafka
+		safetyRecorder: contentsafety.NopRecorder{}, // Story 8.2 default; WithSafetyRecorder wires the 8.5 impl
 	}
 	if h.logger == nil {
 		h.logger = slog.Default()
@@ -403,6 +465,27 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	if status, code, msg, valid := validateChatRequest(&req); !valid {
 		_ = openaierr.Write(w, ctx, status, code, msg, nil)
 		return
+	}
+
+	// Story 8.2 — §9.3 入参 Filter (Bloom 快速排除 → 词典匹配). Reject-before-
+	// dispatch: scan EVERY message's content (all roles — all client-supplied,
+	// BR-1.5) against the 8.1 lexicon AFTER validation and BEFORE the A/B guard /
+	// routing / any adapter|mock|failover|stream dispatch. The FIRST confirmed hit
+	// (BR-3.3) returns the canonical 400_content_filter envelope (REUSED, not added
+	// — BR-1.2) with param=nil so no matched substring leaks to the caller, and
+	// emits the Story-8.5 interception event. Because the reject precedes the
+	// dispatch fork, the blocked request makes ZERO upstream calls and incurs ZERO
+	// usage/billing (the metering hooks fire downstream — BR-1.3). A clean request
+	// falls through BYTE-IDENTICALLY to the pre-8.2 path.
+	if h.safetyScanner != nil {
+		for i := range req.Messages {
+			if match, hit := h.safetyScanner.ScanText(req.Messages[i].Content); hit {
+				h.recordSafetyBlock(ctx, match)
+				_ = openaierr.Write(w, ctx, http.StatusBadRequest, "400_content_filter",
+					"Request was blocked by the content safety filter.", nil)
+				return
+			}
+		}
 	}
 
 	// Story 6.4 BR4-2 — A/B streaming guard (Q-B). A/B is NON-STREAMING-only in

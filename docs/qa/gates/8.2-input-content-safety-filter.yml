@@ -1,0 +1,118 @@
+schema: 1
+story: "8.2"
+story_title: "入参过滤（命中拦截 + 错误码）"
+gate: "PASS"
+status_reason: "§9.3 入参 Filter wired into POST /v1/chat/completions as a reject-before-dispatch guard over the Story-8.1 DefaultLexicon SoT (no fork). Full gateway lane + safety-lexicon lane green under -race, go vet clean, 100% AC coverage (4 ACs + T0) with traceable code+test locations. Both HARD compliance gates PASS — UNIT-013 exhaustive no-false-negative (6 cats × zh/en × embedded/normalization-evasion) and UNIT-014 corpus-truth window bound (40-rune term, descLengths[0]==40). Reject-precedes-dispatch verified by negative assertions (routing/adapter/usage/deducter all 0 on block); no-leak verified (param=null, body free of matched term); no-charge-on-block verified. Perf is a SOFT gate: clean-scan P99 273.6µs ≤ 600µs (Architect-ratified benchmark-derived ceiling per the re-normalization Medium — accepted-and-measured, never traded for a miss). Zero DB, zero new endpoint, zero new CI lane, code REUSED. All 5 deliverable bindings verified."
+reviewer: "Turing (Test Engineer & Quality Architect)"
+updated: "2026-06-10T16:19:39Z"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "HIGH"
+  cached_review_mode: "full_testing"
+  cached_project_type: "web_backend"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+top_issues: []
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 37  # contentsafety 21 + handlers Safety* 14 + safety-lexicon TermLengths UNIT-040/041 2
+    passed_count: 37
+    failed_count: 0
+    skipped_count: 0
+    pass_rate: 100
+    coverage_percentage: 0  # not measured; security-invariant + integrity suite, not line-coverage gated
+    failed_tests: []
+    notes: "Independent execution: go test ./apps/api-gateway/... -race → all ok; go test ./packages/safety-lexicon/... -race → ok; go vet clean. Matches Dev claim (single round). 0 skip/TODO markers in contentsafety."
+  e2e:
+    executed: true  # httptest handler-level (no browser surface for a Go gateway)
+    passed: true
+    skipped: false
+    skip_reason: ""
+    scenarios_tested: 3   # INT-001 blocked end-to-end, INT-002 clean end-to-end, INT-003 CI lanes present
+    scenarios_passed: 3
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: ""  # no issues found → no evidence captured
+  issues: []
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 5
+  security_sensitive: true
+  dev_gate_score: 99
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 0 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "OQ-8.1-6 (Epic-8 blocker, PM/PO): the PLACEHOLDER corpus must be replaced with a sourced, license-clean, 备案-defensible wordlist BEFORE 8.2/8.3 reach production. 8.2 is filter MACHINERY over whatever corpus 8.1 ships; the no-false-negative property is corpus-independent, but production compliance still gates on the real wordlist."
+      - "S⇄T fold (8.1 OQ-8.1-4) carried forward AGAIN by 8.2: a traditional-variant query will not match the simplified-seeded corpus until folding is added (8.3 or a dedicated story). Tracked in the 8.2 Dev Log."
+      - "Tool-arg / multipart-multimodal scan deferred (Architect Low #2): Tools/ToolChoice json.RawMessage + multipart content arrays are an inbound injection surface a later content-safety story (Epic 9 multimodal) must explicitly own. Tracked forward-carry, not silent scope-out."
+      - "Story 8.5 owns the persisting Recorder (content_safety_logs write + excerpt redaction + 6-month retention + 备案 PDF). 8.2 ships the no-op default + the event shape that matches the columns byte-for-byte."
+
+# AC coverage verification (Step 4.6) — 100%, all four ACs + T0 verified against live code + tests
+evidence_trace:
+  ac_covered: [1, 2, 3, 4]
+  ac_gaps: []
+  ac_detail:
+    - ac: AC1
+      status: VERIFIED
+      code: "chat_completions.go:470-489 (scan guard after validateChatRequest, before A/B guard; openaierr.Write 400_content_filter REUSED, param=nil no-leak); main.go:360-369 (DefaultLexicon scanner + NopRecorder wiring)"
+      tests: "UNIT-001 envelope shape, UNIT-002 reject-precedes-dispatch (routing/adapter/usage/deducter==0), UNIT-003 no-leak, UNIT-004 all-roles scanned, UNIT-005 clean passthrough byte-identity, INT-001/INT-002 end-to-end"
+    - ac: AC2
+      status: VERIFIED
+      code: "contentsafety/scanner.go:88-114 (ScanText: shared Normalize → descending-length rune window → MightContain Bloom prefilter → Lookup confirm); :42-49 (corpus-truth descLengths from TermLengths())"
+      tests: "UNIT-010 embedded CJK, UNIT-011 ASCII, UNIT-012 normalization evasion, UNIT-013 HARD exhaustive no-false-negative, UNIT-014 HARD corpus-truth window, UNIT-015 Bloom-before-Lookup, UNIT-016 shared Normalize, UNIT-017 longest-match-first, UNIT-018 no-fast-path preserves no-FN"
+    - ac: AC3
+      status: VERIFIED
+      code: "contentsafety/recorder.go (Recorder/SafetyEvent/NopRecorder; field shapes match content_safety_logs direction≤10/matched_rule≤100/action≤20); chat_completions.go:295-312 (recordSafetyBlock builds event from Match + ctx helpers)"
+      tests: "UNIT-020/021 event shape, UNIT-022 NopRecorder no-panic/zero-DB default, UNIT-023 column-shape parity"
+    - ac: AC4
+      status: VERIFIED
+      code: "scanner.go:88-114 pure/deterministic scan over immutable lexicon; reject precedes metering (chat_completions.go:470-489) → no-charge"
+      tests: "UNIT-030 determinism, BLIND concurrency race-free, UNIT-031 no-charge-on-block, INT-003 CI lanes present+-race, BENCH-001 soft-gate (P99 273.6µs ≤ 600µs), BenchmarkStory82_CleanScan"
+    - ac: T0
+      status: VERIFIED
+      code: "packages/safety-lexicon/lexicon.go:328-332 TermLengths() (additive, precomputed, defensive-copy); :132 lengths field; distinctRuneLengths sorted-distinct"
+      tests: "UNIT-040 sorted-distinct no-regression, UNIT-041 purity (defensive copy)"
+
+# HARD compliance gates — both PASS (a missed term = a missed filter = compliance breach)
+hard_gates:
+  - { id: UNIT-013, desc: "exhaustive no-false-negative (6 cats × zh/en × embedded + normalization-evasion templates)", status: PASS }
+  - { id: UNIT-014, desc: "corpus-truth window bound — 40-rune term, descLengths[0]==40, detected (magic-constant bound would miss it)", status: PASS }
+
+# Architect Round-1 carry-forwards — all regression-guarded
+architect_carryforward_guards:
+  - { issue: "Medium — redundant Normalize on hot path vs AC4 budget", guard: "BENCH-001 measures WITH the re-normalization cost; ceiling set from the real bench (600µs, P99 273.6µs); UNIT-018 proves no fast-path trades the no-FN invariant", status: ACCEPTED_AND_MEASURED }
+  - { issue: "Low #1 — matched_rule determinism under overlapping terms", guard: "scanner descends TermLengths (longest-match-first); UNIT-017 asserts the longest canonical is reported on overlap", status: VERIFIED_LONGEST_FIRST }
+  - { issue: "Low #2 — tool-arg/multimodal deferral should be tracked not silent", guard: "forward-carried in Dev Log + gate monitor item (alongside S⇄T)", status: TRACKED_FORWARD }
+
+# Deliverable bindings (Step: binding verification) — 5/5 verified
+deliverable_bindings:
+  - { binding: "Scanner.Scan/ScanText consumed by chat handler", status: VERIFIED, evidence: "chat_completions.go:482 h.safetyScanner.ScanText" }
+  - { binding: "Scanner + Recorder constructed/injected at wiring", status: VERIFIED, evidence: "main.go:360 NewScanner, :369 NopRecorder, :368 WithSafetyScanner" }
+  - { binding: "TermLengths() consumed by scanner window bound", status: VERIFIED, evidence: "scanner.go:43 l.TermLengths()" }
+  - { binding: "400_content_filter emitted via openaierr.Write (code REUSED)", status: VERIFIED, evidence: "chat_completions.go:484" }
+  - { binding: "Recorder/SafetyEvent exercised by tests (prod consumer = 8.5)", status: VERIFIED, evidence: "recorder_test.go + chat_completions_safety_test.go" }

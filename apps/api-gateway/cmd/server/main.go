@@ -32,6 +32,7 @@ import (
 
 	"github.com/he-api/he-api/apps/api-gateway/internal/adapterclient"
 	"github.com/he-api/he-api/apps/api-gateway/internal/billingemit"
+	"github.com/he-api/he-api/apps/api-gateway/internal/contentsafety"
 	"github.com/he-api/he-api/apps/api-gateway/internal/entitlement"
 	"github.com/he-api/he-api/apps/api-gateway/internal/featureflag"
 	"github.com/he-api/he-api/apps/api-gateway/internal/fxrate"
@@ -51,6 +52,7 @@ import (
 	"github.com/he-api/he-api/packages/proto/gen/go/he/billing/v1/billingv1connect"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/notification/v1/notificationv1connect"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/payment/v1/paymentv1connect"
+	safetylexicon "github.com/he-api/he-api/packages/safety-lexicon"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
@@ -350,12 +352,21 @@ func main() {
 		logger.Warn("HE_API_KAFKA_BROKERS unset — usage.recorded emission disabled")
 	}
 
+	// Story 8.2 — §9.3 入参 content-safety filter. The scanner resolves inbound
+	// message text against the in-process, immutable 8.1 DefaultLexicon (境内-safe,
+	// embedded in the binary — no network). The interception event is handed to a
+	// no-op Recorder this story; Story 8.5 supplies the content_safety_logs-writing
+	// implementation (8.2 makes ZERO DB changes).
+	safetyScanner := contentsafety.NewScanner(safetylexicon.DefaultLexicon)
+
 	chatCompletions := handlers.NewChatCompletionsHandler(
 		logger,
 		handlers.WithAdapterRegistry(adapterRegistry),
 		handlers.WithRouter(routingDecider),
 		handlers.WithTokenDeducter(rateLimitMW),
 		handlers.WithUsageEmitter(usageEmitter),
+		handlers.WithSafetyScanner(safetyScanner),
+		handlers.WithSafetyRecorder(contentsafety.NopRecorder{}),
 	)
 
 	// Story 5.2 — key-policy enforcement gates (AC2 IP whitelist / AC3 model

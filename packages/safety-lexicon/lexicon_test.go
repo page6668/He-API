@@ -639,6 +639,79 @@ func TestUNIT030_introspection_surfaces(t *testing.T) {
 	}
 }
 
+// TestUNIT040_termlengths_sorted_distinct_no_regression covers Story 8.2
+// UNIT-040: the additive TermLengths() accessor returns the sorted, distinct
+// Canonical rune-lengths AND its presence regresses none of the existing
+// Lookup / MightContain / Normalize / enum behaviour.
+func TestUNIT040_termlengths_sorted_distinct_no_regression(t *testing.T) {
+	got := DefaultLexicon.TermLengths()
+	if len(got) == 0 {
+		t.Fatal("TermLengths() returned empty for a floor-guarded corpus")
+	}
+
+	// Sorted ascending + strictly distinct (no duplicate lengths).
+	for i := 1; i < len(got); i++ {
+		if got[i] <= got[i-1] {
+			t.Fatalf("TermLengths() not strictly increasing at %d: %v", i, got)
+		}
+	}
+
+	// Every reported length is a positive rune-count ≤ the Canonical cap, and is
+	// REALIZED by at least one stored term (corpus-truth).
+	present := make(map[int]bool)
+	for _, m := range DefaultLexicon.terms {
+		present[utf8.RuneCountInString(m.Canonical)] = true
+	}
+	for _, n := range got {
+		if n <= 0 || n > maxCanonicalRunes {
+			t.Fatalf("TermLengths() reported out-of-range length %d", n)
+		}
+		if !present[n] {
+			t.Fatalf("TermLengths() reported length %d that no term has", n)
+		}
+	}
+	// Completeness: EVERY realized term-length is reported (no false-negative
+	// window bound for a downstream scanner — the load-bearing 8.2 BR-2.2 rule).
+	if len(present) != len(got) {
+		t.Fatalf("TermLengths() len %d != distinct realized lengths %d", len(got), len(present))
+	}
+
+	// Existing behaviour unchanged (regression guard on the Done package):
+	// a known stored term still resolves; a non-member still misses.
+	if _, ok := DefaultLexicon.Lookup("badword"); !ok {
+		t.Fatal("regression: known term 'badword' no longer resolves after TermLengths() addition")
+	}
+	if !DefaultLexicon.MightContain("badword") {
+		t.Fatal("regression: MightContain('badword') false after TermLengths() addition")
+	}
+	if _, ok := DefaultLexicon.Lookup("this-is-not-a-stored-term-xyz"); ok {
+		t.Fatal("regression: non-member now resolves after TermLengths() addition")
+	}
+}
+
+// TestUNIT041_termlengths_purity covers Story 8.2 UNIT-041: TermLengths() is a
+// read-only, idempotent accessor that returns a defensive copy on every call
+// (mirrors CountByLang / Categories — cannot leak internal state).
+func TestUNIT041_termlengths_purity(t *testing.T) {
+	a := DefaultLexicon.TermLengths()
+	b := DefaultLexicon.TermLengths()
+	if len(a) != len(b) {
+		t.Fatalf("TermLengths() non-idempotent: len %d != %d", len(a), len(b))
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			t.Fatalf("TermLengths() non-idempotent at %d: %d != %d", i, a[i], b[i])
+		}
+	}
+	// Mutating the returned slice must not affect a subsequent call.
+	if len(a) > 0 {
+		a[0] = -999
+		if DefaultLexicon.TermLengths()[0] == -999 {
+			t.Fatal("TermLengths() leaked internal state (no defensive copy)")
+		}
+	}
+}
+
 func TestBLINDBOUNDARY002_single_rune_term_resolves(t *testing.T) {
 	reg := cloneRegistry()
 	const r = "页" // a single CJK rune, benign placeholder
