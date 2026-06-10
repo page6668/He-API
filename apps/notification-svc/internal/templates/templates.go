@@ -15,6 +15,8 @@ import (
 //go:embed gdpr_export_ready/*.txt gdpr_export_ready/*.html
 //go:embed cap_warning/*.txt cap_warning/*.html
 //go:embed cap_tripped/*.txt cap_tripped/*.html
+//go:embed low_balance/*.txt low_balance/*.html
+//go:embed low_balance_failed/*.txt low_balance_failed/*.html
 var fs embed.FS
 
 // FallbackLocale is the locale that any non-resolvable locale falls back to.
@@ -34,6 +36,10 @@ const (
 	// package; the proto wire contract uses the EmailTemplate enum (R-2 cascade).
 	TemplateMonthlyCapWarning = "cap_warning"
 	TemplateMonthlyCapTripped = "cap_tripped"
+	// Story 7.7 — low-balance alert (余额预警) + the auto-recharge-failed variant.
+	// Vars: display_name, current_balance, threshold (string-decimals).
+	TemplateLowBalance       = "low_balance"
+	TemplateLowBalanceFailed = "low_balance_failed"
 )
 
 // Rendered is what the SendGrid client needs to build one outbound mail.

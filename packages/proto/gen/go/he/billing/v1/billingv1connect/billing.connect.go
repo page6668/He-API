@@ -40,12 +40,25 @@ const (
 	// BillingServiceCreateRechargeOrderProcedure is the fully-qualified name of the BillingService's
 	// CreateRechargeOrder RPC (Story 7.3 additive).
 	BillingServiceCreateRechargeOrderProcedure = "/he.billing.v1.BillingService/CreateRechargeOrder"
+	// Story 7.7 additive RPCs.
+	BillingServiceSetAutoRechargeProcedure     = "/he.billing.v1.BillingService/SetAutoRecharge"
+	BillingServiceSavePaymentMethodProcedure   = "/he.billing.v1.BillingService/SavePaymentMethod"
+	BillingServiceListPaymentMethodsProcedure  = "/he.billing.v1.BillingService/ListPaymentMethods"
+	BillingServiceDeletePaymentMethodProcedure = "/he.billing.v1.BillingService/DeletePaymentMethod"
+	BillingServiceListInvoicesProcedure        = "/he.billing.v1.BillingService/ListInvoices"
+	BillingServiceGetInvoicePdfProcedure       = "/he.billing.v1.BillingService/GetInvoicePdf"
 )
 
 // BillingServiceClient is a client for the he.billing.v1.BillingService service.
 type BillingServiceClient interface {
 	CheckBalance(context.Context, *connect.Request[v1.CheckBalanceRequest]) (*connect.Response[v1.CheckBalanceResponse], error)
 	CreateRechargeOrder(context.Context, *connect.Request[v1.CreateRechargeOrderRequest]) (*connect.Response[v1.CreateRechargeOrderResponse], error)
+	SetAutoRecharge(context.Context, *connect.Request[v1.SetAutoRechargeRequest]) (*connect.Response[v1.SetAutoRechargeResponse], error)
+	SavePaymentMethod(context.Context, *connect.Request[v1.SavePaymentMethodRequest]) (*connect.Response[v1.SavePaymentMethodResponse], error)
+	ListPaymentMethods(context.Context, *connect.Request[v1.ListPaymentMethodsRequest]) (*connect.Response[v1.ListPaymentMethodsResponse], error)
+	DeletePaymentMethod(context.Context, *connect.Request[v1.DeletePaymentMethodRequest]) (*connect.Response[v1.DeletePaymentMethodResponse], error)
+	ListInvoices(context.Context, *connect.Request[v1.ListInvoicesRequest]) (*connect.Response[v1.ListInvoicesResponse], error)
+	GetInvoicePdf(context.Context, *connect.Request[v1.GetInvoicePdfRequest]) (*connect.Response[v1.GetInvoicePdfResponse], error)
 }
 
 // NewBillingServiceClient constructs a client for the he.billing.v1.BillingService service. By
@@ -68,6 +81,36 @@ func NewBillingServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(billingServiceMethods.ByName("CreateRechargeOrder")),
 			connect.WithClientOptions(opts...),
 		),
+		setAutoRecharge: connect.NewClient[v1.SetAutoRechargeRequest, v1.SetAutoRechargeResponse](
+			httpClient, baseURL+BillingServiceSetAutoRechargeProcedure,
+			connect.WithSchema(billingServiceMethods.ByName("SetAutoRecharge")),
+			connect.WithClientOptions(opts...),
+		),
+		savePaymentMethod: connect.NewClient[v1.SavePaymentMethodRequest, v1.SavePaymentMethodResponse](
+			httpClient, baseURL+BillingServiceSavePaymentMethodProcedure,
+			connect.WithSchema(billingServiceMethods.ByName("SavePaymentMethod")),
+			connect.WithClientOptions(opts...),
+		),
+		listPaymentMethods: connect.NewClient[v1.ListPaymentMethodsRequest, v1.ListPaymentMethodsResponse](
+			httpClient, baseURL+BillingServiceListPaymentMethodsProcedure,
+			connect.WithSchema(billingServiceMethods.ByName("ListPaymentMethods")),
+			connect.WithClientOptions(opts...),
+		),
+		deletePaymentMethod: connect.NewClient[v1.DeletePaymentMethodRequest, v1.DeletePaymentMethodResponse](
+			httpClient, baseURL+BillingServiceDeletePaymentMethodProcedure,
+			connect.WithSchema(billingServiceMethods.ByName("DeletePaymentMethod")),
+			connect.WithClientOptions(opts...),
+		),
+		listInvoices: connect.NewClient[v1.ListInvoicesRequest, v1.ListInvoicesResponse](
+			httpClient, baseURL+BillingServiceListInvoicesProcedure,
+			connect.WithSchema(billingServiceMethods.ByName("ListInvoices")),
+			connect.WithClientOptions(opts...),
+		),
+		getInvoicePdf: connect.NewClient[v1.GetInvoicePdfRequest, v1.GetInvoicePdfResponse](
+			httpClient, baseURL+BillingServiceGetInvoicePdfProcedure,
+			connect.WithSchema(billingServiceMethods.ByName("GetInvoicePdf")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -75,6 +118,12 @@ func NewBillingServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 type billingServiceClient struct {
 	checkBalance        *connect.Client[v1.CheckBalanceRequest, v1.CheckBalanceResponse]
 	createRechargeOrder *connect.Client[v1.CreateRechargeOrderRequest, v1.CreateRechargeOrderResponse]
+	setAutoRecharge     *connect.Client[v1.SetAutoRechargeRequest, v1.SetAutoRechargeResponse]
+	savePaymentMethod   *connect.Client[v1.SavePaymentMethodRequest, v1.SavePaymentMethodResponse]
+	listPaymentMethods  *connect.Client[v1.ListPaymentMethodsRequest, v1.ListPaymentMethodsResponse]
+	deletePaymentMethod *connect.Client[v1.DeletePaymentMethodRequest, v1.DeletePaymentMethodResponse]
+	listInvoices        *connect.Client[v1.ListInvoicesRequest, v1.ListInvoicesResponse]
+	getInvoicePdf       *connect.Client[v1.GetInvoicePdfRequest, v1.GetInvoicePdfResponse]
 }
 
 // CheckBalance calls he.billing.v1.BillingService.CheckBalance.
@@ -87,10 +136,35 @@ func (c *billingServiceClient) CreateRechargeOrder(ctx context.Context, req *con
 	return c.createRechargeOrder.CallUnary(ctx, req)
 }
 
+func (c *billingServiceClient) SetAutoRecharge(ctx context.Context, req *connect.Request[v1.SetAutoRechargeRequest]) (*connect.Response[v1.SetAutoRechargeResponse], error) {
+	return c.setAutoRecharge.CallUnary(ctx, req)
+}
+func (c *billingServiceClient) SavePaymentMethod(ctx context.Context, req *connect.Request[v1.SavePaymentMethodRequest]) (*connect.Response[v1.SavePaymentMethodResponse], error) {
+	return c.savePaymentMethod.CallUnary(ctx, req)
+}
+func (c *billingServiceClient) ListPaymentMethods(ctx context.Context, req *connect.Request[v1.ListPaymentMethodsRequest]) (*connect.Response[v1.ListPaymentMethodsResponse], error) {
+	return c.listPaymentMethods.CallUnary(ctx, req)
+}
+func (c *billingServiceClient) DeletePaymentMethod(ctx context.Context, req *connect.Request[v1.DeletePaymentMethodRequest]) (*connect.Response[v1.DeletePaymentMethodResponse], error) {
+	return c.deletePaymentMethod.CallUnary(ctx, req)
+}
+func (c *billingServiceClient) ListInvoices(ctx context.Context, req *connect.Request[v1.ListInvoicesRequest]) (*connect.Response[v1.ListInvoicesResponse], error) {
+	return c.listInvoices.CallUnary(ctx, req)
+}
+func (c *billingServiceClient) GetInvoicePdf(ctx context.Context, req *connect.Request[v1.GetInvoicePdfRequest]) (*connect.Response[v1.GetInvoicePdfResponse], error) {
+	return c.getInvoicePdf.CallUnary(ctx, req)
+}
+
 // BillingServiceHandler is an implementation of the he.billing.v1.BillingService service.
 type BillingServiceHandler interface {
 	CheckBalance(context.Context, *connect.Request[v1.CheckBalanceRequest]) (*connect.Response[v1.CheckBalanceResponse], error)
 	CreateRechargeOrder(context.Context, *connect.Request[v1.CreateRechargeOrderRequest]) (*connect.Response[v1.CreateRechargeOrderResponse], error)
+	SetAutoRecharge(context.Context, *connect.Request[v1.SetAutoRechargeRequest]) (*connect.Response[v1.SetAutoRechargeResponse], error)
+	SavePaymentMethod(context.Context, *connect.Request[v1.SavePaymentMethodRequest]) (*connect.Response[v1.SavePaymentMethodResponse], error)
+	ListPaymentMethods(context.Context, *connect.Request[v1.ListPaymentMethodsRequest]) (*connect.Response[v1.ListPaymentMethodsResponse], error)
+	DeletePaymentMethod(context.Context, *connect.Request[v1.DeletePaymentMethodRequest]) (*connect.Response[v1.DeletePaymentMethodResponse], error)
+	ListInvoices(context.Context, *connect.Request[v1.ListInvoicesRequest]) (*connect.Response[v1.ListInvoicesResponse], error)
+	GetInvoicePdf(context.Context, *connect.Request[v1.GetInvoicePdfRequest]) (*connect.Response[v1.GetInvoicePdfResponse], error)
 }
 
 // NewBillingServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -109,12 +183,54 @@ func NewBillingServiceHandler(svc BillingServiceHandler, opts ...connect.Handler
 		connect.WithSchema(billingServiceMethods.ByName("CreateRechargeOrder")),
 		connect.WithHandlerOptions(opts...),
 	)
+	billingServiceSetAutoRechargeHandler := connect.NewUnaryHandler(
+		BillingServiceSetAutoRechargeProcedure, svc.SetAutoRecharge,
+		connect.WithSchema(billingServiceMethods.ByName("SetAutoRecharge")),
+		connect.WithHandlerOptions(opts...),
+	)
+	billingServiceSavePaymentMethodHandler := connect.NewUnaryHandler(
+		BillingServiceSavePaymentMethodProcedure, svc.SavePaymentMethod,
+		connect.WithSchema(billingServiceMethods.ByName("SavePaymentMethod")),
+		connect.WithHandlerOptions(opts...),
+	)
+	billingServiceListPaymentMethodsHandler := connect.NewUnaryHandler(
+		BillingServiceListPaymentMethodsProcedure, svc.ListPaymentMethods,
+		connect.WithSchema(billingServiceMethods.ByName("ListPaymentMethods")),
+		connect.WithHandlerOptions(opts...),
+	)
+	billingServiceDeletePaymentMethodHandler := connect.NewUnaryHandler(
+		BillingServiceDeletePaymentMethodProcedure, svc.DeletePaymentMethod,
+		connect.WithSchema(billingServiceMethods.ByName("DeletePaymentMethod")),
+		connect.WithHandlerOptions(opts...),
+	)
+	billingServiceListInvoicesHandler := connect.NewUnaryHandler(
+		BillingServiceListInvoicesProcedure, svc.ListInvoices,
+		connect.WithSchema(billingServiceMethods.ByName("ListInvoices")),
+		connect.WithHandlerOptions(opts...),
+	)
+	billingServiceGetInvoicePdfHandler := connect.NewUnaryHandler(
+		BillingServiceGetInvoicePdfProcedure, svc.GetInvoicePdf,
+		connect.WithSchema(billingServiceMethods.ByName("GetInvoicePdf")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/he.billing.v1.BillingService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case BillingServiceCheckBalanceProcedure:
 			billingServiceCheckBalanceHandler.ServeHTTP(w, r)
 		case BillingServiceCreateRechargeOrderProcedure:
 			billingServiceCreateRechargeOrderHandler.ServeHTTP(w, r)
+		case BillingServiceSetAutoRechargeProcedure:
+			billingServiceSetAutoRechargeHandler.ServeHTTP(w, r)
+		case BillingServiceSavePaymentMethodProcedure:
+			billingServiceSavePaymentMethodHandler.ServeHTTP(w, r)
+		case BillingServiceListPaymentMethodsProcedure:
+			billingServiceListPaymentMethodsHandler.ServeHTTP(w, r)
+		case BillingServiceDeletePaymentMethodProcedure:
+			billingServiceDeletePaymentMethodHandler.ServeHTTP(w, r)
+		case BillingServiceListInvoicesProcedure:
+			billingServiceListInvoicesHandler.ServeHTTP(w, r)
+		case BillingServiceGetInvoicePdfProcedure:
+			billingServiceGetInvoicePdfHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -130,4 +246,23 @@ func (UnimplementedBillingServiceHandler) CheckBalance(context.Context, *connect
 
 func (UnimplementedBillingServiceHandler) CreateRechargeOrder(context.Context, *connect.Request[v1.CreateRechargeOrderRequest]) (*connect.Response[v1.CreateRechargeOrderResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.billing.v1.BillingService.CreateRechargeOrder is not implemented"))
+}
+
+func (UnimplementedBillingServiceHandler) SetAutoRecharge(context.Context, *connect.Request[v1.SetAutoRechargeRequest]) (*connect.Response[v1.SetAutoRechargeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.billing.v1.BillingService.SetAutoRecharge is not implemented"))
+}
+func (UnimplementedBillingServiceHandler) SavePaymentMethod(context.Context, *connect.Request[v1.SavePaymentMethodRequest]) (*connect.Response[v1.SavePaymentMethodResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.billing.v1.BillingService.SavePaymentMethod is not implemented"))
+}
+func (UnimplementedBillingServiceHandler) ListPaymentMethods(context.Context, *connect.Request[v1.ListPaymentMethodsRequest]) (*connect.Response[v1.ListPaymentMethodsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.billing.v1.BillingService.ListPaymentMethods is not implemented"))
+}
+func (UnimplementedBillingServiceHandler) DeletePaymentMethod(context.Context, *connect.Request[v1.DeletePaymentMethodRequest]) (*connect.Response[v1.DeletePaymentMethodResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.billing.v1.BillingService.DeletePaymentMethod is not implemented"))
+}
+func (UnimplementedBillingServiceHandler) ListInvoices(context.Context, *connect.Request[v1.ListInvoicesRequest]) (*connect.Response[v1.ListInvoicesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.billing.v1.BillingService.ListInvoices is not implemented"))
+}
+func (UnimplementedBillingServiceHandler) GetInvoicePdf(context.Context, *connect.Request[v1.GetInvoicePdfRequest]) (*connect.Response[v1.GetInvoicePdfResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.billing.v1.BillingService.GetInvoicePdf is not implemented"))
 }

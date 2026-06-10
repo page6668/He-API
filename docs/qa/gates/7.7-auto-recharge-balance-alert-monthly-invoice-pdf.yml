@@ -1,0 +1,123 @@
+schema: 1
+story: "7.7"
+story_title: "自动充值 + 余额预警 + 月度账单 PDF"
+gate: "PASS"
+status_reason: >
+  All 64 Story-7.7 test functions pass on independent fresh execution (5 modules
+  green, go vet clean). Every P0 financial-integrity + security invariant is proven
+  with a meaningful (non-vacuous) test: two-layer storm fence (at-most-one), durable
+  fence under Redis loss, exactly-one-of-32 SETNX, cross-user token-binding rejection,
+  invoice IDOR→404, token-never-logged, no-PAN/PCI §8.4, invoice exactly-once on
+  cron re-run, auto-disable-after-3. All 3 ACs verified to code. All Architect Round-1
+  rulings folded in. Live-PG E2E + accuracy reconciliation are environment-deferred
+  per the documented local-toolchain limit (no docker/PG/atlas) — non-blocking,
+  consistent with the 7.1/7.2/7.3 precedent.
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-10T19:58:00+0800"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "HIGH"
+  cached_review_mode: "full_testing"
+  cached_project_type: "web_backend"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+# Non-blocking follow-ups (documented deferrals — do NOT block the gate; tracked for
+# the QA integration-env pass / CI).
+top_issues:
+  - id: "QA-7.7-001"
+    severity: low
+    finding: >
+      Live-PG E2E (E2E-001/002/003) + invoice accuracy reconciliation vs live
+      GET /v1/usage (INT-062) are deferred to the QA integration-env: the local
+      platform cannot run docker/PG (project_toolchain_env_limits). Every P0
+      invariant is nonetheless proven at the unit/integration boundary
+      (pgxmock/miniredis/httptest).
+    suggested_action: >
+      Run E2E-001/002/003 + INT-062 in the integration-env before Beta cutover
+      (scenario IDs are the contract). No code change required.
+  - id: "QA-7.7-002"
+    severity: low
+    finding: >
+      atlas.sum carries the h1:PLACEHOLDER_REGENERATED_BY_CI_OR_OPERATOR hash for
+      0011 — this is the established repo-wide pattern (all 11 migrations), the
+      documented atlas-can't-run-locally workaround, not a regression.
+    suggested_action: "CI/operator regenerates the real atlas.sum hash on apply."
+  - id: "QA-7.7-003"
+    severity: low
+    finding: >
+      Dev-documented env-gated adapters behind seams: real OSS invoice.Uploader
+      (gdpr_export lift, Architect M3), low-balance/invoice email delivery via a
+      notification-svc user-lookup RPC, PDF CJK font embed (email IS localized),
+      optional per-model PDF line-items. None block a tested core invariant.
+    suggested_action: "Wire the real adapters in the integration-env / a follow-up."
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 64
+    passed_count: 64
+    failed_count: 0
+    skipped_count: 0
+    pass_rate: 100
+    coverage_percentage: 0  # not measured (no -cover run); all 7.7 packages green
+    failed_tests: []
+  e2e:
+    executed: false
+    passed: true
+    skipped: true
+    skip_reason: >
+      Live-PG / full-stack E2E (E2E-001/002/003) requires docker+PG+Redis, which the
+      local platform cannot run (project_toolchain_env_limits). All P0 invariants are
+      proven at the component boundary (pgxmock/miniredis/httptest); the live E2E is
+      QA integration-env scope (QA-7.7-001).
+    scenarios_tested: 0
+    scenarios_passed: 0
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: ""
+  issues: []
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 7
+  security_sensitive: true
+  dev_gate_score: 95
+
+risk_summary:
+  totals: { critical: 0, high: 2, medium: 13, low: 2 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "FIN-001/FIN-002 (storm + Redis-loss fence durability) — proven by INT-020/INT-021/storm-lock; monitor lock-TTL / pending-auto fence in integration-env."
+      - "SEC-001/004 (cross-user binding, invoice IDOR) — proven by unit/integration; re-verify on the live HTTP edge in integration-env."
+
+# AC coverage trace (all 3 ACs verified to code + meaningful tests)
+ac_coverage:
+  AC1_auto_recharge: VERIFIED   # trigger.go two-layer fence; paymentmethod cross-user guard; stripe off-session; gateway routes; auto-disable
+  AC2_low_balance_alert: VERIFIED  # lowbalance/alerter.go once-per-episode SETNX dedupe + suppression + failed-variant + fire-and-forget
+  AC3_monthly_invoice_pdf: VERIFIED  # invoice/store.go ON CONFLICT exactly-once + IDOR→404 + MarkEmailed once-guard; pdf.go; cmd/monthly-invoice CronJob
+
+nfr_validation:
+  security: { status: PASS, notes: "PCI §8.4 token-only (no PAN reaches Save); cross-user binding rejected; IDOR→404 no existence disclosure; token never in errors/logs (TestChargeOffSession_ErrorNeverLeaksSecret)." }
+  performance: { status: PASS, notes: "Trigger is off the chat hot path (post-deduction, async); invoice cron is a monthly batch CronJob." }
+  reliability: { status: PASS, notes: "Two-layer storm fence survives Redis loss (DB partial-unique 23505 guard); invoice exactly-once survives cron retry; alert fire-and-forget never rolls back the committed debit." }
+  maintainability: { status: PASS, notes: "Additive seam (PaymentProvider.ChargeOffSession/CreateSetupIntent), additive proto on both services, additive/reversible migration 0011; no orphaned code (deliverable bindings verified)." }

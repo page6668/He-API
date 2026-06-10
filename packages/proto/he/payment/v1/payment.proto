@@ -72,9 +72,61 @@ message CreateSubscriptionResponse {
   string external_subscription_id = 2;
 }
 
+// --- Story 7.7 additions (additive — passes `buf breaking: FILE`) ---
+// The off-session (merchant-initiated) charge seam + the SetupIntent save-token
+// flow. Stripe-card-only in 7.7 (Q-OFFSESSION). The off-session charge settles
+// via the 7.3 `payment.completed` webhook → the 7.3 exactly-once credit path is
+// UNCHANGED (no new credit code).
+
+// ChargeOffSessionRequest charges a STORED PaymentMethod token with no user
+// present (the auto-recharge top-up). amount is the configured intent; the
+// CREDIT is the provider-confirmed settled amount from the webhook (Q-AMOUNT).
+message ChargeOffSessionRequest {
+  string user_id = 1;
+  string pm_token = 2;          // stored provider PaymentMethod token (off-session charge authorization)
+  string amount = 3;            // string-decimal intent (Q-Spec-4)
+  string currency = 4;          // ISO-4217 (USD only in 7.7)
+  string payment_provider = 5;  // stripe (card off-session is Stripe-only — Q-OFFSESSION)
+  string order_id = 6;          // OUR recharge_orders.id → carried into Stripe metadata so the 7.3 webhook resolves it
+}
+
+message ChargeOffSessionResponse {
+  string external_order_id = 1; // provider PaymentIntent id (provider truth binding)
+  string status = 2;            // pending | failed
+}
+
+// CreateSetupIntentRequest begins a Stripe SetupIntent so the client confirms a
+// card off-session; the PAN never touches He-API (PCI §8.4 SAQ-A).
+message CreateSetupIntentRequest {
+  string user_id = 1;
+}
+
+message CreateSetupIntentResponse {
+  string client_secret = 1;     // Stripe SetupIntent client_secret (client-side confirmation)
+  string setup_intent_id = 2;
+}
+
+// RetrievePaymentMethodRequest fetches the confirmed PaymentMethod off a completed
+// SetupIntent (SERVER-side — the token is never client-asserted).
+message RetrievePaymentMethodRequest {
+  string setup_intent_id = 1;
+}
+
+message RetrievePaymentMethodResponse {
+  string provider_pm_token = 1; // opaque PaymentMethod id (NEVER a PAN — PCI §8.4)
+  string brand = 2;             // display-safe
+  string last4 = 3;             // display-safe
+}
+
 service PaymentService {
   // CreateCheckout opens a provider-hosted checkout for a pending recharge order.
   rpc CreateCheckout(CreateCheckoutRequest) returns (CreateCheckoutResponse);
   // CreateSubscription creates a provider subscription (RAIL only — Q-SUBSCOPE).
   rpc CreateSubscription(CreateSubscriptionRequest) returns (CreateSubscriptionResponse);
+  // ChargeOffSession charges a stored token with no user present (Story 7.7).
+  rpc ChargeOffSession(ChargeOffSessionRequest) returns (ChargeOffSessionResponse);
+  // CreateSetupIntent begins a Stripe SetupIntent to save an off-session token (7.7).
+  rpc CreateSetupIntent(CreateSetupIntentRequest) returns (CreateSetupIntentResponse);
+  // RetrievePaymentMethod fetches the confirmed token off a SetupIntent (7.7).
+  rpc RetrievePaymentMethod(RetrievePaymentMethodRequest) returns (RetrievePaymentMethodResponse);
 }

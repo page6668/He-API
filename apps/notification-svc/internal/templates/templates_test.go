@@ -12,6 +12,42 @@ import (
 // Scenario: P2e / 2 — Renderer happy path.
 // Render returns subject + text body + HTML body with snake_case vars
 // substituted; subject is the first non-comment line of the .txt template.
+// Story 7.7 — 7.7-UNIT-052: the low_balance template + the auto-recharge-failed
+// variant resolve to the correct per-locale (en / zh-CN) html+txt with the
+// string-decimal money vars substituted. Mirrors the 5.4 cap_warning precedent.
+func TestRenderer_LowBalance_Localized(t *testing.T) {
+	t.Parallel()
+	r := templates.NewRenderer()
+	vars := map[string]string{"display_name": "Alice", "current_balance": "4.86", "threshold": "5.00"}
+
+	en, err := r.Render(templates.TemplateLowBalance, "en", vars)
+	if err != nil {
+		t.Fatalf("Render low_balance en: %v", err)
+	}
+	if !strings.Contains(en.TextBody, "$4.86") || !strings.Contains(en.TextBody, "$5.00") {
+		t.Errorf("low_balance en did not substitute string-decimal money: %q", en.TextBody)
+	}
+	if !strings.Contains(en.HTMLBody, "<!DOCTYPE html>") {
+		t.Errorf("low_balance en HTML missing DOCTYPE")
+	}
+
+	zh, err := r.Render(templates.TemplateLowBalance, "zh-CN", vars)
+	if err != nil {
+		t.Fatalf("Render low_balance zh-CN: %v", err)
+	}
+	if zh.Subject == en.Subject {
+		t.Errorf("expected localized subject to differ between en and zh-CN")
+	}
+
+	failed, err := r.Render(templates.TemplateLowBalanceFailed, "en", vars)
+	if err != nil {
+		t.Fatalf("Render low_balance_failed en: %v", err)
+	}
+	if !strings.Contains(strings.ToLower(failed.Subject), "auto-recharge failed") {
+		t.Errorf("failed-variant subject = %q, want it to mention auto-recharge failed", failed.Subject)
+	}
+}
+
 func TestRenderer_EmailVerification_HappyPath(t *testing.T) {
 	t.Parallel()
 	r := templates.NewRenderer()

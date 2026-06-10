@@ -306,9 +306,25 @@ func (p *Provider) CreateSubscription(ctx context.Context, s provider.Subscripti
 // post issues a form-encoded Stripe REST call with bearer auth + an idempotency
 // key (BR-R-6: a client double-submit does not create two provider charges).
 func (p *Provider) post(ctx context.Context, path, idempotencyKey string, form url.Values, out any) error {
+	status, body, err := p.doForm(ctx, path, idempotencyKey, form)
+	if err != nil {
+		return err
+	}
+	if status < 200 || status >= 300 {
+		return fmt.Errorf("stripe: provider returned status %d", status)
+	}
+	if err := json.Unmarshal(body, out); err != nil {
+		return fmt.Errorf("stripe: decode response: %w", err)
+	}
+	return nil
+}
+
+// doForm issues the request and returns the raw status + body so callers (the
+// off-session charge) can distinguish a 402 card-decline from a transport error.
+func (p *Provider) doForm(ctx context.Context, path, idempotencyKey string, form url.Values) (int, []byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+path, strings.NewReader(form.Encode()))
 	if err != nil {
-		return fmt.Errorf("stripe: build request: %w", err)
+		return 0, nil, fmt.Errorf("stripe: build request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+p.secretKey)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -317,7 +333,22 @@ func (p *Provider) post(ctx context.Context, path, idempotencyKey string, form u
 	}
 	resp, err := p.client.Do(req)
 	if err != nil {
-		// NEVER embed the secret/URL in the surfaced error.
+		return 0, nil, fmt.Errorf("stripe: request failed") // NEVER embed the secret/URL
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	return resp.StatusCode, body, nil
+}
+
+// get issues a GET with bearer auth (used by RetrievePaymentMethod).
+func (p *Provider) get(ctx context.Context, path string, out any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+path, nil)
+	if err != nil {
+		return fmt.Errorf("stripe: build request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+p.secretKey)
+	resp, err := p.client.Do(req)
+	if err != nil {
 		return fmt.Errorf("stripe: request failed")
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -330,3 +361,89 @@ func (p *Provider) post(ctx context.Context, path, idempotencyKey string, form u
 	}
 	return nil
 }
+
+// --- Story 7.7 — provider.OffSessionProvider (Stripe-card-only, Q-OFFSESSION) ---
+
+// ChargeOffSession confirms an off_session PaymentIntent against a stored token,
+// carrying OUR order id as metadata so the 7.3 webhook (payment_intent.succeeded)
+// resolves our order. A 402 card-decline (or a requires_action/requires_payment_-
+// method status) maps to "failed"; an accepted charge maps to "pending" (the
+// webhook will settle it into the 7.3 exactly-once credit). The PAN is never seen.
+func (p *Provider) ChargeOffSession(ctx context.Context, orderID, pmToken, amountUSD string) (string, string, error) {
+	amt, err := decimal.NewFromString(amountUSD)
+	if err != nil {
+		return "", "", fmt.Errorf("stripe: bad amount %q: %w", amountUSD, err)
+	}
+	cents := amt.Mul(decimal.NewFromInt(100)).Round(0).IntPart()
+	form := url.Values{}
+	form.Set("amount", strconv.FormatInt(cents, 10))
+	form.Set("currency", "usd")
+	form.Set("payment_method", pmToken)
+	form.Set("confirm", "true")
+	form.Set("off_session", "true")
+	form.Set("metadata["+metadataOrderKey+"]", orderID)
+
+	status, body, err := p.doForm(ctx, "/v1/payment_intents", orderID, form)
+	if err != nil {
+		return "", "", err // transport error — the trigger marks the order failed + counts it
+	}
+	var out struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+	_ = json.Unmarshal(body, &out)
+	if status == http.StatusPaymentRequired {
+		// Card declined (402) — a CLEAN business failure, not a transport error.
+		return out.ID, "failed", nil
+	}
+	if status < 200 || status >= 300 {
+		return "", "", fmt.Errorf("stripe: provider returned status %d", status)
+	}
+	switch out.Status {
+	case "succeeded", "processing":
+		return out.ID, "pending", nil
+	default:
+		// requires_action / requires_payment_method — off_session cannot do
+		// interactive auth, so treat as failed (7.7-INT-032).
+		return out.ID, "failed", nil
+	}
+}
+
+// CreateSetupIntent begins an off_session card SetupIntent and returns its
+// client_secret (the client confirms the card with Stripe directly — PCI §8.4).
+func (p *Provider) CreateSetupIntent(ctx context.Context, userID string) (string, string, error) {
+	form := url.Values{}
+	form.Set("usage", "off_session")
+	form.Set("payment_method_types[0]", "card")
+	form.Set("metadata[he_user_id]", userID)
+	var out struct {
+		ID           string `json:"id"`
+		ClientSecret string `json:"client_secret"`
+	}
+	if err := p.post(ctx, "/v1/setup_intents", "", form, &out); err != nil {
+		return "", "", err
+	}
+	return out.ClientSecret, out.ID, nil
+}
+
+// RetrievePaymentMethod fetches the confirmed PaymentMethod off a SetupIntent
+// (server-side — the token is never client-asserted). Returns ONLY the opaque
+// token + display-safe brand/last4 (NEVER a PAN — PCI §8.4).
+func (p *Provider) RetrievePaymentMethod(ctx context.Context, setupIntentID string) (string, string, string, error) {
+	var out struct {
+		PaymentMethod struct {
+			ID   string `json:"id"`
+			Card struct {
+				Brand string `json:"brand"`
+				Last4 string `json:"last4"`
+			} `json:"card"`
+		} `json:"payment_method"`
+	}
+	if err := p.get(ctx, "/v1/setup_intents/"+url.PathEscape(setupIntentID)+"?expand[]=payment_method", &out); err != nil {
+		return "", "", "", err
+	}
+	return out.PaymentMethod.ID, out.PaymentMethod.Card.Brand, out.PaymentMethod.Card.Last4, nil
+}
+
+// Compile-time check that Stripe satisfies the off-session seam extension.
+var _ provider.OffSessionProvider = (*Provider)(nil)

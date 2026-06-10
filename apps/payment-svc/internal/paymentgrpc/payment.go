@@ -95,3 +95,88 @@ func (s *Server) CreateSubscription(ctx context.Context, req *connect.Request[pa
 		ExternalSubscriptionId: res.ExternalSubscriptionID,
 	}), nil
 }
+
+// offSession resolves a provider and asserts the Story-7.7 off-session capability.
+// A non-card provider → ErrOffSessionUnsupported (Q-OFFSESSION). Defaults to stripe.
+func (s *Server) offSession(providerName string) (provider.OffSessionProvider, error) {
+	if strings.TrimSpace(providerName) == "" {
+		providerName = "stripe"
+	}
+	prov, err := s.providers.Get(providerName)
+	if err != nil {
+		return nil, err
+	}
+	osp, ok := prov.(provider.OffSessionProvider)
+	if !ok {
+		return nil, provider.ErrOffSessionUnsupported
+	}
+	return osp, nil
+}
+
+// ChargeOffSession charges a stored token with no user present (Story 7.7 AC1).
+// The token is SECRET-grade — it is NEVER logged. The credit settles via the 7.3
+// webhook (the order_id metadata binds it); this RPC only starts the charge.
+func (s *Server) ChargeOffSession(ctx context.Context, req *connect.Request[paymentv1.ChargeOffSessionRequest]) (*connect.Response[paymentv1.ChargeOffSessionResponse], error) {
+	m := req.Msg
+	if strings.TrimSpace(m.GetUserId()) == "" || strings.TrimSpace(m.GetPmToken()) == "" || strings.TrimSpace(m.GetOrderId()) == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errMissingArgs)
+	}
+	osp, err := s.offSession(m.GetPaymentProvider())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+	ext, status, cerr := osp.ChargeOffSession(ctx, m.GetOrderId(), m.GetPmToken(), m.GetAmount())
+	if cerr != nil {
+		// Log order_id + provider only — NEVER the token or the raw provider error
+		// (which must not embed the secret).
+		s.logger.ErrorContext(ctx, "payment_charge_off_session_failed",
+			slog.String("event", "payment_charge_off_session_failed"),
+			slog.String("provider", m.GetPaymentProvider()),
+			slog.String("order_id", m.GetOrderId()),
+		)
+		return nil, connect.NewError(connect.CodeUnavailable, errChargeFailed)
+	}
+	return connect.NewResponse(&paymentv1.ChargeOffSessionResponse{ExternalOrderId: ext, Status: status}), nil
+}
+
+// CreateSetupIntent begins a Stripe SetupIntent to save an off-session token.
+func (s *Server) CreateSetupIntent(ctx context.Context, req *connect.Request[paymentv1.CreateSetupIntentRequest]) (*connect.Response[paymentv1.CreateSetupIntentResponse], error) {
+	m := req.Msg
+	if strings.TrimSpace(m.GetUserId()) == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errMissingArgs)
+	}
+	osp, err := s.offSession("stripe")
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+	clientSecret, id, serr := osp.CreateSetupIntent(ctx, m.GetUserId())
+	if serr != nil {
+		s.logger.ErrorContext(ctx, "payment_create_setup_intent_failed",
+			slog.String("event", "payment_create_setup_intent_failed"))
+		return nil, connect.NewError(connect.CodeUnavailable, errChargeFailed)
+	}
+	return connect.NewResponse(&paymentv1.CreateSetupIntentResponse{ClientSecret: clientSecret, SetupIntentId: id}), nil
+}
+
+// RetrievePaymentMethod fetches the confirmed token off a SetupIntent (server-side
+// — the token is never client-asserted, defeating cross-user injection). The
+// returned token is display-redacted in logs (it is part of the response, not logged).
+func (s *Server) RetrievePaymentMethod(ctx context.Context, req *connect.Request[paymentv1.RetrievePaymentMethodRequest]) (*connect.Response[paymentv1.RetrievePaymentMethodResponse], error) {
+	m := req.Msg
+	if strings.TrimSpace(m.GetSetupIntentId()) == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errMissingArgs)
+	}
+	osp, err := s.offSession("stripe")
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+	token, brand, last4, rerr := osp.RetrievePaymentMethod(ctx, m.GetSetupIntentId())
+	if rerr != nil {
+		s.logger.ErrorContext(ctx, "payment_retrieve_payment_method_failed",
+			slog.String("event", "payment_retrieve_payment_method_failed"))
+		return nil, connect.NewError(connect.CodeUnavailable, errChargeFailed)
+	}
+	return connect.NewResponse(&paymentv1.RetrievePaymentMethodResponse{ProviderPmToken: token, Brand: brand, Last4: last4}), nil
+}
+
+var errChargeFailed = errors.New("off-session payment operation failed")

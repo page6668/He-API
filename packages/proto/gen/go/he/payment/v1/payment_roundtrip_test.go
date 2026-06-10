@@ -82,6 +82,50 @@ func TestCreateCheckoutMessagesRoundTrip(t *testing.T) {
 	}
 }
 
+// Story 7.7 — 7.7-CONTRACT-002: the off-session seam additions round-trip and the
+// hand-built descriptor loads at init (a malformed rawDesc panics here).
+func TestOffSessionMessagesRoundTrip(t *testing.T) {
+	charge := &ChargeOffSessionRequest{
+		UserId:          "11111111-1111-1111-1111-111111111111",
+		PmToken:         "pm_test_abc123",
+		Amount:          "20.00",
+		Currency:        "USD",
+		PaymentProvider: "stripe",
+		OrderId:         "99999999-9999-9999-9999-999999999999",
+	}
+	cb, _ := proto.Marshal(charge)
+	var chargeOut ChargeOffSessionRequest
+	if err := proto.Unmarshal(cb, &chargeOut); err != nil {
+		t.Fatalf("unmarshal charge: %v", err)
+	}
+	if !proto.Equal(charge, &chargeOut) {
+		t.Fatalf("charge mismatch:\n in=%+v\nout=%+v", charge, &chargeOut)
+	}
+	if chargeOut.GetPmToken() != "pm_test_abc123" || chargeOut.GetAmount() != "20.00" {
+		t.Fatalf("charge field decode mismatch: %+v", &chargeOut)
+	}
+
+	si := &CreateSetupIntentResponse{ClientSecret: "seti_secret_x", SetupIntentId: "seti_x"}
+	sb, _ := proto.Marshal(si)
+	var siOut CreateSetupIntentResponse
+	if err := proto.Unmarshal(sb, &siOut); err != nil {
+		t.Fatalf("unmarshal setupintent: %v", err)
+	}
+	if siOut.GetClientSecret() != "seti_secret_x" || siOut.GetSetupIntentId() != "seti_x" {
+		t.Fatalf("setupintent mismatch: %+v", &siOut)
+	}
+
+	rpm := &RetrievePaymentMethodResponse{ProviderPmToken: "pm_x", Brand: "visa", Last4: "4242"}
+	rb, _ := proto.Marshal(rpm)
+	var rpmOut RetrievePaymentMethodResponse
+	if err := proto.Unmarshal(rb, &rpmOut); err != nil {
+		t.Fatalf("unmarshal retrieve: %v", err)
+	}
+	if rpmOut.GetBrand() != "visa" || rpmOut.GetLast4() != "4242" {
+		t.Fatalf("retrieve mismatch: %+v", &rpmOut)
+	}
+}
+
 func TestCreateSubscriptionMessagesRoundTrip(t *testing.T) {
 	req := &CreateSubscriptionRequest{
 		SubscriptionId:  "66666666-6666-6666-6666-666666666666",

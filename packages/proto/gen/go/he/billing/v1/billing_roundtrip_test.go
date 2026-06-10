@@ -13,6 +13,49 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// Story 7.7 — 7.7-CONTRACT-001: the BillingService additive messages round-trip
+// (including the bytes pdf field + bool fields) and the descriptor loads at init.
+func TestStory77BillingMessagesRoundTrip(t *testing.T) {
+	ar := &SetAutoRechargeRequest{
+		UserId:          "11111111-1111-1111-1111-111111111111",
+		Enabled:         true,
+		ThresholdUsd:    "5.00",
+		AmountUsd:       "20.00",
+		PaymentMethodId: "22222222-2222-2222-2222-222222222222",
+	}
+	ab, _ := proto.Marshal(ar)
+	var arOut SetAutoRechargeRequest
+	if err := proto.Unmarshal(ab, &arOut); err != nil {
+		t.Fatalf("unmarshal auto-recharge: %v", err)
+	}
+	if !proto.Equal(ar, &arOut) {
+		t.Fatalf("auto-recharge mismatch:\n in=%+v\nout=%+v", ar, &arOut)
+	}
+	if !arOut.GetEnabled() || arOut.GetThresholdUsd() != "5.00" || arOut.GetAmountUsd() != "20.00" {
+		t.Fatalf("auto-recharge field decode mismatch: %+v", &arOut)
+	}
+
+	pdf := &GetInvoicePdfResponse{Pdf: []byte("%PDF-1.4 fake"), Filename: "invoice-2026-06.pdf", Found: true}
+	pb, _ := proto.Marshal(pdf)
+	var pdfOut GetInvoicePdfResponse
+	if err := proto.Unmarshal(pb, &pdfOut); err != nil {
+		t.Fatalf("unmarshal pdf: %v", err)
+	}
+	if string(pdfOut.GetPdf()) != "%PDF-1.4 fake" || !pdfOut.GetFound() || pdfOut.GetFilename() != "invoice-2026-06.pdf" {
+		t.Fatalf("pdf field decode mismatch: %+v", &pdfOut)
+	}
+
+	del := &DeletePaymentMethodResponse{Deleted: true, AutoRechargeDisabled: true}
+	db, _ := proto.Marshal(del)
+	var delOut DeletePaymentMethodResponse
+	if err := proto.Unmarshal(db, &delOut); err != nil {
+		t.Fatalf("unmarshal delete: %v", err)
+	}
+	if !delOut.GetDeleted() || !delOut.GetAutoRechargeDisabled() {
+		t.Fatalf("delete mismatch: %+v", &delOut)
+	}
+}
+
 func TestUsageEventRoundTrip(t *testing.T) {
 	in := &UsageEvent{
 		LedgerKey:        "req_abc123:0",

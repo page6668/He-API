@@ -1,0 +1,9 @@
+Auto-recharge failed — please update your payment method
+
+Hi {{.display_name}},
+
+We tried to automatically top up your He-API account because your balance (${{.current_balance}}) fell below your threshold of ${{.threshold}}, but the charge to your saved payment method was declined.
+
+Please update your payment method in the console to keep auto-recharge working. Until then, your balance will not top up automatically.
+
+If you didn't expect this, review your billing settings in the console.

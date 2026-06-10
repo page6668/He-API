@@ -39,6 +39,44 @@ func (f *fakeBilling) CreateRechargeOrder(_ context.Context, req *connect.Reques
 	return connect.NewResponse(&billingv1.CreateRechargeOrderResponse{OrderId: f.orderID, Status: "pending"}), nil
 }
 
+// Story 7.7 stubs (overridden per-test where exercised).
+func (f *fakeBilling) SetAutoRecharge(_ context.Context, req *connect.Request[billingv1.SetAutoRechargeRequest]) (*connect.Response[billingv1.SetAutoRechargeResponse], error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return connect.NewResponse(&billingv1.SetAutoRechargeResponse{Enabled: req.Msg.GetEnabled()}), nil
+}
+func (f *fakeBilling) SavePaymentMethod(context.Context, *connect.Request[billingv1.SavePaymentMethodRequest]) (*connect.Response[billingv1.SavePaymentMethodResponse], error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return connect.NewResponse(&billingv1.SavePaymentMethodResponse{Id: "m1", IsDefault: true}), nil
+}
+func (f *fakeBilling) ListPaymentMethods(context.Context, *connect.Request[billingv1.ListPaymentMethodsRequest]) (*connect.Response[billingv1.ListPaymentMethodsResponse], error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return connect.NewResponse(&billingv1.ListPaymentMethodsResponse{MethodsJson: "[]"}), nil
+}
+func (f *fakeBilling) DeletePaymentMethod(context.Context, *connect.Request[billingv1.DeletePaymentMethodRequest]) (*connect.Response[billingv1.DeletePaymentMethodResponse], error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return connect.NewResponse(&billingv1.DeletePaymentMethodResponse{Deleted: true}), nil
+}
+func (f *fakeBilling) ListInvoices(context.Context, *connect.Request[billingv1.ListInvoicesRequest]) (*connect.Response[billingv1.ListInvoicesResponse], error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return connect.NewResponse(&billingv1.ListInvoicesResponse{InvoicesJson: "[]"}), nil
+}
+func (f *fakeBilling) GetInvoicePdf(context.Context, *connect.Request[billingv1.GetInvoicePdfRequest]) (*connect.Response[billingv1.GetInvoicePdfResponse], error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return connect.NewResponse(&billingv1.GetInvoicePdfResponse{Found: false}), nil
+}
+
 var _ billingv1connect.BillingServiceClient = (*fakeBilling)(nil)
 
 // fakePayment implements paymentv1connect.PaymentServiceClient.
@@ -58,6 +96,26 @@ func (f *fakePayment) CreateCheckout(_ context.Context, req *connect.Request[pay
 }
 func (f *fakePayment) CreateSubscription(context.Context, *connect.Request[paymentv1.CreateSubscriptionRequest]) (*connect.Response[paymentv1.CreateSubscriptionResponse], error) {
 	return connect.NewResponse(&paymentv1.CreateSubscriptionResponse{}), nil
+}
+
+// Story 7.7 off-session stubs.
+func (f *fakePayment) ChargeOffSession(context.Context, *connect.Request[paymentv1.ChargeOffSessionRequest]) (*connect.Response[paymentv1.ChargeOffSessionResponse], error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return connect.NewResponse(&paymentv1.ChargeOffSessionResponse{ExternalOrderId: "pi_off", Status: "pending"}), nil
+}
+func (f *fakePayment) CreateSetupIntent(context.Context, *connect.Request[paymentv1.CreateSetupIntentRequest]) (*connect.Response[paymentv1.CreateSetupIntentResponse], error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return connect.NewResponse(&paymentv1.CreateSetupIntentResponse{ClientSecret: "seti_secret", SetupIntentId: "seti_1"}), nil
+}
+func (f *fakePayment) RetrievePaymentMethod(context.Context, *connect.Request[paymentv1.RetrievePaymentMethodRequest]) (*connect.Response[paymentv1.RetrievePaymentMethodResponse], error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return connect.NewResponse(&paymentv1.RetrievePaymentMethodResponse{ProviderPmToken: "pm_saved", Brand: "visa", Last4: "4242"}), nil
 }
 
 var _ paymentv1connect.PaymentServiceClient = (*fakePayment)(nil)

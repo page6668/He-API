@@ -14,25 +14,39 @@ import (
 	"connectrpc.com/connect"
 
 	"github.com/he-api/he-api/apps/billing-svc/internal/balance"
+	"github.com/he-api/he-api/apps/billing-svc/internal/invoice"
+	"github.com/he-api/he-api/apps/billing-svc/internal/paymentmethod"
 	"github.com/he-api/he-api/apps/billing-svc/internal/recharge"
 	billingv1 "github.com/he-api/he-api/packages/proto/gen/go/he/billing/v1"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/billing/v1/billingv1connect"
 )
 
 // Server implements the BillingService Connect handler (CheckBalance +
-// CreateRechargeOrder — Story 7.3, Q-ORDEROWNER: billing-svc is the sole writer
-// of recharge_orders).
+// CreateRechargeOrder — Story 7.3 — plus the Story-7.7 auto-recharge config,
+// saved payment methods, and invoice retrieval). Story 7.7: billing-svc is the
+// single-writer of payment_methods / invoices / balances.auto_recharge_*.
+//
+// Embeds Unimplemented so any not-yet-wired RPC degrades gracefully (the
+// explicit methods below override it).
 type Server struct {
+	billingv1connect.UnimplementedBillingServiceHandler
 	db       balance.Querier
+	full     paymentmethod.DB // nil unless db is the full pgx pool (Exec/Begin/Query)
 	recharge *recharge.Writer
+	pm       *paymentmethod.Store
+	invoices *invoice.Store
+	uploader invoice.Uploader // nil unless an object store is wired (GetInvoicePdf)
 	logger   *slog.Logger
 }
+
+// SetInvoiceUploader wires the object store used to proxy-stream invoice PDFs.
+func (s *Server) SetInvoiceUploader(u invoice.Uploader) { s.uploader = u }
 
 var _ billingv1connect.BillingServiceHandler = (*Server)(nil)
 
 // NewServer builds the handler. logger may be nil (slog.Default()). The recharge
-// Writer shares the same pgx surface (db must also satisfy recharge.Querier — a
-// *pgxpool.Pool does).
+// Writer + payment-method Store + invoice Store share the same pgx surface (db
+// must also satisfy recharge.Querier / paymentmethod.DB — a *pgxpool.Pool does).
 func NewServer(db balance.Querier, logger *slog.Logger) *Server {
 	if logger == nil {
 		logger = slog.Default()
@@ -40,6 +54,13 @@ func NewServer(db balance.Querier, logger *slog.Logger) *Server {
 	s := &Server{db: db, logger: logger}
 	if rq, ok := db.(recharge.Querier); ok {
 		s.recharge = recharge.New(rq)
+	}
+	if fdb, ok := db.(paymentmethod.DB); ok {
+		s.full = fdb
+		s.pm = paymentmethod.New(fdb)
+	}
+	if idb, ok := db.(invoice.DB); ok {
+		s.invoices = invoice.New(idb)
 	}
 	return s
 }

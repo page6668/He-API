@@ -99,11 +99,20 @@ WHERE id = $1`
 // Ledger applies usage events. Construct once and reuse (concurrency-safe — it
 // holds no per-event state).
 type Ledger struct {
-	db      DB
-	redis   Redis
-	pricer  Pricer
-	logger  *slog.Logger
-	metrics *Metrics
+	db         DB
+	redis      Redis
+	pricer     Pricer
+	logger     *slog.Logger
+	metrics    *Metrics
+	postDeduct func(ctx context.Context, userID, newBalance string)
+}
+
+// SetPostDeduction registers a hook (Story 7.7) invoked AFTER a deduction commits
+// + the Redis mirror — on the already-async consumer path, OFF the chat hot path
+// (BR-R-1). It evaluates the auto-recharge trigger + low-balance alert. A nil hook
+// (the default) is a no-op. The hook must never block or error the deduction.
+func (l *Ledger) SetPostDeduction(fn func(ctx context.Context, userID, newBalance string)) {
+	l.postDeduct = fn
 }
 
 // New builds a Ledger. logger may be nil (slog.Default()); redis may be nil
@@ -177,6 +186,12 @@ func (l *Ledger) Apply(ctx context.Context, ev *billingv1.UsageEvent) (Result, e
 
 	// Post-commit best-effort fan-out (BR-D-3): never rolls back the PG charge.
 	l.mirror(ctx, ev, costStr, newBalance, cost)
+
+	// Story 7.7 — post-deduction auto-recharge + low-balance hook (off the chat
+	// hot path; never blocks/errors the committed deduction, BR-R-1).
+	if l.postDeduct != nil {
+		l.postDeduct(ctx, ev.GetUserId(), newBalance)
+	}
 
 	return Result{Outcome: OutcomeApplied, Cost: cost}, nil
 }

@@ -5,6 +5,7 @@ go 1.25.0
 require (
 	connectrpc.com/connect v1.16.2
 	github.com/alicebob/miniredis/v2 v2.38.0
+	github.com/go-pdf/fpdf v0.9.0
 	github.com/he-api/he-api/packages/go-observability v0.0.0-00010101000000-000000000000
 	github.com/he-api/he-api/packages/proto v0.0.0-00010101000000-000000000000
 	github.com/jackc/pgx/v5 v5.6.0

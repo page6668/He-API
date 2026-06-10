@@ -39,13 +39,18 @@ import (
 
 	obs "github.com/he-api/he-api/packages/go-observability"
 
+	"github.com/he-api/he-api/apps/billing-svc/internal/autorecharge"
 	"github.com/he-api/he-api/apps/billing-svc/internal/consumer"
 	"github.com/he-api/he-api/apps/billing-svc/internal/credit"
 	billinggrpc "github.com/he-api/he-api/apps/billing-svc/internal/grpc"
 	"github.com/he-api/he-api/apps/billing-svc/internal/ledger"
+	"github.com/he-api/he-api/apps/billing-svc/internal/lowbalance"
+	"github.com/he-api/he-api/apps/billing-svc/internal/paymentclient"
+	"github.com/he-api/he-api/apps/billing-svc/internal/paymentmethod"
 	"github.com/he-api/he-api/apps/billing-svc/internal/pricing"
 	"github.com/he-api/he-api/apps/billing-svc/internal/server"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/billing/v1/billingv1connect"
+	"github.com/he-api/he-api/packages/proto/gen/go/he/payment/v1/paymentv1connect"
 )
 
 const (
@@ -113,9 +118,13 @@ func run(ctx context.Context, logger *slog.Logger, addr string) error {
 		go pricer.Run(ctx)
 	}
 
+	// Story 7.7 — the post-deduction auto-recharge + low-balance hook (off the chat
+	// hot path). nil when PG is unavailable.
+	postDeduct := buildPostDeduction(logger, pool, rdb)
+
 	// Kafka consumer (usage.recorded) → ledger.Apply. Wired only when both PG and
 	// Kafka brokers are configured.
-	stopConsumer := startConsumer(ctx, logger, pool, rdb, pricer)
+	stopConsumer := startConsumer(ctx, logger, pool, rdb, pricer, postDeduct)
 	defer stopConsumer()
 
 	// Story 7.3 — payment.completed consumer → credit.Apply (exactly-once balance
@@ -175,7 +184,7 @@ func unimplementedOrReal(pool *pgxpool.Pool, logger *slog.Logger) billingv1conne
 // startConsumer wires the Kafka reader + DLQ writer + ledger and runs the
 // consume loop in a goroutine. Returns a stop func (closes the reader/writer).
 // A no-op when PG, Redis-optional, pricing, or Kafka brokers are unavailable.
-func startConsumer(ctx context.Context, logger *slog.Logger, pool *pgxpool.Pool, rdb *redis.Client, pricer *pricing.Provider) func() {
+func startConsumer(ctx context.Context, logger *slog.Logger, pool *pgxpool.Pool, rdb *redis.Client, pricer *pricing.Provider, postDeduct func(context.Context, string, string)) func() {
 	noop := func() {}
 	if pool == nil || pricer == nil {
 		logger.Warn("consumer disabled — PG/pricing unavailable")
@@ -203,6 +212,9 @@ func startConsumer(ctx context.Context, logger *slog.Logger, pool *pgxpool.Pool,
 	}
 
 	l := ledger.New(pool, redisOrNil(rdb), pricer, logger, ledger.NewMetrics())
+	if postDeduct != nil {
+		l.SetPostDeduction(postDeduct) // Story 7.7 auto-recharge + alert trigger
+	}
 	c := consumer.New(reader, dlq, l, logger)
 	go c.Run(ctx)
 	logger.Info("billing consumer started", slog.String("topic", consumer.Topic))
@@ -238,6 +250,63 @@ func startCreditConsumer(ctx context.Context, logger *slog.Logger, pool *pgxpool
 	go c.Run(ctx)
 	logger.Info("billing credit consumer started", slog.String("topic", credit.Topic))
 	return func() { _ = reader.Close() }
+}
+
+// buildPostDeduction assembles the Story-7.7 auto-recharge trigger + low-balance
+// alerter and returns the hook the ledger calls after each deduction commits.
+// Returns nil when PG is unavailable. Degrades gracefully: with no payment-svc URL
+// the charge is skipped (alerts still fire); with no notifier the alert email is
+// skipped (the trigger + dedupe still run).
+func buildPostDeduction(logger *slog.Logger, pool *pgxpool.Pool, rdb *redis.Client) func(context.Context, string, string) {
+	if pool == nil {
+		return nil
+	}
+	pmStore := paymentmethod.New(pool)
+
+	var charger autorecharge.Charger
+	if url := os.Getenv("HE_API_PAYMENT_SVC_URL"); url != "" {
+		client := paymentv1connect.NewPaymentServiceClient(http.DefaultClient, url)
+		charger = paymentclient.NewCharger(client)
+	} else {
+		logger.Warn("HE_API_PAYMENT_SVC_URL unset — auto-recharge off-session charge disabled (low-balance alerts still fire)")
+	}
+
+	trigger := autorecharge.New(pool, autorechargeRedis(rdb), pmStore, charger,
+		os.Getenv("HE_API_LOW_BALANCE_THRESHOLD_USD"), logger)
+	alerter := lowbalance.New(lowbalanceRedis(rdb), buildLowBalanceNotifier(logger), logger)
+
+	return func(ctx context.Context, userID, newBalance string) {
+		res := trigger.Evaluate(ctx, userID, newBalance)
+		alerter.Handle(ctx, userID, res)
+	}
+}
+
+// buildLowBalanceNotifier returns the email-delivery adapter for low-balance
+// alerts, or nil when notification delivery is not yet configured. NOTE: the
+// localized-render + SendGrid dispatch needs a notification-svc path that resolves
+// the user (email/locale/display_name by user_id) — wired when that RPC lands; the
+// alert DECISION + once-per-episode dedupe (internal/lowbalance) are independent
+// of delivery and fully active.
+func buildLowBalanceNotifier(logger *slog.Logger) lowbalance.Notifier {
+	logger.Warn("low-balance email delivery not configured — alert decision/dedupe active, email pending notification-svc user-lookup RPC")
+	return nil
+}
+
+// autorechargeRedis / lowbalanceRedis adapt a possibly-nil *redis.Client to the
+// respective seams (typed-nil avoidance — a nil *redis.Client in an interface is
+// non-nil, so return the interface nil explicitly).
+func autorechargeRedis(rdb *redis.Client) autorecharge.Locker {
+	if rdb == nil {
+		return nil
+	}
+	return rdb
+}
+
+func lowbalanceRedis(rdb *redis.Client) lowbalance.Redis {
+	if rdb == nil {
+		return nil
+	}
+	return rdb
 }
 
 // creditRedisOrNil adapts a possibly-nil *redis.Client to the credit.Redis seam

@@ -1,0 +1,12 @@
+{
+  "mcp": {
+    "orchestrix": {
+      "type": "remote",
+      "url": "https://orchestrix-mcp.youlidao.ai/api/mcp",
+      "enabled": true,
+      "headers": {
+        "Authorization": "Bearer orch_live_yomingyo_prod_07f590de10e124cc9a217ec2"
+      }
+    }
+  }
+}

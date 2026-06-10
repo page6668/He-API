@@ -1,0 +1,24 @@
+# Iteration 2 scope — drive Epic 6.4 →商用上线完整度
+# Created by Yuri (coordinator) 2026-06-09. SM reads this to know epic order after /clear.
+iteration: 2
+goal: "完成商用正式上线所需的全部 Epic（计费 / 内容安全 / 可观测多模态 / i18n+文档+SDK）"
+status: in_progress
+completed_epics: [1, 2, 3, 4, 5, 6]   # Epic 6 closed at 6.4 (commit dd97441)
+epic_order:
+  - epic: 7
+    title: "计费、定价与多通道支付"
+    stories: ["7.1", "7.2", "7.3", "7.4", "7.5", "7.6", "7.7", "7.8"]
+  - epic: 8
+    title: "内容安全与合规准备"
+    stories: ["8.1", "8.2", "8.3", "8.4", "8.5"]
+  - epic: 9
+    title: "监控、日志与多模态"
+    stories: ["9.1", "9.2", "9.3", "9.4", "9.5", "9.6", "9.7"]
+  - epic: 10
+    title: "多语言控制台、文档、SDK 与 Beta 上线"
+    stories: ["10.1", "10.2", "10.3", "10.4", "10.5", "10.6", "10.7", "10.8"]
+next_story: "7.1"
+total_remaining: 28
+notes:
+  - "Draft strictly in epic_order: 7 → 8 → 9 → 10, one story at a time, in numeric order."
+  - "HANDOFF chain per story: SM *draft → Architect *review → QA *test-design (if Standard/Comprehensive) → Dev *develop-story → QA *review → SM *draft(next)."

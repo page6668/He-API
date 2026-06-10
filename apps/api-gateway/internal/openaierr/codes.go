@@ -124,4 +124,15 @@ var CodeMetadata = map[string]struct {
 	"400_unsupported_payment_provider": {400, "invalid_request_error"},
 	"402_payment_failed":               {402, "invalid_request_error"},
 	"400_webhook_signature_invalid":    {400, "invalid_request_error"},
+
+	// Auto-recharge + saved-method + invoice surface (Story 7.7 — Architect §5.1.2
+	// + Medium #2). Registered here in the runtime mirror per the Story-3.6
+	// single-canonical-writer rule. 422_invalid_auto_recharge = bad threshold/amount
+	// money fields; 422_invalid_payment_method = a foreign/non-existent/non-card
+	// method on the auto-recharge config (cross-user-binding guard, BR-R-7);
+	// 404_not_found = an invoice PDF / payment-method id that is not the caller's
+	// (IDOR guard → 404 not 403, no existence disclosure, BR-I-6).
+	"422_invalid_auto_recharge":  {422, "invalid_request_error"},
+	"422_invalid_payment_method": {422, "invalid_request_error"},
+	"404_not_found":              {404, "invalid_request_error"},
 }

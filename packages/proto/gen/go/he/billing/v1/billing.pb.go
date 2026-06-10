@@ -456,9 +456,559 @@ func (x *CreateRechargeOrderResponse) GetStatus() string {
 	return ""
 }
 
+// --- Story 7.7 additions (additive — passes `buf breaking: FILE`) ---
+
+// SetAutoRechargeRequest configures auto-recharge on balances.auto_recharge_*.
+// payment_method_id MUST belong to the user (cross-user-binding guard, BR-R-7).
+type SetAutoRechargeRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	UserId          string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Enabled         bool                   `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	ThresholdUsd    string                 `protobuf:"bytes,3,opt,name=threshold_usd,json=thresholdUsd,proto3" json:"threshold_usd,omitempty"`
+	AmountUsd       string                 `protobuf:"bytes,4,opt,name=amount_usd,json=amountUsd,proto3" json:"amount_usd,omitempty"`
+	PaymentMethodId string                 `protobuf:"bytes,5,opt,name=payment_method_id,json=paymentMethodId,proto3" json:"payment_method_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *SetAutoRechargeRequest) Reset() {
+	*x = SetAutoRechargeRequest{}
+	mi := &file_he_billing_v1_billing_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+func (x *SetAutoRechargeRequest) String() string { return protoimpl.X.MessageStringOf(x) }
+func (*SetAutoRechargeRequest) ProtoMessage()    {}
+func (x *SetAutoRechargeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_he_billing_v1_billing_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+func (*SetAutoRechargeRequest) Descriptor() ([]byte, []int) {
+	return file_he_billing_v1_billing_proto_rawDescGZIP(), []int{5}
+}
+func (x *SetAutoRechargeRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+func (x *SetAutoRechargeRequest) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+func (x *SetAutoRechargeRequest) GetThresholdUsd() string {
+	if x != nil {
+		return x.ThresholdUsd
+	}
+	return ""
+}
+func (x *SetAutoRechargeRequest) GetAmountUsd() string {
+	if x != nil {
+		return x.AmountUsd
+	}
+	return ""
+}
+func (x *SetAutoRechargeRequest) GetPaymentMethodId() string {
+	if x != nil {
+		return x.PaymentMethodId
+	}
+	return ""
+}
+
+// SetAutoRechargeResponse echoes the resulting enabled state.
+type SetAutoRechargeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Enabled       bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetAutoRechargeResponse) Reset() {
+	*x = SetAutoRechargeResponse{}
+	mi := &file_he_billing_v1_billing_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+func (x *SetAutoRechargeResponse) String() string { return protoimpl.X.MessageStringOf(x) }
+func (*SetAutoRechargeResponse) ProtoMessage()    {}
+func (x *SetAutoRechargeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_he_billing_v1_billing_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+func (*SetAutoRechargeResponse) Descriptor() ([]byte, []int) {
+	return file_he_billing_v1_billing_proto_rawDescGZIP(), []int{6}
+}
+func (x *SetAutoRechargeResponse) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+// SavePaymentMethodRequest persists a stored off-session token (billing-svc is the
+// single-writer of payment_methods). provider_pm_token is the opaque Stripe id —
+// NEVER a PAN (PCI §8.4).
+type SavePaymentMethodRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	UserId          string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	PaymentProvider string                 `protobuf:"bytes,2,opt,name=payment_provider,json=paymentProvider,proto3" json:"payment_provider,omitempty"`
+	ProviderPmToken string                 `protobuf:"bytes,3,opt,name=provider_pm_token,json=providerPmToken,proto3" json:"provider_pm_token,omitempty"`
+	Brand           string                 `protobuf:"bytes,4,opt,name=brand,proto3" json:"brand,omitempty"`
+	Last4           string                 `protobuf:"bytes,5,opt,name=last4,proto3" json:"last4,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *SavePaymentMethodRequest) Reset() {
+	*x = SavePaymentMethodRequest{}
+	mi := &file_he_billing_v1_billing_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+func (x *SavePaymentMethodRequest) String() string { return protoimpl.X.MessageStringOf(x) }
+func (*SavePaymentMethodRequest) ProtoMessage()    {}
+func (x *SavePaymentMethodRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_he_billing_v1_billing_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+func (*SavePaymentMethodRequest) Descriptor() ([]byte, []int) {
+	return file_he_billing_v1_billing_proto_rawDescGZIP(), []int{7}
+}
+func (x *SavePaymentMethodRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+func (x *SavePaymentMethodRequest) GetPaymentProvider() string {
+	if x != nil {
+		return x.PaymentProvider
+	}
+	return ""
+}
+func (x *SavePaymentMethodRequest) GetProviderPmToken() string {
+	if x != nil {
+		return x.ProviderPmToken
+	}
+	return ""
+}
+func (x *SavePaymentMethodRequest) GetBrand() string {
+	if x != nil {
+		return x.Brand
+	}
+	return ""
+}
+func (x *SavePaymentMethodRequest) GetLast4() string {
+	if x != nil {
+		return x.Last4
+	}
+	return ""
+}
+
+// SavePaymentMethodResponse returns the new payment_methods.id + default flag.
+type SavePaymentMethodResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	IsDefault     bool                   `protobuf:"varint,2,opt,name=is_default,json=isDefault,proto3" json:"is_default,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SavePaymentMethodResponse) Reset() {
+	*x = SavePaymentMethodResponse{}
+	mi := &file_he_billing_v1_billing_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+func (x *SavePaymentMethodResponse) String() string { return protoimpl.X.MessageStringOf(x) }
+func (*SavePaymentMethodResponse) ProtoMessage()    {}
+func (x *SavePaymentMethodResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_he_billing_v1_billing_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+func (*SavePaymentMethodResponse) Descriptor() ([]byte, []int) {
+	return file_he_billing_v1_billing_proto_rawDescGZIP(), []int{8}
+}
+func (x *SavePaymentMethodResponse) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+func (x *SavePaymentMethodResponse) GetIsDefault() bool {
+	if x != nil {
+		return x.IsDefault
+	}
+	return false
+}
+
+// ListPaymentMethodsRequest lists a user's saved methods (display-safe).
+type ListPaymentMethodsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPaymentMethodsRequest) Reset() {
+	*x = ListPaymentMethodsRequest{}
+	mi := &file_he_billing_v1_billing_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+func (x *ListPaymentMethodsRequest) String() string { return protoimpl.X.MessageStringOf(x) }
+func (*ListPaymentMethodsRequest) ProtoMessage()    {}
+func (x *ListPaymentMethodsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_he_billing_v1_billing_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+func (*ListPaymentMethodsRequest) Descriptor() ([]byte, []int) {
+	return file_he_billing_v1_billing_proto_rawDescGZIP(), []int{9}
+}
+func (x *ListPaymentMethodsRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+// ListPaymentMethodsResponse carries a JSON array of display-safe methods
+// (brand/last4/is_default — NEVER the token). Flat-scalar wire keeps the
+// hand-authored descriptor simple ([[project_toolchain_env_limits]]).
+type ListPaymentMethodsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MethodsJson   string                 `protobuf:"bytes,1,opt,name=methods_json,json=methodsJson,proto3" json:"methods_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPaymentMethodsResponse) Reset() {
+	*x = ListPaymentMethodsResponse{}
+	mi := &file_he_billing_v1_billing_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+func (x *ListPaymentMethodsResponse) String() string { return protoimpl.X.MessageStringOf(x) }
+func (*ListPaymentMethodsResponse) ProtoMessage()    {}
+func (x *ListPaymentMethodsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_he_billing_v1_billing_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+func (*ListPaymentMethodsResponse) Descriptor() ([]byte, []int) {
+	return file_he_billing_v1_billing_proto_rawDescGZIP(), []int{10}
+}
+func (x *ListPaymentMethodsResponse) GetMethodsJson() string {
+	if x != nil {
+		return x.MethodsJson
+	}
+	return ""
+}
+
+// DeletePaymentMethodRequest revokes a saved method (owner-only).
+type DeletePaymentMethodRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	UserId          string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	PaymentMethodId string                 `protobuf:"bytes,2,opt,name=payment_method_id,json=paymentMethodId,proto3" json:"payment_method_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *DeletePaymentMethodRequest) Reset() {
+	*x = DeletePaymentMethodRequest{}
+	mi := &file_he_billing_v1_billing_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+func (x *DeletePaymentMethodRequest) String() string { return protoimpl.X.MessageStringOf(x) }
+func (*DeletePaymentMethodRequest) ProtoMessage()    {}
+func (x *DeletePaymentMethodRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_he_billing_v1_billing_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+func (*DeletePaymentMethodRequest) Descriptor() ([]byte, []int) {
+	return file_he_billing_v1_billing_proto_rawDescGZIP(), []int{11}
+}
+func (x *DeletePaymentMethodRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+func (x *DeletePaymentMethodRequest) GetPaymentMethodId() string {
+	if x != nil {
+		return x.PaymentMethodId
+	}
+	return ""
+}
+
+// DeletePaymentMethodResponse reports the revoke + cascade-disable result.
+type DeletePaymentMethodResponse struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	Deleted              bool                   `protobuf:"varint,1,opt,name=deleted,proto3" json:"deleted,omitempty"`
+	AutoRechargeDisabled bool                   `protobuf:"varint,2,opt,name=auto_recharge_disabled,json=autoRechargeDisabled,proto3" json:"auto_recharge_disabled,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *DeletePaymentMethodResponse) Reset() {
+	*x = DeletePaymentMethodResponse{}
+	mi := &file_he_billing_v1_billing_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+func (x *DeletePaymentMethodResponse) String() string { return protoimpl.X.MessageStringOf(x) }
+func (*DeletePaymentMethodResponse) ProtoMessage()    {}
+func (x *DeletePaymentMethodResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_he_billing_v1_billing_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+func (*DeletePaymentMethodResponse) Descriptor() ([]byte, []int) {
+	return file_he_billing_v1_billing_proto_rawDescGZIP(), []int{12}
+}
+func (x *DeletePaymentMethodResponse) GetDeleted() bool {
+	if x != nil {
+		return x.Deleted
+	}
+	return false
+}
+func (x *DeletePaymentMethodResponse) GetAutoRechargeDisabled() bool {
+	if x != nil {
+		return x.AutoRechargeDisabled
+	}
+	return false
+}
+
+// ListInvoicesRequest lists a user's monthly invoices.
+type ListInvoicesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListInvoicesRequest) Reset() {
+	*x = ListInvoicesRequest{}
+	mi := &file_he_billing_v1_billing_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+func (x *ListInvoicesRequest) String() string { return protoimpl.X.MessageStringOf(x) }
+func (*ListInvoicesRequest) ProtoMessage()    {}
+func (x *ListInvoicesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_he_billing_v1_billing_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+func (*ListInvoicesRequest) Descriptor() ([]byte, []int) {
+	return file_he_billing_v1_billing_proto_rawDescGZIP(), []int{13}
+}
+func (x *ListInvoicesRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+// ListInvoicesResponse carries a JSON array of invoice summaries (string-decimal
+// money — Q-Spec-4).
+type ListInvoicesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	InvoicesJson  string                 `protobuf:"bytes,1,opt,name=invoices_json,json=invoicesJson,proto3" json:"invoices_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListInvoicesResponse) Reset() {
+	*x = ListInvoicesResponse{}
+	mi := &file_he_billing_v1_billing_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+func (x *ListInvoicesResponse) String() string { return protoimpl.X.MessageStringOf(x) }
+func (*ListInvoicesResponse) ProtoMessage()    {}
+func (x *ListInvoicesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_he_billing_v1_billing_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+func (*ListInvoicesResponse) Descriptor() ([]byte, []int) {
+	return file_he_billing_v1_billing_proto_rawDescGZIP(), []int{14}
+}
+func (x *ListInvoicesResponse) GetInvoicesJson() string {
+	if x != nil {
+		return x.InvoicesJson
+	}
+	return ""
+}
+
+// GetInvoicePdfRequest fetches a user's invoice PDF (owner-only, IDOR guard).
+type GetInvoicePdfRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	InvoiceId     string                 `protobuf:"bytes,2,opt,name=invoice_id,json=invoiceId,proto3" json:"invoice_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetInvoicePdfRequest) Reset() {
+	*x = GetInvoicePdfRequest{}
+	mi := &file_he_billing_v1_billing_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+func (x *GetInvoicePdfRequest) String() string { return protoimpl.X.MessageStringOf(x) }
+func (*GetInvoicePdfRequest) ProtoMessage()    {}
+func (x *GetInvoicePdfRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_he_billing_v1_billing_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+func (*GetInvoicePdfRequest) Descriptor() ([]byte, []int) {
+	return file_he_billing_v1_billing_proto_rawDescGZIP(), []int{15}
+}
+func (x *GetInvoicePdfRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+func (x *GetInvoicePdfRequest) GetInvoiceId() string {
+	if x != nil {
+		return x.InvoiceId
+	}
+	return ""
+}
+
+// GetInvoicePdfResponse carries the proxy-streamed PDF bytes (owner-only).
+type GetInvoicePdfResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Pdf           []byte                 `protobuf:"bytes,1,opt,name=pdf,proto3" json:"pdf,omitempty"`
+	Filename      string                 `protobuf:"bytes,2,opt,name=filename,proto3" json:"filename,omitempty"`
+	Found         bool                   `protobuf:"varint,3,opt,name=found,proto3" json:"found,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetInvoicePdfResponse) Reset() {
+	*x = GetInvoicePdfResponse{}
+	mi := &file_he_billing_v1_billing_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+func (x *GetInvoicePdfResponse) String() string { return protoimpl.X.MessageStringOf(x) }
+func (*GetInvoicePdfResponse) ProtoMessage()    {}
+func (x *GetInvoicePdfResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_he_billing_v1_billing_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+func (*GetInvoicePdfResponse) Descriptor() ([]byte, []int) {
+	return file_he_billing_v1_billing_proto_rawDescGZIP(), []int{16}
+}
+func (x *GetInvoicePdfResponse) GetPdf() []byte {
+	if x != nil {
+		return x.Pdf
+	}
+	return nil
+}
+func (x *GetInvoicePdfResponse) GetFilename() string {
+	if x != nil {
+		return x.Filename
+	}
+	return ""
+}
+func (x *GetInvoicePdfResponse) GetFound() bool {
+	if x != nil {
+		return x.Found
+	}
+	return false
+}
+
 var File_he_billing_v1_billing_proto protoreflect.FileDescriptor
 
-const file_he_billing_v1_billing_proto_rawDesc = "\n\x1bhe/billing/v1/billing.proto\x12\rhe.billing.v1\"\xb8\x03\n\nUsageEvent\x12\x1d\n\nledger_key\x18\x01 \x01(\tR\tledgerKey\x12\"\n\rhe_request_id\x18\x02 \x01(\tR\vheRequestId\x12\x17\n\auser_id\x18\x03 \x01(\tR\x06userId\x12\x1c\n\napi_key_id\x18\x04 \x01(\tR\bapiKeyId\x12\x17\n\ateam_id\x18\x05 \x01(\tR\x06teamId\x12\x14\n\x05model\x18\x06 \x01(\tR\x05model\x12#\n\rprompt_tokens\x18\a \x01(\rR\fpromptTokens\x12+\n\x11completion_tokens\x18\b \x01(\rR\x10completionTokens\x12!\n\ftotal_tokens\x18\t \x01(\rR\vtotalTokens\x12!\n\fis_streaming\x18\n \x01(\bR\visStreaming\x12\x1a\n\tis_ab_leg\x18\v \x01(\bR\aisAbLeg\x12\x0e\n\x02ts\x18\f \x01(\tR\x02ts\x12=\n\fbilling_mode\x18\r \x01(\x0e2\x1a.he.billing.v1.BillingModeR\vbillingMode\".\n\x13CheckBalanceRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\"W\n\x14CheckBalanceResponse\x12\x1f\n\vcurrent_usd\x18\x01 \x01(\tR\ncurrentUsd\x12\x1e\n\nsufficient\x18\x02 \x01(\bR\nsufficient\"\x94\x01\n\x1aCreateRechargeOrderRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12\x16\n\x06amount\x18\x02 \x01(\tR\x06amount\x12\x1a\n\bcurrency\x18\x03 \x01(\tR\bcurrency\x12)\n\x10payment_provider\x18\x04 \x01(\tR\x0fpaymentProvider\"P\n\x1bCreateRechargeOrderResponse\x12\x19\n\border_id\x18\x01 \x01(\tR\aorderId\x12\x16\n\x06status\x18\x02 \x01(\tR\x06status*b\n\vBillingMode\x12\x1c\n\x18BILLING_MODE_UNSPECIFIED\x10\x00\x12\x1a\n\x16BILLING_MODE_PER_TOKEN\x10\x01\x12\x19\n\x15BILLING_MODE_PER_CALL\x10\x022\xd7\x01\n\x0eBillingService\x12W\n\fCheckBalance\x12\".he.billing.v1.CheckBalanceRequest\x1a#.he.billing.v1.CheckBalanceResponse\x12l\n\x13CreateRechargeOrder\x12).he.billing.v1.CreateRechargeOrderRequest\x1a*.he.billing.v1.CreateRechargeOrderResponseBHZFgithub.com/he-api/he-api/packages/proto/gen/go/he/billing/v1;billingv1b\x06proto3"
+const file_he_billing_v1_billing_proto_rawDesc = "\x0a\x1bhe/billing/v1/billing.proto\x12\x0dhe.billing.v1\"\xb8\x03\x0a\x0aUsageEvent\x12\x1d\x0a\x0aledger_key\x18\x01 \x01(\x09R\x09ledgerKey\x12\"\x0a\x0dhe_request_id\x18\x02 \x01(\x09R\x0bheRequestId\x12\x17\x0a\x07user_id\x18\x03 \x01(\x09R\x06userId\x12\x1c\x0a\x0aapi_key_id\x18\x04 \x01(\x09R\x08apiKeyId\x12\x17\x0a\x07team_id\x18\x05 \x01(\x09R\x06teamId\x12\x14\x0a\x05model\x18\x06 \x01(\x09R\x05model\x12#\x0a\x0dprompt_tokens\x18\x07 \x01(\x0dR\x0cpromptTokens\x12+\x0a\x11completion_tokens\x18\x08 \x01(\x0dR\x10completionTokens\x12!\x0a\x0ctotal_tokens\x18\x09 \x01(\x0dR\x0btotalTokens\x12!\x0a\x0cis_streaming\x18\x0a \x01(\x08R\x0bisStreaming\x12\x1a\x0a\x09is_ab_leg\x18\x0b \x01(\x08R\x07isAbLeg\x12\x0e\x0a\x02ts\x18\x0c \x01(\x09R\x02ts\x12=\x0a\x0cbilling_mode\x18\x0d \x01(\x0e2\x1a.he.billing.v1.BillingModeR\x0bbillingMode\".\x0a\x13CheckBalanceRequest\x12\x17\x0a\x07user_id\x18\x01 \x01(\x09R\x06userId\"W\x0a\x14CheckBalanceResponse\x12\x1f\x0a\x0bcurrent_usd\x18\x01 \x01(\x09R\x0acurrentUsd\x12\x1e\x0a\x0asufficient\x18\x02 \x01(\x08R\x0asufficient\"\x94\x01\x0a\x1aCreateRechargeOrderRequest\x12\x17\x0a\x07user_id\x18\x01 \x01(\x09R\x06userId\x12\x16\x0a\x06amount\x18\x02 \x01(\x09R\x06amount\x12\x1a\x0a\x08currency\x18\x03 \x01(\x09R\x08currency\x12)\x0a\x10payment_provider\x18\x04 \x01(\x09R\x0fpaymentProvider\"P\x0a\x1bCreateRechargeOrderResponse\x12\x19\x0a\x08order_id\x18\x01 \x01(\x09R\x07orderId\x12\x16\x0a\x06status\x18\x02 \x01(\x09R\x06status\"\xbb\x01\x0a\x16SetAutoRechargeRequest\x12\x17\x0a\x07user_id\x18\x01 \x01(\x09R\x06userId\x12\x18\x0a\x07enabled\x18\x02 \x01(\x08R\x07enabled\x12#\x0a\x0dthreshold_usd\x18\x03 \x01(\x09R\x0cthresholdUsd\x12\x1d\x0a\x0aamount_usd\x18\x04 \x01(\x09R\x09amountUsd\x12*\x0a\x11payment_method_id\x18\x05 \x01(\x09R\x0fpaymentMethodId\"3\x0a\x17SetAutoRechargeResponse\x12\x18\x0a\x07enabled\x18\x01 \x01(\x08R\x07enabled\"\xb6\x01\x0a\x18SavePaymentMethodRequest\x12\x17\x0a\x07user_id\x18\x01 \x01(\x09R\x06userId\x12)\x0a\x10payment_provider\x18\x02 \x01(\x09R\x0fpaymentProvider\x12*\x0a\x11provider_pm_token\x18\x03 \x01(\x09R\x0fproviderPmToken\x12\x14\x0a\x05brand\x18\x04 \x01(\x09R\x05brand\x12\x14\x0a\x05last4\x18\x05 \x01(\x09R\x05last4\"J\x0a\x19SavePaymentMethodResponse\x12\x0e\x0a\x02id\x18\x01 \x01(\x09R\x02id\x12\x1d\x0a\x0ais_default\x18\x02 \x01(\x08R\x09isDefault\"4\x0a\x19ListPaymentMethodsRequest\x12\x17\x0a\x07user_id\x18\x01 \x01(\x09R\x06userId\"?\x0a\x1aListPaymentMethodsResponse\x12!\x0a\x0cmethods_json\x18\x01 \x01(\x09R\x0bmethodsJson\"a\x0a\x1aDeletePaymentMethodRequest\x12\x17\x0a\x07user_id\x18\x01 \x01(\x09R\x06userId\x12*\x0a\x11payment_method_id\x18\x02 \x01(\x09R\x0fpaymentMethodId\"m\x0a\x1bDeletePaymentMethodResponse\x12\x18\x0a\x07deleted\x18\x01 \x01(\x08R\x07deleted\x124\x0a\x16auto_recharge_disabled\x18\x02 \x01(\x08R\x14autoRechargeDisabled\".\x0a\x13ListInvoicesRequest\x12\x17\x0a\x07user_id\x18\x01 \x01(\x09R\x06userId\";\x0a\x14ListInvoicesResponse\x12#\x0a\x0dinvoices_json\x18\x01 \x01(\x09R\x0cinvoicesJson\"N\x0a\x14GetInvoicePdfRequest\x12\x17\x0a\x07user_id\x18\x01 \x01(\x09R\x06userId\x12\x1d\x0a\x0ainvoice_id\x18\x02 \x01(\x09R\x09invoiceId\"[\x0a\x15GetInvoicePdfResponse\x12\x10\x0a\x03pdf\x18\x01 \x01(\x0cR\x03pdf\x12\x1a\x0a\x08filename\x18\x02 \x01(\x09R\x08filename\x12\x14\x0a\x05found\x18\x03 \x01(\x08R\x05found*b\x0a\x0bBillingMode\x12\x1c\x0a\x18BILLING_MODE_UNSPECIFIED\x10\x00\x12\x1a\x0a\x16BILLING_MODE_PER_TOKEN\x10\x01\x12\x19\x0a\x15BILLING_MODE_PER_CALL\x10\x022\xaf\x06\x0a\x0eBillingService\x12W\x0a\x0cCheckBalance\x12\".he.billing.v1.CheckBalanceRequest\x1a#.he.billing.v1.CheckBalanceResponse\x12l\x0a\x13CreateRechargeOrder\x12).he.billing.v1.CreateRechargeOrderRequest\x1a*.he.billing.v1.CreateRechargeOrderResponse\x12`\x0a\x0fSetAutoRecharge\x12%.he.billing.v1.SetAutoRechargeRequest\x1a&.he.billing.v1.SetAutoRechargeResponse\x12f\x0a\x11SavePaymentMethod\x12'.he.billing.v1.SavePaymentMethodRequest\x1a(.he.billing.v1.SavePaymentMethodResponse\x12i\x0a\x12ListPaymentMethods\x12(.he.billing.v1.ListPaymentMethodsRequest\x1a).he.billing.v1.ListPaymentMethodsResponse\x12l\x0a\x13DeletePaymentMethod\x12).he.billing.v1.DeletePaymentMethodRequest\x1a*.he.billing.v1.DeletePaymentMethodResponse\x12W\x0a\x0cListInvoices\x12\".he.billing.v1.ListInvoicesRequest\x1a#.he.billing.v1.ListInvoicesResponse\x12Z\x0a\x0dGetInvoicePdf\x12#.he.billing.v1.GetInvoicePdfRequest\x1a$.he.billing.v1.GetInvoicePdfResponseBHZFgithub.com/he-api/he-api/packages/proto/gen/go/he/billing/v1;billingv1b\x06proto3"
 
 var (
 	file_he_billing_v1_billing_proto_rawDescOnce sync.Once
@@ -473,7 +1023,7 @@ func file_he_billing_v1_billing_proto_rawDescGZIP() []byte {
 }
 
 var file_he_billing_v1_billing_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_he_billing_v1_billing_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_he_billing_v1_billing_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_he_billing_v1_billing_proto_goTypes = []any{
 	(BillingMode)(0),                    // 0: he.billing.v1.BillingMode
 	(*UsageEvent)(nil),                  // 1: he.billing.v1.UsageEvent
@@ -481,18 +1031,42 @@ var file_he_billing_v1_billing_proto_goTypes = []any{
 	(*CheckBalanceResponse)(nil),        // 3: he.billing.v1.CheckBalanceResponse
 	(*CreateRechargeOrderRequest)(nil),  // 4: he.billing.v1.CreateRechargeOrderRequest
 	(*CreateRechargeOrderResponse)(nil), // 5: he.billing.v1.CreateRechargeOrderResponse
+	(*SetAutoRechargeRequest)(nil),      // 6: he.billing.v1.SetAutoRechargeRequest
+	(*SetAutoRechargeResponse)(nil),     // 7: he.billing.v1.SetAutoRechargeResponse
+	(*SavePaymentMethodRequest)(nil),    // 8: he.billing.v1.SavePaymentMethodRequest
+	(*SavePaymentMethodResponse)(nil),   // 9: he.billing.v1.SavePaymentMethodResponse
+	(*ListPaymentMethodsRequest)(nil),   // 10: he.billing.v1.ListPaymentMethodsRequest
+	(*ListPaymentMethodsResponse)(nil),  // 11: he.billing.v1.ListPaymentMethodsResponse
+	(*DeletePaymentMethodRequest)(nil),  // 12: he.billing.v1.DeletePaymentMethodRequest
+	(*DeletePaymentMethodResponse)(nil), // 13: he.billing.v1.DeletePaymentMethodResponse
+	(*ListInvoicesRequest)(nil),         // 14: he.billing.v1.ListInvoicesRequest
+	(*ListInvoicesResponse)(nil),        // 15: he.billing.v1.ListInvoicesResponse
+	(*GetInvoicePdfRequest)(nil),        // 16: he.billing.v1.GetInvoicePdfRequest
+	(*GetInvoicePdfResponse)(nil),       // 17: he.billing.v1.GetInvoicePdfResponse
 }
 var file_he_billing_v1_billing_proto_depIdxs = []int32{
-	0, // 0: he.billing.v1.UsageEvent.billing_mode:type_name -> he.billing.v1.BillingMode
-	2, // 1: he.billing.v1.BillingService.CheckBalance:input_type -> he.billing.v1.CheckBalanceRequest
-	4, // 2: he.billing.v1.BillingService.CreateRechargeOrder:input_type -> he.billing.v1.CreateRechargeOrderRequest
-	3, // 3: he.billing.v1.BillingService.CheckBalance:output_type -> he.billing.v1.CheckBalanceResponse
-	5, // 4: he.billing.v1.BillingService.CreateRechargeOrder:output_type -> he.billing.v1.CreateRechargeOrderResponse
-	3, // [3:5] is the sub-list for method output_type
-	1, // [1:3] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	0,  // 0: he.billing.v1.UsageEvent.billing_mode:type_name -> he.billing.v1.BillingMode
+	2,  // 1: he.billing.v1.BillingService.CheckBalance:input_type -> he.billing.v1.CheckBalanceRequest
+	4,  // 2: he.billing.v1.BillingService.CreateRechargeOrder:input_type -> he.billing.v1.CreateRechargeOrderRequest
+	6,  // 3: he.billing.v1.BillingService.SetAutoRecharge:input_type -> he.billing.v1.SetAutoRechargeRequest
+	8,  // 4: he.billing.v1.BillingService.SavePaymentMethod:input_type -> he.billing.v1.SavePaymentMethodRequest
+	10, // 5: he.billing.v1.BillingService.ListPaymentMethods:input_type -> he.billing.v1.ListPaymentMethodsRequest
+	12, // 6: he.billing.v1.BillingService.DeletePaymentMethod:input_type -> he.billing.v1.DeletePaymentMethodRequest
+	14, // 7: he.billing.v1.BillingService.ListInvoices:input_type -> he.billing.v1.ListInvoicesRequest
+	16, // 8: he.billing.v1.BillingService.GetInvoicePdf:input_type -> he.billing.v1.GetInvoicePdfRequest
+	3,  // 9: he.billing.v1.BillingService.CheckBalance:output_type -> he.billing.v1.CheckBalanceResponse
+	5,  // 10: he.billing.v1.BillingService.CreateRechargeOrder:output_type -> he.billing.v1.CreateRechargeOrderResponse
+	7,  // 11: he.billing.v1.BillingService.SetAutoRecharge:output_type -> he.billing.v1.SetAutoRechargeResponse
+	9,  // 12: he.billing.v1.BillingService.SavePaymentMethod:output_type -> he.billing.v1.SavePaymentMethodResponse
+	11, // 13: he.billing.v1.BillingService.ListPaymentMethods:output_type -> he.billing.v1.ListPaymentMethodsResponse
+	13, // 14: he.billing.v1.BillingService.DeletePaymentMethod:output_type -> he.billing.v1.DeletePaymentMethodResponse
+	15, // 15: he.billing.v1.BillingService.ListInvoices:output_type -> he.billing.v1.ListInvoicesResponse
+	17, // 16: he.billing.v1.BillingService.GetInvoicePdf:output_type -> he.billing.v1.GetInvoicePdfResponse
+	9,  // [9:17] is the sub-list for method output_type
+	1,  // [1:9] is the sub-list for method input_type
+	1,  // [1:1] is the sub-list for extension type_name
+	1,  // [1:1] is the sub-list for extension extendee
+	0,  // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_he_billing_v1_billing_proto_init() }
@@ -506,7 +1080,7 @@ func file_he_billing_v1_billing_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_he_billing_v1_billing_proto_rawDesc), len(file_he_billing_v1_billing_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   5,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

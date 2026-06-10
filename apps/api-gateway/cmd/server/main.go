@@ -435,7 +435,15 @@ func main() {
 			billingWrite := handlers.NewBillingWriteHandler(logger, billingClient, paymentClient, billingPool)
 			mux.Handle("POST /v1/billing/recharge", bearerAuth.RequireAPIKey(http.HandlerFunc(billingWrite.Recharge)))
 			mux.Handle("POST /v1/billing/subscriptions", bearerAuth.RequireAPIKey(http.HandlerFunc(billingWrite.Subscription)))
-			logger.Info("billing write endpoints wired (POST /v1/billing/recharge, /v1/billing/subscriptions)")
+			// Story 7.7 — auto-recharge config + saved payment methods + invoices.
+			mux.Handle("PUT /v1/billing/auto-recharge", bearerAuth.RequireAPIKey(http.HandlerFunc(billingWrite.UpdateAutoRecharge)))
+			mux.Handle("POST /v1/billing/payment-methods", bearerAuth.RequireAPIKey(http.HandlerFunc(billingWrite.CreatePaymentMethod)))
+			mux.Handle("POST /v1/billing/payment-methods/confirm", bearerAuth.RequireAPIKey(http.HandlerFunc(billingWrite.ConfirmPaymentMethod)))
+			mux.Handle("GET /v1/billing/payment-methods", bearerAuth.RequireAPIKey(http.HandlerFunc(billingWrite.ListPaymentMethods)))
+			mux.Handle("DELETE /v1/billing/payment-methods/{id}", bearerAuth.RequireAPIKey(http.HandlerFunc(billingWrite.DeletePaymentMethod)))
+			mux.Handle("GET /v1/billing/invoices", bearerAuth.RequireAPIKey(http.HandlerFunc(billingWrite.ListInvoices)))
+			mux.Handle("GET /v1/billing/invoices/{id}/pdf", bearerAuth.RequireAPIKey(http.HandlerFunc(billingWrite.GetInvoicePDF)))
+			logger.Info("billing write endpoints wired (recharge, subscriptions, auto-recharge, payment-methods, invoices)")
 		} else {
 			logger.Warn("BILLING_SVC_ENDPOINT or PAYMENT_SVC_ENDPOINT unset — POST /v1/billing/{recharge,subscriptions} disabled")
 		}

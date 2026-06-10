@@ -1,0 +1,21 @@
+{
+  "iteration": 1171,
+  "last_run_ts": "2026-05-25T15:00:00",
+  "windows": {
+    "0": {"hash": "eddefe12c086a3b38317f69603243414", "state": "idle-menu", "agent": "architect", "unchanged_rounds": 0, "note": "Arch idle menu Cogitated 9s"},
+    "1": {"hash": "3b70d70b2af4d5c914e216fa04d9a7b8", "state": "sm-resume-draft-5.1", "agent": "sm", "unchanged_rounds": 0, "note": "🔧 Yuri 推 *draft 5.1 --continue 恢复（卡 5 天 idle）"},
+    "2": {"hash": "bc9eecf2ce04f0933f2dad9fe9031b28", "state": "idle-menu", "agent": "dev", "unchanged_rounds": 0, "note": "Dev idle menu Worked 21s"},
+    "3": {"hash": "2c62bd6c149d7b5788694dd03c02feb8", "state": "idle-menu", "agent": "qa", "unchanged_rounds": 0, "note": "QA idle menu Churned 31s"}
+  },
+  "stuck_count": 0,
+  "strategy": "A-full-auto-advance-RESUMED",
+  "stories_done": 26,
+  "stories_total_planned": "~60",
+  "epic_3_complete": true,
+  "epic_4_adapters_done": true,
+  "current_epic": 5,
+  "current_story": "5.1 (SM resuming draft after 5-day idle)",
+  "stories_committed": ["1.1-1.6", "2.1-2.6", "3.1-3.6", "4.1", "4.2", "4.3", "4.4", "4.5", "4.6", "4.7", "4.8"],
+  "yuri_intervention_count": 195,
+  "current_action": "🔧 Recovery: 5 天闲置后唤醒 · 推 SM *draft 5.1 --continue"
+}

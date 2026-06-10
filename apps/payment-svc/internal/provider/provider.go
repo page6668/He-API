@@ -101,6 +101,31 @@ type PaymentProvider interface {
 // to 400_webhook_signature_invalid and never parses the body (BR-W-1 / BR-W-4).
 var ErrSignatureInvalid = errors.New("provider: webhook signature verification failed")
 
+// OffSessionProvider is the OPTIONAL Story-7.7 extension of the seam (Q-OFFSESSION):
+// merchant-initiated (off-session) charge against a STORED token + the SetupIntent
+// save-token flow. Only the card-capable Stripe impl satisfies it; the payment
+// handler type-asserts it and returns ErrOffSessionUnsupported for any provider
+// that does not — so the 7.4-7.6 impls (USDC / Alipay+ / WeChat) stay UNTOUCHED
+// (boundary lock). The off-session charge still settles via the 7.3 webhook → the
+// exactly-once credit path is UNCHANGED (no new credit code).
+type OffSessionProvider interface {
+	// ChargeOffSession confirms a charge against pmToken with no user present. It
+	// carries orderID into the provider as metadata so the 7.3 webhook resolves
+	// OUR order. amountUSD is a string-decimal. status is "pending" (accepted →
+	// webhook will settle) or "failed" (declined / requires interactive auth).
+	ChargeOffSession(ctx context.Context, orderID, pmToken, amountUSD string) (extOrderID, status string, err error)
+	// CreateSetupIntent begins a SetupIntent and returns its client_secret (for
+	// client-side card confirmation — the PAN never reaches He-API, PCI §8.4).
+	CreateSetupIntent(ctx context.Context, userID string) (clientSecret, setupIntentID string, err error)
+	// RetrievePaymentMethod fetches the confirmed token + display-safe brand/last4
+	// off a completed SetupIntent (server-side — the token is never client-asserted).
+	RetrievePaymentMethod(ctx context.Context, setupIntentID string) (pmToken, brand, last4 string, err error)
+}
+
+// ErrOffSessionUnsupported is returned for a provider that does not implement
+// OffSessionProvider (Q-OFFSESSION: card off-session is Stripe-only in 7.7).
+var ErrOffSessionUnsupported = errors.New("provider: off-session charge unsupported")
+
 // ErrUnsupportedProvider is returned by the Registry for an unknown provider id.
 var ErrUnsupportedProvider = errors.New("provider: unsupported payment provider")
 
