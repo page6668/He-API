@@ -99,6 +99,49 @@ func TestRecharge_Happy(t *testing.T) {
 	}
 }
 
+// 7.5-INT-002/003 — provider:"alipay" is accepted (added to supportedProviders) for
+// BOTH USD and CNY (Q-CURRENCY); the pending order is created and bound to alipay +
+// the authenticated user server-side (BR-A-3/A-6). Money fields string-decimal.
+func TestRecharge_Alipay_Accepted(t *testing.T) {
+	for _, currency := range []string{"USD", "CNY"} {
+		t.Run(currency, func(t *testing.T) {
+			fb := &fakeBilling{orderID: "order-ap"}
+			fp := &fakePayment{checkoutURL: "https://cashier.antom/checkout/abc"}
+			h := NewBillingWriteHandler(nil, fb, fp, nil)
+
+			rec := postRecharge(h, "user-1", `{"amount":"50.00","currency":"`+currency+`","provider":"alipay"}`)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d (%s), want 200", rec.Code, rec.Body.String())
+			}
+			var resp rechargeResponse
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if resp.Provider != "alipay" || resp.CheckoutURL != "https://cashier.antom/checkout/abc" {
+				t.Fatalf("unexpected response: %+v", resp)
+			}
+			// No usdc_address leaks into the alipay response (coinbase-only field).
+			if resp.UsdcAddress != "" {
+				t.Errorf("usdc_address = %q, want empty for alipay", resp.UsdcAddress)
+			}
+			if fb.gotReq.GetPaymentProvider() != "alipay" || fb.gotReq.GetCurrency() != currency || fb.gotReq.GetUserId() != "user-1" {
+				t.Errorf("billing req mismatch: %+v", fb.gotReq)
+			}
+			if fp.gotCheckout.GetPaymentProvider() != "alipay" {
+				t.Errorf("checkout provider = %q, want alipay", fp.gotCheckout.GetPaymentProvider())
+			}
+		})
+	}
+}
+
+// 7.5-INT-005 — an unsupported currency for alipay (EUR) is rejected before any
+// provider call (reuses 7.2 400_unsupported_currency).
+func TestRecharge_Alipay_BadCurrency_400(t *testing.T) {
+	h := NewBillingWriteHandler(nil, &fakeBilling{orderID: "x"}, &fakePayment{}, nil)
+	rec := postRecharge(h, "user-1", `{"amount":"50.00","currency":"EUR","provider":"alipay"}`)
+	assertCode(t, rec, http.StatusBadRequest, "400_unsupported_currency")
+}
+
 // 7.4-INT-002 — provider:"coinbase" is accepted (added to supportedProviders); the
 // pending order is created and the response surfaces the USDC deposit address
 // (Q-ADDRESS) carried through CreateCheckoutResponse.client_token. Money fields

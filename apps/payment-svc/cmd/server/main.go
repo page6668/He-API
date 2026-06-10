@@ -50,6 +50,7 @@ import (
 	"github.com/he-api/he-api/apps/payment-svc/internal/paymentgrpc"
 	"github.com/he-api/he-api/apps/payment-svc/internal/producer"
 	"github.com/he-api/he-api/apps/payment-svc/internal/provider"
+	"github.com/he-api/he-api/apps/payment-svc/internal/provider/alipay"
 	"github.com/he-api/he-api/apps/payment-svc/internal/provider/coinbase"
 	"github.com/he-api/he-api/apps/payment-svc/internal/provider/paypal"
 	"github.com/he-api/he-api/apps/payment-svc/internal/provider/stripe"
@@ -187,6 +188,28 @@ func buildRegistry(logger *slog.Logger) *provider.Registry {
 		logger.Info("coinbase provider wired")
 	} else {
 		logger.Warn("COINBASE_COMMERCE_API_KEY unset — coinbase (USDC) provider disabled")
+	}
+
+	// Story 7.5 — Alipay+ / Antom international cashier. Added only when the client
+	// id is set, so a partial config (e.g. no Alipay+ channel in dev) still boots.
+	// The merchant PRIVATE key (signs outbound) is distinct from the Alipay+ PUBLIC
+	// key (verifies inbound) and the client id (⚠️ the private key has a broader
+	// blast radius than an HMAC secret, BR-W-6). WithNotifyPath carries the PUBLIC
+	// notify path Antom signs over (Q-NOTIFY-PATH), not the internal proxied path.
+	if cid := os.Getenv("ALIPAY_PLUS_CLIENT_ID"); cid != "" {
+		opts := []alipay.Option{}
+		if base := os.Getenv("ALIPAY_PLUS_API_BASE_URL"); base != "" {
+			opts = append(opts, alipay.WithBaseURL(base))
+		}
+		if np := os.Getenv("ALIPAY_PLUS_NOTIFY_PATH"); np != "" {
+			opts = append(opts, alipay.WithNotifyPath(np))
+		}
+		impls = append(impls, alipay.New(cid,
+			os.Getenv("ALIPAY_PLUS_MERCHANT_PRIVATE_KEY"),
+			os.Getenv("ALIPAY_PLUS_ALIPAY_PUBLIC_KEY"), opts...))
+		logger.Info("alipay provider wired")
+	} else {
+		logger.Warn("ALIPAY_PLUS_CLIENT_ID unset — alipay (Alipay+) provider disabled")
 	}
 
 	return provider.NewRegistry(impls...)

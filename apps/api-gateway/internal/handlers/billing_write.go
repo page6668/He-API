@@ -43,8 +43,25 @@ import (
 )
 
 // supportedProviders is the enabled channel set. 7.3: stripe/paypal. 7.4 adds
-// coinbase (USDC); Alipay+/WeChat are 7.5-7.6.
-var supportedProviders = map[string]bool{"stripe": true, "paypal": true, "coinbase": true}
+// coinbase (USDC); 7.5 adds alipay (Alipay+); WeChat is 7.6.
+var supportedProviders = map[string]bool{"stripe": true, "paypal": true, "coinbase": true, "alipay": true}
+
+// providerCurrencies overrides the default recharge currency set per provider. The
+// default (stripe/paypal/coinbase) is USD-only (7.2 Q-CURRENCY m3); alipay (7.5)
+// enables {USD, CNY} — a CNY settlement converts to the USD single-SoT balance at
+// the latest 7.2 fx_rate at credit time (Q-CURRENCY).
+var providerCurrencies = map[string]map[string]bool{
+	"alipay": {"USD": true, "CNY": true},
+}
+
+// currencySupported reports whether currency is enabled for provider. An absent
+// provider falls back to the USD-only default (7.2 m3).
+func currencySupported(provider, currency string) bool {
+	if set, ok := providerCurrencies[provider]; ok {
+		return set[currency]
+	}
+	return currency == "USD"
+}
 
 // supportedPlans is the §4.1 subscription plan enum (opaque in 7.3 — Q-SUBSCOPE).
 var supportedPlans = map[string]bool{"free": true, "pro": true, "team": true, "enterprise": true}
@@ -109,13 +126,13 @@ func (h *BillingWriteHandler) Recharge(w http.ResponseWriter, r *http.Request) {
 	provider := strings.ToLower(strings.TrimSpace(req.Provider))
 	if !supportedProviders[provider] {
 		p := req.Provider
-		_ = openaierr.Write(w, ctx, http.StatusBadRequest, "400_unsupported_payment_provider", "Unsupported payment provider. Supported: stripe, paypal, coinbase.", &p)
+		_ = openaierr.Write(w, ctx, http.StatusBadRequest, "400_unsupported_payment_provider", "Unsupported payment provider. Supported: stripe, paypal, coinbase, alipay.", &p)
 		return
 	}
 	currency := strings.ToUpper(strings.TrimSpace(req.Currency))
-	if currency != "USD" { // Q-CURRENCY m3 — 7.3 enables USD only
+	if !currencySupported(provider, currency) { // Q-CURRENCY — USD-only default; alipay adds CNY (7.5)
 		c := req.Currency
-		_ = openaierr.Write(w, ctx, http.StatusBadRequest, "400_unsupported_currency", "Unsupported recharge currency. 7.3 supports USD only.", &c)
+		_ = openaierr.Write(w, ctx, http.StatusBadRequest, "400_unsupported_currency", "Unsupported recharge currency for this provider.", &c)
 		return
 	}
 	amt, err := decimal.NewFromString(strings.TrimSpace(req.Amount))

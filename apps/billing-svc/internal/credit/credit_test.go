@@ -189,6 +189,73 @@ func TestApply_Recharge_UnparseableIntent_Parks(t *testing.T) {
 	}
 }
 
+// 7.5-INT-012 — CNY→USD fx-at-credit (the FIRST real exercise of the inherited
+// toUSD branch, Story 7.5). A CNY settlement passes the amount-integrity guard in
+// the PAID currency (settled 350 CNY == intent 350 CNY, Q-FX-INTENT), THEN converts
+// to USD at the latest 7.2 fx_rate (350 / 7.00 = 50.0000, HALF-UP) and credits
+// balances.current_usd. current_rmb is untouched (7.2 Q-SOT, single USD accounting).
+func TestApply_Recharge_CNY_FxAtCredit(t *testing.T) {
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	rdb := newRedis(t)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT user_id::text, amount::text, currency FROM he_api.recharge_orders").
+		WithArgs(orderID).
+		WillReturnRows(pgxmock.NewRows([]string{"user_id", "amount", "currency"}).AddRow(userID, "350.0000", "CNY"))
+	// Integrity passes in CNY → THEN the fx read converts the settled amount to USD.
+	mock.ExpectQuery("SELECT rate::text FROM he_api.fx_rates").
+		WithArgs("CNY").
+		WillReturnRows(pgxmock.NewRows([]string{"rate"}).AddRow("7.00000000"))
+	mock.ExpectExec("UPDATE he_api.recharge_orders").
+		WithArgs(orderID, "pi_123").
+		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+	mock.ExpectQuery("INSERT INTO he_api.balances").
+		WithArgs(userID, "50.0000"). // 350 CNY / 7.00 = 50.0000 USD credited
+		WillReturnRows(pgxmock.NewRows([]string{"current_usd"}).AddRow("50.0000"))
+	mock.ExpectCommit()
+
+	a := New(mock, rdb, nil)
+	out, err := a.Apply(context.Background(), rechargeEvent("350.00", "CNY"))
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if out != OutcomeCredited {
+		t.Fatalf("outcome = %v, want Credited (CNY→USD fx-at-credit)", out)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+// 7.5-INT-013 — Q-FX-INTENT: a SHORT CNY settlement parks, and the comparison
+// happens in the PAID currency BEFORE any fx conversion (NO fx_rate query, NO flip)
+// — so fx-rate drift can never falsely trip the park. settled 300 CNY ≠ intent 350
+// CNY → mismatch.
+func TestApply_Recharge_CNY_ShortSettle_ParksPreFx(t *testing.T) {
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT user_id::text, amount::text, currency FROM he_api.recharge_orders").
+		WithArgs(orderID).
+		WillReturnRows(pgxmock.NewRows([]string{"user_id", "amount", "currency"}).AddRow(userID, "350.0000", "CNY"))
+	// NO fx_rate query (the park happens pre-conversion), NO UPDATE, NO credit, just rollback.
+	mock.ExpectRollback()
+
+	a := New(mock, nil, nil)
+	out, err := a.Apply(context.Background(), rechargeEvent("300.00", "CNY"))
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if out != OutcomeMismatch {
+		t.Fatalf("outcome = %v, want Mismatch (short CNY settle parks pre-fx)", out)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
 // 7.3-UNIT-003 — CNY→USD conversion at settlement (HALF-UP, decimal, no float).
 // 360 CNY ÷ 7.20 = 50.00 USD. The conversion path is built + tested even though
 // 7.3 enables USD only at the endpoint (Q-CURRENCY).

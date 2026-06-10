@@ -190,30 +190,44 @@ func (a *Applier) applyRecharge(ctx context.Context, ev *paymentv1.PaymentEvent)
 		return 0, fmt.Errorf("credit: read order: %w", err)
 	}
 
-	// Convert the provider-confirmed settled amount to USD (Q-CURRENCY). For a USD
-	// settlement this is a no-op; a non-USD settlement converts at the 7.2 fx_rate.
-	creditUSD, err := a.toUSD(ctx, ev.GetSettledAmount(), ev.GetCurrency())
-	if err != nil {
-		return 0, fmt.Errorf("credit: convert amount: %w", err)
-	}
-
-	// Amount integrity (Q-AMOUNT / m2 + ROBUST-003): the credited value must match
-	// the order intent. A settled≠intent mismatch — OR an unparseable/corrupt stored
-	// intent (ierr) — parks the order (no flip, no credit) + alerts, rather than
-	// crediting unchecked. A corrupt/NULL intent must NOT bypass the anti-tampering
-	// guard and credit the provider amount blind.
+	// Amount integrity (Q-AMOUNT / m2 + ROBUST-003 + Q-FX-INTENT, Story 7.5): the
+	// provider-confirmed settled amount must match the order intent. Compare in the
+	// PAID currency — settled vs intent, BOTH pre-conversion, AND the same currency —
+	// so fx-rate drift between order-create and settlement does NOT falsely trip the
+	// park (Q-FX-INTENT). A settled≠intent mismatch, a currency mismatch, OR an
+	// unparseable/corrupt stored intent (ierr) parks the order (no flip, no credit) +
+	// alerts, rather than crediting unchecked.
+	//
+	// ⚠️ Story 7.5 (Alipay+) is the FIRST channel to settle a native non-USD currency
+	// (CNY). Prior to this the guard compared the USD-converted credit against the raw
+	// paid-currency intent, which silently parked every CNY recharge (50.0000 USD ≠
+	// 350.00 CNY). Comparing in the paid currency BEFORE conversion fixes that while
+	// leaving the USD path byte-identical (USD: settled == intent == creditUSD).
+	settled, serr := decimal.NewFromString(strings.TrimSpace(ev.GetSettledAmount()))
 	intent, ierr := decimal.NewFromString(intentStr)
-	if ierr != nil || !creditUSD.Equal(intent) {
+	settledCur := strings.ToUpper(strings.TrimSpace(ev.GetCurrency()))
+	intentCur := strings.ToUpper(strings.TrimSpace(orderCurrency))
+	if serr != nil || ierr != nil || settledCur != intentCur || !settled.Equal(intent) {
 		a.mismatch.Add(ctx, 1)
 		a.count(ctx, "mismatch")
 		a.logger.WarnContext(ctx, "payment_amount_mismatch",
 			slog.String("event", "payment_amount_mismatch"),
 			slog.String("order_id", orderID),
-			slog.String("settled_usd", creditUSD.StringFixed(moneyScale)),
+			slog.String("settled", strings.TrimSpace(ev.GetSettledAmount())),
+			slog.String("settled_currency", settledCur),
 			slog.String("intent", intentStr), // raw stored intent (may be unparseable)
+			slog.String("intent_currency", intentCur),
 		)
 		// Commit nothing (the deferred rollback discards the read). Order stays pending.
 		return OutcomeMismatch, nil
+	}
+
+	// Integrity passed — NOW convert the verified settled amount to USD for the credit
+	// (Q-CURRENCY / BR-C-4). For a USD settlement this is a no-op pass-through; a CNY
+	// settlement converts at the latest 7.2 fx_rate (HALF-UP, moneyScale).
+	creditUSD, err := a.toUSD(ctx, ev.GetSettledAmount(), ev.GetCurrency())
+	if err != nil {
+		return 0, fmt.Errorf("credit: convert amount: %w", err)
 	}
 
 	// Exactly-once fence: only a pending row flips. Zero rows ⇒ redelivery / race.

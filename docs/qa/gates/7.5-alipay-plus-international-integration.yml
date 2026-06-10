@@ -1,0 +1,97 @@
+schema: 1
+story: "7.5"
+story_title: "支付宝 Alipay+ 国际版集成"
+gate: "PASS"
+status_reason: "All 3 ACs implemented and independently verified. The 4th payment channel (Alipay+/Antom) lands as a pure-additive PaymentProvider impl on the proven 7.3 seam. payment-svc alipay/webhook + billing-svc credit + gateway billing suites all green; go vet clean on all 3 modules. The 3 High risks are mitigated AND verified at source: SEC-002 (signs over CONFIGURED notify path, not r.URL.Path), SEC-001 (RSA2 verify-before-parse, fail-closed on every failure path), DATA-001 (table-driven minor-unit, fail-closed both directions). The ONE REUSE-discipline deviation (credit.go guard) was scrutinised and is a JUSTIFIED, correct root-cause fix (the live guard compared post-fx USD vs paid-currency intent → silently parked every CNY recharge; the story's own BR-C-3/Q-FX-INTENT required the paid-currency comparison). Residual: full-stack testcontainers E2E (T4.1) is docker-gated and CI-deferred per the 7.3/7.4 precedent — composition is covered offline by the producer-boundary ingress test + the credit-applier USD/CNY tests (non-blocking)."
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-10T08:28:55Z"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "HIGH"
+  cached_review_mode: "full_testing"
+  cached_project_type: "web_backend"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+# No blocking issues. CI-001 is an env-limited execution follow-up; OBS-001 is a real-world
+# integration nuance to watch, fail-safe by construction (false-reject only, never false-accept).
+top_issues:
+  - id: "CI-001"
+    severity: low
+    finding: "Full-stack testcontainers E2E (7.5-E2E-001/002, T4.1) is docker-gated; docker cannot run in the local review env. The AC1→AC2→AC3 journey is covered in composition by offline integration pieces: webhook/alipay_ingress_test.go (verify→emit boundary: forged→400+no-emit, S→one recharge_paid emit, U→no-emit, stale-replay→400) + credit_test.go (applier USD pass-through + CNY→USD fx-at-credit + pre-fx short-settle park)."
+    suggested_action: "Run the full-stack recharge→notify→credit→GET /v1/balance journey (USD 1:1 / CNY@fx) in CI to obtain over-the-wire E2E proof, mirroring the 7.3/7.4 CI deferral."
+  - id: "OBS-001"
+    severity: low
+    finding: "alipay.go parseSignatureHeader URL-decodes the Signature value via url.QueryUnescape. The inline comment claims only %-escapes are unescaped, but QueryUnescape also maps a literal '+' to space. Antom URL-encodes the base64 signature (a base64 '+' arrives as %2B), so genuine traffic is unaffected. A non-conformant literal '+' would corrupt the decode → verify-fail → reject (fail-closed). Worst case is a false-REJECT, never a false-accept."
+    suggested_action: "Confirm against Antom sandbox that the Signature base64 is %-encoded (it is, per spec). If any literal '+' is ever observed, switch to a %-only unescape. No code change required for MVP — the failure mode is safe."
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 4              # packages: alipay, payment-svc/webhook, billing-svc/credit, gateway/handlers(alipay subset)
+    passed_count: 4
+    failed_count: 0
+    skipped_count: 0
+    pass_rate: 100
+    coverage_percentage: 0   # not measured this round; alipay provider impl unit-covered (CreateCheckout/VerifyWebhook/RSA/minor-unit/resultStatus), per T5.1
+    failed_tests: []
+    notes: "The api-gateway/handlers package contains one PRE-EXISTING failing test, TestChatCompletionsStream_ClientDisconnect_ConnectionClose (a chat-streaming timing flake), INDEPENDENTLY CONFIRMED pre-existing: it fails identically with all 7.5 changes git-stashed (clean 7.4 base). It is outside the 7.5 billing surface and is NOT a regression. The 7.5 billing/alipay tests (TestRecharge_Alipay_Accepted USD+CNY, TestRecharge_Alipay_BadCurrency_400) pass in isolation."
+  e2e:
+    executed: false
+    passed: true
+    skipped: true
+    skip_reason: "Backend-only MVP (no UI/browser tier; 7.5 returns the Antom cashier checkout_url consumed by a deferred Console story). Full-stack testcontainers E2E is docker-gated and CI-deferred per the 7.3/7.4 precedent (CI-001). Offline composition covers the journey."
+    scenarios_tested: 0
+    scenarios_passed: 0
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: ""
+  issues: []
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 5
+  security_sensitive: true
+  dev_gate_score: 95
+
+risk_summary:
+  totals: { critical: 0, high: 3, medium: 7, low: 3 }   # from docs/qa/assessments/7.5-risk-profile-20260610.md
+  recommendations:
+    must_fix: []   # all 3 High risks mitigated AND verified at source + test (see high_gates_verified)
+    monitor:
+      - "Run the docker-gated full-stack E2E (CI-001) in CI before deploy."
+      - "Confirm Antom Signature base64 is %-encoded in sandbox (OBS-001) — fail-safe either way."
+
+quality_score: 92
+
+# Verification trace (Step 4.6 AC coverage)
+evidence_trace:
+  ac_covered: [1, 2, 3]
+  ac_gaps: []
+  high_gates_verified:
+    SEC_002_canonicalisation: "alipay.go:271 signingString(POST, p.notifyPath, ...) reconstructs over the CONFIGURED public notify path (WithNotifyPath), NOT r.URL.Path; method fixed POST. TestAC3_VerifyWebhook (7.5-UNIT-025) asserts genuine verifies / r.URL.Path use would fail all genuine traffic."
+    SEC_001_forged_rsa2: "alipay.go:233-277 fail-closed on nil/garbage key, missing Signature/Client-Id/Request-Time, Client-Id mismatch, stale Request-Time (freshness BEFORE verify), bad sig, wrong key; rsa.VerifyPKCS1v15(SHA256); body parsed ONLY after verify (reject-before-parse, BR-W-1). TestAC3_VerifyWebhook 7.5-UNIT-020..028 + TestAlipayIngress_Forged_Rejected green."
+    DATA_001_minor_unit: "alipay.go:87 minorUnitDigits{USD:2,CNY:2} table-driven (no hardcoded /100); decimalToMinor/minorToDecimal fail CLOSED on sub-minor precision / non-integer minor value → no 100× mis-scale (BR-W-7). TestMinorUnits (7.5-UNIT-006/007) green."
+  reuse_deviation_verified:
+    credit_go_guard: "JUSTIFIED + correct. The inherited guard compared creditUSD (post-fx, USD) against the raw paid-currency intent → 50.0000 USD != 350.00 CNY → every CNY recharge silently parked (latent defect; prior USD-only tests never drove it). The story's own BR-C-3/Q-FX-INTENT REQUIRED comparing in the PAID currency before toUSD; BR-C-5 'verbatim' was the contradicted assumption. Fix is ~15 lines confined to the guard (parse settled+intent, compare same-currency + equal magnitude pre-conversion, THEN toUSD); tx/fence/credit/mirror untouched. USD path byte-identical — pre-existing USD credit_test.go stays green. New TestApply_Recharge_CNY_FxAtCredit (7.5-INT-012) + TestApply_Recharge_CNY_ShortSettle_ParksPreFx (7.5-INT-013) prove CNY credit + pre-fx park. User-approved 2026-06-10."
+  reuse_discipline: "TECH-003 verified: producer / he.payment.v1 proto / payment.completed topic / recharge_orders schema / recharge endpoint shape ALL untouched. alipay is purely additive (new provider impl + registry entry + supportedProviders entry + 2 webhook route mounts + secrets). The ONE credit.go change is the scrutinised, justified guard fix above — no other spine modification."
+  seam_parity: "alipay satisfies the same PaymentProvider contract (Name/CreateCheckout/VerifyWebhook/CreateSubscription); CreateSubscription returns a not-supported error (mirrors coinbase, Q-SUBSCOPE); no alipay branch leaks into the recharge handler or credit.go (proof-of-reuse for 7.6 WeChat)."
+  toolchain: "go vet clean on payment-svc(alipay,webhook) + billing-svc(credit) + api-gateway(handlers); all referenced traceability-matrix test functions (14) confirmed to exist and pass."
