@@ -44,6 +44,7 @@ var _ billingv1connect.BillingServiceClient = (*fakeBilling)(nil)
 // fakePayment implements paymentv1connect.PaymentServiceClient.
 type fakePayment struct {
 	checkoutURL string
+	clientToken string // coinbase: the USDC deposit address rides here (Q-ADDRESS, 7.4)
 	err         error
 	gotCheckout *paymentv1.CreateCheckoutRequest
 }
@@ -53,7 +54,7 @@ func (f *fakePayment) CreateCheckout(_ context.Context, req *connect.Request[pay
 	if f.err != nil {
 		return nil, f.err
 	}
-	return connect.NewResponse(&paymentv1.CreateCheckoutResponse{CheckoutUrl: f.checkoutURL, ExternalOrderId: "pi_1"}), nil
+	return connect.NewResponse(&paymentv1.CreateCheckoutResponse{CheckoutUrl: f.checkoutURL, ClientToken: f.clientToken, ExternalOrderId: "pi_1"}), nil
 }
 func (f *fakePayment) CreateSubscription(context.Context, *connect.Request[paymentv1.CreateSubscriptionRequest]) (*connect.Response[paymentv1.CreateSubscriptionResponse], error) {
 	return connect.NewResponse(&paymentv1.CreateSubscriptionResponse{}), nil
@@ -95,6 +96,52 @@ func TestRecharge_Happy(t *testing.T) {
 	// The order id is carried to the provider as metadata (the webhook resolves it).
 	if fp.gotCheckout.GetOrderId() != "order-1" {
 		t.Errorf("checkout order id = %q, want order-1", fp.gotCheckout.GetOrderId())
+	}
+}
+
+// 7.4-INT-002 — provider:"coinbase" is accepted (added to supportedProviders); the
+// pending order is created and the response surfaces the USDC deposit address
+// (Q-ADDRESS) carried through CreateCheckoutResponse.client_token. Money fields
+// stay string-decimal (BR-A-4).
+func TestRecharge_Coinbase_Accepted(t *testing.T) {
+	fb := &fakeBilling{orderID: "order-cb"}
+	fp := &fakePayment{checkoutURL: "https://commerce.coinbase.com/charges/ABC123", clientToken: "0xUSDCdeposit"}
+	h := NewBillingWriteHandler(nil, fb, fp, nil)
+
+	rec := postRecharge(h, "user-1", `{"amount":"50.00","currency":"USD","provider":"coinbase"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d (%s), want 200", rec.Code, rec.Body.String())
+	}
+	var resp rechargeResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.OrderID != "order-cb" || resp.Provider != "coinbase" {
+		t.Fatalf("unexpected response: %+v", resp)
+	}
+	if resp.CheckoutURL != "https://commerce.coinbase.com/charges/ABC123" {
+		t.Errorf("checkout_url = %q (want hosted_url)", resp.CheckoutURL)
+	}
+	if resp.UsdcAddress != "0xUSDCdeposit" {
+		t.Errorf("usdc_address = %q, want 0xUSDCdeposit (Q-ADDRESS)", resp.UsdcAddress)
+	}
+	// The order is bound to coinbase + the authenticated user server-side (BR-A-3/A-6).
+	if fb.gotReq.GetPaymentProvider() != "coinbase" || fb.gotReq.GetUserId() != "user-1" {
+		t.Errorf("billing req mismatch: %+v", fb.gotReq)
+	}
+	if fp.gotCheckout.GetPaymentProvider() != "coinbase" || fp.gotCheckout.GetOrderId() != "order-cb" {
+		t.Errorf("checkout req mismatch: %+v", fp.gotCheckout)
+	}
+}
+
+// A stripe recharge must NOT surface a usdc_address (omitempty — the field is
+// coinbase-specific; no leak into other channels' responses).
+func TestRecharge_Stripe_NoUsdcAddress(t *testing.T) {
+	fp := &fakePayment{checkoutURL: "https://checkout.stripe.com/x"} // clientToken empty
+	h := NewBillingWriteHandler(nil, &fakeBilling{orderID: "o1"}, fp, nil)
+	rec := postRecharge(h, "user-1", `{"amount":"50.00","currency":"USD","provider":"stripe"}`)
+	if strings.Contains(rec.Body.String(), "usdc_address") {
+		t.Errorf("stripe response leaked usdc_address: %s", rec.Body.String())
 	}
 }
 

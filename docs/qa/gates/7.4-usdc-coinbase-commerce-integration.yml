@@ -1,0 +1,136 @@
+schema: 1
+story: "7.4"
+story_title: "USDC（Coinbase Commerce）集成"
+gate: "PASS"
+status_reason: >
+  Additive coinbase PaymentProvider plug-in on the proven 7.3 seam — all 3 ACs
+  traced with real, passing evidence; payment-svc + api-gateway go test ./... and
+  go vet clean; coinbase provider coverage 91.0%; adversarial X-CC-Webhook-Signature
+  lanes (forged/absent/tampered/empty/non-hex → ErrSignatureInvalid, constant-time,
+  before-parse) pass; REUSE discipline git-verified (credit applier / producer /
+  recharge_orders / proto / Kafka topic UNTOUCHED). 3 low observations, none blocking.
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-10T00:00:00Z"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "HIGH"
+  cached_review_mode: "full_testing"
+  cached_project_type: "web_backend"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+# Non-blocking low-severity observations (recorded for hardening backlog, do not gate)
+top_issues:
+  - id: "OBS-001"
+    severity: low
+    finding: >
+      settledValue() falls back to the charge's local INTENT price when a
+      charge:confirmed arrives with an empty payments[] array — it would then
+      credit the intent rather than a provider-confirmed on-chain value. Theoretical
+      (Coinbase itemises payments on confirmed charges), but the fallback path is the
+      one place where settled could equal intent without an on-chain payment.
+    suggested_action: >
+      Future hardening — on charge:confirmed with empty payments[], park (Kind:
+      EventUnhandled) instead of falling back to the intent price. (coinbase.go
+      settledValue:269-272)
+  - id: "OBS-002"
+    severity: low
+    finding: >
+      Wrong-coin parking relies on billing-svc's inherited currency/amount guard
+      treating the provider-surfaced "NON_USDC" currency as a park. Only the
+      provider-side signal is asserted here (BLIND-DATA-005); the actual park
+      behaviour lives in the reused billing-svc applier.
+    suggested_action: >
+      Add a billing-svc integration assertion that a non-USD settled currency parks
+      (no credit) in a hardening follow-up. (coinbase.go settledValue:293-297)
+  - id: "OBS-003"
+    severity: low
+    finding: >
+      VerifyWebhook explicitly rejects uppercase-hex signatures (lowercase-only per
+      BR-W-2). Correct against Coinbase's documented lowercase-hex contract but
+      slightly brittle if Coinbase ever changes case.
+    suggested_action: >
+      Acceptable as documented; monitor Coinbase signature-format changes.
+      (coinbase.go VerifyWebhook:168-170)
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 0          # go test reports per-package ok; coinbase suite = 29 unit + 4 ingress subtests, 17 PG/E2E lanes t.Skip'd with pointers
+    passed_count: 0
+    failed_count: 0
+    skipped_count: 17
+    pass_rate: 100
+    coverage_percentage: 91   # coinbase provider package
+    failed_tests: []
+  e2e:
+    executed: false
+    passed: true
+    skipped: true
+    skip_reason: >
+      web_backend — full-stack E2E (testcontainers/compose) is CI-only (local
+      toolchain cannot run docker, project_toolchain_env_limits). Substituted by
+      offline integration against the REAL webhook.Handler + REAL coinbase.Provider
+      in internal/webhook/coinbase_ingress_test.go (forged→400+no-emit,
+      confirmed→emit-once, pending→no-emit, emit-fail→5xx).
+    scenarios_tested: 0
+    scenarios_passed: 0
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: ""   # no issues requiring screenshot/log evidence
+  tests_reviewed: 33
+  trace:
+    ac_covered: [1, 2, 3]
+    ac_gaps: []
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 5
+  security_sensitive: true
+  dev_gate_score: 95
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 3 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "Empty-payments fallback on charge:confirmed (OBS-001)"
+      - "Wrong-coin park assertion belongs in billing-svc (OBS-002)"
+
+nfr_validation:
+  security: { status: PASS, notes: "Signature-before-parse, constant-time hmac.Equal, forged/absent/tampered/empty/non-hex all rejected; no secret leak in errors; crypto no-PAN; route mounted outside bearer+CSRF; replay neutralised by inherited recharge_orders state-machine (no-timestamp posture documented, BR-W-4)." }
+  performance: { status: PASS, notes: "Payment path is not hot; no chat-hot-path emission." }
+  reliability: { status: PASS, notes: "2xx/400/5xx discipline proven at the ingress boundary; verified-but-emit-fail → 5xx for at-least-once redelivery." }
+  maintainability: { status: PASS, notes: "Additive provider impl on the ratified seam; REUSE discipline git-verified — no spine file modified; coinbase satisfies the same PaymentProvider contract (seam parity / proof-of-reuse for 7.5/7.6)." }
+
+history:
+  - at: "2026-06-10T00:00:00Z"
+    gate: PASS
+    note: >
+      Round 1 PASS. payment-svc + api-gateway go test ./... + go vet clean; coinbase
+      coverage 91.0%; both cmd binaries build. AC1 (CreateCheckout + registry gate +
+      supportedProviders + usdc_address) verified by UNIT-001/002/005 + BLIND-ERROR-001..004
+      + gateway TestRecharge_Coinbase_Accepted/Stripe_NoUsdcAddress. AC2 (charge-lifecycle
+      → VerifiedEvent, credit on confirmed only) verified by UNIT-010..016 + ingress
+      confirmed/pending boundary; PG-credit lanes reused-and-proven by 7.3, re-asserted
+      at the producer boundary. AC3 (X-CC-Webhook-Signature) verified by adversarial
+      UNIT-020..027 + ingress forged→400/emit-fail→5xx. 3 low observations logged for
+      hardening backlog (OBS-001..003), none blocking.

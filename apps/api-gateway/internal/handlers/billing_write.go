@@ -42,8 +42,9 @@ import (
 	"github.com/he-api/he-api/packages/proto/gen/go/he/payment/v1/paymentv1connect"
 )
 
-// supportedProviders is the 7.3 enabled channel set (USDC/Alipay/WeChat are 7.4-7.6).
-var supportedProviders = map[string]bool{"stripe": true, "paypal": true}
+// supportedProviders is the enabled channel set. 7.3: stripe/paypal. 7.4 adds
+// coinbase (USDC); Alipay+/WeChat are 7.5-7.6.
+var supportedProviders = map[string]bool{"stripe": true, "paypal": true, "coinbase": true}
 
 // supportedPlans is the §4.1 subscription plan enum (opaque in 7.3 — Q-SUBSCOPE).
 var supportedPlans = map[string]bool{"free": true, "pro": true, "team": true, "enterprise": true}
@@ -81,6 +82,10 @@ type rechargeResponse struct {
 	OrderID     string `json:"order_id"`
 	CheckoutURL string `json:"checkout_url"`
 	Provider    string `json:"provider"`
+	// UsdcAddress is the USDC deposit address for the coinbase channel (Q-ADDRESS,
+	// Story 7.4). It rides through CreateCheckoutResponse.client_token (no proto
+	// change) and is omitted for providers that do not supply one.
+	UsdcAddress string `json:"usdc_address,omitempty"`
 }
 
 // Recharge handles POST /v1/billing/recharge.
@@ -104,7 +109,7 @@ func (h *BillingWriteHandler) Recharge(w http.ResponseWriter, r *http.Request) {
 	provider := strings.ToLower(strings.TrimSpace(req.Provider))
 	if !supportedProviders[provider] {
 		p := req.Provider
-		_ = openaierr.Write(w, ctx, http.StatusBadRequest, "400_unsupported_payment_provider", "Unsupported payment provider. Supported: stripe, paypal.", &p)
+		_ = openaierr.Write(w, ctx, http.StatusBadRequest, "400_unsupported_payment_provider", "Unsupported payment provider. Supported: stripe, paypal, coinbase.", &p)
 		return
 	}
 	currency := strings.ToUpper(strings.TrimSpace(req.Currency))
@@ -151,6 +156,9 @@ func (h *BillingWriteHandler) Recharge(w http.ResponseWriter, r *http.Request) {
 		OrderID:     orderID,
 		CheckoutURL: checkout.Msg.GetCheckoutUrl(),
 		Provider:    provider,
+		// For coinbase the USDC deposit address rides in client_token (Q-ADDRESS);
+		// empty for stripe/paypal → omitted by the json:omitempty tag.
+		UsdcAddress: checkout.Msg.GetClientToken(),
 	})
 }
 

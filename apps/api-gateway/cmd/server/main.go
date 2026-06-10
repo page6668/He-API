@@ -521,7 +521,8 @@ func main() {
 		webhookProxy := handlers.NewWebhookProxyHandler(logger, paymentBase, nil)
 		rootMux.Handle("POST /v1/billing/webhooks/stripe", webhookProxy.Handle("stripe"))
 		rootMux.Handle("POST /v1/billing/webhooks/paypal", webhookProxy.Handle("paypal"))
-		logger.Info("payment webhook ingress wired (POST /v1/billing/webhooks/{stripe,paypal}; outside bearer+CSRF)")
+		rootMux.Handle("POST /v1/billing/webhooks/coinbase", webhookProxy.Handle("coinbase")) // Story 7.4 (USDC)
+		logger.Info("payment webhook ingress wired (POST /v1/billing/webhooks/{stripe,paypal,coinbase}; outside bearer+CSRF)")
 	} else {
 		logger.Warn("PAYMENT_SVC_ENDPOINT unset — POST /v1/billing/webhooks/* disabled")
 	}

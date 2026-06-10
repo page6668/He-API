@@ -27,6 +27,9 @@
 //	PAYPAL_CLIENT_SECRET          — PayPal REST client secret
 //	PAYPAL_WEBHOOK_ID             — PayPal webhook id (verify-webhook-signature binds to it)
 //	PAYPAL_API_BASE_URL           — optional PayPal API base override (sandbox/test)
+//	COINBASE_COMMERCE_API_KEY     — Coinbase Commerce REST API key (X-CC-Api-Key; charge create)
+//	COINBASE_COMMERCE_WEBHOOK_SECRET — Coinbase webhook HMAC secret (X-CC-Webhook-Signature; distinct blast radius)
+//	COINBASE_COMMERCE_API_BASE_URL — optional Coinbase Commerce API base override (sandbox/test)
 package main
 
 import (
@@ -47,6 +50,7 @@ import (
 	"github.com/he-api/he-api/apps/payment-svc/internal/paymentgrpc"
 	"github.com/he-api/he-api/apps/payment-svc/internal/producer"
 	"github.com/he-api/he-api/apps/payment-svc/internal/provider"
+	"github.com/he-api/he-api/apps/payment-svc/internal/provider/coinbase"
 	"github.com/he-api/he-api/apps/payment-svc/internal/provider/paypal"
 	"github.com/he-api/he-api/apps/payment-svc/internal/provider/stripe"
 	"github.com/he-api/he-api/apps/payment-svc/internal/server"
@@ -169,6 +173,20 @@ func buildRegistry(logger *slog.Logger) *provider.Registry {
 		logger.Info("paypal provider wired")
 	} else {
 		logger.Warn("PAYPAL_CLIENT_ID unset — paypal provider disabled")
+	}
+
+	// Story 7.4 — USDC via Coinbase Commerce. Added only when the API key is set, so
+	// a partial config (e.g. no crypto channel in dev) still boots. The webhook
+	// secret is distinct from the API key (distinct blast radius, BR-W-6).
+	if apiKey := os.Getenv("COINBASE_COMMERCE_API_KEY"); apiKey != "" {
+		var opts []coinbase.Option
+		if base := os.Getenv("COINBASE_COMMERCE_API_BASE_URL"); base != "" {
+			opts = append(opts, coinbase.WithBaseURL(base))
+		}
+		impls = append(impls, coinbase.New(apiKey, os.Getenv("COINBASE_COMMERCE_WEBHOOK_SECRET"), opts...))
+		logger.Info("coinbase provider wired")
+	} else {
+		logger.Warn("COINBASE_COMMERCE_API_KEY unset — coinbase (USDC) provider disabled")
 	}
 
 	return provider.NewRegistry(impls...)

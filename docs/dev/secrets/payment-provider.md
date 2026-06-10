@@ -1,7 +1,8 @@
-# Stripe + PayPal Payment Provider Credentials — Vault & Rotation Path
+# Stripe + PayPal + Coinbase Payment Provider Credentials — Vault & Rotation Path
 
-> Story 7.3 — Stripe + PayPal 集成. Vault path + rotation runbook for the payment
-> provider secrets consumed by `apps/payment-svc` (Q-SECRETS / BR-W-6).
+> Story 7.3 — Stripe + PayPal 集成; Story 7.4 — USDC（Coinbase Commerce）集成.
+> Vault path + rotation runbook for the payment provider secrets consumed by
+> `apps/payment-svc` (Q-SECRETS / BR-W-6).
 >
 > Template mirrors `docs/dev/secrets/fxrate-provider.md` (Topology / Migration
 > Workflow / Capacity / Operator Runbook / Decision Lineage). These secrets gate
@@ -19,10 +20,10 @@
 | Vault server | `vault.internal` (managed by Platform Ops) |
 | Vault namespace | `he-api` |
 | Secret engine | `kv-v2` |
-| Path | `kv/data/he-api/payment/stripe/` + `kv/data/he-api/payment/paypal/` |
+| Path | `kv/data/he-api/payment/stripe/` + `kv/data/he-api/payment/paypal/` + `kv/data/he-api/payment/coinbase/` |
 | External Secrets Operator `ClusterSecretStore` | `he-api-vault` |
 | K8s `Secret` (target) | `he-api-payment-provider` in namespace `he-api-services` |
-| Consuming service | `apps/payment-svc` (provider impls under `internal/provider/{stripe,paypal}`) |
+| Consuming service | `apps/payment-svc` (provider impls under `internal/provider/{stripe,paypal,coinbase}`) |
 
 ### Stripe keys
 
@@ -41,6 +42,14 @@
 | `webhook_id` | `PAYPAL_WEBHOOK_ID` | `verify-webhook-signature` binds to it | the configured webhook's id |
 | — | `PAYPAL_API_BASE_URL` | optional base override | default `https://api-m.paypal.com`; sandbox `https://api-m.sandbox.paypal.com` |
 
+### Coinbase Commerce keys (Story 7.4 — USDC)
+
+| Vault key | Env var | Used by | Notes |
+|---|---|---|---|
+| `api_key` | `COINBASE_COMMERCE_API_KEY` | `X-CC-Api-Key` — REST auth (charge create) | gates the channel: unset → coinbase not wired → `400_unsupported_payment_provider` |
+| `webhook_secret` | `COINBASE_COMMERCE_WEBHOOK_SECRET` | `X-CC-Webhook-Signature` HMAC verify | **DISTINCT** from `api_key` (separate blast radius). ⚠️ Coinbase signs lowercase-hex `HMAC-SHA256(rawBody)` with **NO timestamp** → no signature-freshness window; replay defence is the `recharge_orders` state-machine ALONE (BR-W-4). |
+| — | `COINBASE_COMMERCE_API_BASE_URL` | optional base override | default `https://api.commerce.coinbase.com`; tests point at an `httptest` stub |
+
 The Secret is injected via `envFrom.secretRef` so the keys land in the pod
 environment and NEVER render into a manifest. payment-svc's slog uses the shared
 `go-observability` redaction handler (keys containing `secret`/`token` are
@@ -57,8 +66,9 @@ the 7.2 FX secret (lands in Epic 9 ops hardening).
 
 **Dev / CI / sandbox fallback**: set the `*_TEST` sandbox credentials (Stripe
 `sk_test_…` + a sandbox `whsec_…`; PayPal sandbox client id/secret + a sandbox
-webhook id) and point `STRIPE_API_BASE_URL` / `PAYPAL_API_BASE_URL` at the
-provider sandbox (or, in unit tests, at an `httptest` stub). With NO provider
+webhook id; Coinbase Commerce sandbox `api_key` + a sandbox `webhook_secret`) and
+point `STRIPE_API_BASE_URL` / `PAYPAL_API_BASE_URL` / `COINBASE_COMMERCE_API_BASE_URL`
+at the provider sandbox (or, in unit tests, at an `httptest` stub). With NO provider
 secrets configured, payment-svc still boots — the corresponding provider is simply
 not wired (the `PaymentService` falls back to Unimplemented; health still serves),
 so a partial config (e.g. Stripe-only in dev) never CrashLoops.
@@ -95,4 +105,5 @@ id, BR-R-6) so a client double-submit never creates two provider charges.
 | NEW `payment-svc` owns the provider SDKs + secrets | SM Q-SVC → Architect RATIFIED | 2026-06-09 | Blast-radius isolation of third-party-API churn + secrets from the billing-svc money-ledger core (topology §3.2). |
 | Webhook signing secret DISTINCT from API key | SM Q-SECRETS → Architect RATIFIED | 2026-06-09 | Separate blast radius — a forgeable-webhook leak ≠ an API-call leak; they rotate independently. |
 | Stripe `stripe-go` scheme / PayPal thin REST + verify-webhook-signature | Architect Q-SDK | 2026-06-09 | PayPal's official Go SDK is unmaintained; the Stripe-Signature HMAC scheme is implemented over the stdlib behind the seam (offline-testable, no SDK/pin risk — see Dev Agent Record). |
+| Coinbase Commerce thin REST + stdlib `X-CC-Webhook-Signature` HMAC | SM Q-SDK (7.4) | 2026-06-10 | Mirrors the PayPal thin-REST decision: no third-party SDK; the signature verify is a stdlib `crypto/hmac` over the raw body (offline-testable). ⚠️ The scheme has NO timestamp → replay defence rests on the inherited `recharge_orders` state-machine alone (BR-W-4). |
 | Secrets env-injected, NEVER logged | SM Q-SECRETS (7.2 cascade) → Architect RATIFIED | 2026-06-09 | A leaked credential on the money-IN path is a direct fraud vector. |
