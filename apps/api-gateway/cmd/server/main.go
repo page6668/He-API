@@ -352,11 +352,13 @@ func main() {
 		logger.Warn("HE_API_KAFKA_BROKERS unset — usage.recorded emission disabled")
 	}
 
-	// Story 8.2 — §9.3 入参 content-safety filter. The scanner resolves inbound
-	// message text against the in-process, immutable 8.1 DefaultLexicon (境内-safe,
-	// embedded in the binary — no network). The interception event is handed to a
-	// no-op Recorder this story; Story 8.5 supplies the content_safety_logs-writing
-	// implementation (8.2 makes ZERO DB changes).
+	// Story 8.2/8.3 — §9.3 双向 content-safety filter. ONE scanner resolves BOTH
+	// the inbound request text (8.2 入参 reject) AND the model-generated completion
+	// (8.3 出参 redact/terminate) against the in-process, immutable 8.1
+	// DefaultLexicon (境内-safe, embedded in the binary — no network). The scanner
+	// is PURE/concurrent-safe so a single instance backs both directions (OQ-8.3-4).
+	// Interception events go to a no-op Recorder this story; Story 8.5 supplies the
+	// content_safety_logs-writing implementation for BOTH directions (zero DB here).
 	safetyScanner := contentsafety.NewScanner(safetylexicon.DefaultLexicon)
 
 	chatCompletions := handlers.NewChatCompletionsHandler(
@@ -366,6 +368,7 @@ func main() {
 		handlers.WithTokenDeducter(rateLimitMW),
 		handlers.WithUsageEmitter(usageEmitter),
 		handlers.WithSafetyScanner(safetyScanner),
+		handlers.WithOutputSafetyScanner(safetyScanner), // Story 8.3 — reuse the 8.2 instance (OQ-8.3-4)
 		handlers.WithSafetyRecorder(contentsafety.NopRecorder{}),
 	)
 

@@ -63,6 +63,19 @@ type MockChunker struct {
 	content string
 	id      string
 	created int64
+	// guard is the optional Story-8.3 §9.3 出参 hook (nil default → byte-identical
+	// pre-8.3 loop). When set, each content piece is Observe-d BEFORE it is
+	// forwarded; a hit terminates the stream with a content_filter terminal.
+	guard OutputGuard
+}
+
+// AttachOutputGuard wires the optional Story-8.3 output guard. A nil guard leaves
+// the Stream loop byte-identical to pre-8.3 (zero overhead / no observable
+// change). The handler calls this right after construction. Returns the receiver
+// for call-site chaining.
+func (c *MockChunker) AttachOutputGuard(g OutputGuard) *MockChunker {
+	c.guard = g
+	return c
 }
 
 // NewMockChunker builds a chunker. All arguments are primitives — the
@@ -105,6 +118,16 @@ func (c *MockChunker) Stream(ctx context.Context, w Writer) (chunksEmitted int, 
 			return chunksEmitted, firstFlushAt, ctx.Err()
 		default:
 		}
+		// Story 8.3 — §9.3 出参 guard, scan-BEFORE-forward (OQ-8.3-2). A hit means
+		// this piece COMPLETES a sensitive term: withhold it (do NOT WriteEvent) and
+		// terminate with a content_filter terminal. The captured Match is read by the
+		// handler from the guard post-Stream (M-1: chunker writes the terminal, handler
+		// records + meters).
+		if c.guard != nil {
+			if _, blocked := c.guard.Observe(piece); blocked {
+				return c.writeContentFilterTerminal(w, chunksEmitted, firstFlushAt)
+			}
+		}
 		ck := c.newChunk(chatChunkDelta{Content: piece}, nil)
 		j, _ := json.Marshal(ck)
 		if err = w.WriteEvent("", j); err != nil {
@@ -141,6 +164,30 @@ func (c *MockChunker) Stream(ctx context.Context, w Writer) (chunksEmitted int, 
 		return chunksEmitted, firstFlushAt, err
 	}
 	return chunksEmitted, firstFlushAt, nil
+}
+
+// writeContentFilterTerminal emits the Story-8.3 §9.3 出参 termination: a single
+// terminal chunk with an EMPTY delta (OQ-8.3-4 — no notice string in a stream
+// terminal; the client has already appended prior deltas, so the finish_reason IS
+// the contract) + finish_reason:"content_filter", then the literal [DONE]. It uses
+// the SAME WriteEvent+WriteDone path the normal "stop" terminal uses (BR-2.6 —
+// NOT writeSSEErrorFrame, which is for upstream errors). Returns ErrContentFiltered
+// so the handler records the 8.5 event + meters the consumed tail (M-1).
+func (c *MockChunker) writeContentFilterTerminal(w Writer, chunksEmitted int, firstFlushAt time.Time) (int, time.Time, error) {
+	cf := "content_filter"
+	terminal := c.newChunk(chatChunkDelta{}, &cf) // empty delta → {} (omitempty), finish_reason set
+	terminalJSON, _ := json.Marshal(terminal)
+	if err := w.WriteEvent("", terminalJSON); err != nil {
+		return chunksEmitted, firstFlushAt, err
+	}
+	chunksEmitted++
+	if err := w.Flush(); err != nil {
+		return chunksEmitted, firstFlushAt, err
+	}
+	if err := w.WriteDone(); err != nil {
+		return chunksEmitted, firstFlushAt, err
+	}
+	return chunksEmitted, firstFlushAt, ErrContentFiltered
 }
 
 func (c *MockChunker) newChunk(delta chatChunkDelta, finish *string) chatChunk {

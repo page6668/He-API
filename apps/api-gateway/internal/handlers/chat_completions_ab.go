@@ -103,6 +103,12 @@ func (h *ChatCompletionsHandler) dispatchAB(w http.ResponseWriter, r *http.Reque
 	h.router.RecordABOutcome(ctx, outcome)
 
 	merged := mergeABResponses(ctx, results, h.newID(), h.now().UTC().Unix())
+	// Story 8.3 — §9.3 出参 filter on the A/B merged body: EACH merged choice is
+	// scanned + redacted INDEPENDENTLY (x_he_model attribution preserved), one 8.5
+	// output event per redacted choice (OQ-8.3-7). A failed-leg marker choice has
+	// empty content → no candidate, untouched. merged.Usage untouched (BR-1.5) so
+	// the dual-billing TPMDeduct below is unaffected.
+	h.redactResponse(ctx, merged)
 
 	// BR2-7 — NO X-He-Selected-Model on the A/B path (it names ONE model). The
 	// X-He-AB-Models response header lists the SUCCESSFULLY-served ids in order

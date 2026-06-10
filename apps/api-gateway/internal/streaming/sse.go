@@ -18,6 +18,8 @@ package streaming
 import (
 	"errors"
 	"net/http"
+
+	safetylexicon "github.com/he-api/he-api/packages/safety-lexicon"
 )
 
 // ErrFlushUnsupported is returned by Writer.Flush when the underlying
@@ -25,6 +27,28 @@ import (
 // http.ResponseController can reach a Flusher in the wrapper chain).
 // Callers may errors.Is to detect this case (BR-1.10).
 var ErrFlushUnsupported = errors.New("streaming: ResponseWriter does not support flush")
+
+// ErrContentFiltered is the Story-8.3 §9.3 出参 sentinel a chunker returns from
+// Stream when its OutputGuard confirms a sensitive term mid-stream: the chunker
+// has already WITHHELD the term-completing delta and written the
+// finish_reason:"content_filter" terminal + [DONE], so this is a SUCCESS-but-
+// filtered completion, NOT an upstream error. The handler MUST branch on
+// errors.Is(err, ErrContentFiltered) BEFORE its writeSSEErrorFrame / pre-flush
+// classification (OQ-8.3-1 / M-1): it then reads the guard's captured Match to
+// record the 8.5 output event + meters the consumed tail — it does NOT emit an
+// error frame and does NOT failover.
+var ErrContentFiltered = errors.New("streaming: output blocked by content safety filter")
+
+// OutputGuard is the optional Story-8.3 §9.3 出参 hook a chunker consults per
+// content delta. A nil guard → the Stream loop is byte-identical to pre-8.3 (zero
+// overhead). Observe is called BEFORE the delta is forwarded (scan-before-forward,
+// OQ-8.3-2): a true second return means the delta COMPLETES a sensitive term, so
+// the chunker withholds it (never flushed) and terminates with ErrContentFiltered.
+// The Match is captured by the guard for the handler to read post-Stream (the
+// chunker ignores it); *contentsafety.StreamGuard satisfies this interface.
+type OutputGuard interface {
+	Observe(delta string) (safetylexicon.Match, bool)
+}
 
 // Writer is the minimal SSE writer interface. Implementations wrap an
 // http.ResponseWriter and serialize events per W3C EventSource §9.2.6.

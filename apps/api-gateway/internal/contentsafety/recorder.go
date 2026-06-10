@@ -24,7 +24,7 @@ import "context"
 // matched term reaches only this event, never the caller-facing error envelope
 // (no lexicon leak, AC1 security note).
 type SafetyEvent struct {
-	Direction   string // literal "input" for Story 8.2 (入参 direction)
+	Direction   string // "input" (入参, Story 8.2) | "output" (出参, Story 8.3) — fits direction VARCHAR(10)
 	MatchedRule string // == safetylexicon.Match.Canonical (≤100 runes, 8.1 cap)
 	Category    string // safetylexicon.Match.Category (§9.3 taxonomy)
 	Severity    string // safetylexicon.Match.Severity (carried; NOT gating in 8.2 — 8.4 owns strictness)
@@ -38,7 +38,12 @@ type SafetyEvent struct {
 // the handler and Story 8.5 share one constant rather than re-typing the string.
 const (
 	DirectionInput = "input"
-	ActionBlocked  = "blocked"
+	// DirectionOutput is the Story-8.3 §9.3 出参 direction. Additive const (the
+	// SafetyEvent struct, Recorder interface, and NopRecorder default are REUSED
+	// verbatim from 8.2). Fits content_safety_logs.direction VARCHAR(10); Story
+	// 8.5 binds ONE persisting Recorder for BOTH directions with no contract change.
+	DirectionOutput = "output"
+	ActionBlocked   = "blocked"
 )
 
 // Recorder is the Story-8.5 binding seam. A confirmed input hit constructs a

@@ -377,6 +377,12 @@ type ChatCompletionsHandler struct {
 	// nil → no-op. Production wires both in main.go.
 	safetyScanner  *contentsafety.Scanner
 	safetyRecorder contentsafety.Recorder
+	// Story 8.3 — §9.3 出参 Filter. outputScanner resolves the model-generated
+	// completion (non-stream redact path + the per-request StreamGuard on the
+	// stream path) against the SAME 8.1 lexicon; nil → output scanning disabled
+	// (pre-8.3 behaviour). MAY be the SAME instance as safetyScanner (OQ-8.3-4);
+	// the interception event reuses safetyRecorder with direction:"output".
+	outputScanner *contentsafety.Scanner
 }
 
 // NewChatCompletionsHandler builds the handler. logger may be nil — falls
@@ -568,6 +574,11 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	// the mock path too; Story 6.2 High-2 / UNIT-013 flip).
 	w.Header().Set("X-He-Selected-Model", selected)
 	resp := mockChatCompletionResponse(&req, selected, h.newID(), h.now())
+	// Story 8.3 — §9.3 出参 filter: scan + redact the assembled completion in place
+	// (records one 8.5 output event per redacted choice) BEFORE the 200 body is
+	// written. Body-only mutation: resp.Usage is untouched so the metering below
+	// fires on the real usage unchanged (BR-1.5). Clean → byte-identical pass-through.
+	h.redactResponse(ctx, resp)
 	writeChatJSON(w, http.StatusOK, resp)
 	// Story 5.3 BR-3.4 / Architect Q3 — post-deduction on success. Fire-
 	// and-forget; errors are absorbed by the deducter (slog WARN inside
@@ -667,6 +678,11 @@ func (h *ChatCompletionsHandler) serveAdapterNonStream(ctx context.Context, w ht
 	if err != nil {
 		return err
 	}
+
+	// Story 8.3 — §9.3 出参 filter on the adapter non-stream success path: scan +
+	// redact in place (per-choice, records the 8.5 output event) BEFORE the write.
+	// resp.Usage untouched → the TPMDeduct/emitUsage below meter the real usage.
+	h.redactResponse(ctx, resp)
 
 	// BR1-2 / Q-F — gateway sets X-He-Selected-Model = the model that actually
 	// SERVED (after any failover hops; == the body `model` echo).

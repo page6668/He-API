@@ -50,6 +50,46 @@ func TestRecorder_UNIT023_DATA001_ColumnShapeParity(t *testing.T) {
 	}
 }
 
+// 8.3-UNIT-022 — the additive DirectionOutput const == "output" and fits the
+// content_safety_logs.direction VARCHAR(10) column (BR-3.1). The SafetyEvent /
+// Recorder / NopRecorder shapes are REUSED from 8.2 unchanged.
+func TestRecorder_Story83_UNIT022_DirectionOutputConst(t *testing.T) {
+	if DirectionOutput != "output" {
+		t.Fatalf("DirectionOutput = %q, want output", DirectionOutput)
+	}
+	if n := utf8.RuneCountInString(DirectionOutput); n > colDirectionMax {
+		t.Fatalf("DirectionOutput %q = %d runes, exceeds direction VARCHAR(%d)", DirectionOutput, n, colDirectionMax)
+	}
+}
+
+// 8.3-UNIT-024 — column-shape parity for a Story-8.3 OUTPUT event: direction
+// ("output") ≤10, matched_rule ≤100, action ("blocked") ≤20 all fit
+// content_safety_logs, so Story 8.5 binds ONE writer for BOTH directions.
+func TestRecorder_Story83_UNIT024_OutputEventColumnParity(t *testing.T) {
+	ev := SafetyEvent{
+		Direction:   DirectionOutput,
+		MatchedRule: "badword",
+		Category:    "abuse",
+		Severity:    "high",
+		Action:      ActionBlocked,
+		UserID:      "u-1",
+		APIKeyID:    "k-1",
+		HeRequestID: "req_abc",
+	}
+	if n := utf8.RuneCountInString(ev.Direction); n > colDirectionMax {
+		t.Fatalf("direction %q = %d runes, exceeds VARCHAR(%d)", ev.Direction, n, colDirectionMax)
+	}
+	if n := utf8.RuneCountInString(ev.MatchedRule); n > colMatchedRuleMax {
+		t.Fatalf("matched_rule = %d runes, exceeds VARCHAR(%d)", n, colMatchedRuleMax)
+	}
+	if n := utf8.RuneCountInString(ev.Action); n > colActionMax {
+		t.Fatalf("action %q = %d runes, exceeds VARCHAR(%d)", ev.Action, n, colActionMax)
+	}
+	if ev.Direction != "output" || ev.Action != "blocked" {
+		t.Fatalf("output event literals drifted: direction=%q action=%q", ev.Direction, ev.Action)
+	}
+}
+
 // 8.2-UNIT-022 (recorder half) — the NopRecorder persists nothing and never
 // panics (zero-DB this story; the persisting impl is Story 8.5). The handler half
 // of UNIT-022 (request still 400s with the no-op default) is in the handler test.

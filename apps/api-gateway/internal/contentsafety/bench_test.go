@@ -73,6 +73,48 @@ func BenchmarkStory82_CleanScan(b *testing.B) {
 	}
 }
 
+// 8.3-BENCH-001 (soft-gate) — the streaming StreamGuard per-delta Observe cost on
+// a representative clean stream. Mirrors 8.2-BENCH-001: a breach emits t.Log, never
+// t.Fatal (BR-4.1 soft-gate). The HARD invariant is no-false-negative (UNIT-031),
+// asserted in streamguard_test.go.
+func TestBENCH001_stream_guard_observe_p99_soft_gate(t *testing.T) {
+	const N = 5_000
+	// The per-delta Observe re-scans the bounded window via the REUSED Scanner
+	// (Bloom excludes ~98% of windows). Ceiling set generously from the bounded-
+	// window cost; the absolute value is negligible vs the upstream LLM round-trip.
+	const ceiling = 600 * time.Microsecond
+	scanner := NewScanner(safetylexicon.DefaultLexicon)
+	// A representative clean content-delta the chunker would emit incrementally.
+	const delta = "Here is a concise, helpful answer to your question. "
+
+	samples := make([]time.Duration, N)
+	for i := 0; i < N; i++ {
+		g := NewStreamGuard(scanner)
+		start := time.Now()
+		_, _ = g.Observe(delta)
+		samples[i] = time.Since(start)
+	}
+	got := benchScanP99(samples)
+	if got > ceiling {
+		t.Logf("SOFT-GATE: stream-guard per-delta Observe P99 = %v exceeds %v (bench-host variance — not a hard fail)", got, ceiling)
+	} else {
+		t.Logf("stream-guard per-delta Observe P99 = %v (<= %v)", got, ceiling)
+	}
+}
+
+// BenchmarkStory83_StreamGuardObserve — 8.3-BENCH-001. Steady-state per-delta cost
+// on one guard fed a long clean stream (buffer pinned at the window). -benchmem
+// surfaces the per-Observe allocation shape (bounded, O(window)).
+func BenchmarkStory83_StreamGuardObserve(b *testing.B) {
+	g := NewStreamGuard(NewScanner(safetylexicon.DefaultLexicon))
+	const delta = "Here is a concise, helpful answer to your question. "
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = g.Observe(delta)
+	}
+}
+
 // BenchmarkStory82_HitScan measures the reject path (a term early in the prompt)
 // — should be cheaper than the clean scan (fail-fast on first hit).
 func BenchmarkStory82_HitScan(b *testing.B) {

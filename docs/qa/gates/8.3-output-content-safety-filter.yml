@@ -1,0 +1,123 @@
+schema: 1
+story: "8.3"
+story_title: "出参过滤（含流式响应替换）"
+gate: "PASS"
+status_reason: "§9.3 出参 Filter wired into the response path of POST /v1/chat/completions — the bidirectional counterpart to 8.2's 入参 reject — over the Story-8.1 DefaultLexicon SoT via the EXACT 8.2 contentsafety.Scanner (no fork). Full gateway lane green under -race (go test ./apps/api-gateway/... -race → all ok), go vet clean, 100% AC coverage (4 ACs) with traceable code+test locations. Both response paths verified: NON-STREAM redactResponse (脱敏 notice + finish_reason:\"content_filter\", per-choice, body-only/resp.Usage untouched) wired at all 3 write sites (mock, adapter non-stream, A/B merge); STREAM StreamGuard (rune sliding-window, window=max(512,maxTerm) no-FN-by-construction, scan-before-forward + scan-before-trim) with the term-completing delta WITHHELD before WriteEvent, single EMPTY content_filter terminal via WriteEvent+WriteDone (M-1, NOT writeSSEErrorFrame), ErrContentFiltered handled before pre-flush-failover/post-flush-error-frame in both stream paths. All HARD compliance gates PASS — exhaustive no-false-negative on BOTH paths (UNIT-013 non-stream, UNIT-031 stream), cross-chunk-seam splits (UNIT-011 two-delta, UNIT-012 multi-delta), single-delta-larger-than-window latent-hole guard (UNIT-015, forbids trim-then-scan), corpus-truth window bound (UNIT-014, window≥max(TermLengths())), and M-3 zero-width-evasion×cross-seam (UNIT-032). M-2 billing classification verified: ErrContentFiltered (non-nil streamErr) routes maybeStreamTPMDeduct to the partial arm (prompt_tokens) — never skip-when-usage-available, never double-charge. Clean-path byte-identity regression-guarded (non-stream body + stream sequence); 8.2 input path NOT weakened (INT-020 cross-direction). Perf is a SOFT gate (BENCH-001 t.Log-on-fail). Zero DB, zero new error code, zero new endpoint, zero new CI lane, code REUSED (only DirectionOutput const is additive). All 6 deliverable bindings verified."
+reviewer: "Turing (Test Engineer & Quality Architect)"
+updated: "2026-06-11T00:00:00Z"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "HIGH"
+  cached_review_mode: "full_testing"
+  cached_project_type: "web_backend"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+top_issues: []
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 42  # streamguard 15 + handlers safety_output (7 int + 11 internal) + streaming chunker_safety 6 + recorder DirectionOutput 2 + bench 1
+    passed_count: 42
+    failed_count: 0
+    skipped_count: 0
+    pass_rate: 100
+    coverage_percentage: 0  # not measured; security-invariant + integrity suite, not line-coverage gated
+    failed_tests: []
+    notes: "Independent execution: go test ./apps/api-gateway/... -race → all packages ok (contentsafety 10.0s, handlers 6.9s, streaming 3.9s, cmd/server 7.1s, tests 5.7s); go vet ./apps/api-gateway/... clean. Matches Dev claim (single round). 0 t.Skip/TODO/FIXME markers in 8.3 test files. The cmd/server TestColdStart that Dev flagged as a pre-existing flaky perf soft-gate PASSED this run (warm)."
+  e2e:
+    executed: true  # httptest handler-level (no browser surface for a Go gateway)
+    passed: true
+    skipped: false
+    skip_reason: ""
+    scenarios_tested: 6   # INT-001/002 non-stream sites, INT-010 stream empty-terminal, INT-011 stream cross-seam, INT-020 cross-direction (8.2 not weakened), INT-021 cross-path
+    scenarios_passed: 6
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: ""  # no issues found → no evidence captured
+  issues: []
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 5
+  security_sensitive: true
+  dev_gate_score: 95
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 0 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "OQ-8.1-6 (Epic-8 blocker, PM/PO): the PLACEHOLDER corpus must be replaced with a sourced, license-clean, 备案-defensible wordlist BEFORE Epic-8 reaches production. 8.3 is filter MACHINERY over whatever corpus 8.1 ships; the no-false-negative property is corpus-independent, but production compliance still gates on the real wordlist."
+      - "Story 8.4 owns per-Key 严格度 (loose/default/strict). 8.3 blocks on ANY confirmed match (the future 'strict' posture); Match.Severity is carried into the 8.5 output event but does not gate the 8.3 decision."
+      - "Story 8.5 owns the persisting Recorder (content_safety_logs write for BOTH directions + excerpt redaction + 6-month retention + 备案 PDF). 8.3 ships the no-op default + the output event shape (direction:\"output\", action:\"blocked\") matching the columns byte-for-byte; excerpt_redacted deliberately NOT populated by 8.3."
+      - "Stream leak posture (§9.3-sanctioned): scan-before-forward withholds the term-COMPLETING delta, but earlier partial deltas that aged out of the window may already be on the wire (已发出的 chunk 无法收回，但日志记录). This is the ratified OQ-8.3-2 policy, not a defect; the interception IS logged + recorded."
+      - "Tool-call/function-arg output and multimodal output remain DEFERRED (8.3 scans string content/delta.content only — same surface as 8.2; multimodal = Epic 9)."
+
+# AC coverage verification (Step 4.6) — 100%, all four ACs verified against live code + tests
+evidence_trace:
+  ac_covered: [1, 2, 3, 4]
+  ac_gaps: []
+  ac_detail:
+    - ac: AC1
+      status: VERIFIED
+      code: "chat_completions_safety_output.go:65-87 (redactResponse: per-choice ScanText → 脱敏 notice + finish_reason=content_filter; resp.Usage untouched; clean passthrough byte-identical); 3 sites: chat_completions.go:581 (mock), :685 (serveAdapterNonStream), chat_completions_ab.go:111 (A/B merge); main.go:362,371 (DefaultLexicon scanner reuses 8.2 instance via WithOutputSafetyScanner)"
+      tests: "UNIT-001 redact shape, UNIT-002 no-leak, UNIT-003 clean byte-identity, UNIT-004 per-choice A/B (x_he_model preserved), UNIT-005 billing-unchanged, UNIT-006 empty-content boundary; INT-001 adapter end-to-end, INT-002 3-write-site"
+    - ac: AC2
+      status: VERIFIED
+      code: "contentsafety/streamguard.go:55-114 (NewStreamGuard window=max(512,maxTerm); Observe scan-before-trim — full buffer scanned BEFORE window trim; Blocked latches Match); streaming/sse.go:40 (ErrContentFiltered sentinel + OutputGuard iface); chat_chunks.go:126-191 + adapter_chunker.go:140-216 (nil-default guard seam, scan-before-forward, term-completing delta WITHHELD, writeContentFilterTerminal empty-delta via WriteEvent+WriteDone); chat_completions_stream.go:76-94 (mock) + :244-289 (adapter) ErrContentFiltered branch before failover/error-frame"
+      tests: "UNIT-010 single-delta hit, UNIT-011 cross-seam (HARD), UNIT-012 multi-delta (HARD), UNIT-013 scan-before-forward, UNIT-014 corpus-truth window (HARD), UNIT-015 over-window single delta (HARD latent-hole), UNIT-016 clean/bounded, UNIT-017 Bloom prefilter, UNIT-018 determinism, boundary/concurrency suite; INT-010 empty content_filter terminal+[DONE], INT-011 cross-seam stream, chunker_safety clean byte-identity + not-error-frame"
+    - ac: AC3
+      status: VERIFIED
+      code: "contentsafety/recorder.go:45 (additive DirectionOutput=\"output\" const; SafetyEvent/Recorder/NopRecorder REUSED unchanged); chat_completions_safety_output.go:94-111 (recordSafetyOutputBlock builds output event from Match + same 8.2 ctx helpers; fire-and-forget; no-op default = zero DB)"
+      tests: "UNIT-020/021/023 output event shape (non-stream+stream), UNIT-022/024 DirectionOutput const value/fit, UNIT-025/026 no-op default zero-DB no-panic, column-shape parity (direction≤10/matched_rule≤100/action≤20)"
+    - ac: AC4
+      status: VERIFIED
+      code: "scanner.go maxTermLen() (corpus-truth window source); pure/deterministic ScanText over immutable lexicon; billing untouched at all sites; maybeStreamTPMDeduct:425-459 ErrContentFiltered → partial arm (prompt_tokens, M-2)"
+      tests: "UNIT-031 exhaustive no-FN stream (all 6 cats × zh/en × split), UNIT-032 M-3 zero-width-evasion×cross-seam (HARD), UNIT-018 determinism, UNIT-030 exhaustive no-FN non-stream, chunker clean byte-identity (non-stream+stream), BENCH-001 stream-guard per-delta soft-gate, INT-010 M-2 billing (prompt_tokens deducted, not total, not skip), INT-020 cross-direction (8.2 400 still fires), INT-021 cross-path"
+
+# HARD compliance gates — all PASS (a missed output term = a missed 出参 filter = 备案 compliance breach)
+hard_gates:
+  - { id: UNIT-011, desc: "cross-chunk-seam two-delta split detected at the seam (ASCII + CJK)", status: PASS }
+  - { id: UNIT-012, desc: "multi-delta (4-way) split detected via overlap-carry", status: PASS }
+  - { id: UNIT-013, desc: "scan-before-forward: hit fires on the term-COMPLETING delta so the caller withholds it", status: PASS }
+  - { id: UNIT-014, desc: "window=max(512,maxTerm) ≥ max(TermLengths()) by construction — longest term split at window edge still detected", status: PASS }
+  - { id: UNIT-015, desc: "single delta LARGER than window with term in leading portion detected (scan-before-trim; forbids trim-then-scan FN hole)", status: PASS }
+  - { id: UNIT-031, desc: "exhaustive no-false-negative — stream path (6 cats × zh/en × split-across-deltas)", status: PASS }
+  - { id: UNIT-032, desc: "M-3 zero-width-padded term split across deltas detected (raw buffer scanned via Normalize-d ScanText)", status: PASS }
+  - { id: clean-byte-identity, desc: "clean non-stream body + clean stream sequence byte-identical to pre-8.3", status: PASS }
+
+# Architect Round-1 Medium/Low notes — all resolved + verified
+architect_carryforward_guards:
+  - { issue: "M-1 — stream terminal placement + flush ownership", guard: "chunker writes the single EMPTY content_filter terminal via WriteEvent+WriteDone (chat_chunks.go:176-191, adapter_chunker.go:192-216); handler records event + meters post-Stream; verified NOT routed through writeSSEErrorFrame (handled before that branch at chat_completions_stream.go:265 / :89)", status: VERIFIED }
+  - { issue: "M-2 — maybeStreamTPMDeduct classification of ErrContentFiltered", guard: "non-nil streamErr → partial arm deducts prompt_tokens (chat_completions_stream.go:438-458); INT-010 asserts partial deduct, not total, not skip, not double", status: VERIFIED }
+  - { issue: "M-3 — no-FN must combine normalization-evasion WITH cross-seam splitting", guard: "UNIT-032 zero-width-padded term split across ≥2 deltas → still detected; raw rune buffer scanned via shared Normalize-d ScanText; max(512,maxTerm) floor absorbs padding", status: VERIFIED }
+  - { issue: "L-1 — rest-api-spec change-log row matches shipped behaviour (empty stream terminal)", guard: "Dev added §5.3 change-log row (empty stream terminal documented; no §5.1.2 edit, no new error code)", status: TRACKED }
+
+# Deliverable bindings (Step: binding verification) — 6/6 verified
+deliverable_bindings:
+  - { binding: "redactResponse consumed at 3 non-stream write sites", status: VERIFIED, evidence: "chat_completions.go:581,685 + chat_completions_ab.go:111" }
+  - { binding: "StreamGuard.Observe consumed by chunker seam", status: VERIFIED, evidence: "chat_chunks.go:127 + adapter_chunker.go:142 (.Observe); chat_completions_stream.go:78,246 NewStreamGuard" }
+  - { binding: "chunker exposes optional nil-default guard seam", status: VERIFIED, evidence: "AttachOutputGuard + guard field on both chunkers; nil → byte-identical loop" }
+  - { binding: "output Scanner constructed/injected at wiring", status: VERIFIED, evidence: "main.go:362 NewScanner, :371 WithOutputSafetyScanner (reuses 8.2 instance, OQ-8.3-4)" }
+  - { binding: "DirectionOutput const consumed when building output event", status: VERIFIED, evidence: "chat_completions_safety_output.go:102 contentsafety.DirectionOutput" }
+  - { binding: "finish_reason content_filter emitted on redact/terminate paths", status: VERIFIED, evidence: "chat_completions_safety_output.go:77 (non-stream); chat_chunks.go + adapter_chunker.go writeContentFilterTerminal (stream)" }

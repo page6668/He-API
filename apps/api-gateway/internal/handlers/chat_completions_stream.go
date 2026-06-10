@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/he-api/he-api/apps/api-gateway/internal/adapterclient"
+	"github.com/he-api/he-api/apps/api-gateway/internal/contentsafety"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/requestid"
 	"github.com/he-api/he-api/apps/api-gateway/internal/openaierr"
 	"github.com/he-api/he-api/apps/api-gateway/internal/streaming"
@@ -70,9 +71,27 @@ func (h *ChatCompletionsHandler) serveStream(w http.ResponseWriter, r *http.Requ
 	w.Header().Set("X-He-Selected-Model", selected)
 	writer := streaming.NewWriter(w)
 	chunker := streaming.NewMockChunker(selected, MockContent, id, created)
+	// Story 8.3 — §9.3 出参 guard, per-request (constructed fresh per stream, never
+	// shared). nil outputScanner → no guard attached → byte-identical pre-8.3 loop.
+	var guard *contentsafety.StreamGuard
+	if h.outputScanner != nil {
+		guard = contentsafety.NewStreamGuard(h.outputScanner)
+		chunker.AttachOutputGuard(guard)
+	}
 
 	chunksEmitted, firstFlushAt, streamErr := chunker.Stream(ctx, writer)
 	_ = writer.Close() // BR-4.4 Close is a no-op for this Story; future Writer impls may hold resources.
+
+	// Story 8.3 — a content_filter termination is a SUCCESS-but-filtered completion,
+	// NOT a disconnect/error: record the 8.5 output event once and mark it so the
+	// disconnect classification below excludes it. The mock path has no upstream
+	// usage → no TPM metering here (the adapter path meters via maybeStreamTPMDeduct).
+	contentFiltered := errors.Is(streamErr, streaming.ErrContentFiltered)
+	if contentFiltered && guard != nil {
+		if m, ok := guard.Blocked(); ok {
+			h.recordSafetyOutputBlock(ctx, m)
+		}
+	}
 
 	var ttfbMs int64
 	if !firstFlushAt.IsZero() {
@@ -80,7 +99,7 @@ func (h *ChatCompletionsHandler) serveStream(w http.ResponseWriter, r *http.Requ
 	}
 	totalMs := time.Since(realStart).Milliseconds()
 
-	clientDisconnected := streamErr != nil &&
+	clientDisconnected := !contentFiltered && streamErr != nil &&
 		(errors.Is(streamErr, context.Canceled) ||
 			errors.Is(ctx.Err(), context.Canceled) ||
 			errors.Is(streamErr, streaming.ErrFlushUnsupported) ||
@@ -95,6 +114,7 @@ func (h *ChatCompletionsHandler) serveStream(w http.ResponseWriter, r *http.Requ
 		slog.Int64("ttfb_ms", ttfbMs),
 		slog.Int64("total_ms", totalMs),
 		slog.Bool("client_disconnected", clientDisconnected),
+		slog.Bool("content_filtered", contentFiltered),
 	}
 	if clientDisconnected && streamErr != nil {
 		attrs = append(attrs, slog.String("flush_error", streamErr.Error()))
@@ -219,6 +239,13 @@ func (h *ChatCompletionsHandler) attemptAdapterStream(ctx context.Context, w htt
 
 	writer := streaming.NewWriter(w)
 	chunker := streaming.NewAdapterChunker(stream, servedModel)
+	// Story 8.3 — §9.3 出参 guard, per-request (fresh per stream attempt, never
+	// shared). nil outputScanner → no guard → byte-identical pre-8.3 loop.
+	var guard *contentsafety.StreamGuard
+	if h.outputScanner != nil {
+		guard = contentsafety.NewStreamGuard(h.outputScanner)
+		chunker.AttachOutputGuard(guard)
+	}
 
 	// BR1-2 / Q-F — X-He-Selected-Model = the model SERVING this hop. Set BEFORE
 	// the first chunk emit (the writer flushes headers lazily on first WriteEvent
@@ -227,6 +254,39 @@ func (h *ChatCompletionsHandler) attemptAdapterStream(ctx context.Context, w htt
 
 	chunksEmitted, firstFlushAt, streamErr := chunker.Stream(ctx, writer)
 	_ = writer.Close()
+
+	// Story 8.3 — §9.3 出参 cut. The chunker has ALREADY written the content_filter
+	// terminal + [DONE] (M-1) and withheld the term-completing delta, so this is a
+	// COMMITTED success-but-filtered completion: NOT an upstream error, NOT a
+	// pre-flush failover, NOT writeSSEErrorFrame. Record the 8.5 output event once,
+	// meter the consumed tail via the existing partial-deduct path (M-2 — passing
+	// the non-nil ErrContentFiltered routes maybeStreamTPMDeduct to its partial arm,
+	// deducting the consumed prompt tokens; never skip, never double), then stop.
+	if errors.Is(streamErr, streaming.ErrContentFiltered) {
+		if guard != nil {
+			if m, ok := guard.Blocked(); ok {
+				h.recordSafetyOutputBlock(ctx, m)
+			}
+		}
+		h.maybeStreamTPMDeduct(ctx, apiKeyID, req.Model, chunker.TailUsage(), streamErr, false)
+		var ttfbMs int64
+		if !firstFlushAt.IsZero() {
+			ttfbMs = firstFlushAt.Sub(realStart).Milliseconds()
+		}
+		h.logger.LogAttrs(ctx, slog.LevelInfo, "chat_completions_stream",
+			slog.String("event", "chat_completions_stream"),
+			slog.String("model", req.Model),
+			slog.String("served_model", servedModel),
+			slog.String("api_key_id", apiKeyID),
+			slog.Int("messages_count", len(req.Messages)),
+			slog.Int("chunks_emitted", chunksEmitted),
+			slog.Int64("ttfb_ms", ttfbMs),
+			slog.Int64("total_ms", time.Since(realStart).Milliseconds()),
+			slog.Bool("content_filtered", true),
+			slog.Bool("adapter_path", true),
+		)
+		return true, nil // committed; no failover past the §9.3 cut
+	}
 
 	if streamErr != nil && !writer.HeadersFlushed() {
 		// BR-2.5 pre-flush boundary — the chunker errored before any SSE byte
@@ -352,6 +412,12 @@ func (h *ChatCompletionsHandler) writeSSEErrorFrame(_ http.ResponseWriter, ctx c
 //	streamErr == nil + tailUsage != nil  → (i)  TPMDeduct(total_tokens)
 //	streamErr != nil + tailUsage != nil  → (ii/iii) TPMDeduct(prompt_tokens)
 //	tailUsage == nil                     → (iv) NO deduct + WARN slog
+//
+// Story 8.3 (M-2): a streaming.ErrContentFiltered cut is a non-nil streamErr, so
+// it flows through the PARTIAL arm (ii/iii) — deducting exactly the consumed
+// prompt tokens up to the §9.3 cut (treated like a completed-with-tail-usage
+// partial), NOT skipping (unless there is genuinely no tail usage, case iv) and
+// NOT double-charging. No new metering path is introduced (BR-2.7).
 //
 // The clientDisconnected flag disambiguates Q10 (ii) (server-side mid-flight
 // error) from (iii) (client disconnect) for slog-only purposes; the

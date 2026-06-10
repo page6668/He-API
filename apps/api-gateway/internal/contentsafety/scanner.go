@@ -48,6 +48,18 @@ func newScannerFromLexicon(l lexicon) *Scanner {
 	return &Scanner{lex: l, descLengths: desc}
 }
 
+// maxTermLen reports the longest realized Canonical rune-length in the corpus
+// (descLengths is sorted DESCENDING, so element 0 is the max), or 0 for an empty
+// corpus. It is the no-false-negative window bound the Story-8.3 StreamGuard
+// derives its buffer size from (window ≥ longest term → a stored term can never
+// be split out of the window, BR-2.5).
+func (s *Scanner) maxTermLen() int {
+	if len(s.descLengths) == 0 {
+		return 0
+	}
+	return s.descLengths[0]
+}
+
 // Scan resolves a slice of message contents in array order and returns the FIRST
 // confirmed hit (fail-fast reject, BR-3.3). Scanning in array order + text order
 // makes the verdict and the reported Match fully deterministic (BR-4.3). The

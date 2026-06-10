@@ -19,6 +19,7 @@ package streaming
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	adapterv1 "github.com/he-api/he-api/packages/proto/gen/go/he/adapter/v1"
@@ -51,6 +52,12 @@ type AdapterChunker struct {
 	stream    AdapterChunkStream
 	model     string
 	tailUsage *adapterv1.Usage // captured by Stream(); nil until first usage chunk
+	// guard is the optional Story-8.3 §9.3 出参 hook (nil default → byte-identical
+	// pre-8.3 loop). lastID/lastCreated are captured as chunks pass so the
+	// content_filter terminal echoes the upstream id/created on a mid-stream cut.
+	guard       OutputGuard
+	lastID      string
+	lastCreated int64
 }
 
 // NewAdapterChunker builds the chunker. model is the OpenAI-shape `model`
@@ -58,6 +65,14 @@ type AdapterChunker struct {
 // req.Model verbatim (failover-aware behaviour lands in Epic 6 routing-svc).
 func NewAdapterChunker(stream AdapterChunkStream, model string) *AdapterChunker {
 	return &AdapterChunker{stream: stream, model: model}
+}
+
+// AttachOutputGuard wires the optional Story-8.3 output guard. A nil guard leaves
+// the Stream loop byte-identical to pre-8.3. The handler calls this right after
+// construction. Returns the receiver for call-site chaining.
+func (c *AdapterChunker) AttachOutputGuard(g OutputGuard) *AdapterChunker {
+	c.guard = g
+	return c
 }
 
 // TailUsage returns the LAST non-nil `chunk.Usage` the chunker saw during
@@ -110,6 +125,25 @@ func (c *AdapterChunker) Stream(ctx context.Context, w Writer) (chunksEmitted in
 		if chunk.Usage != nil {
 			c.tailUsage = chunk.Usage
 		}
+		// Capture id/created so a content_filter terminal can echo the upstream
+		// envelope on a mid-stream cut (Story 8.3).
+		if chunk.Id != "" {
+			c.lastID = chunk.Id
+		}
+		if chunk.Created != 0 {
+			c.lastCreated = chunk.Created
+		}
+		// Story 8.3 — §9.3 出参 guard, scan-BEFORE-forward (OQ-8.3-2). Observe the
+		// content delta BEFORE marshaling/forwarding; a hit means this delta
+		// COMPLETES a sensitive term → withhold it and terminate with a
+		// content_filter terminal. The handler reads the captured Match post-Stream.
+		if c.guard != nil {
+			if delta := chunkDeltaContent(chunk); delta != "" {
+				if _, blocked := c.guard.Observe(delta); blocked {
+					return c.writeContentFilterTerminal(w, chunksEmitted, firstFlushAt)
+				}
+			}
+		}
 		jsonBytes, jerr := marshalAdapterChunk(chunk, c.model)
 		if jerr != nil {
 			return chunksEmitted, firstFlushAt, jerr
@@ -132,6 +166,53 @@ func (c *AdapterChunker) Stream(ctx context.Context, w Writer) (chunksEmitted in
 		return chunksEmitted, firstFlushAt, err
 	}
 	return chunksEmitted, firstFlushAt, nil
+}
+
+// chunkDeltaContent concatenates the content deltas of a proto ChatChunk's
+// choices (a chunk normally carries one choice with the incremental content).
+// Returns "" when no choice carries content (e.g. a usage-only tail chunk) so the
+// guard skips the Observe call (scan only the string content surface, AC scope).
+func chunkDeltaContent(chunk *adapterv1.ChatChunk) string {
+	var sb strings.Builder
+	for _, ch := range chunk.Choices {
+		if ch.Delta != nil && ch.Delta.Content != nil {
+			sb.WriteString(*ch.Delta.Content)
+		}
+	}
+	return sb.String()
+}
+
+// writeContentFilterTerminal emits the Story-8.3 §9.3 出参 termination for the
+// adapter path: one terminal chunk with an EMPTY delta (OQ-8.3-4) +
+// finish_reason:"content_filter", echoing the captured upstream id/created, then
+// [DONE]. Same WriteEvent+WriteDone path normal chunks use (BR-2.6 — NOT
+// writeSSEErrorFrame). Returns ErrContentFiltered. When the hit lands on the very
+// first delta (no chunk flushed yet) the terminal write flushes headers → a 200
+// SSE content_filter response, not a JSON error envelope (AC2 first-delta case).
+func (c *AdapterChunker) writeContentFilterTerminal(w Writer, chunksEmitted int, firstFlushAt time.Time) (int, time.Time, error) {
+	cf := "content_filter"
+	terminal := adapterChunkJSON{
+		ID:      c.lastID,
+		Object:  "chat.completion.chunk",
+		Created: c.lastCreated,
+		Model:   c.model,
+		Choices: []adapterChunkChoiceJSON{{Index: 0, Delta: adapterChunkDeltaJSON{}, FinishReason: &cf}},
+	}
+	terminalJSON, _ := json.Marshal(terminal)
+	if err := w.WriteEvent("", terminalJSON); err != nil {
+		return chunksEmitted, firstFlushAt, err
+	}
+	chunksEmitted++
+	if firstFlushAt.IsZero() {
+		firstFlushAt = time.Now() // first byte is the terminal (hit on the first delta)
+	}
+	if err := w.Flush(); err != nil {
+		return chunksEmitted, firstFlushAt, err
+	}
+	if err := w.WriteDone(); err != nil {
+		return chunksEmitted, firstFlushAt, err
+	}
+	return chunksEmitted, firstFlushAt, ErrContentFiltered
 }
 
 // adapterChunkJSON is the OpenAI `chat.completion.chunk` wire shape. Drives
