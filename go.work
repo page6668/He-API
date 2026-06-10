@@ -21,4 +21,5 @@ use (
 	./packages/models-catalogue
 	./packages/plan-catalogue
 	./packages/proto
+	./packages/safety-lexicon
 )

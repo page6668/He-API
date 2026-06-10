@@ -1,0 +1,111 @@
+schema: 1
+story: "8.1"
+story_title: "敏感词词库（中英基础库 + 可扩展）"
+gate: "PASS"
+status_reason: "Pure Go SoT library; 46/46 tests PASS under -race, go vet clean, 100% AC coverage with traceable code+test locations. Both Architect Round-1 High issues regression-guarded (CI lane→INT-004, ≤100-rune cap→UNIT-017+BLIND-BOUNDARY-001/003). Bloom no-false-negative invariant exhaustively verified; FP=0.022%/100k (HARD ≤1% bound). Placeholder corpus is the Architect-ratified state for 8.1 (final license-clean corpus is an Epic-8 blocker before 8.2/8.3 reach prod, not before 8.1 merges)."
+reviewer: "Turing (Test Engineer & Quality Architect)"
+updated: "2026-06-10T15:19:14Z"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "HIGH"
+  cached_review_mode: "full_testing"
+  cached_project_type: "library"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+top_issues: []
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 46
+    passed_count: 46
+    failed_count: 0
+    skipped_count: 0
+    pass_rate: 100
+    coverage_percentage: 0  # not measured; integrity-guard + exhaustive-invariant suite, not line-coverage gated
+    failed_tests: []
+    notes: "go test ./packages/safety-lexicon/... -count=1 -race → ok (2.9s); go vet clean. Independent execution matches Dev claim (46/46)."
+  e2e:
+    executed: false
+    passed: true
+    skipped: true
+    skip_reason: "Pure Go library — no UI/HTTP surface. End-to-end behavior is covered in-package: TestE2E001 (DefaultLexicon constructs at package init) + TestE2E002 (positive-membership round-trip across all 12 lang×category buckets)."
+    scenarios_tested: 0
+    scenarios_passed: 0
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: ""  # no issues found → no evidence captured
+  issues: []
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 4
+  security_sensitive: true
+  dev_gate_score: 100
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 0 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "OQ-8.1-6 (Epic-8 blocker, PM/PO): replace the marked PLACEHOLDER corpus with a sourced, license-clean, 备案-defensible wordlist BEFORE Story 8.2/8.3 reach production. TestUNIT031 enforces the marker remains until replaced."
+      - "OQ-8.1-4 follow-up (8.2/8.3): simplified⇄traditional Chinese folding is deferred; a traditional-variant query will not match the simplified-seeded corpus until 8.2/8.3 add folding."
+      - "OQ-8.1-5 doc-debt (SM/PM, non-blocking): backfill the ratified 6-value category taxonomy into docs/architecture/9-合规架构compliance-architecture.md#9.3."
+
+# AC coverage verification (Step 4.6) — 100%, all four ACs verified against live code + tests
+evidence_trace:
+  ac_covered: [1, 2, 3, 4]
+  ac_gaps: []
+  ac_detail:
+    - ac: AC1
+      status: VERIFIED
+      code: "lexicon.go (Category/Severity/Lang/Match closed enums, NewFromRegistry floor+enum+1:1 panics, Len/CountByLang/Categories); data/{zh=1200,en=601}"
+      tests: "UNIT-001..007, BLIND-ERROR-002, UNIT-023/024/030"
+    - ac: AC2
+      status: VERIFIED
+      code: "registry.go (//go:embed, loadRegistryFS, parseFile, BR-1.5 lang-from-dir); lexicon.go (Normalize NFKC→fold→trim→zw, dedupe/empty/≤100-rune/newline panics)"
+      tests: "UNIT-008..017, INT-001, INT-005, UNIT-025/026/027/031, BLIND-BOUNDARY-001/003/004, BLIND-ERROR-001"
+    - ac: AC3
+      status: VERIFIED
+      code: "bloom.go (FNV-1a double-hash, lock-free); lexicon.go (MightContain/Lookup/Normalize, immutable-after-construction)"
+      tests: "UNIT-018 (exhaustive no-false-negative), UNIT-019/020/028/029, BLIND-BOUNDARY-002, INT-002 (-race)"
+    - ac: AC4
+      status: VERIFIED
+      code: "lexicon.go sort-before-populate; bloom.go sizing (m=32768,k=8); .github/workflows/test.yml safety-lexicon -race lane; bench_test.go"
+      tests: "UNIT-021 (determinism), UNIT-022 (FP=0.022%≤1% HARD), INT-003 (integrity guard), INT-004 (CI lane present+-race), BENCH-001/002 (soft-gate)"
+
+# Blind-spot verification (Step 5.5) — 6/6 covered
+blind_spot_verification:
+  total_scenarios: 6
+  covered: 6
+  coverage_rate: 100
+  scenarios:
+    - { id: BLIND-BOUNDARY-001, desc: "101-rune term panics", status: COVERED }
+    - { id: BLIND-BOUNDARY-002, desc: "single-rune term resolves", status: COVERED }
+    - { id: BLIND-BOUNDARY-003, desc: "exactly-100-rune term accepted", status: COVERED }
+    - { id: BLIND-BOUNDARY-004, desc: "zero-width-only difference collapses → dupe panic", status: COVERED }
+    - { id: BLIND-ERROR-001, desc: "embedded-newline term panics", status: COVERED }
+    - { id: BLIND-ERROR-002, desc: "unknown category FILE-stem panics", status: COVERED }
+
+architect_high_regression_guards:
+  - { issue: "High#1 — CI integrity guard not wired", guard: "INT-004 (asserts test.yml has safety-lexicon lane running -race)", status: VERIFIED_PRESENT }
+  - { issue: "High#2 — Canonical ≤128 overflows matched_rule VARCHAR(100)", guard: "UNIT-017 (all stored ≤100 runes) + BLIND-BOUNDARY-001/003", status: VERIFIED_CAP_AT_100 }

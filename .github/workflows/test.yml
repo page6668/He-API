@@ -61,6 +61,15 @@ jobs:
         run: |
           go test ./apps/auth-svc/... ./apps/notification-svc/... -count=1 -race
 
+      # Story 8.1 — safety-lexicon integrity guard (Architect Round-1 High #1).
+      # The package's test lane IS the load-bearing security gate (count floors,
+      # zero-dupes, in-enum, Bloom no-false-negative + FP≤1%, determinism). It is
+      # NOT auto-included by go.work, so it MUST be enumerated here explicitly; -race
+      # covers the lock-free concurrent-read invariant (BR-3.5).
+      - name: Run go test (safety-lexicon — Story 8.1 content-safety lexicon)
+        run: |
+          go test ./packages/safety-lexicon/... -count=1 -race
+
       - name: Coverage summary
         if: always()
         run: |
