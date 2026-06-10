@@ -7,6 +7,7 @@ require (
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/go-pdf/fpdf v0.9.0
 	github.com/he-api/he-api/packages/go-observability v0.0.0-00010101000000-000000000000
+	github.com/he-api/he-api/packages/plan-catalogue v0.0.0-00010101000000-000000000000
 	github.com/he-api/he-api/packages/proto v0.0.0-00010101000000-000000000000
 	github.com/jackc/pgx/v5 v5.6.0
 	github.com/pashagolub/pgxmock/v3 v3.3.0
@@ -57,5 +58,7 @@ require (
 )
 
 replace github.com/he-api/he-api/packages/go-observability => ../../packages/go-observability
+
+replace github.com/he-api/he-api/packages/plan-catalogue => ../../packages/plan-catalogue
 
 replace github.com/he-api/he-api/packages/proto => ../../packages/proto

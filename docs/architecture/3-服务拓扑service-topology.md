@@ -45,6 +45,8 @@
    - notification-svc 监听余额阈值，触发预警邮件
 ```
 
+**套餐权益执行 + 计费档管理 (Story 7.8 — 订阅档 + Beta 模式)**：步骤 4b 的配额校验在热路径上叠加了**套餐权益 (entitlement) 执行**。`api-gateway` 在 `internal/entitlement/` 读取**缓存快照** `entitlement:user:{id}`（plan + 解析后的 rpm/tpm/qps/quota 限额，TTL≤60s + 跨 pod 失效哨兵——复用 5.1 `auth:apikey:revoked` 模式），**绝不在 chat 热路径做同步 PG/billing 调用**（BR-E-6）。快照缺失或解析不确定时**失败降级到 free 下限 (fail-safe-LOW，绝不 fail-open-high)**（BR-E-2）；plan 来自服务端按已鉴权 user_id 解析，客户端断言的 plan 被结构性忽略（防越权）。当 `flag:beta_mode` ON 时（`internal/featureflag/`：Redis 运行时读 + PG `feature_flags` 冷启动回落 + Unleash live push；冷启动无信号→OFF，运行中失 Redis→last-known），网关对每轴叠加全局 Sandbox 上限 `effective_limit = min(plan_limit, sandbox_limit)`（无 Enterprise 豁免——Beta 即收敛），再喂入既有 5.3 Lua 限流器 / 5.4 月度上限（仅改限额值，不新增节流信封）。写侧：**`billing-svc` 是该快照的唯一写者**——在每次 `subscriptions` 状态变更（升级/降级/取消/7.3 provider webhook 确认）时写入/失效快照（升级即时、降级与取消顺延至 `current_period_end`；plan 流转以 7.3 provider webhook 为准，绝不乐观改库；档位限额来自版本化的 `packages/plan-catalogue/` 代码目录，无运行时漂移）。Beta 开关的**写面由 Unleash 控制台 RBAC 守护**（He-API 无 `beta_mode` 写端点——Q-ADMIN-BETA），网关侧仅为内部只读。
+
 ## 3.3 同步 vs 异步边界
 
 | 操作 | 模式 | 理由 |

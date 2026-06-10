@@ -16,6 +16,7 @@ import (
 	"github.com/pashagolub/pgxmock/v3"
 	"github.com/redis/go-redis/v9"
 
+	plancatalogue "github.com/he-api/he-api/packages/plan-catalogue"
 	paymentv1 "github.com/he-api/he-api/packages/proto/gen/go/he/payment/v1"
 )
 
@@ -435,5 +436,83 @@ func TestApply_SubscriptionCancel_NoCredit(t *testing.T) {
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+// --- Story 7.8 — webhook plan-extension (BR-S-3) + snapshot refresh (BR-E-3) ---
+
+type fakeSnap struct {
+	wroteUser, wrotePlan string
+	writes, invalidates  int
+	invalUser            string
+}
+
+func (f *fakeSnap) WriteActive(_ context.Context, userID string, plan plancatalogue.PlanKey) error {
+	f.writes++
+	f.wroteUser, f.wrotePlan = userID, string(plan)
+	return nil
+}
+func (f *fakeSnap) Invalidate(_ context.Context, userID string) error {
+	f.invalidates++
+	f.invalUser = userID
+	return nil
+}
+
+// 7.8-INT-013 — a confirmed active webhook carrying a plan flips subscriptions.plan
+// (RETURNING user_id+plan) and refreshes the gateway snapshot to the new tier.
+func TestApply_SubscriptionActive_WithPlan_RefreshesSnapshot(t *testing.T) {
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	mock.ExpectQuery("UPDATE he_api.subscriptions").
+		WithArgs("stripe", "sub_123", "pro").
+		WillReturnRows(pgxmock.NewRows([]string{"user_id", "plan"}).AddRow("u-1", "pro"))
+
+	a := New(mock, nil, nil)
+	snap := &fakeSnap{}
+	a.SetEntitlementSnapshot(snap)
+
+	out, err := a.Apply(context.Background(), &paymentv1.PaymentEvent{
+		EventType:              "subscription_active",
+		PaymentProvider:        "stripe",
+		ExternalSubscriptionId: "sub_123",
+		Plan:                   "pro",
+	})
+	if err != nil || out != OutcomeSubscription {
+		t.Fatalf("out=%v err=%v", out, err)
+	}
+	if snap.writes != 1 || snap.wroteUser != "u-1" || snap.wrotePlan != "pro" {
+		t.Fatalf("snapshot not refreshed to pro: %+v", snap)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet: %v", err)
+	}
+}
+
+// 7.8-INT-019 — a cancel/past_due webhook invalidates the snapshot so the gateway
+// converges to free (never keeps the higher tier).
+func TestApply_SubscriptionCancel_InvalidatesSnapshot(t *testing.T) {
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	mock.ExpectQuery("UPDATE he_api.subscriptions").
+		WithArgs("stripe", "sub_123", "cancelled").
+		WillReturnRows(pgxmock.NewRows([]string{"user_id", "plan"}).AddRow("u-1", "free"))
+
+	a := New(mock, nil, nil)
+	snap := &fakeSnap{}
+	a.SetEntitlementSnapshot(snap)
+
+	out, err := a.Apply(context.Background(), &paymentv1.PaymentEvent{
+		EventType:              "subscription_cancel",
+		PaymentProvider:        "stripe",
+		ExternalSubscriptionId: "sub_123",
+	})
+	if err != nil || out != OutcomeSubscription {
+		t.Fatalf("out=%v err=%v", out, err)
+	}
+	if snap.invalidates != 1 || snap.invalUser != "u-1" || snap.writes != 0 {
+		t.Fatalf("snapshot not invalidated: %+v", snap)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet: %v", err)
 	}
 }

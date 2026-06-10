@@ -155,3 +155,32 @@ func TestCreateSubscriptionMessagesRoundTrip(t *testing.T) {
 		t.Fatalf("resp mismatch: %+v", &respOut)
 	}
 }
+
+// Story 7.8 — 7.8-CONTRACT-003: the additive UpdateProviderSubscription messages
+// round-trip and the descriptor loads at init.
+func TestStory78PaymentUpdateProviderSubscriptionRoundTrip(t *testing.T) {
+	req := &UpdateProviderSubscriptionRequest{
+		ExternalSubscriptionId: "sub_abc",
+		NewPlan:                "pro",
+		PaymentProvider:        "stripe",
+		ProrationBehavior:      "create_prorations",
+		Schedule:               "now",
+	}
+	b, _ := proto.Marshal(req)
+	var out UpdateProviderSubscriptionRequest
+	if err := proto.Unmarshal(b, &out); err != nil {
+		t.Fatalf("unmarshal req: %v", err)
+	}
+	if !proto.Equal(req, &out) {
+		t.Fatalf("req mismatch:\n in=%+v\nout=%+v", req, &out)
+	}
+	resp := &UpdateProviderSubscriptionResponse{ExternalSubscriptionId: "sub_abc", Status: "active"}
+	rb, _ := proto.Marshal(resp)
+	var rout UpdateProviderSubscriptionResponse
+	if err := proto.Unmarshal(rb, &rout); err != nil {
+		t.Fatalf("unmarshal resp: %v", err)
+	}
+	if rout.GetStatus() != "active" || rout.GetExternalSubscriptionId() != "sub_abc" {
+		t.Fatalf("resp mismatch: %+v", &rout)
+	}
+}

@@ -93,9 +93,66 @@ message CreateRechargeOrderResponse {
   string status = 2;   // always 'pending' at create
 }
 
+// --- Story 7.8 additions (additive — passes `buf breaking: FILE`) ---
+// The subscription-tier read + change seam. NOTE: Stories 7.7 added 6 further
+// BillingService RPCs (SetAutoRecharge … GetInvoicePdf) directly to the vendored
+// descriptor; this .proto source lagged on those. The generated descriptor
+// (billing.pb.go) is the authoritative, round-trip-tested contract.
+
+// GetSubscriptionRequest resolves the AUTHENTICATED user's subscription
+// (user_id is server-resolved; BR-S-7 cross-user read impossible).
+message GetSubscriptionRequest {
+  string user_id = 1;
+}
+
+// GetSubscriptionResponse carries the current plan + status + period end. The
+// gateway resolves entitlements from its in-process plan-catalogue (BR-E-5).
+message GetSubscriptionResponse {
+  string plan = 1;                // free | pro | team | enterprise (else free — Q-PLAN-DEFAULT)
+  string status = 2;             // active | cancelled | past_due
+  string current_period_end = 3; // RFC3339 (next-billing / period roll)
+}
+
+// ChangePlanRequest upgrades/downgrades (or cancels) the AUTHENTICATED user's
+// subscription (server-resolved user_id; BR-S-7).
+message ChangePlanRequest {
+  string user_id = 1;
+  string new_plan = 2; // target tier; unknown → 400_invalid_payment_request (Medium-1)
+  bool cancel = 3;     // DELETE /v1/billing/subscription → revert to free at period end
+}
+
+// ChangePlanResponse reports the resolved direction + whether deferred.
+message ChangePlanResponse {
+  string direction = 1;               // upgrade | downgrade | same
+  string new_plan = 2;
+  bool deferred_to_period_end = 3;    // downgrade/cancel scheduled at period end (BR-S-2)
+}
+
+// GetEntitlementsRequest resolves a user's tier entitlement.
+message GetEntitlementsRequest {
+  string user_id = 1;
+}
+
+// GetEntitlementsResponse mirrors packages/plan-catalogue.Entitlement (money is
+// string-decimal — Q-Spec-4).
+message GetEntitlementsResponse {
+  string plan = 1;
+  int64 rpm = 2;
+  int64 tpm = 3;
+  int64 qps = 4;
+  string monthly_included_credit_usd = 5; // string-decimal
+  string monthly_quota_usd = 6;           // string-decimal
+}
+
 service BillingService {
   // CheckBalance returns the PG-authoritative current_usd for a user.
   rpc CheckBalance(CheckBalanceRequest) returns (CheckBalanceResponse);
   // CreateRechargeOrder persists a PENDING recharge order (Story 7.3 additive).
   rpc CreateRechargeOrder(CreateRechargeOrderRequest) returns (CreateRechargeOrderResponse);
+  // GetSubscription resolves the caller's current subscription (Story 7.8).
+  rpc GetSubscription(GetSubscriptionRequest) returns (GetSubscriptionResponse);
+  // ChangePlan upgrades/downgrades/cancels the caller's subscription (Story 7.8).
+  rpc ChangePlan(ChangePlanRequest) returns (ChangePlanResponse);
+  // GetEntitlements resolves a caller's tier entitlement (Story 7.8).
+  rpc GetEntitlements(GetEntitlementsRequest) returns (GetEntitlementsResponse);
 }

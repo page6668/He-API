@@ -32,6 +32,8 @@ import (
 
 	"github.com/he-api/he-api/apps/api-gateway/internal/adapterclient"
 	"github.com/he-api/he-api/apps/api-gateway/internal/billingemit"
+	"github.com/he-api/he-api/apps/api-gateway/internal/entitlement"
+	"github.com/he-api/he-api/apps/api-gateway/internal/featureflag"
 	"github.com/he-api/he-api/apps/api-gateway/internal/fxrate"
 	"github.com/he-api/he-api/apps/api-gateway/internal/handlers"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
@@ -44,6 +46,7 @@ import (
 	"github.com/he-api/he-api/apps/api-gateway/internal/routingclient"
 	"github.com/he-api/he-api/apps/api-gateway/internal/usage"
 	obs "github.com/he-api/he-api/packages/go-observability"
+	plancatalogue "github.com/he-api/he-api/packages/plan-catalogue"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1/authv1connect"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/billing/v1/billingv1connect"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/notification/v1/notificationv1connect"
@@ -299,8 +302,19 @@ func main() {
 		logger.Error("ratelimit env validation failed", slog.String("error", rlErr.Error()))
 		os.Exit(1)
 	}
+	// Story 7.8 (AC2 + AC3) — entitlement enforcement on the chat hot path.
+	// The featureflag reader resolves global Beta-mode (Redis runtime read +
+	// last-known; booting-no-signal → OFF). The entitlement resolver reads the
+	// cached `entitlement:user:{id}` snapshot (billing-svc is the sole writer)
+	// and composes min(plan, sandbox) when Beta is ON, feeding the resolved
+	// ceilings into the 5.3 limiter via the stable ResolveCeilings seam (BR-E-4).
+	// A cache miss / Redis hiccup fails safe-LOW to the free ceiling (BR-E-2).
+	entitlementRedis := redis.NewClient(mustRedisOptions(redisURL, logger))
+	betaReader := featureflag.NewReader(entitlementRedis, nil /* PG cold-start optional; Unleash pushes to Redis */, logger)
+	entitlementResolver := entitlement.NewResolver(entitlementRedis, plancatalogue.DefaultCatalogue, betaReader.BetaOn, logger)
 	rateLimitMW := ratelimit.New(ratelimit.Config{
 		Redis:            redis.NewClient(mustRedisOptions(redisURL, logger)),
+		ResolveCeilings:  entitlementResolver.ResolveCeilings(),
 		FreeTierDefaults: rlCeilings,
 		FailOpenTimeout:  ratelimit.DefaultFailOpenTimeout,
 	}, logger)
@@ -443,7 +457,16 @@ func main() {
 			mux.Handle("DELETE /v1/billing/payment-methods/{id}", bearerAuth.RequireAPIKey(http.HandlerFunc(billingWrite.DeletePaymentMethod)))
 			mux.Handle("GET /v1/billing/invoices", bearerAuth.RequireAPIKey(http.HandlerFunc(billingWrite.ListInvoices)))
 			mux.Handle("GET /v1/billing/invoices/{id}/pdf", bearerAuth.RequireAPIKey(http.HandlerFunc(billingWrite.GetInvoicePDF)))
-			logger.Info("billing write endpoints wired (recharge, subscriptions, auto-recharge, payment-methods, invoices)")
+			// Story 7.8 — the subscription-tier singleton (GET/PUT/DELETE) + the
+			// public tier catalogue. The singular /v1/billing/subscription is the
+			// caller's one management resource (Medium-2; distinct from the 7.3
+			// plural create-rail above). user_id is server-resolved (BR-S-7).
+			subHandler := handlers.NewSubscriptionHandler(logger, billingClient, plancatalogue.DefaultCatalogue)
+			mux.Handle("GET /v1/billing/subscription", bearerAuth.RequireAPIKey(http.HandlerFunc(subHandler.GetSubscription)))
+			mux.Handle("PUT /v1/billing/subscription", bearerAuth.RequireAPIKey(http.HandlerFunc(subHandler.ChangePlan)))
+			mux.Handle("DELETE /v1/billing/subscription", bearerAuth.RequireAPIKey(http.HandlerFunc(subHandler.Cancel)))
+			mux.Handle("GET /v1/billing/plans", bearerAuth.RequireAPIKey(http.HandlerFunc(subHandler.GetPlans)))
+			logger.Info("billing write endpoints wired (recharge, subscriptions, subscription-tiers, auto-recharge, payment-methods, invoices)")
 		} else {
 			logger.Warn("BILLING_SVC_ENDPOINT or PAYMENT_SVC_ENDPOINT unset — POST /v1/billing/{recharge,subscriptions} disabled")
 		}

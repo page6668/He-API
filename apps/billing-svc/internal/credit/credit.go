@@ -39,6 +39,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
+	plancatalogue "github.com/he-api/he-api/packages/plan-catalogue"
 	paymentv1 "github.com/he-api/he-api/packages/proto/gen/go/he/payment/v1"
 )
 
@@ -112,7 +113,33 @@ const (
 	subStatusSQL = `UPDATE he_api.subscriptions
 		SET status = $3
 	WHERE payment_provider = $1 AND external_subscription_id = $2`
+
+	// Story 7.8 — the same transitions with RETURNING user_id + plan, so the
+	// confirmed webhook can refresh the gateway entitlement snapshot (BR-E-3).
+	// subActivatePlanSQL ALSO flips subscriptions.plan to the confirmed tier
+	// (BR-S-3). Used only when an EntitlementSnapshotWriter is wired.
+	subActivateRetSQL = `UPDATE he_api.subscriptions
+		SET status = 'active', current_period_start = NOW(), current_period_end = NOW() + INTERVAL '30 days'
+	WHERE payment_provider = $1 AND external_subscription_id = $2
+	RETURNING user_id::text, plan`
+	subActivatePlanSQL = `UPDATE he_api.subscriptions
+		SET status = 'active', plan = $3, current_period_start = NOW(), current_period_end = NOW() + INTERVAL '30 days'
+	WHERE payment_provider = $1 AND external_subscription_id = $2
+	RETURNING user_id::text, plan`
+	subStatusRetSQL = `UPDATE he_api.subscriptions
+		SET status = $3
+	WHERE payment_provider = $1 AND external_subscription_id = $2
+	RETURNING user_id::text, plan`
 )
+
+// EntitlementSnapshotWriter is the Story-7.8 hook: on a confirmed subscription
+// transition, billing-svc (the SOLE writer, BR-E-3) refreshes/invalidates the
+// gateway entitlement cache so the enforced ceiling converges to the true plan.
+// Satisfied by subscription.SnapshotWriter.
+type EntitlementSnapshotWriter interface {
+	WriteActive(ctx context.Context, userID string, plan plancatalogue.PlanKey) error
+	Invalidate(ctx context.Context, userID string) error
+}
 
 // Applier consumes payment.completed and credits / updates durable storage.
 type Applier struct {
@@ -124,7 +151,17 @@ type Applier struct {
 	amount       metric.Float64Histogram // he_billing_credit_amount_usd
 	mismatch     metric.Int64Counter     // he_payment_amount_mismatch_total
 	mirrorFailed metric.Int64Counter     // he_billing_credit_mirror_failed_total
+
+	// snapshot is the Story-7.8 entitlement-cache refresh hook (nil pre-7.8 / in
+	// unit tests). When wired, subscription transitions resolve user_id and
+	// refresh/invalidate the gateway snapshot (BR-E-3).
+	snapshot EntitlementSnapshotWriter
 }
+
+// SetEntitlementSnapshot wires the Story-7.8 entitlement-snapshot writer. When
+// set, a confirmed subscription webhook flips subscriptions.plan (when the event
+// carries one) and refreshes/invalidates the gateway entitlement cache.
+func (a *Applier) SetEntitlementSnapshot(w EntitlementSnapshotWriter) { a.snapshot = w }
 
 // New builds an Applier. logger may be nil; redis may be nil (mirror skipped).
 func New(db DB, rdb Redis, logger *slog.Logger) *Applier {
@@ -283,20 +320,66 @@ func (a *Applier) applySubscription(ctx context.Context, ev *paymentv1.PaymentEv
 		a.count(ctx, "ignored")
 		return OutcomeIgnored, nil
 	}
+	plan := strings.TrimSpace(ev.GetPlan())
+
+	// Pre-7.8 / no-snapshot path: status-only Exec (RAIL behaviour unchanged).
+	if a.snapshot == nil {
+		var err error
+		if status == "active" {
+			_, err = a.db.Exec(ctx, subActivateSQL, ev.GetPaymentProvider(), extID)
+		} else {
+			_, err = a.db.Exec(ctx, subStatusSQL, ev.GetPaymentProvider(), extID, status)
+		}
+		if err != nil {
+			return 0, fmt.Errorf("credit: subscription update: %w", err)
+		}
+		a.count(ctx, "subscription")
+		a.logger.InfoContext(ctx, "payment_subscription_update",
+			slog.String("event", "payment_subscription_update"),
+			slog.String("external_subscription_id", extID),
+			slog.String("status", status),
+		)
+		return OutcomeSubscription, nil
+	}
+
+	// Story 7.8 path: apply the transition (flipping subscriptions.plan to the
+	// confirmed tier when the event carries one — BR-S-3), RETURNING user_id so
+	// the gateway entitlement snapshot is refreshed/invalidated (BR-E-3).
+	var userID, curPlan string
 	var err error
-	if status == "active" {
-		_, err = a.db.Exec(ctx, subActivateSQL, ev.GetPaymentProvider(), extID)
-	} else {
-		_, err = a.db.Exec(ctx, subStatusSQL, ev.GetPaymentProvider(), extID, status)
+	switch {
+	case status == "active" && plan != "":
+		err = a.db.QueryRow(ctx, subActivatePlanSQL, ev.GetPaymentProvider(), extID, plan).Scan(&userID, &curPlan)
+	case status == "active":
+		err = a.db.QueryRow(ctx, subActivateRetSQL, ev.GetPaymentProvider(), extID).Scan(&userID, &curPlan)
+	default:
+		err = a.db.QueryRow(ctx, subStatusRetSQL, ev.GetPaymentProvider(), extID, status).Scan(&userID, &curPlan)
 	}
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// No matching subscription row — idempotent ACK (redelivery / unknown sub).
+			a.count(ctx, "subscription")
+			return OutcomeSubscription, nil
+		}
 		return 0, fmt.Errorf("credit: subscription update: %w", err)
+	}
+
+	// Refresh/invalidate the gateway entitlement snapshot (BR-E-3). An active
+	// transition writes the resolved tier; a cancel/past_due invalidates → the
+	// gateway converges to free (fail-safe-LOW), never keeps the higher tier.
+	if userID != "" {
+		if status == "active" {
+			_ = a.snapshot.WriteActive(ctx, userID, plancatalogue.PlanKey(curPlan))
+		} else {
+			_ = a.snapshot.Invalidate(ctx, userID)
+		}
 	}
 	a.count(ctx, "subscription")
 	a.logger.InfoContext(ctx, "payment_subscription_update",
 		slog.String("event", "payment_subscription_update"),
 		slog.String("external_subscription_id", extID),
 		slog.String("status", status),
+		slog.String("plan", curPlan),
 	)
 	return OutcomeSubscription, nil
 }

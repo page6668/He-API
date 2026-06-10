@@ -47,6 +47,10 @@ const (
 	BillingServiceDeletePaymentMethodProcedure = "/he.billing.v1.BillingService/DeletePaymentMethod"
 	BillingServiceListInvoicesProcedure        = "/he.billing.v1.BillingService/ListInvoices"
 	BillingServiceGetInvoicePdfProcedure       = "/he.billing.v1.BillingService/GetInvoicePdf"
+	// Story 7.8 additive RPCs (subscription tiers).
+	BillingServiceGetSubscriptionProcedure = "/he.billing.v1.BillingService/GetSubscription"
+	BillingServiceChangePlanProcedure      = "/he.billing.v1.BillingService/ChangePlan"
+	BillingServiceGetEntitlementsProcedure = "/he.billing.v1.BillingService/GetEntitlements"
 )
 
 // BillingServiceClient is a client for the he.billing.v1.BillingService service.
@@ -59,6 +63,9 @@ type BillingServiceClient interface {
 	DeletePaymentMethod(context.Context, *connect.Request[v1.DeletePaymentMethodRequest]) (*connect.Response[v1.DeletePaymentMethodResponse], error)
 	ListInvoices(context.Context, *connect.Request[v1.ListInvoicesRequest]) (*connect.Response[v1.ListInvoicesResponse], error)
 	GetInvoicePdf(context.Context, *connect.Request[v1.GetInvoicePdfRequest]) (*connect.Response[v1.GetInvoicePdfResponse], error)
+	GetSubscription(context.Context, *connect.Request[v1.GetSubscriptionRequest]) (*connect.Response[v1.GetSubscriptionResponse], error)
+	ChangePlan(context.Context, *connect.Request[v1.ChangePlanRequest]) (*connect.Response[v1.ChangePlanResponse], error)
+	GetEntitlements(context.Context, *connect.Request[v1.GetEntitlementsRequest]) (*connect.Response[v1.GetEntitlementsResponse], error)
 }
 
 // NewBillingServiceClient constructs a client for the he.billing.v1.BillingService service. By
@@ -111,6 +118,21 @@ func NewBillingServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(billingServiceMethods.ByName("GetInvoicePdf")),
 			connect.WithClientOptions(opts...),
 		),
+		getSubscription: connect.NewClient[v1.GetSubscriptionRequest, v1.GetSubscriptionResponse](
+			httpClient, baseURL+BillingServiceGetSubscriptionProcedure,
+			connect.WithSchema(billingServiceMethods.ByName("GetSubscription")),
+			connect.WithClientOptions(opts...),
+		),
+		changePlan: connect.NewClient[v1.ChangePlanRequest, v1.ChangePlanResponse](
+			httpClient, baseURL+BillingServiceChangePlanProcedure,
+			connect.WithSchema(billingServiceMethods.ByName("ChangePlan")),
+			connect.WithClientOptions(opts...),
+		),
+		getEntitlements: connect.NewClient[v1.GetEntitlementsRequest, v1.GetEntitlementsResponse](
+			httpClient, baseURL+BillingServiceGetEntitlementsProcedure,
+			connect.WithSchema(billingServiceMethods.ByName("GetEntitlements")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -124,6 +146,9 @@ type billingServiceClient struct {
 	deletePaymentMethod *connect.Client[v1.DeletePaymentMethodRequest, v1.DeletePaymentMethodResponse]
 	listInvoices        *connect.Client[v1.ListInvoicesRequest, v1.ListInvoicesResponse]
 	getInvoicePdf       *connect.Client[v1.GetInvoicePdfRequest, v1.GetInvoicePdfResponse]
+	getSubscription     *connect.Client[v1.GetSubscriptionRequest, v1.GetSubscriptionResponse]
+	changePlan          *connect.Client[v1.ChangePlanRequest, v1.ChangePlanResponse]
+	getEntitlements     *connect.Client[v1.GetEntitlementsRequest, v1.GetEntitlementsResponse]
 }
 
 // CheckBalance calls he.billing.v1.BillingService.CheckBalance.
@@ -154,6 +179,15 @@ func (c *billingServiceClient) ListInvoices(ctx context.Context, req *connect.Re
 func (c *billingServiceClient) GetInvoicePdf(ctx context.Context, req *connect.Request[v1.GetInvoicePdfRequest]) (*connect.Response[v1.GetInvoicePdfResponse], error) {
 	return c.getInvoicePdf.CallUnary(ctx, req)
 }
+func (c *billingServiceClient) GetSubscription(ctx context.Context, req *connect.Request[v1.GetSubscriptionRequest]) (*connect.Response[v1.GetSubscriptionResponse], error) {
+	return c.getSubscription.CallUnary(ctx, req)
+}
+func (c *billingServiceClient) ChangePlan(ctx context.Context, req *connect.Request[v1.ChangePlanRequest]) (*connect.Response[v1.ChangePlanResponse], error) {
+	return c.changePlan.CallUnary(ctx, req)
+}
+func (c *billingServiceClient) GetEntitlements(ctx context.Context, req *connect.Request[v1.GetEntitlementsRequest]) (*connect.Response[v1.GetEntitlementsResponse], error) {
+	return c.getEntitlements.CallUnary(ctx, req)
+}
 
 // BillingServiceHandler is an implementation of the he.billing.v1.BillingService service.
 type BillingServiceHandler interface {
@@ -165,6 +199,9 @@ type BillingServiceHandler interface {
 	DeletePaymentMethod(context.Context, *connect.Request[v1.DeletePaymentMethodRequest]) (*connect.Response[v1.DeletePaymentMethodResponse], error)
 	ListInvoices(context.Context, *connect.Request[v1.ListInvoicesRequest]) (*connect.Response[v1.ListInvoicesResponse], error)
 	GetInvoicePdf(context.Context, *connect.Request[v1.GetInvoicePdfRequest]) (*connect.Response[v1.GetInvoicePdfResponse], error)
+	GetSubscription(context.Context, *connect.Request[v1.GetSubscriptionRequest]) (*connect.Response[v1.GetSubscriptionResponse], error)
+	ChangePlan(context.Context, *connect.Request[v1.ChangePlanRequest]) (*connect.Response[v1.ChangePlanResponse], error)
+	GetEntitlements(context.Context, *connect.Request[v1.GetEntitlementsRequest]) (*connect.Response[v1.GetEntitlementsResponse], error)
 }
 
 // NewBillingServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -213,6 +250,21 @@ func NewBillingServiceHandler(svc BillingServiceHandler, opts ...connect.Handler
 		connect.WithSchema(billingServiceMethods.ByName("GetInvoicePdf")),
 		connect.WithHandlerOptions(opts...),
 	)
+	billingServiceGetSubscriptionHandler := connect.NewUnaryHandler(
+		BillingServiceGetSubscriptionProcedure, svc.GetSubscription,
+		connect.WithSchema(billingServiceMethods.ByName("GetSubscription")),
+		connect.WithHandlerOptions(opts...),
+	)
+	billingServiceChangePlanHandler := connect.NewUnaryHandler(
+		BillingServiceChangePlanProcedure, svc.ChangePlan,
+		connect.WithSchema(billingServiceMethods.ByName("ChangePlan")),
+		connect.WithHandlerOptions(opts...),
+	)
+	billingServiceGetEntitlementsHandler := connect.NewUnaryHandler(
+		BillingServiceGetEntitlementsProcedure, svc.GetEntitlements,
+		connect.WithSchema(billingServiceMethods.ByName("GetEntitlements")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/he.billing.v1.BillingService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case BillingServiceCheckBalanceProcedure:
@@ -231,6 +283,12 @@ func NewBillingServiceHandler(svc BillingServiceHandler, opts ...connect.Handler
 			billingServiceListInvoicesHandler.ServeHTTP(w, r)
 		case BillingServiceGetInvoicePdfProcedure:
 			billingServiceGetInvoicePdfHandler.ServeHTTP(w, r)
+		case BillingServiceGetSubscriptionProcedure:
+			billingServiceGetSubscriptionHandler.ServeHTTP(w, r)
+		case BillingServiceChangePlanProcedure:
+			billingServiceChangePlanHandler.ServeHTTP(w, r)
+		case BillingServiceGetEntitlementsProcedure:
+			billingServiceGetEntitlementsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -265,4 +323,13 @@ func (UnimplementedBillingServiceHandler) ListInvoices(context.Context, *connect
 }
 func (UnimplementedBillingServiceHandler) GetInvoicePdf(context.Context, *connect.Request[v1.GetInvoicePdfRequest]) (*connect.Response[v1.GetInvoicePdfResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.billing.v1.BillingService.GetInvoicePdf is not implemented"))
+}
+func (UnimplementedBillingServiceHandler) GetSubscription(context.Context, *connect.Request[v1.GetSubscriptionRequest]) (*connect.Response[v1.GetSubscriptionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.billing.v1.BillingService.GetSubscription is not implemented"))
+}
+func (UnimplementedBillingServiceHandler) ChangePlan(context.Context, *connect.Request[v1.ChangePlanRequest]) (*connect.Response[v1.ChangePlanResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.billing.v1.BillingService.ChangePlan is not implemented"))
+}
+func (UnimplementedBillingServiceHandler) GetEntitlements(context.Context, *connect.Request[v1.GetEntitlementsRequest]) (*connect.Response[v1.GetEntitlementsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.billing.v1.BillingService.GetEntitlements is not implemented"))
 }

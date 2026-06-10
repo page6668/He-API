@@ -19,5 +19,6 @@ use (
 	./packages/adapter-usage
 	./packages/go-observability
 	./packages/models-catalogue
+	./packages/plan-catalogue
 	./packages/proto
 )

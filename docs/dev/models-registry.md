@@ -268,3 +268,12 @@ Story 4.8 introduces test-only shared types under `apps/api-gateway/tests/`. The
 - **NEW payment-svc Go types**: `provider.OffSessionProvider` interface + `ErrOffSessionUnsupported`; Stripe `ChargeOffSession`/`CreateSetupIntent`/`RetrievePaymentMethod` methods.
 - **NEW gateway types** (`apps/api-gateway/internal/handlers`): `BillingWriteHandler` gains `UpdateAutoRecharge`/`CreatePaymentMethod`/`ConfirmPaymentMethod`/`ListPaymentMethods`/`DeletePaymentMethod`/`ListInvoices`/`GetInvoicePDF` methods + request structs `autoRechargeRequest`/`confirmPaymentMethodRequest`.
 - **NEW notification template slugs**: `templates.{TemplateLowBalance, TemplateLowBalanceFailed}`.
+
+## Subscription Tier Catalogue + Proto (Story 7.8)
+
+- **NEW shared module `packages/plan-catalogue/`** (Go, mirrors `packages/models-catalogue/`; pure domain — no JSON tags on the wire-facing types except string-decimal money):
+  - `PlanKey` (`free`|`pro`|`team`|`enterprise`); `Plan{Key, DisplayName, PriceUSD (string-decimal), Rank, Entitlement}`; `Entitlement{Plan, RPM, TPM, QPS, MonthlyIncludedCreditUSD (string-decimal), MonthlyQuotaUSD (string-decimal), Features []string}`; `SandboxCeiling{RPM, TPM, QPS, MonthlyQuotaUSD}`; `Catalogue` (List/Find/Entitlements/Rank/Sandbox/Has).
+  - Invariants: panic-at-construction 1:1 plan↔entitlement (both directions) + strict-monotonic rank (4.7/6.1 precedent); `ErrUnknownPlan` is lookup-time (never panic). `DefaultCatalogue` resolved at init. Money = quoted JSON string (Q-Spec-4).
+  - Consumed by: gateway `internal/entitlement` (enforcement) + billing-svc `internal/subscription` + grpc handlers (`GetSubscription`/`GetEntitlements`/`ChangePlan`) + gateway `handlers.SubscriptionHandler` (`GET /v1/billing/plans`).
+- **Gateway entitlement contract**: `entitlement.Snapshot{Plan, Status}` (JSON at Redis `entitlement:user:{id}` — billing-svc SOLE writer, gateway read-only). `entitlement.Resolve` (fail-safe-LOW) + `Compose` (min(plan,sandbox)) + `Resolver` (→ `ratelimit.Ceilings`). `featureflag.Reader` (beta_mode read).
+- **Proto (additive — `buf breaking: FILE` not crossed; round-trip GREEN)**: `he.payment.v1` += `UpdateProviderSubscription{Request,Response}` + `PaymentEvent.plan` (field 11); `he.billing.v1` += `GetSubscription{Request,Response}`, `ChangePlan{Request,Response}` (bool cancel/deferred), `GetEntitlements{Request,Response}` (int64 rpm/tpm/qps + string-decimal money). Hand-authored vendored `*.pb.go` via a `descriptorpb` regenerator ([[project_toolchain_env_limits]]).

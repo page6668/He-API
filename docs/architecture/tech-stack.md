@@ -36,7 +36,7 @@
 | **日志** | Loki + Promtail | 3.x | 日志聚合 |
 | **告警** | Alertmanager + 飞书机器人 + PagerDuty | - | 多通道告警 |
 | **错误追踪** | Sentry | 自托管 | 前端 + 后端异常 |
-| **特性开关** | Unleash (自托管) | 5.x | A/B / 灰度 / Beta 模式 |
+| **特性开关** | Unleash (自托管) | 5.x | A/B / 灰度 / Beta 模式 — **Beta 模式 REALISED in Story 7.8** (the `beta_mode` flag + the gateway read path: PG `feature_flags` cold-start + Redis `flag:beta_mode` runtime + Unleash live push; Unleash console is the operator SoT for the flip — Q-ADMIN-BETA). General A/B + 灰度-cohort targeting (`feature_flags.variants`) is wired-ready but DEFERRED to Epic 6.4. |
 | **密钥管理** | HashiCorp Vault | 1.16+ | 密钥、证书、动态密码 |
 | **基础设施即代码** | Terraform | 1.7+ | 云资源 |
 | **测试 - 后端** | Go testing + testify + ginkgo | - | 单元 + 集成 |

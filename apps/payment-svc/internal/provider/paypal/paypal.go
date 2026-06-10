@@ -242,6 +242,32 @@ func (p *Provider) CreateSubscription(ctx context.Context, s provider.Subscripti
 	}, nil
 }
 
+// UpdateProviderSubscription revises an existing PayPal subscription's plan
+// (Story 7.8, SubscriptionUpdater). PayPal computes any proration itself; the
+// durable plan flip confirms on the 7.3 webhook (BR-S-3). prorationBehavior /
+// schedule are advisory to PayPal's revise semantics (PayPal prorates by
+// default; a deferred downgrade is realised by PayPal at the next cycle).
+func (p *Provider) UpdateProviderSubscription(ctx context.Context, extSubID, newPlan, prorationBehavior, schedule string) (string, error) {
+	if strings.TrimSpace(extSubID) == "" {
+		return "", fmt.Errorf("paypal: missing subscription id")
+	}
+	token, err := p.accessToken(ctx)
+	if err != nil {
+		return "", err
+	}
+	reqBody := map[string]any{"plan_id": newPlan}
+	var out struct {
+		Status string `json:"status"`
+	}
+	if err := p.postJSONKeyed(ctx, "/v1/billing/subscriptions/"+url.PathEscape(extSubID)+"/revise", token, extSubID+":"+newPlan, reqBody, &out); err != nil {
+		return "", err
+	}
+	if out.Status == "" {
+		return "active", nil
+	}
+	return out.Status, nil
+}
+
 func approveLink(links []struct {
 	Href string `json:"href"`
 	Rel  string `json:"rel"`

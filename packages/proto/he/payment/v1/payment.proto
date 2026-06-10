@@ -38,6 +38,7 @@ message PaymentEvent {
   string event_type = 8;               // recharge | subscription_renew | subscription_cancel | subscription_past_due
   string external_subscription_id = 9; // provider subscription id (subscription events only)
   string ts = 10;                      // RFC3339 event timestamp
+  string plan = 11;                    // Story 7.8 — the new tier on a confirmed subscription change (BR-S-3); empty for recharge events
 }
 
 // CreateCheckoutRequest asks payment-svc to open a provider-hosted checkout for a
@@ -118,6 +119,27 @@ message RetrievePaymentMethodResponse {
   string last4 = 3;             // display-safe
 }
 
+// --- Story 7.8 additions (additive — passes `buf breaking: FILE`) ---
+// The provider-subscription tier-change seam. billing-svc drives this on a
+// PUT/DELETE /v1/billing/subscription; the durable plan flip CONFIRMS on the 7.3
+// webhook (BR-S-3). Proration is PROVIDER-computed (no He-API credit — BR-S-4/5).
+
+// UpdateProviderSubscriptionRequest changes a provider subscription's tier.
+// proration_behavior is the Stripe directive (create_prorations on an immediate
+// upgrade; none on a deferred downgrade); schedule is now|period_end.
+message UpdateProviderSubscriptionRequest {
+  string external_subscription_id = 1; // the provider subscription to update
+  string new_plan = 2;                 // target tier (free|pro|team|enterprise)
+  string payment_provider = 3;         // stripe / paypal (REUSE the 7.3 seam)
+  string proration_behavior = 4;       // create_prorations | none (provider-side)
+  string schedule = 5;                 // now | period_end
+}
+
+message UpdateProviderSubscriptionResponse {
+  string external_subscription_id = 1; // unchanged provider subscription id
+  string status = 2;                   // provider-reported subscription status
+}
+
 service PaymentService {
   // CreateCheckout opens a provider-hosted checkout for a pending recharge order.
   rpc CreateCheckout(CreateCheckoutRequest) returns (CreateCheckoutResponse);
@@ -129,4 +151,6 @@ service PaymentService {
   rpc CreateSetupIntent(CreateSetupIntentRequest) returns (CreateSetupIntentResponse);
   // RetrievePaymentMethod fetches the confirmed token off a SetupIntent (7.7).
   rpc RetrievePaymentMethod(RetrievePaymentMethodRequest) returns (RetrievePaymentMethodResponse);
+  // UpdateProviderSubscription changes a provider subscription's tier (Story 7.8).
+  rpc UpdateProviderSubscription(UpdateProviderSubscriptionRequest) returns (UpdateProviderSubscriptionResponse);
 }

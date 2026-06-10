@@ -243,7 +243,9 @@ session:{session_id}                            JSON, TTL 7 days
 auth:apikey:{sha256_hex(plaintext_key)}         缓存 user_id + scope, TTL 5min  # Story 3.2 (T6.5 §4.5 Change Log)
 auth:apikey:revoked:{api_key_id}                SET value="1" TTL 300s         # Story 5.1 BR-3.8 cross-pod cache-invalidation sentinel; gateway bearer_auth.go EXISTS-checks on positive cache hit
 balance:user:{user_id}:realtime                 实时余额, 跟 PG 对账
-flag:beta_mode                                  bool, 实时 Feature Flag
+flag:beta_mode                                  bool, 实时 Feature Flag  # Story 7.8 LIVE (gateway read; PG feature_flags cold-start; Unleash push)
+entitlement:user:{user_id}                      JSON {plan,status}, TTL ≤ 60s   # Story 7.8 — gateway hot-path tier snapshot; billing-svc SOLE writer (BR-E-3); miss → free (fail-safe-LOW)
+entitlement:user:{user_id}:invalidated          SET "1" TTL ≤ 60s               # Story 7.8 — cross-pod invalidation sentinel on downgrade/cancel (5.1 precedent)
 ```
 
 ## 4.4 Kafka Topics
@@ -260,6 +262,7 @@ flag:beta_mode                                  bool, 实时 Feature Flag
 
 | Date | Story | Author | Change |
 |------|-------|--------|--------|
+| 2026-06-10 | 7.8 | Dev (Linus) | **§4.1 `feature_flags` REALISED** (migration `0012_create_feature_flags.sql`, Q-BETA-MIGRATION): the pre-defined-but-never-migrated table is created verbatim + an idempotent `('beta_mode', false) ON CONFLICT (key) DO NOTHING` seed. PG = global Beta-mode cold-start SoT; Redis `flag:beta_mode` = runtime mirror; Unleash = live push. **§4.1 `subscriptions` (0010) EXTENDED, no schema change**: the opaque `plan` string now carries TIER semantics (`packages/plan-catalogue`); `credit.applySubscription` flips `plan` on the confirmed webhook (BR-S-3). NO `plan_entitlements` table (Q-PLAN-CATALOG = code-catalogue). **§4.3 NEW Redis key** `entitlement:user:{id}` (JSON `{plan,status}`, billing-svc SOLE writer, TTL ≤ 60s + `entitlement:user:{id}:invalidated` cross-pod sentinel — 5.1 precedent; the gateway hot-path read for tier enforcement, fail-safe-LOW on miss). The pre-listed `flag:beta_mode` is now LIVE (gateway `internal/featureflag` read; booting-no-signal→OFF, running-loses-Redis→last-known). |
 | 2026-05-18 | 3.2 | Dev (Linus) | **§4.3 Redis Key 规范**: Updated `auth:apikey:{key_hash}` → `auth:apikey:{sha256_hex(plaintext_key)}`. Rationale: the bcrypt `key_hash` cannot be derived from incoming plaintext without a pre-cache DB lookup (bcrypt is one-way; you'd need to bcrypt-compare against candidate hashes — defeating the cache the entry is meant to serve). SHA-256 of plaintext is the only design achieving O(1) cache-key derivation while preserving defence in depth (a Redis-dump compromise cannot reverse to plaintext). Architect Round 1 M4 (2026-05-18) ruled IN FAVOUR of the Story's design. |
 | 2026-05-18 | 3.2 | Dev (Linus) | **§4.1 `api_keys.team_id` FK deferral**: Story 3.2's migration `0006_create_api_keys.sql` lands `team_id UUID` (nullable, no REFERENCES clause) because `he_api.teams` table does not exist yet (created in Epic 5). `ALTER TABLE he_api.api_keys ADD CONSTRAINT fk_api_keys_team FOREIGN KEY (team_id) REFERENCES he_api.teams(id) ON DELETE CASCADE` to land in Epic 5 alongside the `he_api.teams` table creation (Architect Round 1 OQ4 ruling, 2026-05-18). |
 | 2026-05-25 | 5.1 | Dev (Linus) | **§4.1 `he_api.api_keys` is now WRITTEN** (Story 3.2 was read-only — `LookupAPIKeysByPrefix` + fire-and-forget `last_used_at` UPDATE). Story 5.1 adds INSERT (CreateApiKey RPC) + UPDATE `revoked_at=NOW()` (RevokeApiKey RPC) + omit-`key_hash` SELECT (ListApiKeys RPC, BR-2.5 defence-in-depth). No DDL change (`cumulative_context_impact.db_schema=false`). |

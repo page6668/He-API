@@ -124,6 +124,7 @@ func (h *Handler) Handle(providerName string) http.HandlerFunc {
 			Status:                 ev.Status,
 			EventType:              string(ev.Kind),
 			ExternalSubscriptionId: ev.ExternalSubscriptionID,
+			Plan:                   ev.Plan, // Story 7.8 — carries the confirmed tier (BR-S-3)
 			Ts:                     h.now().UTC().Format(time.RFC3339),
 		}
 

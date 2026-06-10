@@ -66,6 +66,8 @@ he-api/                                  (Monorepo, Turborepo)
 │   │   ├── buf.yaml
 │   │   └── buf.gen.yaml
 │   ├── go-observability/                Go observability 共享包 (Story 1.5 — TracerProvider / slog JSON / otelhttp wrap)
+│   ├── models-catalogue/                model catalogue SoT (Story 6.1 lift — gateway + routing-svc)
+│   ├── plan-catalogue/                  subscription tier catalogue SoT (Story 7.8 — Free/Pro/Team/Enterprise → Entitlement + SandboxCeiling; panic-at-construction 1:1; gateway entitlement + billing-svc subscription + GET /v1/billing/plans)
 │   ├── sdk-python/                      Python SDK
 │   │   ├── he_api/
 │   │   ├── tests/

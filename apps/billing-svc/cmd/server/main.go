@@ -49,6 +49,8 @@ import (
 	"github.com/he-api/he-api/apps/billing-svc/internal/paymentmethod"
 	"github.com/he-api/he-api/apps/billing-svc/internal/pricing"
 	"github.com/he-api/he-api/apps/billing-svc/internal/server"
+	"github.com/he-api/he-api/apps/billing-svc/internal/subscription"
+	plancatalogue "github.com/he-api/he-api/packages/plan-catalogue"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/billing/v1/billingv1connect"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/payment/v1/paymentv1connect"
 )
@@ -134,7 +136,7 @@ func run(ctx context.Context, logger *slog.Logger, addr string) error {
 
 	// gRPC handler — CheckBalance reads PG authoritatively. With no pool it falls
 	// back to Unimplemented (health still serves).
-	var billingHandler = unimplementedOrReal(pool, logger)
+	var billingHandler = unimplementedOrReal(pool, rdb, logger)
 
 	srv := server.New(server.Options{
 		BillingHandler: billingHandler,
@@ -174,11 +176,35 @@ func run(ctx context.Context, logger *slog.Logger, addr string) error {
 // else interface-nil (server.New falls back to the Unimplemented stub). Returning
 // the interface type — not a typed-nil *Server — keeps the nil check in server.New
 // correct.
-func unimplementedOrReal(pool *pgxpool.Pool, logger *slog.Logger) billingv1connect.BillingServiceHandler {
+func unimplementedOrReal(pool *pgxpool.Pool, rdb *redis.Client, logger *slog.Logger) billingv1connect.BillingServiceHandler {
 	if pool == nil {
 		return nil
 	}
-	return billinggrpc.NewServer(pool, logger)
+	srv := billinggrpc.NewServer(pool, logger)
+
+	// Story 7.8 — wire the subscription-tier surface. The PG reader resolves the
+	// caller's active plan (else free); the catalogue is the entitlement SoT; the
+	// snapshot writer is billing-svc's SOLE write of the gateway entitlement cache
+	// (BR-E-3). ChangePlan additionally needs the payment-svc provider rail — when
+	// HE_API_PAYMENT_SVC_URL is unset, GetSubscription/GetEntitlements still serve
+	// (read-only) and ChangePlan returns Unimplemented.
+	cat := plancatalogue.DefaultCatalogue
+	subReader := subscription.NewPGSubReader(pool)
+	var snapRedis subscription.Redis
+	if rdb != nil {
+		snapRedis = rdb
+	}
+	snapshot := subscription.NewSnapshotWriter(snapRedis, logger)
+	if url := os.Getenv("HE_API_PAYMENT_SVC_URL"); url != "" {
+		client := paymentv1connect.NewPaymentServiceClient(http.DefaultClient, url)
+		updater := paymentclient.NewSubscriptionUpdater(client)
+		svc := subscription.NewService(cat, subReader, updater, snapshot, logger)
+		srv.SetSubscriptions(svc, subReader, cat)
+	} else {
+		logger.Warn("HE_API_PAYMENT_SVC_URL unset — ChangePlan disabled (GetSubscription/GetEntitlements still serve)")
+		srv.SetSubscriptions(nil, subReader, cat)
+	}
+	return srv
 }
 
 // startConsumer wires the Kafka reader + DLQ writer + ledger and runs the
@@ -246,6 +272,11 @@ func startCreditConsumer(ctx context.Context, logger *slog.Logger, pool *pgxpool
 		Topic:   credit.Topic,
 	})
 	applier := credit.New(pool, creditRedisOrNil(rdb), logger)
+	// Story 7.8 — on a confirmed subscription webhook, refresh/invalidate the
+	// gateway entitlement snapshot (BR-E-3) + flip subscriptions.plan (BR-S-3).
+	if rdb != nil {
+		applier.SetEntitlementSnapshot(subscription.NewSnapshotWriter(rdb, logger))
+	}
 	c := credit.NewConsumer(reader, applier, logger)
 	go c.Run(ctx)
 	logger.Info("billing credit consumer started", slog.String("topic", credit.Topic))

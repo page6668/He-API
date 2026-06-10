@@ -77,6 +77,26 @@ func (f *fakeBilling) GetInvoicePdf(context.Context, *connect.Request[billingv1.
 	return connect.NewResponse(&billingv1.GetInvoicePdfResponse{Found: false}), nil
 }
 
+// Story 7.8 subscription-tier stubs.
+func (f *fakeBilling) GetSubscription(context.Context, *connect.Request[billingv1.GetSubscriptionRequest]) (*connect.Response[billingv1.GetSubscriptionResponse], error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return connect.NewResponse(&billingv1.GetSubscriptionResponse{Plan: "free", Status: "active"}), nil
+}
+func (f *fakeBilling) ChangePlan(context.Context, *connect.Request[billingv1.ChangePlanRequest]) (*connect.Response[billingv1.ChangePlanResponse], error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return connect.NewResponse(&billingv1.ChangePlanResponse{Direction: "same", NewPlan: "free"}), nil
+}
+func (f *fakeBilling) GetEntitlements(context.Context, *connect.Request[billingv1.GetEntitlementsRequest]) (*connect.Response[billingv1.GetEntitlementsResponse], error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return connect.NewResponse(&billingv1.GetEntitlementsResponse{Plan: "free"}), nil
+}
+
 var _ billingv1connect.BillingServiceClient = (*fakeBilling)(nil)
 
 // fakePayment implements paymentv1connect.PaymentServiceClient.
@@ -116,6 +136,14 @@ func (f *fakePayment) RetrievePaymentMethod(context.Context, *connect.Request[pa
 		return nil, f.err
 	}
 	return connect.NewResponse(&paymentv1.RetrievePaymentMethodResponse{ProviderPmToken: "pm_saved", Brand: "visa", Last4: "4242"}), nil
+}
+
+// Story 7.8 subscription-update stub.
+func (f *fakePayment) UpdateProviderSubscription(context.Context, *connect.Request[paymentv1.UpdateProviderSubscriptionRequest]) (*connect.Response[paymentv1.UpdateProviderSubscriptionResponse], error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return connect.NewResponse(&paymentv1.UpdateProviderSubscriptionResponse{Status: "active"}), nil
 }
 
 var _ paymentv1connect.PaymentServiceClient = (*fakePayment)(nil)

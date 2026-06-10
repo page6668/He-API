@@ -188,6 +188,11 @@ func parseEvent(rawBody []byte) (provider.VerifiedEvent, error) {
 	}
 	if obj.Metadata != nil {
 		ev.OrderID = obj.Metadata[metadataOrderKey]
+		// Story 7.8 — the tier set on the subscription via metadata[plan] (by
+		// CreateSubscription / UpdateProviderSubscription) rides back on the
+		// confirmed subscription webhook so billing-svc flips subscriptions.plan
+		// (BR-S-3). Empty for recharge events.
+		ev.Plan = obj.Metadata["plan"]
 	}
 	switch env.Type {
 	case "checkout.session.completed", "payment_intent.succeeded":
@@ -301,6 +306,38 @@ func (p *Provider) CreateSubscription(ctx context.Context, s provider.Subscripti
 		CheckoutURL:            out.URL,
 		ExternalSubscriptionID: firstNonEmpty(out.Subscription, out.ID),
 	}, nil
+}
+
+// UpdateProviderSubscription changes an existing Stripe subscription's tier
+// (Story 7.8, SubscriptionUpdater). proration_behavior is passed through to
+// Stripe (create_prorations on an immediate upgrade; none on a deferred
+// downgrade). The new plan is carried in metadata[plan] so the 7.3 webhook flips
+// our subscriptions.plan on the provider-confirmed update (BR-S-3). Stripe
+// computes any proration money itself — He-API issues no credit (BR-S-4).
+func (p *Provider) UpdateProviderSubscription(ctx context.Context, extSubID, newPlan, prorationBehavior, schedule string) (string, error) {
+	if strings.TrimSpace(extSubID) == "" {
+		return "", fmt.Errorf("stripe: missing subscription id")
+	}
+	form := url.Values{}
+	form.Set("metadata[plan]", newPlan)
+	if prorationBehavior != "" {
+		form.Set("proration_behavior", prorationBehavior)
+	}
+	// A deferred downgrade takes effect at period end rather than immediately.
+	if schedule == "period_end" {
+		form.Set("cancel_at_period_end", "false")
+		form.Set("billing_cycle_anchor", "unchanged")
+	}
+	var out struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+	// Idempotency key binds (subscription, plan, schedule) so a double-submit does
+	// not issue two provider updates (BR — BLIND-FLOW-002).
+	if err := p.post(ctx, "/v1/subscriptions/"+url.PathEscape(extSubID), extSubID+":"+newPlan+":"+schedule, form, &out); err != nil {
+		return "", err
+	}
+	return firstNonEmpty(out.Status, "active"), nil
 }
 
 // post issues a form-encoded Stripe REST call with bearer auth + an idempotency

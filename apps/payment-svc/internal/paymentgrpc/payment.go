@@ -179,4 +179,50 @@ func (s *Server) RetrievePaymentMethod(ctx context.Context, req *connect.Request
 	return connect.NewResponse(&paymentv1.RetrievePaymentMethodResponse{ProviderPmToken: token, Brand: brand, Last4: last4}), nil
 }
 
+// subscriptionUpdater resolves a provider and asserts the Story-7.8 tier-change
+// capability. A non-rail provider → ErrSubscriptionUpdateUnsupported.
+func (s *Server) subscriptionUpdater(name string) (provider.SubscriptionUpdater, error) {
+	if strings.TrimSpace(name) == "" {
+		name = "stripe"
+	}
+	prov, err := s.providers.Get(name)
+	if err != nil {
+		return nil, err
+	}
+	su, ok := prov.(provider.SubscriptionUpdater)
+	if !ok {
+		return nil, provider.ErrSubscriptionUpdateUnsupported
+	}
+	return su, nil
+}
+
+// UpdateProviderSubscription changes a provider subscription's tier (Story 7.8).
+// Proration is PROVIDER-computed; the durable plan flip confirms on the 7.3
+// webhook (BR-S-3). This RPC issues NO He-API credit (BR-S-4/5).
+func (s *Server) UpdateProviderSubscription(ctx context.Context, req *connect.Request[paymentv1.UpdateProviderSubscriptionRequest]) (*connect.Response[paymentv1.UpdateProviderSubscriptionResponse], error) {
+	m := req.Msg
+	if strings.TrimSpace(m.GetExternalSubscriptionId()) == "" || strings.TrimSpace(m.GetNewPlan()) == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errMissingArgs)
+	}
+	su, err := s.subscriptionUpdater(m.GetPaymentProvider())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+	status, uerr := su.UpdateProviderSubscription(ctx, m.GetExternalSubscriptionId(), m.GetNewPlan(), m.GetProrationBehavior(), m.GetSchedule())
+	if uerr != nil {
+		s.logger.ErrorContext(ctx, "payment_update_subscription_failed",
+			slog.String("event", "payment_update_subscription_failed"),
+			slog.String("provider", m.GetPaymentProvider()),
+			slog.String("external_subscription_id", m.GetExternalSubscriptionId()),
+			slog.String("new_plan", m.GetNewPlan()),
+		)
+		// Provider-domain failure → 402 at the gateway, not our-infra 5xx.
+		return nil, connect.NewError(connect.CodeUnavailable, uerr)
+	}
+	return connect.NewResponse(&paymentv1.UpdateProviderSubscriptionResponse{
+		ExternalSubscriptionId: m.GetExternalSubscriptionId(),
+		Status:                 status,
+	}), nil
+}
+
 var errChargeFailed = errors.New("off-session payment operation failed")

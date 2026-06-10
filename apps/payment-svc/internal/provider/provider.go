@@ -79,6 +79,7 @@ type VerifiedEvent struct {
 	SettledAmount          string // string-decimal; the credited value (Q-AMOUNT)
 	Currency               string
 	Status                 string // paid | failed | cancelled | past_due
+	Plan                   string // Story 7.8 — the tier carried in metadata[plan] on a subscription event (BR-S-3); empty for recharge
 }
 
 // PaymentProvider is the seam. Implementations live in sub-packages and are
@@ -125,6 +126,26 @@ type OffSessionProvider interface {
 // ErrOffSessionUnsupported is returned for a provider that does not implement
 // OffSessionProvider (Q-OFFSESSION: card off-session is Stripe-only in 7.7).
 var ErrOffSessionUnsupported = errors.New("provider: off-session charge unsupported")
+
+// SubscriptionUpdater is the OPTIONAL Story-7.8 extension of the seam
+// (Q-UPGRADE-DOWNGRADE): change an EXISTING provider subscription's tier with
+// PROVIDER-computed proration. Only the subscription-rail providers (Stripe /
+// PayPal) satisfy it; the payment handler type-asserts it and returns
+// ErrSubscriptionUpdateUnsupported for any provider that does not — so the
+// 7.4-7.6 channels stay UNTOUCHED (boundary lock). The durable plan flip
+// CONFIRMS on the 7.3 webhook (BR-S-3); this call issues NO He-API credit and
+// computes NO proration money itself (BR-S-4/5 — provider truth).
+type SubscriptionUpdater interface {
+	// UpdateProviderSubscription changes extSubID to newPlan. prorationBehavior is
+	// the provider directive (create_prorations on an immediate upgrade; none on a
+	// deferred downgrade); schedule is "now" | "period_end". It returns the
+	// provider-reported subscription status.
+	UpdateProviderSubscription(ctx context.Context, extSubID, newPlan, prorationBehavior, schedule string) (status string, err error)
+}
+
+// ErrSubscriptionUpdateUnsupported is returned for a provider that does not
+// implement SubscriptionUpdater (tier change is Stripe/PayPal-only — the 7.3 rail).
+var ErrSubscriptionUpdateUnsupported = errors.New("provider: subscription update unsupported")
 
 // ErrUnsupportedProvider is returned by the Registry for an unknown provider id.
 var ErrUnsupportedProvider = errors.New("provider: unsupported payment provider")

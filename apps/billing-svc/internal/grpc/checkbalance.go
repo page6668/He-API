@@ -17,6 +17,8 @@ import (
 	"github.com/he-api/he-api/apps/billing-svc/internal/invoice"
 	"github.com/he-api/he-api/apps/billing-svc/internal/paymentmethod"
 	"github.com/he-api/he-api/apps/billing-svc/internal/recharge"
+	"github.com/he-api/he-api/apps/billing-svc/internal/subscription"
+	plancatalogue "github.com/he-api/he-api/packages/plan-catalogue"
 	billingv1 "github.com/he-api/he-api/packages/proto/gen/go/he/billing/v1"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/billing/v1/billingv1connect"
 )
@@ -37,10 +39,28 @@ type Server struct {
 	invoices *invoice.Store
 	uploader invoice.Uploader // nil unless an object store is wired (GetInvoicePdf)
 	logger   *slog.Logger
+
+	// Story 7.8 subscription-tier surface (nil unless SetSubscriptions wired).
+	subs      *subscription.Service
+	subReader subscription.SubReader
+	catalogue plancatalogue.Catalogue
+	subsWired bool
 }
 
 // SetInvoiceUploader wires the object store used to proxy-stream invoice PDFs.
 func (s *Server) SetInvoiceUploader(u invoice.Uploader) { s.uploader = u }
+
+// SetSubscriptions wires the Story-7.8 subscription-tier surface: the plan-change
+// orchestrator (svc), the current-subscription reader, and the plan catalogue.
+// main.go constructs these (the payment-svc client + the Redis snapshot writer
+// live behind svc). Until wired, GetSubscription/ChangePlan/GetEntitlements
+// return CodeUnimplemented (the embedded default).
+func (s *Server) SetSubscriptions(svc *subscription.Service, reader subscription.SubReader, cat plancatalogue.Catalogue) {
+	s.subs = svc
+	s.subReader = reader
+	s.catalogue = cat
+	s.subsWired = true
+}
 
 var _ billingv1connect.BillingServiceHandler = (*Server)(nil)
 

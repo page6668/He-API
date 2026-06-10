@@ -50,6 +50,9 @@ const (
 	// PaymentServiceRetrievePaymentMethodProcedure is the fully-qualified name of the PaymentService's
 	// RetrievePaymentMethod RPC (Story 7.7 — server-side token retrieval).
 	PaymentServiceRetrievePaymentMethodProcedure = "/he.payment.v1.PaymentService/RetrievePaymentMethod"
+	// PaymentServiceUpdateProviderSubscriptionProcedure is the fully-qualified name of the
+	// PaymentService's UpdateProviderSubscription RPC (Story 7.8 — tier change + proration).
+	PaymentServiceUpdateProviderSubscriptionProcedure = "/he.payment.v1.PaymentService/UpdateProviderSubscription"
 )
 
 // PaymentServiceClient is a client for the he.payment.v1.PaymentService service.
@@ -59,6 +62,7 @@ type PaymentServiceClient interface {
 	ChargeOffSession(context.Context, *connect.Request[v1.ChargeOffSessionRequest]) (*connect.Response[v1.ChargeOffSessionResponse], error)
 	CreateSetupIntent(context.Context, *connect.Request[v1.CreateSetupIntentRequest]) (*connect.Response[v1.CreateSetupIntentResponse], error)
 	RetrievePaymentMethod(context.Context, *connect.Request[v1.RetrievePaymentMethodRequest]) (*connect.Response[v1.RetrievePaymentMethodResponse], error)
+	UpdateProviderSubscription(context.Context, *connect.Request[v1.UpdateProviderSubscriptionRequest]) (*connect.Response[v1.UpdateProviderSubscriptionResponse], error)
 }
 
 // NewPaymentServiceClient constructs a client for the he.payment.v1.PaymentService service. By
@@ -99,16 +103,23 @@ func NewPaymentServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(paymentServiceMethods.ByName("RetrievePaymentMethod")),
 			connect.WithClientOptions(opts...),
 		),
+		updateProviderSubscription: connect.NewClient[v1.UpdateProviderSubscriptionRequest, v1.UpdateProviderSubscriptionResponse](
+			httpClient,
+			baseURL+PaymentServiceUpdateProviderSubscriptionProcedure,
+			connect.WithSchema(paymentServiceMethods.ByName("UpdateProviderSubscription")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // paymentServiceClient implements PaymentServiceClient.
 type paymentServiceClient struct {
-	createCheckout        *connect.Client[v1.CreateCheckoutRequest, v1.CreateCheckoutResponse]
-	createSubscription    *connect.Client[v1.CreateSubscriptionRequest, v1.CreateSubscriptionResponse]
-	chargeOffSession      *connect.Client[v1.ChargeOffSessionRequest, v1.ChargeOffSessionResponse]
-	createSetupIntent     *connect.Client[v1.CreateSetupIntentRequest, v1.CreateSetupIntentResponse]
-	retrievePaymentMethod *connect.Client[v1.RetrievePaymentMethodRequest, v1.RetrievePaymentMethodResponse]
+	createCheckout             *connect.Client[v1.CreateCheckoutRequest, v1.CreateCheckoutResponse]
+	createSubscription         *connect.Client[v1.CreateSubscriptionRequest, v1.CreateSubscriptionResponse]
+	chargeOffSession           *connect.Client[v1.ChargeOffSessionRequest, v1.ChargeOffSessionResponse]
+	createSetupIntent          *connect.Client[v1.CreateSetupIntentRequest, v1.CreateSetupIntentResponse]
+	retrievePaymentMethod      *connect.Client[v1.RetrievePaymentMethodRequest, v1.RetrievePaymentMethodResponse]
+	updateProviderSubscription *connect.Client[v1.UpdateProviderSubscriptionRequest, v1.UpdateProviderSubscriptionResponse]
 }
 
 // CreateCheckout calls he.payment.v1.PaymentService.CreateCheckout.
@@ -136,6 +147,11 @@ func (c *paymentServiceClient) RetrievePaymentMethod(ctx context.Context, req *c
 	return c.retrievePaymentMethod.CallUnary(ctx, req)
 }
 
+// UpdateProviderSubscription calls he.payment.v1.PaymentService.UpdateProviderSubscription.
+func (c *paymentServiceClient) UpdateProviderSubscription(ctx context.Context, req *connect.Request[v1.UpdateProviderSubscriptionRequest]) (*connect.Response[v1.UpdateProviderSubscriptionResponse], error) {
+	return c.updateProviderSubscription.CallUnary(ctx, req)
+}
+
 // PaymentServiceHandler is an implementation of the he.payment.v1.PaymentService service.
 type PaymentServiceHandler interface {
 	CreateCheckout(context.Context, *connect.Request[v1.CreateCheckoutRequest]) (*connect.Response[v1.CreateCheckoutResponse], error)
@@ -143,6 +159,7 @@ type PaymentServiceHandler interface {
 	ChargeOffSession(context.Context, *connect.Request[v1.ChargeOffSessionRequest]) (*connect.Response[v1.ChargeOffSessionResponse], error)
 	CreateSetupIntent(context.Context, *connect.Request[v1.CreateSetupIntentRequest]) (*connect.Response[v1.CreateSetupIntentResponse], error)
 	RetrievePaymentMethod(context.Context, *connect.Request[v1.RetrievePaymentMethodRequest]) (*connect.Response[v1.RetrievePaymentMethodResponse], error)
+	UpdateProviderSubscription(context.Context, *connect.Request[v1.UpdateProviderSubscriptionRequest]) (*connect.Response[v1.UpdateProviderSubscriptionResponse], error)
 }
 
 // NewPaymentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -179,6 +196,12 @@ func NewPaymentServiceHandler(svc PaymentServiceHandler, opts ...connect.Handler
 		connect.WithSchema(paymentServiceMethods.ByName("RetrievePaymentMethod")),
 		connect.WithHandlerOptions(opts...),
 	)
+	paymentServiceUpdateProviderSubscriptionHandler := connect.NewUnaryHandler(
+		PaymentServiceUpdateProviderSubscriptionProcedure,
+		svc.UpdateProviderSubscription,
+		connect.WithSchema(paymentServiceMethods.ByName("UpdateProviderSubscription")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/he.payment.v1.PaymentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case PaymentServiceCreateCheckoutProcedure:
@@ -191,6 +214,8 @@ func NewPaymentServiceHandler(svc PaymentServiceHandler, opts ...connect.Handler
 			paymentServiceCreateSetupIntentHandler.ServeHTTP(w, r)
 		case PaymentServiceRetrievePaymentMethodProcedure:
 			paymentServiceRetrievePaymentMethodHandler.ServeHTTP(w, r)
+		case PaymentServiceUpdateProviderSubscriptionProcedure:
+			paymentServiceUpdateProviderSubscriptionHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -218,4 +243,8 @@ func (UnimplementedPaymentServiceHandler) CreateSetupIntent(context.Context, *co
 
 func (UnimplementedPaymentServiceHandler) RetrievePaymentMethod(context.Context, *connect.Request[v1.RetrievePaymentMethodRequest]) (*connect.Response[v1.RetrievePaymentMethodResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.payment.v1.PaymentService.RetrievePaymentMethod is not implemented"))
+}
+
+func (UnimplementedPaymentServiceHandler) UpdateProviderSubscription(context.Context, *connect.Request[v1.UpdateProviderSubscriptionRequest]) (*connect.Response[v1.UpdateProviderSubscriptionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.payment.v1.PaymentService.UpdateProviderSubscription is not implemented"))
 }

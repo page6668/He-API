@@ -185,3 +185,38 @@ func TestBillingModeEnum(t *testing.T) {
 		t.Fatalf("enum value map wrong")
 	}
 }
+
+// Story 7.8 — 7.8-CONTRACT-003: the additive GetSubscription / ChangePlan /
+// GetEntitlements messages round-trip (incl. bool + int64 fields) and the
+// descriptor loads at init.
+func TestStory78BillingSubscriptionMessagesRoundTrip(t *testing.T) {
+	gs := &GetSubscriptionResponse{Plan: "pro", Status: "active", CurrentPeriodEnd: "2026-07-09T00:00:00Z"}
+	b, _ := proto.Marshal(gs)
+	var gsOut GetSubscriptionResponse
+	if err := proto.Unmarshal(b, &gsOut); err != nil {
+		t.Fatalf("unmarshal GetSubscriptionResponse: %v", err)
+	}
+	if !proto.Equal(gs, &gsOut) {
+		t.Fatalf("GetSubscriptionResponse mismatch:\n in=%+v\nout=%+v", gs, &gsOut)
+	}
+
+	cp := &ChangePlanResponse{Direction: "downgrade", NewPlan: "free", DeferredToPeriodEnd: true}
+	cb, _ := proto.Marshal(cp)
+	var cpOut ChangePlanResponse
+	if err := proto.Unmarshal(cb, &cpOut); err != nil {
+		t.Fatalf("unmarshal ChangePlanResponse: %v", err)
+	}
+	if !cpOut.GetDeferredToPeriodEnd() || cpOut.GetDirection() != "downgrade" {
+		t.Fatalf("ChangePlanResponse field decode mismatch: %+v", &cpOut)
+	}
+
+	ent := &GetEntitlementsResponse{Plan: "enterprise", Rpm: 10000, Tpm: 20000000, Qps: 50, MonthlyIncludedCreditUsd: "0.00", MonthlyQuotaUsd: "5000.00"}
+	eb, _ := proto.Marshal(ent)
+	var entOut GetEntitlementsResponse
+	if err := proto.Unmarshal(eb, &entOut); err != nil {
+		t.Fatalf("unmarshal GetEntitlementsResponse: %v", err)
+	}
+	if !proto.Equal(ent, &entOut) || entOut.GetRpm() != 10000 {
+		t.Fatalf("GetEntitlementsResponse mismatch:\n in=%+v\nout=%+v", ent, &entOut)
+	}
+}
