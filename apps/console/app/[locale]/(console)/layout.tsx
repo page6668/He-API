@@ -37,12 +37,14 @@ export default async function ConsoleLayout({
   }
 
   const t = await getTranslations('account');
+  const tDashboard = await getTranslations('dashboard');
 
   return (
     <div className="mx-auto flex max-w-5xl gap-6 px-6 py-8">
       <aside className="w-48 shrink-0" aria-label={t('settings.sidebar.label')}>
         <ConsoleSidebarNav
           items={[
+            { href: `/${resolvedLocale}/dashboard`, label: tDashboard('nav.sidebar') },
             { href: `/${resolvedLocale}/keys`, label: t('keys.nav.sidebar') },
             { href: `/${resolvedLocale}/settings/profile`, label: t('settings.sidebar.profile') },
             { href: `/${resolvedLocale}/settings/security`, label: t('settings.sidebar.security') },

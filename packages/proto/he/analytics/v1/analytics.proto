@@ -1,0 +1,53 @@
+// analytics.proto — He-API analytics contract for Epic 9 (监控、日志与多模态).
+// Story 9.1 defines UsageLogEvent — the `request.logged` Kafka payload emitted
+// by the api-gateway on EVERY terminal /v1/chat/completions + /v1/embeddings
+// outcome (success AND failure). analytics-svc is the CONSUMER; it batch-INSERTs
+// the event into ClickHouse `he_api.request_logs`.
+//
+// Distinct from billing.v1.UsageEvent (`usage.recorded`, success-only, the
+// billing contract): request.logged fires on all outcomes (the 成功率 metric
+// needs failed rows) and carries status/latency/cost (Q-EVT).
+//
+// cost_usd is gateway-emitted, NON-NULL, string-decimal (Q-Spec-4 / Q-COST H-1).
+// selected_by_strategy is in-scope here (closes the 6.2 deferral — H-3).
+// team_id / user_agent / error_message are NOT on the event — the ClickHouse
+// writer leaves those columns to their defaults (teams unrealized;
+// error_message omitted for PII discipline, BR-ING-5 — named-column INSERT, H-3).
+//
+// buf/protoc cannot run in this environment ([[project_toolchain_env_limits]]);
+// the paired analytics.pb.go is hand-authored from a descriptorpb-built
+// FileDescriptorProto (byte-exact rawDesc) and verified by a round-trip
+// marshal/unmarshal test (9.1-CONTRACT). To regenerate the rawDesc, see
+// packages/proto/_genanalytics (throwaway).
+
+syntax = "proto3";
+
+package he.analytics.v1;
+
+option go_package = "github.com/he-api/he-api/packages/proto/gen/go/he/analytics/v1;analyticsv1";
+
+// UsageLogEvent is the `request.logged` Kafka payload (protojson on the wire).
+// A 21-field subset of the request_logs row shape (data-models §4.2).
+message UsageLogEvent {
+  string he_request_id = 1;        // ^req_[a-f0-9]{12}$ — dedup fence + correlation key
+  string user_id = 2;              // the request subject (IDOR isolation key on read)
+  string api_key_id = 3;
+  string model = 4;                // requested model
+  string upstream_model = 5;       // the upstream model actually dispatched
+  string routing_strategy = 6;     // the configured routing strategy
+  string selected_by_strategy = 7; // strategy-selected upstream model (H-3, closes 6.2 deferral)
+  uint32 status_code = 8;          // terminal HTTP status (100-599); success_rate = countIf(<400)/count()
+  uint32 prompt_tokens = 9;
+  uint32 completion_tokens = 10;
+  uint32 total_tokens = 11;
+  string cost_usd = 12;            // string-decimal NON-NULL, default "0" (Q-COST / H-1)
+  uint32 latency_ms_total = 13;
+  uint32 latency_ms_gateway = 14;
+  uint32 latency_ms_upstream = 15;
+  uint32 ttfb_ms = 16;             // time-to-first-byte (streaming)
+  bool is_streaming = 17;
+  string client_ip = 18;           // abuse correlation (ops field — NEVER returned to the user, BR-ING-5)
+  string client_country = 19;
+  string error_code = 20;          // envelope code on failure ("" on success)
+  string ts = 21;                  // RFC3339 event timestamp
+}

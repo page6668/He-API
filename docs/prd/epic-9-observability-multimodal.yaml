@@ -16,6 +16,23 @@ stories:
     title: 用量大盘（实时 + 历史聚合）
     acceptance_criteria:
       - 控制台显示今日 / 本月 / 季度的请求数 / 成功率 / Token / 消费
+  # 9.1b — fast-follow carrying AC4 (usage-trend chart) DEFERRED out of 9.1 by
+  # Architect Round-1 ruling H-4 / Q-SCOPE-TREND (binding overrule). Full AC4 +
+  # /series spec retained verbatim in 9.1's story ("AC4 DEFERRED" block, lines
+  # 375-419) for authoring traceability. Builds strictly on 9.1's shipped
+  # summary endpoint + dashboard page.
+  - id: "9.1b"
+    title: 用量趋势图（<UsageChart> + /v1/me/usage/series）
+    repository_type: monolith
+    priority: P1                          # P1: 9.1 (P0) already ships the card matrix that satisfies the literal Epic-9 AC; the trend chart is the historical-aggregation visualization layered on top.
+    estimated_complexity: medium          # FIRST Recharts realization + ONE new JWT read endpoint (/series) reusing 9.1's ClickHouse pool + hourly_agg MV; no new tables, no new Kafka topic, no migration.
+    dependencies: ["9.1"]                 # consumes 9.1's request_logs/hourly_agg + /v1/me/usage/* family + /dashboard page + UsageStatCards band.
+    acceptance_criteria:
+      - "控制台 /dashboard 显示最近 30 天用量趋势折线图（Recharts <UsageChart>，FIRST realization），默认 By Day 的每日请求数曲线"
+      - "支持 By Day / By Model / By Status 切换（toggle 重新查询 /series?group_by=...）；By Model 每模型一条线，By Status 成功 vs 失败两条线"
+      - "新增 JWT-cookie 读接口 GET /v1/me/usage/series?range=30d&group_by=day|model|status（per-user IDOR 隔离、user-timezone 边界、range ≤ 90d、未知 group_by/range → 400_invalid_request）"
+      - "图表可访问性：SVG aria-hidden + 视觉隐藏 <table> 镜像数据（WCAG 2.1 AA）；toggle 为带标签的 radiogroup/Tabs；i18n×10 轴标签+tooltip + RTL（x 轴时间序保持 L→R）"
+      - "空历史 → 图表卡内 EmptyState（'No usage in the last 30 days'）；/series 5xx → 图表卡内联 retry（不影响 AC3 已渲染的统计卡）；loading → chart skeleton"
   - id: "9.2"
     title: 实时调用日志（最近 1000 条）
     acceptance_criteria:

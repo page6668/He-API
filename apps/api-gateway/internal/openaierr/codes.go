@@ -83,6 +83,10 @@ var CodeMetadata = map[string]struct {
 	"503_database_unavailable":      {503, "server_error"},
 	"503_jwks_unavailable":          {503, "server_error"},
 	"503_service_unavailable":       {503, "server_error"},
+	// Story 9.1 (Q-CODE / M-3) — usage dashboard read over ClickHouse. The
+	// canonical runtime mirror; the rest-api-spec §5.1.2 row is the paired
+	// single-canonical-writer dual-write (Story-3.6 rule).
+	"503_clickhouse_unavailable":    {503, "server_error"},
 
 	// 2FA surface (Story 2.4)
 	"400_invalid_factor":               {400, "invalid_request_error"},

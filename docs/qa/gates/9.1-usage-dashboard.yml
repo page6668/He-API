@@ -1,0 +1,169 @@
+# QA Gate — Story 9.1 用量大盘（实时 + 历史聚合）
+schema: 1
+story: "9.1"
+story_title: "用量大盘（实时 + 历史聚合）"
+gate: CONCERNS
+status_reason: >
+  Round-2 incremental re-review. ALL THREE Round-1 blockers are addressed: (H-A cost-source)
+  the Architect escalation ruling H-1-R landed and Dev re-wired 消费 ← PG usage_ledger — the
+  AC3 消费 card is no longer structurally $0; independently verified GREEN at unit+handler level
+  (11 analyticsquery tests, -race). (H-B checkboxes) ticked honestly — 26 [x], 3 [ ] left as
+  integrated-stack/perf stubs with explicit STATUS notes. (H-C/M-A CI execution) a real
+  clickhouse-integration CI job now runs the ClickHouse data P0s (INT-001 ingestion, INT-002
+  aggregation-correctness, INT-003 migration round-trip) against ClickHouse 24. Gate is CONCERNS
+  (not PASS) on ONE residual: the browser E2E (incl. 9.1-E2E-001 IDOR full-path), perf, and visual
+  suites remain `test.skip` — they need an integrated-stack harness (console+gateway+auth-svc+
+  ClickHouse+Kafka+worker+seeded session) explicitly OUT of this story's scope and carried forward.
+  This is verification-depth pending cross-story infra, NOT a defect and NOT a Dev code-fix: zero
+  critical / zero high DEFECTS, all authorable + data-P0-CI tests pass, and IDOR — the highest-stakes
+  item — is covered by a real unit+handler test (TestIDORFence, extended to the new PG cost path).
+  Waiver active on the integrated-stack E2E/perf/visual suites (tracked to a shared E2E-stack story /
+  9.1b). FAIL→Dev would dead-end on a harness Dev cannot build in scope, so the story proceeds with
+  the residual recorded as tracked, non-blocking debt.
+reviewer: "Turing (Test Engineer & Quality Architect)"
+review_date: "2026-06-11"
+review_round: 2
+review_mode_type: incremental
+risk_level: HIGH
+review_mode: full_testing
+final_status: Done
+next_action: handoff_to_sm
+next_command: "*draft 9.1b"   # SM owes the 9.1b 用量趋势图 fast-follow (carried over) before/with 9.2
+
+waiver:
+  active: true
+  scope: "Integrated-stack E2E (9.1-E2E-001..005), visual (9.1-VIS-001), and perf (9.1-PERF-001/002) suites"
+  reason: >
+    These require a full integrated-stack harness (console+gateway+auth-svc+ClickHouse+Kafka+
+    analytics worker + seeded session/usage) that this story does not and should not build — it is a
+    cross-story infrastructure concern. IDOR (the security-critical leg of E2E-001) is mitigated at
+    unit+handler level (TestIDORFence GREEN, fences BOTH ClickHouse and the new PG usage_ledger read,
+    strict-rejects query-param user_id). Perf/visual are unmeasured but carry no known defect (SSR
+    dashboard + hourly_agg MV for wide windows is architecturally sound).
+  granted_by: "Turing (QA) — recommend PO/lead ratification when funding the E2E-stack story"
+  tracked_to: "shared E2E-stack story / fold into 9.1b"
+
+# ---- Round-1 → Round-2 blocker resolution ----
+round1_blocker_resolution:
+  9.1-H-A:
+    round1: "AC3 消费 card structurally always $0 (gateway has no cost source); H-1 premise false."
+    round2: RESOLVED
+    evidence: >
+      Architect *review-escalation ruled H-1-R (消费 ← PG usage_ledger). Dev re-wired (verified):
+      analyticsquery/store.go — CH todayQuery/aggQuery NO LONGER select cost_usd (R2-3); NEW pgCostStore
+      runs `SELECT COALESCE(SUM(cost_usd),0)::text FROM he_api.usage_ledger WHERE user_id=$1 AND ts>=$2`
+      (IDOR-fenced, R2-6) over the SAME user-tz bounds as CH (R2-1). handler.go — cost_usd *string nullable;
+      costFor() returns nil → null on usage_ledger error WITHOUT emitting 503 (R2-4 independent degradation).
+      main.go — NewCostStore(billingPool) REUSES the existing billing pgxpool, typed-nil guarded (R2-6, no
+      new PG path). Console UsageStatCards renders cost null→"—" via the reused 5.5 money helper; me-usage.ts
+      Zod cost_usd nullable. 11 analyticsquery tests GREEN (-race) incl. TestIDORFence (both stores +
+      query-param strict-reject + no-store-queried-on-attack), TestSummaryThreeWindows (+ same-bounds assert),
+      TestCostPartialDegradation (R2-4), TestNilCostStoreRendersNull, TestZeroRequestsNullSuccessRate.
+  9.1-H-B:
+    round1: "All 30 T0-T7 checkboxes unchecked (under-claim)."
+    round2: RESOLVED
+    evidence: "26 boxes [x] (deliverable exists AND test GREEN/CI-executed); 3 left [ ] honestly — T7.1 (E2E test.skip), T7.3 (perf, not measured), T7.4 (visual test.skip) — each with an explicit STATUS note. No false claims."
+  9.1-H-C:
+    round1: "User-facing /dashboard + P0 E2E/integration never executed in any env."
+    round2: PARTIALLY_RESOLVED
+    evidence: >
+      NEW .github/workflows/test.yml `clickhouse-integration` job: boots ClickHouse 24.3, applies migration
+      002 (up → asserts request_logs + hourly_agg EXIST = 9.1-INT-003 forward), runs `go test -tags=integration`
+      (9.1-INT-001 ingestion + 9.1-INT-002 aggregation-correctness MV==raw), then down-migration (asserts
+      dropped = 9.1-INT-003 reverse). analytics-svc unit lane added to unit-go. RESIDUAL: the Playwright E2E
+      (9.1-E2E-001 IDOR full-path, E2E-002..005), VIS-001, PERF-001/002 remain test.skip (integrated-stack
+      harness pending) → see waiver. IDOR full-path mitigated by TestIDORFence (unit+handler).
+  9.1-M-A:
+    round1: "5/11 blind-spot scenarios unexecuted (Docker/CI)."
+    round2: PARTIALLY_RESOLVED
+    evidence: "Data blind-spots (DATA-002 aggregation-correctness) now CI-execute via clickhouse-integration; CONCURRENCY/browser ones carried forward with the E2E-stack follow-up."
+
+# ---- Test execution (independent, this env, Round 2) ----
+test_results:
+  project_type: "fullstack (go-microservices + next console)"
+  automated_tests_passed: true
+  builds: {api-gateway: OK, analytics-svc: OK, console_tsc: CLEAN}
+  suites:
+    - {name: "api-gateway/internal/analyticsquery (-race)", result: PASS, tests: 11, note: "re-wired 消费←usage_ledger; IDOR on both stores; R2-4 partial degradation; same-bounds"}
+    - {name: "api-gateway/internal/analyticslog (-race)", result: PASS}
+    - {name: "analytics-svc/internal/clickhouse (-race)", result: PASS}
+    - {name: "analytics-svc/internal/workers (-race)", result: PASS}
+    - {name: "console __tests__/9.1-usage-dashboard (vitest)", result: PASS, tests: 7, note: "+ R2-4 cost-null partial-degradation case"}
+  not_executed:
+    reason: "Integrated-stack harness (console+gateway+auth-svc+CH+Kafka+worker+seeded session) not built in this story — cross-story infra. Docker-only ClickHouse data P0s NOW run in the clickhouse-integration CI job."
+    disposition: WAIVED — tracked to a shared E2E-stack story / 9.1b
+    suites:
+      - "e2e/9.1-dashboard.spec.ts: 9.1-E2E-001..005 (test.skip), VIS-001 (test.skip) — integrated-stack + seeded session"
+      - "9.1-PERF-001/002 — quarter-agg latency + dashboard LCP ≤2.5s 4G (perf harness)"
+  ci_now_executes:
+    job: "clickhouse-integration (.github/workflows/test.yml)"
+    covers: ["9.1-INT-001 ingestion", "9.1-INT-002 aggregation-correctness (MV==raw)", "9.1-INT-003 migration 002 up/down round-trip"]
+
+# ---- AC coverage (Round 2) ----
+ac_coverage:
+  ac_traceability_found: true
+  coverage_rate: 100
+  passed: true
+  acs:
+    AC1: {status: VERIFIED, note: "proto + migration(H-2 MV) + producer(one-event-per-outcome incl errors, fire-and-forget, PII-safe) + consumer(DLQ/batch/named-col). Unit GREEN; INT-001/002/003 now CI-executed."}
+    AC2: {status: VERIFIED, note: "Per-metric SoT split DONE: 请求数/成功率/Token ← CH; 消费 ← PG usage_ledger SUM (IDOR-fenced R2-6, same user-tz bounds R2-1, R2-4 independent degradation). 11 tests GREEN -race."}
+    AC3: {status: VERIFIED, note: "消费 card now renders the billed usage_ledger SUM (was structurally $0 in R1) — H-1-R re-wire complete; cost null→'—' (R2-4). Vitest 7/7 + tsc clean. E2E/visual = test.skip (harness pending — waived)."}
+    AC4: {status: DEFERRED, note: "用量趋势图 → 9.1b (Architect H-4). Correctly NOT implemented."}
+
+# ---- Checkboxes (Round 2) ----
+task_checkboxes:
+  total: 29
+  checked: 26
+  unchecked: 3
+  unchecked_items: ["T7.1 (E2E test.skip)", "T7.3 (perf not measured)", "T7.4 (visual test.skip)"]
+  finding: "Honest — the 3 unchecked are integrated-stack/perf stubs with explicit STATUS notes; resolves R1 9.1-H-B (was 30/30 unchecked)."
+
+# ---- Findings (Round 2) ----
+top_issues:
+  - id: "9.1-C-1"
+    severity: medium
+    category: verification / infra
+    finding: >
+      Browser E2E (9.1-E2E-001 IDOR full-path + E2E-002..005), visual (VIS-001), and perf
+      (PERF-001/002) for the user-facing /dashboard remain test.skip — never executed in any env.
+      Needs an integrated-stack harness this story does not build (cross-story infra).
+    mitigation: "IDOR covered at unit+handler (TestIDORFence, both stores fenced + query-param strict-reject). Data-correctness P0s CI-execute. No known functional/visual/perf defect."
+    owner: SM / PO
+    resolution: "Fund a shared E2E-stack story (or fold the dashboard E2E into 9.1b); WAIVED for 9.1 with tracking."
+  - id: "9.1-C-2"
+    severity: low
+    category: security follow-up (carried)
+    finding: "Gateway ClickHouse reader is read-only by app-level discipline only (he_api holds SELECT,INSERT). M-2 follow-up: dedicated he_api_ro GRANT-SELECT-only user."
+    owner: future security story
+
+issues_by_severity: {critical: 0, high: 0, medium: 1, low: 1}
+
+# ---- Positives (verified this round) ----
+verified_strengths:
+  - "H-1-R re-wire is clean and correct: CH reads dropped cost (R2-3); pgCostStore = IDOR-fenced usage_ledger SUM over the SAME bounds (R2-1/R2-6) via the EXISTING billing pgxpool (no new PG path); cost nullable + independent degradation, never 503 (R2-4). 11 tests GREEN -race."
+  - "TestIDORFence asserts BOTH stores are fenced to the JWT sub AND query-param user_id is strict-rejected AND no store is queried on attack — the highest-stakes test, real assertions."
+  - "Real CI now executes the ClickHouse data P0s (ingestion + aggregation-correctness + migration up/down round-trip) against ClickHouse 24.3."
+  - "Console: cost null→'—' via reused 5.5 money helper; success_rate null→'—'; Zod nullable contract matches the wire. Vitest 7/7 + tsc clean."
+  - "Checkbox honesty restored (26 [x] / 3 [ ] stubs with STATUS notes)."
+  - "Scope discipline: AC4 trend chart correctly NOT implemented (9.1b); no out-of-scope work."
+  - "Builds GREEN (api-gateway + analytics-svc); main.go cost-store wiring typed-nil guarded."
+
+scope_correctness:
+  ac4_deferred_respected: true
+  no_out_of_scope_work: true
+
+recommendations:
+  immediate:
+    - "SM: draft the 9.1b 用量趋势图 fast-follow (AC4 chart + /series + UsageChart) — carried over from the Round-1 fold."
+    - "SM/PO: fund a shared integrated-stack E2E harness story (or fold the dashboard E2E into 9.1b) to close 9.1-C-1; ratify the waiver."
+  future:
+    - "Security: dedicated he_api_ro SELECT-only ClickHouse user for the gateway reader (M-2 / 9.1-C-2)."
+
+incremental_context:
+  cached_risk_level: HIGH
+  cached_review_mode: full_testing
+  cached_project_type: fullstack
+  failed_acs: []                 # AC3 now VERIFIED (消费 re-wired)
+  failed_e2e_scenarios: []       # not executed (harness pending) — waived, not failures
+  missing_blind_spots: []        # data P0s now CI-executed; browser ones tracked to the E2E-stack follow-up
+  checkbox_issues: []            # resolved (honest)

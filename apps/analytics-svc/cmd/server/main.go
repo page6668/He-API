@@ -43,6 +43,7 @@ import (
 
 	obs "github.com/he-api/he-api/packages/go-observability"
 
+	"github.com/he-api/he-api/apps/analytics-svc/internal/clickhouse"
 	"github.com/he-api/he-api/apps/analytics-svc/internal/dumps"
 	"github.com/he-api/he-api/apps/analytics-svc/internal/workers"
 
@@ -149,6 +150,63 @@ func main() {
 		}()
 	}
 
+	// Story 9.1 AC1 — request.logged → ClickHouse ingestion worker. Env-gated
+	// (default false, GDPR-worker opt-in parity): the operator MUST set
+	// HE_API_ANALYTICS_REQUEST_LOG_WORKER_ENABLED=true AND provide
+	// HE_API_CLICKHOUSE_DSN before this consumes. With the ClickHouse client now
+	// vendored + a real batched writer, "enabled" means real ingestion (unlike
+	// the GDPR NoOp wiring above).
+	requestLogEnabled := envBool("HE_API_ANALYTICS_REQUEST_LOG_WORKER_ENABLED", false)
+	chDSN := strings.TrimSpace(os.Getenv("HE_API_CLICKHOUSE_DSN"))
+	switch {
+	case len(kafkaBrokers) == 0 || kafkaBrokers[0] == "":
+		// already warned above
+	case !requestLogEnabled:
+		logger.Warn("request.logged worker disabled — set HE_API_ANALYTICS_REQUEST_LOG_WORKER_ENABLED=true (+ HE_API_CLICKHOUSE_DSN)",
+			slog.String("topic", workers.RequestLogTopic),
+			slog.String("group", workers.RequestLogConsumerGroup),
+		)
+	case chDSN == "":
+		logger.Warn("request.logged worker enabled but HE_API_CLICKHOUSE_DSN unset — refusing to ACK without a ClickHouse sink",
+			slog.String("topic", workers.RequestLogTopic))
+	default:
+		sink, closeSink, serr := clickhouse.Open(ctx, chDSN)
+		if serr != nil {
+			logger.Error("clickhouse open failed — request.logged worker not started", slog.String("error", serr.Error()))
+		} else {
+			defer func() { _ = closeSink() }()
+			rlReader := kafka.NewReader(kafka.ReaderConfig{
+				Brokers:        kafkaBrokers,
+				GroupID:        workers.RequestLogConsumerGroup,
+				Topic:          workers.RequestLogTopic,
+				MinBytes:       1,
+				MaxBytes:       10 * 1024 * 1024,
+				CommitInterval: 0, // sync commit (at-least-once; offsets after INSERT)
+			})
+			defer rlReader.Close()
+
+			dlqWriter := &kafka.Writer{
+				Addr:         kafka.TCP(kafkaBrokers...),
+				Topic:        workers.RequestLogDLQTopic,
+				Balancer:     &kafka.Hash{},
+				RequiredAcks: kafka.RequireAll,
+			}
+			defer func() { _ = dlqWriter.Close() }()
+
+			writer := clickhouse.NewBatchWriter(sink, clickhouse.DefaultBatchSize)
+			worker := workers.NewRequestLogWorker(rlReader, writer, &kafkaDLQ{w: dlqWriter}, logger)
+			go func() {
+				logger.Info("request.logged worker running",
+					slog.String("topic", workers.RequestLogTopic),
+					slog.String("group", workers.RequestLogConsumerGroup),
+				)
+				if err := worker.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+					logger.Error("request.logged worker exited with error", slog.String("error", err.Error()))
+				}
+			}()
+		}
+	}
+
 	<-ctx.Done()
 	logger.Info("signal received, shutting down")
 
@@ -181,6 +239,14 @@ func envBool(key string, fallback bool) bool {
 	default:
 		return fallback
 	}
+}
+
+// kafkaDLQ adapts a *kafka.Writer to the workers.DLQPublisher surface (Story 9.1
+// — poison request.logged events route to request.logged.dlq, BR-ING-7).
+type kafkaDLQ struct{ w *kafka.Writer }
+
+func (d *kafkaDLQ) Publish(ctx context.Context, key, value []byte) error {
+	return d.w.WriteMessages(ctx, kafka.Message{Key: key, Value: value})
 }
 
 // ---- NoOp implementations — bootable placeholders. Replaced on the PR

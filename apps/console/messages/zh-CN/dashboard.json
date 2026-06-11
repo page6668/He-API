@@ -1,0 +1,34 @@
+{
+  "page": {
+    "title": "用量大盘",
+    "description": "查看今日、本月与本季度的 API 用量。",
+    "heading": "用量"
+  },
+  "nav": {
+    "sidebar": "大盘"
+  },
+  "periods": {
+    "today": "今日",
+    "month": "本月",
+    "quarter": "季度"
+  },
+  "metrics": {
+    "requests": "请求数",
+    "successRate": "成功率",
+    "tokens": "Token",
+    "cost": "消费"
+  },
+  "empty": {
+    "hint": "发起第一个 API 调用后即可在此查看用量。",
+    "cta": "创建 API 密钥"
+  },
+  "loading": {
+    "label": "正在加载用量…"
+  },
+  "errors": {
+    "generic": "无法加载用量数据，请重试。",
+    "unavailable": "用量数据暂时不可用，请稍后重试。",
+    "malformed": "加载大盘时出现问题。",
+    "retry": "重试"
+  }
+}

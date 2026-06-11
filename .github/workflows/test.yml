@@ -61,6 +61,14 @@ jobs:
         run: |
           go test ./apps/auth-svc/... ./apps/notification-svc/... -count=1 -race
 
+      # Story 9.1 — analytics-svc unit lane (ClickHouse row/writer + request-log
+      # worker). Not auto-included by the api-gateway path above; the //go:build
+      # integration ClickHouse suite (9.1-INT-001/002/003) runs in the dedicated
+      # clickhouse-integration job below (needs a live ClickHouse).
+      - name: Run go test (analytics-svc — Story 9.1 ingestion unit tests)
+        run: |
+          go test ./apps/analytics-svc/... -count=1 -race
+
       # Story 8.1 — safety-lexicon integrity guard (Architect Round-1 High #1).
       # The package's test lane IS the load-bearing security gate (count floors,
       # zero-dupes, in-enum, Bloom no-false-negative + FP≤1%, determinism). It is
@@ -218,6 +226,80 @@ jobs:
         run: |
           echo "integration tests deferred to Story 1.6"
           exit 0
+
+  # Story 9.1 (AC1) — ClickHouse ingestion + aggregation integration suite + the
+  # migration 002 round-trip. Resolves QA 9.1-H-C / 9.1-M-A (the Docker-gated P0
+  # ClickHouse suites must run in CI with evidence):
+  #   * 9.1-INT-001 — consume → request_logs row + hourly_agg MV auto-populates
+  #   * 9.1-INT-002 — sum(success_count)/sum(request_count) over the MV == raw
+  #                   countIf(status<400)/count() (DATA-002 aggregation correctness)
+  #   * 9.1-INT-003 — migration 002 round-trip (up creates the objects; down drops
+  #                   the MV then the table; the 001 he_api database survives)
+  # ClickHouse 24+ per tech-stack §2.1. The Go suite (//go:build integration)
+  # connects via HE_API_CLICKHOUSE_TEST_DSN; migration 002 is applied first.
+  clickhouse-integration:
+    name: analytics-svc / clickhouse-integration
+    runs-on: ubuntu-22.04
+    needs: [unit-go]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Start ClickHouse 24
+        run: |
+          docker run -d --name clickhouse \
+            -p 9000:9000 -p 8123:8123 \
+            --ulimit nofile=262144:262144 \
+            clickhouse/clickhouse-server:24.3
+
+      - name: Wait for ClickHouse ready
+        run: |
+          for i in $(seq 1 30); do
+            if docker exec clickhouse clickhouse-client --query 'SELECT 1' >/dev/null 2>&1; then
+              echo "ClickHouse ready after ${i} attempt(s)"
+              docker exec clickhouse clickhouse-client --query 'SELECT version()'
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::ClickHouse did not become ready in time"
+          docker logs clickhouse || true
+          exit 1
+
+      # 9.1-INT-003 (forward) — apply migration 002 under the admin/default user
+      # (M-1: DDL needs privileges the he_api app user lacks). The 001 baseline
+      # creates the he_api database; here we ensure it exists, then apply 002.
+      - name: Apply migration 002 (up) + assert objects exist
+        run: |
+          docker exec clickhouse clickhouse-client --query 'CREATE DATABASE IF NOT EXISTS he_api'
+          docker exec -i clickhouse clickhouse-client --multiquery < migrations/clickhouse/002_create_request_logs.up.sql
+          test "$(docker exec clickhouse clickhouse-client --query 'EXISTS TABLE he_api.request_logs')" = "1"
+          test "$(docker exec clickhouse clickhouse-client --query 'EXISTS TABLE he_api.request_logs_hourly_agg')" = "1"
+          echo "migration 002 up: request_logs + hourly_agg MV present"
+
+      - name: Run ClickHouse integration suite (9.1-INT-001/002)
+        env:
+          HE_API_CLICKHOUSE_TEST_DSN: clickhouse://localhost:9000/he_api
+        run: |
+          go test -tags=integration -count=1 -v ./apps/analytics-svc/internal/clickhouse/...
+
+      # 9.1-INT-003 (reverse) — the down migration drops the MV then the table;
+      # the 001 he_api database is untouched (non-destructive round-trip).
+      - name: Apply migration 002 (down) + assert objects dropped
+        run: |
+          docker exec -i clickhouse clickhouse-client --multiquery < migrations/clickhouse/002_create_request_logs.down.sql
+          test "$(docker exec clickhouse clickhouse-client --query 'EXISTS TABLE he_api.request_logs')" = "0"
+          test "$(docker exec clickhouse clickhouse-client --query 'EXISTS TABLE he_api.request_logs_hourly_agg')" = "0"
+          test "$(docker exec clickhouse clickhouse-client --query 'EXISTS DATABASE he_api')" = "1"
+          echo "migration 002 round-trip clean: objects dropped, he_api database survives"
+
+      - name: Stop ClickHouse
+        if: always()
+        run: docker rm -f clickhouse || true
 
   # Story 3.3 T3.4 — OpenAI Python SDK contract test against a live
   # api-gateway. Boots Postgres + Redis, applies migrations, seeds a

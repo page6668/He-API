@@ -31,6 +31,8 @@ import (
 	"time"
 
 	"github.com/he-api/he-api/apps/api-gateway/internal/adapterclient"
+	"github.com/he-api/he-api/apps/api-gateway/internal/analyticslog"
+	"github.com/he-api/he-api/apps/api-gateway/internal/analyticsquery"
 	"github.com/he-api/he-api/apps/api-gateway/internal/billingemit"
 	"github.com/he-api/he-api/apps/api-gateway/internal/contentsafety"
 	"github.com/he-api/he-api/apps/api-gateway/internal/entitlement"
@@ -353,6 +355,29 @@ func main() {
 		logger.Warn("HE_API_KAFKA_BROKERS unset — usage.recorded emission disabled")
 	}
 
+	// Story 9.1 AC1 — request.logged producer (analytics-svc consumes → ClickHouse
+	// request_logs). Shares HE_API_KAFKA_BROKERS; unset → Nop (no emission). Unlike
+	// usage.recorded this fires on EVERY terminal outcome (success AND failure) so
+	// the dashboard 成功率 sees the failed rows (Q-EVT). acks=all (BR-ING-3, 7.1
+	// parity); fire-and-forget so a producer error never affects the response
+	// (BR-ING-4). The analyticsMiddleware wraps the chat + embeddings handlers
+	// INSIDE bearer-auth so user_id/api_key_id are in context and the 402/403/429
+	// gate rejections are captured too.
+	var analyticsEmitter analyticslog.Emitter = analyticslog.Nop{}
+	if brokersEnv := os.Getenv("HE_API_KAFKA_BROKERS"); brokersEnv != "" {
+		requestLogWriter := &kafka.Writer{
+			Addr:         kafka.TCP(splitCSV(brokersEnv)...),
+			Topic:        analyticslog.Topic,
+			Balancer:     &kafka.Hash{}, // user_id partition key
+			RequiredAcks: kafka.RequireAll,
+		}
+		analyticsEmitter = analyticslog.NewKafkaEmitter(requestLogWriter, logger)
+		logger.Info("request.logged producer wired", slog.String("topic", analyticslog.Topic))
+	} else {
+		logger.Warn("HE_API_KAFKA_BROKERS unset — request.logged emission disabled")
+	}
+	analyticsMiddleware := analyticslog.Middleware(analyticsEmitter)
+
 	// Story 8.2/8.3 — §9.3 双向 content-safety filter. ONE scanner resolves BOTH
 	// the inbound request text (8.2 入参 reject) AND the model-generated completion
 	// (8.3 出参 redact/terminate) against the in-process, immutable 8.1
@@ -381,6 +406,36 @@ func main() {
 		handlers.WithOutputSafetyScanner(safetyScanner), // Story 8.3 — reuse the 8.2 instance (OQ-8.3-4)
 		handlers.WithSafetyRecorder(safetylog.NewPersistingRecorder(ctx, billingPool, logger)),
 	)
+
+	// Story 9.1 AC2 — usage dashboard read endpoint (JWT-cookie, per-user IDOR-
+	// fenced). Wired only when HE_API_CLICKHOUSE_DSN is configured; absent → the
+	// route is simply not mounted (404 — graceful degradation, billing-read
+	// parity). Volume metrics ← ClickHouse; 消费 ← PG usage_ledger via the SAME
+	// billing pgxpool (H-1-R / R2-6 — no new PG path; nil pool → cost renders
+	// null, R2-4). The timezone resolver reuses that pool too (nil → UTC).
+	if chReadDSN := strings.TrimSpace(os.Getenv("HE_API_CLICKHOUSE_DSN")); chReadDSN != "" {
+		usageStore, closeUsageStore, uerr := analyticsquery.OpenStore(ctx, chReadDSN)
+		if uerr != nil {
+			logger.Error("clickhouse read store open failed — GET /v1/me/usage/summary disabled",
+				slog.String("error", uerr.Error()))
+		} else {
+			defer func() { _ = closeUsageStore() }()
+			tzResolver := analyticsquery.NewPGTimezoneResolver(billingPool, logger)
+			// Guard the typed-nil trap: a nil *pgxpool.Pool wrapped in the
+			// RowQuerier interface is non-nil, so only build the cost store when
+			// the pool is genuinely present (nil → cost renders null, R2-4).
+			var costStore analyticsquery.CostStore
+			if billingPool != nil {
+				costStore = analyticsquery.NewCostStore(billingPool)
+			}
+			usageHandler := analyticsquery.NewHandler(usageStore, costStore, tzResolver, logger)
+			mux.Handle("GET /v1/me/usage/summary",
+				jwtVerifier.RequireJWT(http.HandlerFunc(usageHandler.HandleSummary)))
+			logger.Info("usage summary endpoint wired (GET /v1/me/usage/summary; 消费 ← usage_ledger)")
+		}
+	} else {
+		logger.Warn("HE_API_CLICKHOUSE_DSN unset — GET /v1/me/usage/summary disabled")
+	}
 
 	// Story 5.2 — key-policy enforcement gates (AC2 IP whitelist / AC3 model
 	// scope / AC4 monthly cap). Runs AFTER bearer-auth (reads the extended
@@ -432,7 +487,7 @@ func main() {
 	// chat-completions handler. Story 5.2 keypolicy sits between bearer-auth
 	// and ratelimit. Story 7.1 billingGate is the innermost wrap (pre-dispatch).
 	mux.Handle("POST /v1/chat/completions",
-		bearerAuth.RequireAPIKey(keyPolicy(rateLimitMW.Wrap(billingGate(chatCompletions)))))
+		bearerAuth.RequireAPIKey(analyticsMiddleware(keyPolicy(rateLimitMW.Wrap(billingGate(chatCompletions))))))
 
 	// Story 7.1 (AC3) — read-only billing endpoints. Mounted behind bearer-auth
 	// (user_id from the validated key). Wired only when a PG DSN is configured;
@@ -513,7 +568,7 @@ func main() {
 	// /v1/embeddings consumes tokens — Story 5.3 BR-X.8 applies. Story 5.2
 	// keypolicy enforces model-scope + IP-whitelist + cap here too (BR-3.2).
 	mux.Handle("POST /v1/embeddings",
-		bearerAuth.RequireAPIKey(keyPolicy(rateLimitMW.Wrap(embeddingsHandler))))
+		bearerAuth.RequireAPIKey(analyticsMiddleware(keyPolicy(rateLimitMW.Wrap(embeddingsHandler)))))
 
 	// Story 4.7 — unauthenticated mirror of /v1/models. Mounted OUTSIDE
 	// the bearer middleware chain; both handlers share a snapshot built

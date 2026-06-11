@@ -35,6 +35,7 @@ import (
 	"connectrpc.com/connect"
 
 	"github.com/he-api/he-api/apps/api-gateway/internal/adapterclient"
+	"github.com/he-api/he-api/apps/api-gateway/internal/analyticslog"
 	"github.com/he-api/he-api/apps/api-gateway/internal/billingemit"
 	"github.com/he-api/he-api/apps/api-gateway/internal/contentsafety"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
@@ -345,6 +346,15 @@ func (h *ChatCompletionsHandler) emitUsage(ctx context.Context, apiKeyID, served
 		Ts:               h.now().UTC().Format(time.RFC3339),
 		BillingMode:      billingv1.BillingMode_BILLING_MODE_PER_TOKEN,
 	})
+
+	// Story 9.1 AC1 — enrich the request.logged record with the served facts
+	// (the analyticslog Middleware emits ONE event per outcome). Q-AB: the FIRST
+	// leg wins (leg-A attribution); nil-safe when the middleware is not mounted.
+	analyticslog.FromContext(ctx).Populate(
+		servedModel,
+		uint32(usage.PromptTokens), uint32(usage.CompletionTokens), uint32(usage.TotalTokens),
+		streaming,
+	)
 }
 
 // WithFailoverBudget overrides the Story-6.3 total wall-clock failover budget

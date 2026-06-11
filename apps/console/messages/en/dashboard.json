@@ -1,0 +1,34 @@
+{
+  "page": {
+    "title": "Usage Dashboard",
+    "description": "Your API usage across today, this month, and this quarter.",
+    "heading": "Usage"
+  },
+  "nav": {
+    "sidebar": "Dashboard"
+  },
+  "periods": {
+    "today": "Today",
+    "month": "This Month",
+    "quarter": "This Quarter"
+  },
+  "metrics": {
+    "requests": "Requests",
+    "successRate": "Success Rate",
+    "tokens": "Tokens",
+    "cost": "Spend"
+  },
+  "empty": {
+    "hint": "Make your first API call to see usage here.",
+    "cta": "Create an API key"
+  },
+  "loading": {
+    "label": "Loading usage…"
+  },
+  "errors": {
+    "generic": "We couldn't load your usage. Please try again.",
+    "unavailable": "Usage data is temporarily unavailable. Please try again.",
+    "malformed": "Something went wrong loading your dashboard.",
+    "retry": "Retry"
+  }
+}

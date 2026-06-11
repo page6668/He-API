@@ -209,7 +209,7 @@ PARTITION BY toYYYYMM(ts)
 ORDER BY (user_id, ts, he_request_id)
 TTL ts + INTERVAL 90 DAY;                       -- 90 天保留
 
--- 用量小时聚合
+-- 用量小时聚合 (Story 9.1 H-2 amendment: +success_count, −avg/p95 — see §4.5)
 CREATE MATERIALIZED VIEW request_logs_hourly_agg
 ENGINE = SummingMergeTree()
 ORDER BY (user_id, model, hour)
@@ -218,14 +218,17 @@ AS SELECT
   model,
   toStartOfHour(ts) AS hour,
   count() AS request_count,
+  countIf(status_code < 400) AS success_count,  -- 成功率 = sum(success_count)/sum(request_count)
   sum(prompt_tokens) AS prompt_tokens,
   sum(completion_tokens) AS completion_tokens,
   sum(total_tokens) AS total_tokens,
-  sum(cost_usd) AS cost_usd,
-  avg(latency_ms_total) AS avg_latency_ms,
-  quantile(0.95)(latency_ms_total) AS p95_latency_ms
+  sum(cost_usd) AS cost_usd
 FROM request_logs
 GROUP BY user_id, model, hour;
+-- NOTE (Story 9.1 / Q-AGG H-2): avg_latency_ms / p95_latency_ms were REMOVED.
+-- avg() and quantile() stored as plain SummingMergeTree columns are SUMMED on
+-- background merge → statistically invalid. A future latency story re-adds them
+-- as avgState()/quantileState(0.95)() AggregateFunction columns read with -Merge.
 
 -- Benchmark 跑分结果
 CREATE TABLE benchmark_results (
@@ -265,6 +268,8 @@ entitlement:user:{user_id}:invalidated          SET "1" TTL ≤ 60s             
 | Topic | Schema | 消费者 | 保留 |
 |-------|--------|-------|------|
 | `usage.recorded` | UsageEvent (proto) | billing-svc, audit-svc, analytics-svc | 7 天 |
+| `request.logged` | UsageLogEvent (`he.analytics.v1`, protojson) | analytics-svc | 7 天 |
+| `request.logged.dlq` | UsageLogEvent (malformed/poison) | analytics-svc (DLQ) | 7 天 |
 | `payment.completed` | PaymentEvent | billing-svc, notification-svc | 30 天 |
 | `audit.event` | AuditEvent (Story 5.1 adds `event_type ∈ {api_key.created, api_key.revoked}`) | audit-svc | 30 天 |
 | `notification.queued` | NotificationEvent | notification-svc | 7 天 |
@@ -274,6 +279,7 @@ entitlement:user:{user_id}:invalidated          SET "1" TTL ≤ 60s             
 
 | Date | Story | Author | Change |
 |------|-------|--------|--------|
+| 2026-06-11 | 9.1 | Dev (Linus) | **§4.2 ClickHouse `request_logs` + `request_logs_hourly_agg` REALISED** (FIRST ClickHouse business tables) via `migrations/clickhouse/002_create_request_logs.{up,down}.sql` — `request_logs` lands **verbatim** (MergeTree, `PARTITION BY toYYYYMM(ts)`, `ORDER BY (user_id, ts, he_request_id)`, `TTL ts + INTERVAL 90 DAY`; Q-DEDUP keeps MergeTree — at-least-once dups tolerated for the approximate dashboard, exact dedup deferred to 9.3). Migration runs under the migration-admin credential, NOT the `he_api` app user (`SELECT, INSERT` only — M-1). **§4.2 MV CORRECTED (Q-AGG / H-2)**: `request_logs_hourly_agg` ADDS `success_count UInt64 = countIf(status_code < 400)` (makes month/quarter 成功率 = `sum(success_count)/sum(request_count)` computable from the MV — a count is sum-compatible) and **DROPS `avg_latency_ms`/`p95_latency_ms`** (avg()/quantile() stored as plain SummingMergeTree columns are SUMMED on merge → statistically invalid; 9.1 consumes no latency aggregate; a future latency story re-adds them as `avgState()`/`quantileState(0.95)()` AggregateFunction state read with `-Merge`). **§4.4 NEW topics**: `request.logged` (`UsageLogEvent`, `he.analytics.v1` protojson; 消费者 analytics-svc; 保留 7 天 — Kafka is transport-only, ClickHouse's 90-day TTL is the durable SoT) + `request.logged.dlq` (Q-EVT — NEW topic, NOT a reuse of success-only `usage.recorded`). The gateway emits `request.logged` fire-and-forget on EVERY terminal /v1/chat/completions + /v1/embeddings outcome (success AND failure — the 成功率 rows `usage.recorded` misses). `cost_usd` is gateway-emitted, NON-NULL, string-decimal (Q-COST / H-1 — no PG `usage_ledger` cross-read; the dashboard 消费 reads ClickHouse ONLY). `selected_by_strategy` write is now realised (closes the 6.2 Epic-9-scope deferral — H-3); the writer uses a named-column INSERT leaving `team_id`/`user_agent`/`error_message` to their column defaults (teams unrealized; `error_message` omitted for PII discipline, BR-ING-5). |
 | 2026-06-10 | 7.8 | Dev (Linus) | **§4.1 `feature_flags` REALISED** (migration `0012_create_feature_flags.sql`, Q-BETA-MIGRATION): the pre-defined-but-never-migrated table is created verbatim + an idempotent `('beta_mode', false) ON CONFLICT (key) DO NOTHING` seed. PG = global Beta-mode cold-start SoT; Redis `flag:beta_mode` = runtime mirror; Unleash = live push. **§4.1 `subscriptions` (0010) EXTENDED, no schema change**: the opaque `plan` string now carries TIER semantics (`packages/plan-catalogue`); `credit.applySubscription` flips `plan` on the confirmed webhook (BR-S-3). NO `plan_entitlements` table (Q-PLAN-CATALOG = code-catalogue). **§4.3 NEW Redis key** `entitlement:user:{id}` (JSON `{plan,status}`, billing-svc SOLE writer, TTL ≤ 60s + `entitlement:user:{id}:invalidated` cross-pod sentinel — 5.1 precedent; the gateway hot-path read for tier enforcement, fail-safe-LOW on miss). The pre-listed `flag:beta_mode` is now LIVE (gateway `internal/featureflag` read; booting-no-signal→OFF, running-loses-Redis→last-known). |
 | 2026-05-18 | 3.2 | Dev (Linus) | **§4.3 Redis Key 规范**: Updated `auth:apikey:{key_hash}` → `auth:apikey:{sha256_hex(plaintext_key)}`. Rationale: the bcrypt `key_hash` cannot be derived from incoming plaintext without a pre-cache DB lookup (bcrypt is one-way; you'd need to bcrypt-compare against candidate hashes — defeating the cache the entry is meant to serve). SHA-256 of plaintext is the only design achieving O(1) cache-key derivation while preserving defence in depth (a Redis-dump compromise cannot reverse to plaintext). Architect Round 1 M4 (2026-05-18) ruled IN FAVOUR of the Story's design. |
 | 2026-05-18 | 3.2 | Dev (Linus) | **§4.1 `api_keys.team_id` FK deferral**: Story 3.2's migration `0006_create_api_keys.sql` lands `team_id UUID` (nullable, no REFERENCES clause) because `he_api.teams` table does not exist yet (created in Epic 5). `ALTER TABLE he_api.api_keys ADD CONSTRAINT fk_api_keys_team FOREIGN KEY (team_id) REFERENCES he_api.teams(id) ON DELETE CASCADE` to land in Epic 5 alongside the `he_api.teams` table creation (Architect Round 1 OQ4 ruling, 2026-05-18). |

@@ -34,6 +34,7 @@ import (
 	"math"
 	"net/http"
 
+	"github.com/he-api/he-api/apps/api-gateway/internal/analyticslog"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware"
 	"github.com/he-api/he-api/apps/api-gateway/internal/openaierr"
 )
@@ -363,6 +364,11 @@ func (h *EmbeddingsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			TotalTokens:  promptTokens,
 		},
 	})
+
+	// Story 9.1 AC1 — enrich the request.logged record (embeddings have no
+	// completion dimension; total == prompt). Nil-safe when the analytics
+	// middleware is not mounted.
+	analyticslog.FromContext(r.Context()).Populate(req.Model, uint32(promptTokens), 0, uint32(promptTokens), false)
 
 	// Story 5.3 BR-X.8 — embeddings have no completion dimension; deduct
 	// the prompt_tokens value (== total_tokens) unchanged after response.
