@@ -145,6 +145,45 @@ trustedProxies:
   ingressCidrs: ""
 
 # -----------------------------------------------------------------------------
+# Story 1.6 — shared DB credentials Secret (he-api-db-creds). Projects
+# HE_API_DB_POSTGRES_URI into pods via envFrom. Consumed by the Story-8.5
+# safety-log-retention CronJob (same Secret the auth-svc cron uses).
+# -----------------------------------------------------------------------------
+db:
+  credsSecretName: he-api-db-creds
+
+# -----------------------------------------------------------------------------
+# Story 8.5 AC2 — §9.3 治理日志 "保留 6 个月" retention CronJob. Deletes
+# he_api.content_safety_logs rows older than 6 months (strict `<` cutoff,
+# idempotent, index-backed). Mirrors the auth-svc monthly-cost-reset posture:
+# concurrencyPolicy: Forbid + backoffLimit: 0 → one cron, one outcome,
+# human-verified on failure (security-sensitive-cron). K8s 5-field schedule +
+# `.spec.timeZone` (Architect Medium fix — NOT a 6-field "... UTC" string).
+# Scheduled day-1 03:00 UTC, AFTER monthly-cost-reset (00:00) + monthly-invoice.
+# -----------------------------------------------------------------------------
+safetyLogRetention:
+  enabled: true
+  schedule: "0 3 1 * *"        # 03:00 UTC on day 1 of each month (5-field)
+  timeZone: "Etc/UTC"          # K8s 1.27+ CronJob TimeZone
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 200
+  backoffLimit: 0              # no auto-retry; on-call investigates
+  activeDeadlineSeconds: 330   # > the binary's 5-min ctx deadline
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  image:
+    repository: he-api/safety-log-retention
+    tag: "0.0.1"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+# -----------------------------------------------------------------------------
 # Pod Security — K8s 1.29 Pod Security "Restricted" profile baseline.
 # Every field below MUST be present for ACK PSA enforcement to accept the pod.
 # -----------------------------------------------------------------------------

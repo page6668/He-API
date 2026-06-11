@@ -141,19 +141,29 @@ CREATE TABLE model_pricing (
   PRIMARY KEY (model_id, effective_at)
 );
 
--- 内容安全治理日志（合规归档）
+-- 内容安全治理日志（合规归档）— IMPLEMENTED in Story 8.5 (migration 0014).
+-- The persisting contentsafety Recorder (apps/api-gateway/internal/safetylog)
+-- writes ONE row per acted-on §9.3 block (8.2 入参 reject / 8.3 出参 redact /
+-- stream terminate), fire-and-forget. NOTE the deliberate ABSENCE of a
+-- `REFERENCES users(id)` FK on user_id: this is the §9.3 GDPR-erasure exemption
+-- ("合规优先于个人删除请求") — account deletion must NOT cascade-purge the
+-- compliance log (contrast data_export_requests' ON DELETE CASCADE). A 6-month
+-- retention CronJob (cmd/safety-log-retention) prunes by created_at; the 备案
+-- PDF (cmd/safety-filing-report) renders an aggregate summary.
 CREATE TABLE content_safety_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
+  user_id UUID NOT NULL,                         -- NO users FK (GDPR-exemption, Story 8.5 BR-2.2)
   api_key_id UUID,
   he_request_id VARCHAR(50) NOT NULL,
   direction VARCHAR(10) NOT NULL,               -- input / output
-  matched_rule VARCHAR(100),
-  action VARCHAR(20) NOT NULL,                  -- blocked / warned
-  excerpt_redacted TEXT,                        -- 脱敏的命中内容片段
+  matched_rule VARCHAR(100),                    -- canonical rule id (NOT surface 敏感词)
+  action VARCHAR(20) NOT NULL,                  -- blocked / warned ('warned' RESERVED; v1 logs only 'blocked')
+  strictness VARCHAR(10) NOT NULL DEFAULT '',   -- 8.4 effective level the block acted under (OQ-8.5-7)
+  excerpt_redacted TEXT,                        -- 脱敏的命中内容片段 (masked span; never raw text / literal term)
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX idx_safety_logs_user_time ON content_safety_logs(user_id, created_at DESC);
+CREATE INDEX idx_safety_logs_created_at ON content_safety_logs(created_at);  -- 6-month retention sweep (Story 8.5)
 
 -- Beta 模式 / Feature Flag (Unleash 备份；冷启动数据)
 CREATE TABLE feature_flags (

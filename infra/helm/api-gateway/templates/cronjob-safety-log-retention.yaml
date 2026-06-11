@@ -1,0 +1,68 @@
+{{- if .Values.safetyLogRetention.enabled }}
+# Story 8.5 AC2 — §9.3 治理日志 "保留 6 个月" retention CronJob. Deletes
+# he_api.content_safety_logs rows older than 6 months (strict `<` cutoff,
+# idempotent, index-backed range delete) at 03:00 UTC on day 1 of each month.
+# It NEVER touches users — the §9.3 GDPR-erasure exemption is the table's
+# deliberate absence of a users FK (migration 0014), not this Job.
+# concurrencyPolicy: Forbid + backoffLimit: 0 → one cron, one outcome,
+# human-verified on failure (security-sensitive-cron posture).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "api-gateway.fullname" . }}-safety-log-retention
+  labels:
+    {{- include "api-gateway.labels" . | nindent 4 }}
+    app.kubernetes.io/component: safety-log-retention
+spec:
+  # K8s 5-field schedule + .spec.timeZone (Architect Medium fix — NOT a 6-field
+  # "0 3 1 * * UTC" string, which k8s rejects).
+  schedule: {{ .Values.safetyLogRetention.schedule | quote }}
+  timeZone: {{ .Values.safetyLogRetention.timeZone | quote }}
+  concurrencyPolicy: {{ .Values.safetyLogRetention.concurrencyPolicy }}
+  startingDeadlineSeconds: {{ .Values.safetyLogRetention.startingDeadlineSeconds }}
+  successfulJobsHistoryLimit: {{ .Values.safetyLogRetention.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.safetyLogRetention.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      backoffLimit: {{ .Values.safetyLogRetention.backoffLimit }}
+      activeDeadlineSeconds: {{ .Values.safetyLogRetention.activeDeadlineSeconds }}  # > the binary's ctx deadline
+      template:
+        metadata:
+          labels:
+            {{- include "api-gateway.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: safety-log-retention
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ include "api-gateway.serviceAccountName" . }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: safety-log-retention
+              image: "{{ .Values.safetyLogRetention.image.repository }}:{{ .Values.safetyLogRetention.image.tag }}"
+              imagePullPolicy: {{ .Values.safetyLogRetention.image.pullPolicy }}
+              envFrom:
+                # HE_API_DB_POSTGRES_URI from the shared Story-1.6 Secret — the
+                # same pool the gateway writes content_safety_logs through.
+                - secretRef:
+                    name: {{ .Values.db.credsSecretName }}
+              securityContext:
+                runAsNonRoot: true
+                runAsUser: 65532
+                readOnlyRootFilesystem: true
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                seccompProfile:
+                  type: RuntimeDefault
+              resources:
+                requests:
+                  cpu: {{ .Values.safetyLogRetention.resources.requests.cpu }}
+                  memory: {{ .Values.safetyLogRetention.resources.requests.memory }}
+                limits:
+                  cpu: {{ .Values.safetyLogRetention.resources.limits.cpu }}
+                  memory: {{ .Values.safetyLogRetention.resources.limits.memory }}
+{{- end }}

@@ -19,8 +19,11 @@ import "context"
 // / action VARCHAR(20), per docs/architecture/data-models.md:142-154) so Story
 // 8.5 binds its persisting Recorder with no contract change (BR-3.2).
 //
-// Story 8.2 deliberately does NOT populate an excerpt/redacted snippet — placing
-// raw user text in the event is Story 8.5's job (with its redaction policy). The
+// The event deliberately does NOT carry raw user text. Story 8.5 (IMPLEMENTED)
+// owns the redaction policy: its persisting Recorder
+// (apps/api-gateway/internal/safetylog) derives excerpt_redacted as a masked
+// span (■×rune-count) from the canonical MatchedRule — never raw text nor the
+// literal term — keeping this seam field-stable (8.5 added NO field here). The
 // matched term reaches only this event, never the caller-facing error envelope
 // (no lexicon leak, AC1 security note).
 type SafetyEvent struct {
@@ -55,16 +58,19 @@ const (
 
 // Recorder is the Story-8.5 binding seam. A confirmed input hit constructs a
 // SafetyEvent and hands it to the injected Recorder. The reject-path contract is
-// fire-and-forget: Record returns nothing and MUST NOT block the 400 response;
-// Story 8.5's persisting implementation owns its own failure/retry policy.
+// fire-and-forget: Record returns nothing and MUST NOT block the 400 response.
+// Story 8.5's persisting implementation (safetylog.PersistingRecorder) honours
+// this via a non-blocking enqueue onto a bounded async worker.
 type Recorder interface {
 	Record(ctx context.Context, ev SafetyEvent)
 }
 
-// NopRecorder is the Story-8.2 default Recorder: it persists nothing. Story 8.2
-// makes ZERO database changes and writes NO content_safety_logs row — the
-// persisting implementation is supplied by Story 8.5. Wiring a no-op default
-// (rather than a nil interface) keeps the handler's call site branch-free.
+// NopRecorder is the default Recorder: it persists nothing. It remains the
+// graceful-degradation fallback when no Postgres pool is configured
+// (HE_API_DB_POSTGRES_URI unset) — the gateway serves without content_safety_logs
+// writes. When a pool IS present, main.go wires safetylog.PersistingRecorder
+// (Story 8.5, IMPLEMENTED) instead. Wiring a no-op default (rather than a nil
+// interface) keeps the handler's call site branch-free.
 type NopRecorder struct{}
 
 // Record discards the event (no DB write, no I/O, no panic).

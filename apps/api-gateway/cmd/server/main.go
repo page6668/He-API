@@ -45,6 +45,7 @@ import (
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/requestid"
 	"github.com/he-api/he-api/apps/api-gateway/internal/notifyclient"
 	"github.com/he-api/he-api/apps/api-gateway/internal/routingclient"
+	"github.com/he-api/he-api/apps/api-gateway/internal/safetylog"
 	"github.com/he-api/he-api/apps/api-gateway/internal/usage"
 	obs "github.com/he-api/he-api/packages/go-observability"
 	plancatalogue "github.com/he-api/he-api/packages/plan-catalogue"
@@ -361,6 +362,15 @@ func main() {
 	// content_safety_logs-writing implementation for BOTH directions (zero DB here).
 	safetyScanner := contentsafety.NewScanner(safetylexicon.DefaultLexicon)
 
+	// Story 8.5 — the persisting half of the §9.3 治理日志 seam. Built from the
+	// SAME gateway Postgres pool the billing reads use (buildBillingPool, reused
+	// below for /v1/balance etc.). A nil pool (HE_API_DB_POSTGRES_URI unset) makes
+	// NewPersistingRecorder return nil, so WithSafetyRecorder keeps the 8.2
+	// NopRecorder default — degraded-but-serving, mirroring the
+	// billing-endpoints-disabled posture (main.go:488 / BR-1.1). The recorder's
+	// async worker is bound to the root signal ctx and flushes on shutdown.
+	billingPool := buildBillingPool(logger)
+
 	chatCompletions := handlers.NewChatCompletionsHandler(
 		logger,
 		handlers.WithAdapterRegistry(adapterRegistry),
@@ -369,7 +379,7 @@ func main() {
 		handlers.WithUsageEmitter(usageEmitter),
 		handlers.WithSafetyScanner(safetyScanner),
 		handlers.WithOutputSafetyScanner(safetyScanner), // Story 8.3 — reuse the 8.2 instance (OQ-8.3-4)
-		handlers.WithSafetyRecorder(contentsafety.NopRecorder{}),
+		handlers.WithSafetyRecorder(safetylog.NewPersistingRecorder(ctx, billingPool, logger)),
 	)
 
 	// Story 5.2 — key-policy enforcement gates (AC2 IP whitelist / AC3 model
@@ -427,7 +437,7 @@ func main() {
 	// Story 7.1 (AC3) — read-only billing endpoints. Mounted behind bearer-auth
 	// (user_id from the validated key). Wired only when a PG DSN is configured;
 	// without it the routes are absent (404) rather than nil-panicking.
-	if billingPool := buildBillingPool(logger); billingPool != nil {
+	if billingPool != nil {
 		// Story 7.2 (Q-CONVLOC gateway-side) — boot+~60s-refresh FX rate snapshot
 		// over the same read pool (mirrors billing-svc/internal/pricing). The
 		// conversion read never calls the FX provider (BR-C-5); the provider is

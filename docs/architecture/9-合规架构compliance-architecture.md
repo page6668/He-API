@@ -37,11 +37,20 @@
   - 命中后立即终止流，返回脱敏内容
   - 已发出的 chunk 客户端处理（无法收回，但日志记录）
 
-治理日志:
-  - 保留 6 个月（合规要求）
-  - 备案审计可调取
-  - 用户 GDPR 删除时不删除（合规优先于个人删除请求）
+治理日志 (Story 8.5 IMPLEMENTED):
+  - 命中 → 拒绝/脱敏 → 写入 content_safety_logs（fire-and-forget 异步持久化）
+  - 保留 6 个月（合规要求）— cmd/safety-log-retention CronJob 月度清理 created_at < 6mo
+  - 备案审计可调取 — cmd/safety-filing-report 按时间段生成聚合 PDF（仅 canonical id + 计数，不含原文/敏感词）
+  - 用户 GDPR 删除时不删除（合规优先于个人删除请求）— content_safety_logs.user_id 无 users FK，账户删除不级联
 ```
+
+> **§9.3 治理日志 pipeline 已闭环（Story 8.5，Epic-8 FINALE）**：`命中 → 拒绝/脱敏 → 写入
+> content_safety_logs` 端到端打通；持久化 Recorder 位于独立包
+> `apps/api-gateway/internal/safetylog`（保持 `contentsafety` 仅词库、无 import-cycle），
+> fire-and-forget（DB 故障/缓冲满不阻塞拦截，graceful-drain on shutdown），`excerpt_redacted`
+> 仅存掩码片段（■×rune-count，永不存原文/敏感词原形）。第三层 BERT 分类器（行 32）仍为后续
+> epic。**Epic-8 DoD CLOSED**：入参/出参过滤（8.2/8.3）· 严格度 per-Key（8.4）· 治理日志 6 个月
+> 保留 + 备案 PDF（8.5）。
 
 ### 严格度 → 严重度 gating（per Key，Story 8.4）
 
