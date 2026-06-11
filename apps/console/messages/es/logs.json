@@ -79,5 +79,28 @@
     "unavailable": "[en-pending] Request logs are temporarily unavailable. Please try again.",
     "malformed": "[en-pending] Something went wrong loading your request logs.",
     "retry": "[en-pending] Retry"
+  },
+  "export": {
+    "heading": "[en-pending] Export logs",
+    "description": "[en-pending] Download up to 90 days of your request logs. We'll email you a download link when it's ready.",
+    "format": {
+      "legend": "[en-pending] Format",
+      "json": "[en-pending] JSON",
+      "csv": "[en-pending] CSV"
+    },
+    "submit": "[en-pending] Export logs",
+    "submitting": "[en-pending] Starting export…",
+    "status": {
+      "in_progress": "[en-pending] Export in progress — we'll email you a download link when it's ready."
+    },
+    "banner": {
+      "emailed": "[en-pending] Download link emailed. It expires on {expiry}.",
+      "failed": "[en-pending] Your last export failed. Please try again."
+    },
+    "errors": {
+      "rate_limited": "[en-pending] An export is already in progress.",
+      "generic": "[en-pending] Couldn't start the export. Please try again.",
+      "retry": "[en-pending] Retry"
+    }
   }
 }

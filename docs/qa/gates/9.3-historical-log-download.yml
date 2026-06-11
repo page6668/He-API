@@ -1,0 +1,176 @@
+schema: 1
+story: "9.3"
+story_title: "历史日志下载（90 天 + JSON/CSV）"
+slug: historical-log-download
+gate: PASS
+status_reason: "All 3 ACs VERIFIED with independent code+test evidence (100% traceability). All 5 HIGH security risks (R-01 IDOR / R-02 PII+cost exclusion / R-03 signed-URL non-leak / R-04 CSV formula-injection / R-05 cross-kind EXTEND regression) verified at the IMPLEMENTATION level, not just by test name — each P0 mitigation read in source and confirmed against a real (non-weak) assertion. 4 Go modules (proto/api-gateway/notification-svc/analytics-svc) `go test -race` + `go build` + `go vet` GREEN; integration compiles under `-tags=integration`; console vitest 16 pass / 1 skip(reason). Architect HIGH condition (kind-scope the 3 existing 2.6 repo methods) HONORED + regression-tested. Architect Low-1 honored (DisallowUnknownFields strict-decode, not the account_data empty-body pattern). 9/9 deliverable bindings wired. Zero critical / zero high. The one MEDIUM is the PRE-EXISTING auth-surface build blocker inherited from 9.2 (confirmed untouched by 9.3, out of scope)."
+reviewer: "Turing (QA)"
+updated: "2026-06-11T22:30:00+08:00"
+
+review_round: 1
+risk_level: HIGH                 # security_sensitive + signed-URL credential + IDOR + PII/cost exclusion + 3-service async pipeline + DB migration
+review_mode: full_testing
+review_mode_type: full
+
+waiver:
+  active: false
+
+# ---- Independent test execution (Step 4) ----
+test_results:
+  project_type: fullstack
+  backend_proto:
+    command: "go test -race -count=1 ./gen/go/he/usagelog/... (packages/proto)"
+    result: PASS
+    detail: "ok he/usagelog/v1 — hand-authored pb.go/connect.go round-trip + service-resolves (buf unavailable, project_toolchain_env_limits)"
+  backend_gateway:
+    command: "go test -race ./internal/handlers/... ./internal/openaierr/... (api-gateway)"
+    result: PASS
+    detail: "ok handlers + openaierr (incl. 429_rate_limit_usage_log_export)"
+  backend_notification:
+    command: "go test -race ./internal/{handlers,repository,ratelimit,events,templates}/... (notification-svc)"
+    result: PASS
+    detail: "ok all 5 pkgs; kind-scope regression tests GREEN (FindLatestForUser_GdprKindScoped, FindCurrentUsageLogInWindow_Scoped, InsertUsageLog_WritesKindFormat)"
+  backend_analytics:
+    command: "go test -race ./internal/{dumps,workers,clickhouse}/... (analytics-svc)"
+    result: PASS
+    detail: "ok all 3 pkgs; dumps suite incl. ExportColumns_MatchBRRD9, CSV_FormulaInjectionEscaped, CSV_RFC4180Quoting, Dump_PassesUserIDToFetcher, Dump_UnknownFormat_Error, Dump_ZeroRows"
+  backend_build_vet:
+    command: "go build ./... && go vet ./... on all 4 touched modules"
+    result: PASS
+    detail: "all clean; cmd/server/main.go edits (route mount, env-gated worker wiring, service registration) compile"
+  backend_integration_compile:
+    command: "go build -tags=integration ./internal/workers/... (analytics-svc)"
+    result: PASS
+    detail: "integration scaffold compiles; runs in CI clickhouse-integration job (no docker/testcontainers in dev env)"
+  console_unit:
+    command: "npx vitest run __tests__/9.3-log-export.test.tsx"
+    result: PASS
+    detail: "16 passed / 1 skipped (UNIT-040 no-raw-URL P0 asserts a[href^=http] null AND innerHTML no https?://; UNIT-041..049 states/i18n/a11y/RTL; BLIND-FLOW/ERROR/BOUNDARY)"
+  integrity_check:
+    dev_evidence_found: true
+    dev_claimed_pass: true
+    discrepancy: false
+
+# ---- Task checkbox verification (Step 4.5) ----
+task_checkboxes:
+  consistency: PASS
+  detail: "T0–T3 + T5 all [x] and match wired deliverables. T4.1 (testcontainers integration) + T4.2 (Playwright E2E) honestly left [ ] — not executable in dev env (no docker), compile-clean and CI-wired. No checked box lacks its deliverable."
+
+# ---- AC coverage (Step 4.6) ----
+ac_coverage:
+  coverage_rate: 100
+  passed: true
+  details:
+    - ac_id: AC1
+      title: "POST /v1/me/usage/logs/export + GET .../current — JWT-cookie, per-user IDOR, format=json|csv, ≤90d"
+      status: VERIFIED
+      code:
+        - "gateway usage_log_export.go: user_id from middleware.UserIDFromContext (JWT sub) ONLY; json.Decoder.DisallowUnknownFields() rejects spoofed user_id/any unknown field (Architect Low-1 — me_keys.go precedent, not account_data empty-body); format json|csv required; resolveExportRange ≤90d (range_days 1..90, RFC3339 end>start, span≤90d); Cache-Control no-store; connect.Code→HTTP incl. ResourceExhausted→429_rate_limit_usage_log_export"
+        - "notification-svc usage_log_export.go: InsertUsageLog(kind=usage_logs, format); Publish AFTER tx.Commit (BR-EX-9, verified line order); audit best-effort; separate rate-limit ns via UsageLogExportLimiter"
+        - "repository/data_export_requests.go: 2.6 methods kind-scoped 'gdpr_full'; new FindCurrentUsageLogInWindow/FindLatestUsageLogForUser/InsertUsageLog scope 'usage_logs' (Architect HIGH condition)"
+      tests: "gateway handler unit (-race); notif handler+repo unit (-race) incl. (kind,format) idempotency + publish-after-commit + cross-kind regression; INT full-chain CI-deferred"
+    - ac_id: AC2
+      title: "analytics-svc UsageLogExportWorker — dump→OSS→signed-URL→email, status machine, audit"
+      status: VERIFIED
+      code:
+        - "dumps/request_logs_export.go: LogRow = EXACTLY 13 BR-RD-9 cols (NO client_ip/client_country/user_agent/error_message/cost_usd field — leak is a compile error); ExportColumns + LogRowSelectColumns byte-identical to 9.2 logsSelectColumns; csvSanitizeCell neutralizes =+-@\\t\\r (OWASP); rfc4180Field quoting + CRLF; writeJSONL one-object-per-line; unknown format = hard error"
+        - "clickhouse/log_export_reader.go: logExportQuery WHERE user_id=? AND ts BETWEEN ?/? (IDOR fence on every read)"
+        - "workers/usage_log_export.go: claim guard MarkProcessing(claimed=false→ack+skip); signedURL passed ONLY to Email.Send — never logged, never in failure_reason (failWithAudit uses usageLogSanitize(stage err) only), never persisted (MarkCompleted stores key+expiry only); per-stage failure attribution; offset committed after terminal state"
+        - "templates/: usage_log_export_ready ×10 (txt+html) embedded; TemplateUsageLogExportReady const; render parity test"
+        - "cmd/server/main.go: worker env-gated HE_API_ANALYTICS_USAGE_LOG_EXPORT_WORKER_ENABLED default false (BR-EX-10/17 — NoOp deps never silently ACK a real job)"
+      tests: "dumps unit (PII/cost exclusion, CSV injection, RFC-4180, IDOR-to-fetcher, zero-rows); workers unit (claim guard, no-URL-in-reason, stages); template parity ×10; integration scaffold (-tags=integration, CI)"
+    - ac_id: AC3
+      title: "Console /{locale}/logs export control — format picker + status/banner, i18n×10 + a11y/RTL"
+      status: VERIFIED
+      code:
+        - "components/business/LogExportDialog.tsx: format radiogroup; requestLogExport Server Action; in-progress + submit-disabled while pending|processing; emailed-link banner with localized expiry; NO raw signed URL in DOM (BR-UI-3)"
+        - "_actions/request-log-export.ts + get-current-log-export.ts: 'use server', cookie passthrough, no-store, discriminated union ok|unauthorized|rate_limited|error; Zod safety-net"
+        - "logs/page.tsx: imports LogExportDialog + hydrates current; messages/{10}/logs.json export.* keys; packages/i18n-keys/src/logs.ts hand-extended (codegen blocked, [[project_auth_surface_prebroken_head]])"
+      tests: "vitest 16 pass / 1 skip — UNIT-040 no-raw-URL (P0), 041-046 states, 047 i18n×10 key-parity, 048 a11y, 049 RTL, BLIND-FLOW-001/002, ERROR-005, BOUNDARY-007"
+
+# ---- HIGH-risk P0 verification (Step 5.5 — white-box, per risk profile) ----
+high_risk_verification:
+  - id: R-01
+    risk: "IDOR — one user downloads another's logs"
+    verdict: MITIGATED
+    evidence: "gateway: user_id from JWT sub only + DisallowUnknownFields strict-reject of body user_id; worker: logExportQuery hard-codes `WHERE user_id = ?`; repo kind+user scoped. TestDump_PassesUserIDToFetcher + handler unit."
+  - id: R-02
+    risk: "PII / cost leak in exported file"
+    verdict: MITIGATED
+    evidence: "LogRow struct has exactly 13 fields, no PII/cost field (compile-enforced); SELECT projection byte-identical to 9.2 logsSelectColumns; TestExportColumns_MatchBRRD9 pins columns AND explicitly bans client_ip/client_country/user_agent/error_message/cost_usd in struct tags + SELECT."
+  - id: R-03
+    risk: "Signed URL (credential) leaks via logs / failure_reason / DOM"
+    verdict: MITIGATED
+    evidence: "worker: signedURL flows ONLY into Email.Send; all failWithAudit paths use usageLogSanitize(stage err); completion log emits export_id/user_id/format/rows/bytes (no URL); MarkCompleted persists key+expiry only. console UNIT-040 asserts no http(s) anchor/text in DOM."
+  - id: R-04
+    risk: "CSV formula injection — =cmd() executes in Excel"
+    verdict: MITIGATED
+    evidence: "csvSanitizeCell prefixes ' on cells starting = + - @ TAB CR (applied to untrusted model/upstream_model/error_code/he_request_id/api_key_id); rfc4180Field quoting + doubling + CRLF. TestCSV_FormulaInjectionEscaped + TestCSV_RFC4180Quoting."
+  - id: R-05
+    risk: "EXTEND regression — usage-log rows pollute live 2.6 GDPR /current"
+    verdict: MITIGATED
+    evidence: "Architect HIGH condition honored: FindCurrentInWindow/FindLatestForUser/Insert now carry kind='gdpr_full'; new usage-log methods carry kind='usage_logs'. Migration 0015 additive+reversible+NOT NULL DEFAULT backfill. Regression tests TestFindLatestForUser_GdprKindScoped + TestFindLatestUsageLogForUser_KindScoped."
+
+# ---- Issues ----
+top_issues: []
+issues_by_severity:
+  critical: 0
+  high: 0
+  medium: 1
+  low: 2
+
+medium_issues:
+  - id: PRE-EXISTING-AUTH-BLOCKER
+    finding: "`next build` / `next lint` / i18n-keys codegen fail on HEAD (non-async maskEmail 'use server' export + leading-digit 2fa i18n key). Inherited from 9.2; confirmed untouched by 9.3 (i18n-keys/src/logs.ts hand-extended to match emit output, per [[project_auth_surface_prebroken_head]])."
+    impact: "Blocks console production build + the i18n-keys-completeness CI job for the WHOLE repo — not a 9.3 regression. Scope discipline (CLAUDE.md) correctly kept 9.3 out of it."
+    severity: MEDIUM
+    blocks_this_story: false
+    recommendation: "Land the auth/2.2 fix-it story before any Epic-9 console release."
+
+low_issues:
+  - id: PROTO-RPC-PLACEMENT-DEVIATION
+    finding: "Architect Q-OWNER ruling said the 2 RPCs live ON NotificationService; Dev co-located them on a dedicated he.usagelog.v1.UsageLogExportService (still IMPLEMENTED inside notification-svc). Deviation-with-intent: hand-editing the 808-line notification.pb.go service descriptor (buf unavailable) was deemed high-risk; single-service table ownership intent is preserved."
+    severity: LOW
+    blocks_this_story: false
+    recommendation: "Accept as-built — ownership intent met. Re-fold into NotificationService if/when buf regen is available locally."
+  - id: COLUMN-DRIFT-GUARD-IS-PINNED-LITERAL
+    finding: "Architect Low-3 asked to extract 9.2 logsSelectColumns to a shared const consumed by both the read handler and the dumper. Cross-Go-module boundary makes a literal import impossible; Dev instead pins both to identical literals + a drift-guard test that bans PII/cost columns. Reasonable mitigation; cheap insurance is in place."
+    severity: LOW
+    blocks_this_story: false
+    recommendation: "Acceptable. If a shared internal package emerges later, host the column const there."
+
+# ---- E2E (Step 5) ----
+e2e:
+  executed: false
+  skipped: true
+  skip_reason: "Integrated stack (console+gateway+notification-svc+analytics-svc+Kafka+ClickHouse+OSS+SendGrid) unavailable in dev env (project_toolchain_env_limits). e2e/9.3-log-export.spec.ts are honest test.skip stubs (9.1-H-B / 9.2 precedent). Every HIGH risk is covered defense-in-depth at UNIT + INT; E2E is the CI backstop, not the sole guard."
+  failed_scenarios: []
+
+blind_spot:
+  covered: ["BLIND-DATA-002 dup-delivery (claim guard)", "BLIND-DATA-003 model cell =cmd() neutralized in file", "BLIND-BOUNDARY-005 zero-rows valid file", "BLIND-FLOW-001 double-click one action", "BLIND-FLOW-002 session-expiry redirect", "BLIND-ERROR-005 network error inline retry"]
+  missing_scenarios: []
+
+deliverable_bindings_verified: 9/9
+
+env_deferrals_accepted:
+  - "Live OSS/Kafka/SendGrid wiring — NoOp + worker env-gated off (BR-EX-17, 2.6 parity); ClickHouse dump is real."
+  - "Live EMAIL_TEMPLATE_USAGE_LOG_EXPORT_READY enum + SendEmail-handler wiring deferred (notification.pb.go enum surgery); template dir ×10 + renderer + parity test shipped & tested (mirrors 2.6 deferred-live-email)."
+  - "T4.1 testcontainers integration + T4.2 Playwright E2E — compile-clean, CI-wired, not runnable locally (no docker)."
+
+# ---- Round 2+ optimization cache ----
+incremental_context:
+  cached_risk_level: HIGH
+  cached_review_mode: full_testing
+  cached_project_type: fullstack
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+recommendations:
+  immediate: []
+  future:
+    - "Raise the Architect-escalated Q-DRIFT 2.6 fix-it story: dumps.go request_logs.json allow-list references endpoint/tokens_in/tokens_out which DO NOT EXIST in the 9.1 schema (broken at query time). 9.3 correctly avoids it; the 2.6 GDPR request_logs dump itself needs repair."
+    - "Run the T4.1 integration + T4.2 E2E suites once the integrated-stack/testcontainers harness exists (epic-9 exit)."
+    - "Land the auth/2.2 fix-it story to unblock next build + i18n codegen before Epic-9 console release."
+    - "Re-fold the usage-log RPCs into NotificationService when buf regen is available locally."

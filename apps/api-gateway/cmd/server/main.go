@@ -54,6 +54,7 @@ import (
 	"github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1/authv1connect"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/billing/v1/billingv1connect"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/notification/v1/notificationv1connect"
+	"github.com/he-api/he-api/packages/proto/gen/go/he/usagelog/v1/usagelogv1connect"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/payment/v1/paymentv1connect"
 	safetylexicon "github.com/he-api/he-api/packages/safety-lexicon"
 
@@ -268,6 +269,22 @@ func main() {
 		jwtVerifier.RequireJWT(http.HandlerFunc(accountData.RequestDataExport)))
 	mux.Handle("GET /v1/account/data-export/current",
 		jwtVerifier.RequireJWT(http.HandlerFunc(accountData.GetCurrentExport)))
+
+	// Story 9.3 — usage-log export routes (AC1). Proxies to notification-svc
+	// UsageLogExportService. ALWAYS mounted (BR-EX-8) — unlike the 9.2 read
+	// endpoints these do NOT depend on HE_API_CLICKHOUSE_DSN (they hit
+	// notification-svc, not ClickHouse). BR-EX-1 user_id-from-JWT + strict-
+	// fields body validation happen inside the handler.
+	usageLogExport := handlers.NewUsageLogExportProxy(
+		usagelogv1connect.NewUsageLogExportServiceClient(
+			&http.Client{Timeout: 10 * time.Second},
+			notificationSvcURL,
+		),
+	)
+	mux.Handle("POST /v1/me/usage/logs/export",
+		jwtVerifier.RequireJWT(http.HandlerFunc(usageLogExport.RequestUsageLogExport)))
+	mux.Handle("GET /v1/me/usage/logs/export/current",
+		jwtVerifier.RequireJWT(http.HandlerFunc(usageLogExport.GetCurrentUsageLogExport)))
 
 	// Story 3.2 — Bearer-token API-key auth on the OpenAI-compatible
 	// /v1/* routes (AC1 / AC4). The middleware is wrapped PER ROUTE — the

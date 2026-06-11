@@ -538,6 +538,8 @@ Done!
 
 > **Story 9.2 实现说明（MVP 子集）**：`/{locale}/logs` 页（Server Component + `getUsageLogs` Server Action → 网关 `GET /v1/me/usage/logs`）落地本线框的**过滤 + 分页表格**部分。列 = Time / Model / Status / Streaming / Tokens / Latency / API Key / Request ID（8 列，`<th scope>` 语义表格）。过滤栏 = Model / Status / Streaming / 时间范围 / 每页（filter+pagination 反映在 URL query，可分享/back-safe，BR-UI-3），分页走 ≤1000 条最近窗口（Prev/Next，has_more）。状态以 **文本+图标**呈现（非仅颜色，WCAG 1.4.1）。**故意省略**：① **cost / 消费 列**（per-request 成本 non-authoritative，H-1-R / BR-UI-4，余额消费见 /dashboard 与 usage_ledger）；② 行展开 detail panel + Download（Download 属 Story 9.3 历史下载范围）。i18n `logs` namespace ×10 + RTL（时间戳/ID/数字 cell 保持 LTR）。
 
+> **Story 9.3 实现说明（历史日志下载）**：`/{locale}/logs` 页顶部新增**导出控件**（`LogExportDialog`，section 而非 modal）：格式单选（JSON / CSV，radiogroup，格式码恒 LTR）+ 导出按钮（aria-label + disabled 态）。Server Action `request-log-export.ts` POST 网关 `POST /v1/me/usage/logs/export`（cookie 透传，`cache:'no-store'`，判别联合 ok|unauthorized|rate_limited|error）；`get-current-log-export.ts` 读 `GET .../export/current` 驱动 CTA-disable（pending|processing 时禁用 + "完成后邮件发送链接"状态行，BR-UI-3）。完成态 → "链接已邮件发送，{expiry} 过期"横幅（**控制台从不渲染原始签名 URL** — 链接仅邮件投递，BR-UI-3 / TS-CONS-008）；失败态 → 重新启用 + 重试。状态以**文本+图标**呈现（非仅颜色，WCAG 2.1 AA）。i18n `logs.export.*` ×10（en+zh-CN 真实，8 `[en-pending]`）；`/ar` RTL 镜像，格式码/时间戳保持 LTR。
+
 ### P-11 Settings
 
 子页面通过左侧 sidebar 切换：

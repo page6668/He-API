@@ -150,6 +150,64 @@ func main() {
 		}()
 	}
 
+	// Story 9.3 AC2 — usage.log.export.requested → format-aware request_logs
+	// export worker. Env-gated (default false, GDPR-worker opt-in parity per
+	// BR-EX-10/17): the operator MUST set
+	// HE_API_ANALYTICS_USAGE_LOG_EXPORT_WORKER_ENABLED=true before this claims
+	// real jobs. OSS / Email / Store remain NoOp (deferred to CI per BR-EX-17,
+	// parity with the GDPR worker) so a real job is never silently ACK'd into a
+	// dead end — but the ClickHouse DUMP is REAL when HE_API_CLICKHOUSE_DSN is
+	// set (client vendored in 9.1).
+	usageLogWorkerEnabled := envBool("HE_API_ANALYTICS_USAGE_LOG_EXPORT_WORKER_ENABLED", false)
+	switch {
+	case len(kafkaBrokers) == 0 || kafkaBrokers[0] == "":
+		// already warned above
+	case !usageLogWorkerEnabled:
+		logger.Warn("usage-log-export worker disabled — set HE_API_ANALYTICS_USAGE_LOG_EXPORT_WORKER_ENABLED=true after wiring real OSS/Email/Store (ClickHouse dump is real when HE_API_CLICKHOUSE_DSN is set)",
+			slog.String("topic", workers.UsageLogExportTopic),
+			slog.String("group", workers.UsageLogExportConsumerGroup),
+		)
+	default:
+		ulReader := kafka.NewReader(kafka.ReaderConfig{
+			Brokers:        kafkaBrokers,
+			GroupID:        workers.UsageLogExportConsumerGroup,
+			Topic:          workers.UsageLogExportTopic,
+			MinBytes:       1,
+			MaxBytes:       10 * 1024 * 1024,
+			CommitInterval: 0, // sync commit (at-least-once; offsets after terminal PG state)
+		})
+		defer ulReader.Close()
+
+		// Real ClickHouse fetcher when the DSN is set (the dump IS real);
+		// otherwise an empty fetcher so the binary still boots.
+		var fetcher dumps.LogRowFetcher = &noopFetcher{}
+		ulDSN := strings.TrimSpace(os.Getenv("HE_API_CLICKHOUSE_DSN"))
+		if ulDSN != "" {
+			if conn, closeConn, cerr := clickhouse.OpenConn(ctx, ulDSN); cerr != nil {
+				logger.Error("clickhouse open (usage-log export) failed — using empty fetcher", slog.String("error", cerr.Error()))
+			} else {
+				defer func() { _ = closeConn() }()
+				fetcher = clickhouse.NewLogExportReader(conn)
+			}
+		} else {
+			logger.Warn("usage-log-export worker enabled but HE_API_CLICKHOUSE_DSN unset — dumps will be empty")
+		}
+
+		dumper := dumps.NewRequestLogsExportDumper(fetcher)
+		ulWorker := workers.NewUsageLogExportWorker(
+			ulReader, &noopStore{}, &noopUploader{}, dumper, &noopUsageLogEmail{}, &noopAudit{logger: logger}, logger,
+		)
+		go func() {
+			logger.Warn("usage-log-export worker running with NoOp OSS/Email/Store wiring — exports will be ACK'd without delivery; ensure real SDKs are vendored before production use",
+				slog.String("topic", workers.UsageLogExportTopic),
+				slog.String("group", workers.UsageLogExportConsumerGroup),
+			)
+			if err := ulWorker.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				logger.Error("usage-log export worker exited with error", slog.String("error", err.Error()))
+			}
+		}()
+	}
+
 	// Story 9.1 AC1 — request.logged → ClickHouse ingestion worker. Env-gated
 	// (default false, GDPR-worker opt-in parity): the operator MUST set
 	// HE_API_ANALYTICS_REQUEST_LOG_WORKER_ENABLED=true AND provide
@@ -290,6 +348,23 @@ func (a *noopAudit) EmitFailed(_ context.Context, exportID, userID, reason, stag
 		slog.String("reason", reason),
 		slog.String("stage", stage),
 	)
+}
+
+// noopUsageLogEmail is the Story 9.3 placeholder UsageLogEmailTrigger (carries
+// format + rowCount). Replaced by the real notification-svc.SendEmail call on
+// the PR that wires the EMAIL_TEMPLATE_USAGE_LOG_EXPORT_READY enum (BR-EX-17).
+type noopUsageLogEmail struct{}
+
+func (*noopUsageLogEmail) Send(_ context.Context, _ string, _ workers.EmailContext, _ string, _ time.Time, _ string, _ int64) error {
+	return nil
+}
+
+// noopFetcher returns no rows — used when HE_API_CLICKHOUSE_DSN is unset so the
+// usage-log worker still boots (the dump is real once the DSN is provided).
+type noopFetcher struct{}
+
+func (*noopFetcher) FetchLogRows(_ context.Context, _ string, _, _ time.Time) ([]dumps.LogRow, error) {
+	return nil, nil
 }
 
 type emptyDumper struct{ name string }

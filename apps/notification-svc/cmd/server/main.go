@@ -33,6 +33,7 @@ import (
 	gdprratelimit "github.com/he-api/he-api/apps/notification-svc/internal/ratelimit"
 	"github.com/he-api/he-api/apps/notification-svc/internal/sendgrid"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/notification/v1/notificationv1connect"
+	"github.com/he-api/he-api/packages/proto/gen/go/he/usagelog/v1/usagelogv1connect"
 
 	"go.opentelemetry.io/otel"
 )
@@ -83,6 +84,7 @@ func main() {
 	// nil-check by binding only the full server when all deps are
 	// present).
 	var dataExport *handlers.DataExportServer
+	var usageLogExport *handlers.UsageLogExportServer
 	var capServer *handlers.CapThresholdServer
 	if dbURI := strings.TrimSpace(os.Getenv("HE_API_DB_POSTGRES_URI")); dbURI != "" {
 		var pool *pgxpool.Pool
@@ -141,6 +143,28 @@ func main() {
 		)
 		logger.Info("notification-svc Story-2.6 data-export RPCs enabled")
 
+		// Story 9.3 — usage-log export RPCs (AC1). Reuse the same pool/redis/
+		// audit; a SEPARATE Kafka writer for the new topic + a SEPARATE Redis
+		// limiter key namespace (BR-EX-5) so usage-log exports do not consume
+		// the GDPR quota.
+		usageLogWriter := &kafka.Writer{
+			Addr:         kafka.TCP(kafkaBrokers...),
+			Topic:        events.TopicUsageLogExportRequested,
+			Balancer:     &kafka.Hash{},
+			Async:        false,
+			RequiredAcks: kafka.RequireAll,
+		}
+		defer usageLogWriter.Close()
+
+		usageLogExport = handlers.NewUsageLogExportServer(
+			handlers.PoolAdapter(pool),
+			gdprratelimit.NewUsageLogExportLimiter(rdb),
+			events.NewUsageLogExportPublisher(usageLogWriter, logger),
+			audit.NewKafkaPublisher(auditWriter, logger),
+			logger,
+		)
+		logger.Info("notification-svc Story-9.3 usage-log export RPCs enabled")
+
 		// Story 5.4 — cap-threshold notification RPC. Needs the same Redis
 		// (dedupe sentinels) + the auth-svc gRPC endpoint (Q-L Fix-A context
 		// lookup). Env var follows the repo's HE_API_*_URL convention.
@@ -164,6 +188,17 @@ func main() {
 	}
 	ns.Cap = capServer // nil → NotifyMonthlyCapThreshold returns Unimplemented
 	mux.Handle(notificationv1connect.NewNotificationServiceHandler(ns))
+
+	// Story 9.3 — mount the UsageLogExportService (separate connect service).
+	// When the PG block above was skipped (no HE_API_DB_POSTGRES_URI) the
+	// handler is the Unimplemented stub so the route 404s cleanly rather than
+	// nil-panicking.
+	if usageLogExport != nil {
+		mux.Handle(usagelogv1connect.NewUsageLogExportServiceHandler(usageLogExport))
+	} else {
+		mux.Handle(usagelogv1connect.NewUsageLogExportServiceHandler(usagelogv1connect.UnimplementedUsageLogExportServiceHandler{}))
+		logger.Warn("HE_API_DB_POSTGRES_URI unset — Story 9.3 usage-log export RPCs will return Unimplemented")
+	}
 
 	srv := &http.Server{
 		Addr:              listenAddr,

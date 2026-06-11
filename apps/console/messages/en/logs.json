@@ -79,5 +79,28 @@
     "unavailable": "Request logs are temporarily unavailable. Please try again.",
     "malformed": "Something went wrong loading your request logs.",
     "retry": "Retry"
+  },
+  "export": {
+    "heading": "Export logs",
+    "description": "Download up to 90 days of your request logs. We'll email you a download link when it's ready.",
+    "format": {
+      "legend": "Format",
+      "json": "JSON",
+      "csv": "CSV"
+    },
+    "submit": "Export logs",
+    "submitting": "Starting export…",
+    "status": {
+      "in_progress": "Export in progress — we'll email you a download link when it's ready."
+    },
+    "banner": {
+      "emailed": "Download link emailed. It expires on {expiry}.",
+      "failed": "Your last export failed. Please try again."
+    },
+    "errors": {
+      "rate_limited": "An export is already in progress.",
+      "generic": "Couldn't start the export. Please try again.",
+      "retry": "Retry"
+    }
   }
 }

@@ -1,0 +1,91 @@
+// usagelog.proto — He-API usage-log export domain (Story 9.3, Epic 9).
+//
+// First occupant of the `usagelog` Buf domain. Per the Architect Q-EVENT
+// ruling, the export-requested event lives in a dedicated FEATURE domain
+// (`he.usagelog.v1`), NOT the consuming service's domain — mirroring the 2.6
+// precedent where the GDPR event lives in `he.gdpr.v1`, decoupled from which
+// service consumes it (TS-CONS-010 consistency).
+//
+// This package carries BOTH:
+//   1. UsageLogExportRequestedEvent — produced by notification-svc on the
+//      `usage.log.export.requested` Kafka topic (NEW; partitions=6,
+//      retention=7d) and consumed by analytics-svc UsageLogExportWorker
+//      (consumer group `analytics-svc.usage-log-export`, BR-EX-10).
+//      Partition key on the wire = user_id (TS-CONS-015).
+//   2. UsageLogExportService — the sync-gRPC initiate/status pair behind
+//      POST /v1/me/usage/logs/export + GET /v1/me/usage/logs/export/current.
+//      Per Q-OWNER it is OWNED + IMPLEMENTED by notification-svc (it already
+//      owns the data_export_requests table + repo + Lua limiter + Kafka
+//      publisher + email); a dedicated feature-domain service keeps the new
+//      surface decoupled from the 2.6 NotificationService descriptor.
+//
+// buf/protoc cannot run in this environment ([[project_toolchain_env_limits]]);
+// the paired usagelog.pb.go / usagelog.connect.go are hand-authored from a
+// descriptorpb-built FileDescriptorProto (byte-exact rawDesc emitted by
+// cmd/genusagelog) and verified by usagelog_roundtrip_test.go (9.3-CONTRACT).
+syntax = "proto3";
+
+package he.usagelog.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/he-api/he-api/packages/proto/gen/go/he/usagelog/v1;usagelogv1";
+
+// UsageLogExportService — Story 9.3 AC1. The two RPCs proxied by api-gateway:
+//   - RequestUsageLogExport  — POST /v1/me/usage/logs/export. (kind,format)-
+//     scoped 24h idempotency (BR-EX-4); a separate rate-limit key namespace
+//     (BR-EX-5); publishes usage.log.export.requested AFTER the PG commit.
+//   - GetCurrentUsageLogExport — GET /v1/me/usage/logs/export/current. Kind-
+//     scoped hydration (BR-EX-7) — a GDPR export never masks a usage-log one.
+service UsageLogExportService {
+  rpc RequestUsageLogExport(RequestUsageLogExportRequest) returns (RequestUsageLogExportResponse);
+  rpc GetCurrentUsageLogExport(GetCurrentUsageLogExportRequest) returns (GetCurrentUsageLogExportResponse);
+}
+
+// UsageLogExportRequestedEvent — the `usage.log.export.requested` Kafka
+// payload. Carries the minimum the worker needs to dump the user's
+// request_logs over [range_start, range_end] and serialize to `format`.
+// No PII beyond the user_id UUID.
+message UsageLogExportRequestedEvent {
+  string export_id = 1;
+  string user_id = 2;
+  string format = 3; // "json" | "csv"
+  google.protobuf.Timestamp range_start = 4;
+  google.protobuf.Timestamp range_end = 5;
+}
+
+// RequestUsageLogExportRequest — user_id is server-derived from the JWT `sub`
+// by api-gateway (BR-EX-1; NEVER from the body). format is the caller's
+// json|csv choice (BR-EX-2). range_start/range_end are the gateway-resolved
+// window (range_days|start/end → [start,end], ≤90d, BR-EX-3).
+// idempotency_window_seconds is kept for future tuning (default 86400, BR-EX-4).
+message RequestUsageLogExportRequest {
+  string user_id = 1;
+  string format = 2;
+  google.protobuf.Timestamp range_start = 3;
+  google.protobuf.Timestamp range_end = 4;
+  int32  idempotency_window_seconds = 5; // default 86400 (24h)
+}
+
+message RequestUsageLogExportResponse {
+  string export_id = 1;
+  string status = 2; // "pending" | "processing" | "completed" | "failed" | "expired"
+  string format = 3;
+  google.protobuf.Timestamp requested_at = 4;
+}
+
+message GetCurrentUsageLogExportRequest {
+  string user_id = 1;
+}
+
+// GetCurrentUsageLogExportResponse — has_current=false ⇒ all other fields are
+// zero. has_current=true ⇒ status ∈ {pending, processing} OR (completed AND
+// signed_url_expires_at > now) (BR-EX-7).
+message GetCurrentUsageLogExportResponse {
+  bool   has_current = 1;
+  string export_id = 2;
+  string status = 3;
+  string format = 4;
+  google.protobuf.Timestamp requested_at = 5;
+  google.protobuf.Timestamp signed_url_expires_at = 6; // zero unless status=completed
+}

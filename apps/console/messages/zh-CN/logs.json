@@ -79,5 +79,28 @@
     "unavailable": "调用日志暂时不可用，请稍后重试。",
     "malformed": "加载调用日志时出现问题。",
     "retry": "重试"
+  },
+  "export": {
+    "heading": "导出日志",
+    "description": "下载最近 90 天的调用日志。准备就绪后我们会通过邮件发送下载链接。",
+    "format": {
+      "legend": "格式",
+      "json": "JSON",
+      "csv": "CSV"
+    },
+    "submit": "导出日志",
+    "submitting": "正在开始导出…",
+    "status": {
+      "in_progress": "导出处理中 — 完成后将通过邮件发送下载链接。"
+    },
+    "banner": {
+      "emailed": "下载链接已通过邮件发送，将于 {expiry} 过期。",
+      "failed": "上次导出失败，请重试。"
+    },
+    "errors": {
+      "rate_limited": "已有一个导出正在进行中。",
+      "generic": "无法开始导出，请重试。",
+      "retry": "重试"
+    }
   }
 }

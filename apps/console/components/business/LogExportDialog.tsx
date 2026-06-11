@@ -1,0 +1,181 @@
+'use client';
+
+// Story 9.3 AC3 — usage-log export control on /{locale}/logs.
+//
+// Mirrors the 2.6 ExportDataDialog interaction (format picker + CTA-disable +
+// status/banner) but targets the NEW /v1/me/usage/logs/export family and adds a
+// JSON/CSV format picker. The signed download link is delivered by EMAIL only —
+// this control NEVER renders a raw URL (BR-UI-3); the response carries only the
+// expiry timestamp.
+//
+// a11y (BR-UI-5, WCAG 2.1 AA): labeled <form>, format radiogroup, submit button
+// with aria + disabled states, status conveyed by text+icon (never color alone).
+// RTL (ar): layout mirrors; format codes (JSON/CSV) + timestamps stay LTR.
+
+import { useRef, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
+
+import {
+  requestLogExport,
+  type LogExportFormat,
+  type RequestLogExportResult,
+} from '@/app/[locale]/(console)/logs/_actions/request-log-export';
+import type { CurrentLogExport } from '@/app/[locale]/(console)/logs/_actions/get-current-log-export';
+
+interface LogExportDialogProps {
+  locale: string;
+  current: CurrentLogExport;
+}
+
+type Notice = 'rate_limited' | 'error' | null;
+
+function isInProgress(c: CurrentLogExport): boolean {
+  return c?.status === 'pending' || c?.status === 'processing';
+}
+
+function isCompletedLive(c: CurrentLogExport): boolean {
+  if (!c || c.status !== 'completed' || !c.signed_url_expires_at) return false;
+  const exp = Date.parse(c.signed_url_expires_at);
+  return Number.isFinite(exp) && exp > Date.now();
+}
+
+export function LogExportDialog({ locale, current }: LogExportDialogProps) {
+  const t = useTranslations('logs');
+  const router = useRouter();
+  const [format, setFormat] = useState<LogExportFormat>('json');
+  const [pending, startTransition] = useTransition();
+  // Optimistic in-progress after a successful submit (before revalidate lands).
+  const [submitted, setSubmitted] = useState(false);
+  const [notice, setNotice] = useState<Notice>(null);
+  // Synchronous in-flight guard so two clicks in the same tick fire ONE action
+  // (BLIND-FLOW-001 — the React `disabled` state only flips on the next render).
+  const inFlight = useRef(false);
+
+  const inProgress = submitted || isInProgress(current);
+  const disabled = pending || inProgress;
+
+  function handleResult(res: RequestLogExportResult) {
+    inFlight.current = false;
+    switch (res.kind) {
+      case 'ok':
+        setSubmitted(true);
+        setNotice(null);
+        break;
+      case 'unauthorized':
+        router.push(`/${locale}/signin?return_to=/${locale}/logs`);
+        break;
+      case 'rate_limited':
+        setNotice('rate_limited');
+        break;
+      case 'error':
+      default:
+        setNotice('error');
+        break;
+    }
+  }
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (disabled || inFlight.current) return; // BLIND-FLOW-001 — no double submit
+    inFlight.current = true;
+    setNotice(null);
+    startTransition(() => {
+      requestLogExport(format, locale)
+        .then(handleResult)
+        .catch(() => {
+          inFlight.current = false;
+          setNotice('error');
+        });
+    });
+  }
+
+  return (
+    <section aria-labelledby="log-export-heading" className="rounded-lg border p-4">
+      <h2 id="log-export-heading" className="text-lg font-medium">
+        {t('export.heading')}
+      </h2>
+      <p className="mt-1 text-sm text-muted-foreground">{t('export.description')}</p>
+
+      <form onSubmit={onSubmit} className="mt-4 space-y-4">
+        <fieldset>
+          <legend className="text-sm font-medium">{t('export.format.legend')}</legend>
+          <div role="radiogroup" aria-label={t('export.format.legend')} className="mt-2 flex gap-4">
+            {(['json', 'csv'] as const).map((f) => (
+              <label key={f} className="inline-flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="log-export-format"
+                  value={f}
+                  checked={format === f}
+                  onChange={() => setFormat(f)}
+                  disabled={disabled}
+                />
+                {/* format codes are universal — literal + LTR even under RTL */}
+                <span dir="ltr">{f.toUpperCase()}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <button
+          type="submit"
+          disabled={disabled}
+          aria-disabled={disabled}
+          aria-label={t('export.submit')}
+          className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+        >
+          {pending ? t('export.submitting') : t('export.submit')}
+        </button>
+      </form>
+
+      {/* Status / banners — text + icon, never color-alone (BR-UI-5). */}
+      {inProgress && (
+        <p role="status" className="mt-4 flex items-center gap-2 text-sm" data-testid="log-export-in-progress">
+          <span aria-hidden="true">⏳</span>
+          {t('export.status.in_progress')}
+        </p>
+      )}
+
+      {!inProgress && isCompletedLive(current) && current && (
+        <p role="status" className="mt-4 flex items-center gap-2 text-sm" data-testid="log-export-emailed">
+          <span aria-hidden="true">✅</span>
+          {t('export.banner.emailed', { expiry: formatExpiry(current.signed_url_expires_at, locale) })}
+        </p>
+      )}
+
+      {!inProgress && current?.status === 'failed' && (
+        <p role="status" className="mt-4 flex items-center gap-2 text-sm" data-testid="log-export-failed">
+          <span aria-hidden="true">⚠️</span>
+          {t('export.banner.failed')}
+        </p>
+      )}
+
+      {notice === 'rate_limited' && (
+        <p role="alert" className="mt-4 flex items-center gap-2 text-sm" data-testid="log-export-rate-limited">
+          <span aria-hidden="true">⏳</span>
+          {t('export.errors.rate_limited')}
+        </p>
+      )}
+      {notice === 'error' && (
+        <p role="alert" className="mt-4 flex items-center gap-2 text-sm" data-testid="log-export-error">
+          <span aria-hidden="true">⚠️</span>
+          {t('export.errors.generic')}
+        </p>
+      )}
+    </section>
+  );
+}
+
+// formatExpiry renders the expiry in the user's locale; wrapped LTR by the
+// caller's surrounding markup. Falls back to the raw string if unparseable.
+function formatExpiry(iso: string | null, locale: string): string {
+  if (!iso) return '';
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return iso;
+  try {
+    return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(ms));
+  } catch {
+    return iso;
+  }
+}

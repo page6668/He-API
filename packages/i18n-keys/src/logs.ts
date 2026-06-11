@@ -1,8 +1,24 @@
 // @generated — DO NOT EDIT — run `pnpm --filter @he-api/i18n-keys build`
 // Source: apps/console/messages/en/logs.json
+// NOTE: the `export.*` keys (Story 9.3) were hand-added — the i18n-keys codegen
+// is blocked on a pre-existing 2fa crash ([[project_auth_surface_prebroken_head]]);
+// keep these in lockstep with apps/console/messages/en/logs.json `export`.
 export type LogsKeys
   = 'empty.reset'
   | 'empty.title'
+  | 'export.banner.emailed'
+  | 'export.banner.failed'
+  | 'export.description'
+  | 'export.errors.generic'
+  | 'export.errors.rate_limited'
+  | 'export.errors.retry'
+  | 'export.format.csv'
+  | 'export.format.json'
+  | 'export.format.legend'
+  | 'export.heading'
+  | 'export.status.in_progress'
+  | 'export.submit'
+  | 'export.submitting'
   | 'errors.generic'
   | 'errors.malformed'
   | 'errors.retry'

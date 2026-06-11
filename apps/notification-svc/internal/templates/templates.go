@@ -17,6 +17,7 @@ import (
 //go:embed cap_tripped/*.txt cap_tripped/*.html
 //go:embed low_balance/*.txt low_balance/*.html
 //go:embed low_balance_failed/*.txt low_balance_failed/*.html
+//go:embed usage_log_export_ready/*.txt usage_log_export_ready/*.html
 var fs embed.FS
 
 // FallbackLocale is the locale that any non-resolvable locale falls back to.
@@ -40,6 +41,14 @@ const (
 	// Vars: display_name, current_balance, threshold (string-decimals).
 	TemplateLowBalance       = "low_balance"
 	TemplateLowBalanceFailed = "low_balance_failed"
+	// Story 9.3 — slug for the usage-log export "your download is ready" email
+	// (BR-EX-15). Vars: display_name, signed_url, expires_at, format, row_count.
+	// Slug internal to this package; the wire contract uses the EmailTemplate
+	// enum (R-2 cascade — the EMAIL_TEMPLATE_USAGE_LOG_EXPORT_READY enum + the
+	// SendEmail-handler mapping are the deferred live-email wiring per BR-EX-17,
+	// parity with the 2.6 NoOp-email deferral; the template + renderer are real
+	// + tested here).
+	TemplateUsageLogExportReady = "usage_log_export_ready"
 )
 
 // Rendered is what the SendGrid client needs to build one outbound mail.

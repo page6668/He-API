@@ -20,22 +20,25 @@ type Querier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
-// DataExportRequest mirrors he_api.data_export_requests (migration 0005).
-// All time fields are TIMESTAMPTZ; nullable values use pointers so the
-// caller can distinguish unset vs zero-time.
+// DataExportRequest mirrors he_api.data_export_requests (migration 0005 +
+// migration 0015 added Kind/Format). All time fields are TIMESTAMPTZ;
+// nullable values use pointers so the caller can distinguish unset vs
+// zero-time.
 type DataExportRequest struct {
-	ID                  string     // UUID
-	UserID              string     // UUID
-	Status              string     // pending|processing|completed|failed|expired
-	RequestedAt         time.Time
-	StartedAt           *time.Time
-	CompletedAt         *time.Time
-	OSSObjectKey        *string
-	SignedURLExpiresAt  *time.Time
-	EmailSentAt         *time.Time
-	FailureReason       *string
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
+	ID                 string  // UUID
+	UserID             string  // UUID
+	Kind               string  // 'gdpr_full' | 'usage_logs' (migration 0015)
+	Status             string  // pending|processing|completed|failed|expired
+	Format             *string // 'json' | 'csv' | nil (usage-log exports only, migration 0015)
+	RequestedAt        time.Time
+	StartedAt          *time.Time
+	CompletedAt        *time.Time
+	OSSObjectKey       *string
+	SignedURLExpiresAt *time.Time
+	EmailSentAt        *time.Time
+	FailureReason      *string
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }
 
 // ErrNotFound is returned by repository reads when no row matches.
@@ -69,12 +72,17 @@ func NewDataExportRequestsRepo(db Querier) *DataExportRequestsRepo {
 // handlers/data_export.go for the canonical wiring + Story 2.6 QA Round 1
 // ISSUE-5 for the design-deviation rationale.
 func (r *DataExportRequestsRepo) FindCurrentInWindow(ctx context.Context, userID string, window time.Duration) (*DataExportRequest, error) {
+	// Story 9.3 Architect HIGH condition (Q-TABLE EXTEND): kind-scope to
+	// 'gdpr_full' so the 2.6 GDPR idempotency lookup never matches a 9.3
+	// usage-log row after migration 0015 adds the `kind` discriminator
+	// (BR-EX-7 — distinct lifecycles, disjoint rows in one table).
 	const q = `
 		SELECT id, user_id, status, requested_at, started_at, completed_at,
 		       oss_object_key, signed_url_expires_at, email_sent_at,
 		       failure_reason, created_at, updated_at
 		FROM he_api.data_export_requests
 		WHERE user_id = $1
+		  AND kind = 'gdpr_full'
 		  AND status IN ('pending', 'processing', 'completed')
 		  AND requested_at > NOW() - $2::interval
 		ORDER BY requested_at DESC
@@ -88,12 +96,15 @@ func (r *DataExportRequestsRepo) FindCurrentInWindow(ctx context.Context, userID
 // the AC1 BR-1.5 hydration read. Returns ErrNotFound when the user has
 // never requested an export.
 func (r *DataExportRequestsRepo) FindLatestForUser(ctx context.Context, userID string) (*DataExportRequest, error) {
+	// Story 9.3 Architect HIGH condition: kind-scope to 'gdpr_full' so the
+	// 2.6 GDPR /current hydration never surfaces a 9.3 usage-log row.
 	const q = `
 		SELECT id, user_id, status, requested_at, started_at, completed_at,
 		       oss_object_key, signed_url_expires_at, email_sent_at,
 		       failure_reason, created_at, updated_at
 		FROM he_api.data_export_requests
 		WHERE user_id = $1
+		  AND kind = 'gdpr_full'
 		ORDER BY requested_at DESC
 		LIMIT 1
 	`
@@ -101,17 +112,76 @@ func (r *DataExportRequestsRepo) FindLatestForUser(ctx context.Context, userID s
 	return scanOne(row)
 }
 
-// Insert creates a new pending row and returns the assigned ID + requested_at.
+// Insert creates a new pending GDPR-export row and returns the assigned ID +
+// requested_at. Story 9.3: explicit kind='gdpr_full' (the column DEFAULT also
+// covers it, but explicit is clearer at the call-site and decouples from the
+// DEFAULT should it ever change).
 func (r *DataExportRequestsRepo) Insert(ctx context.Context, userID string) (string, time.Time, error) {
 	const q = `
-		INSERT INTO he_api.data_export_requests (user_id)
-		VALUES ($1)
+		INSERT INTO he_api.data_export_requests (user_id, kind)
+		VALUES ($1, 'gdpr_full')
 		RETURNING id, requested_at
 	`
 	var id string
 	var requestedAt time.Time
 	if err := r.db.QueryRow(ctx, q, userID).Scan(&id, &requestedAt); err != nil {
 		return "", time.Time{}, fmt.Errorf("data_export_requests: insert: %w", err)
+	}
+	return id, requestedAt, nil
+}
+
+// --- Story 9.3 usage-log export methods (kind='usage_logs') -----------------
+
+// FindCurrentUsageLogInWindow returns the most-recent non-failed usage-log row
+// for (user_id, format) inside the idempotency window (BR-EX-4 — json/csv are
+// independent; failed rows excluded so a re-export starts fresh after failure).
+func (r *DataExportRequestsRepo) FindCurrentUsageLogInWindow(ctx context.Context, userID, format string, window time.Duration) (*DataExportRequest, error) {
+	const q = `
+		SELECT id, user_id, status, format, requested_at, started_at, completed_at,
+		       oss_object_key, signed_url_expires_at, email_sent_at,
+		       failure_reason, created_at, updated_at
+		FROM he_api.data_export_requests
+		WHERE user_id = $1
+		  AND kind = 'usage_logs'
+		  AND format = $2
+		  AND status IN ('pending', 'processing', 'completed')
+		  AND requested_at > NOW() - $3::interval
+		ORDER BY requested_at DESC
+		LIMIT 1
+	`
+	row := r.db.QueryRow(ctx, q, userID, format, fmt.Sprintf("%d seconds", int(window.Seconds())))
+	return scanOneUsageLog(row)
+}
+
+// FindLatestUsageLogForUser returns the user's most-recent usage-log row (any
+// format, any status) for the BR-EX-7 kind-scoped /current hydration read.
+func (r *DataExportRequestsRepo) FindLatestUsageLogForUser(ctx context.Context, userID string) (*DataExportRequest, error) {
+	const q = `
+		SELECT id, user_id, status, format, requested_at, started_at, completed_at,
+		       oss_object_key, signed_url_expires_at, email_sent_at,
+		       failure_reason, created_at, updated_at
+		FROM he_api.data_export_requests
+		WHERE user_id = $1
+		  AND kind = 'usage_logs'
+		ORDER BY requested_at DESC
+		LIMIT 1
+	`
+	row := r.db.QueryRow(ctx, q, userID)
+	return scanOneUsageLog(row)
+}
+
+// InsertUsageLog creates a new pending usage-log export row (kind='usage_logs',
+// the caller-chosen format) and returns the assigned ID + requested_at.
+func (r *DataExportRequestsRepo) InsertUsageLog(ctx context.Context, userID, format string) (string, time.Time, error) {
+	const q = `
+		INSERT INTO he_api.data_export_requests (user_id, kind, format)
+		VALUES ($1, 'usage_logs', $2)
+		RETURNING id, requested_at
+	`
+	var id string
+	var requestedAt time.Time
+	if err := r.db.QueryRow(ctx, q, userID, format).Scan(&id, &requestedAt); err != nil {
+		return "", time.Time{}, fmt.Errorf("data_export_requests: insert usage-log: %w", err)
 	}
 	return id, requestedAt, nil
 }
@@ -130,5 +200,25 @@ func scanOne(row pgx.Row) (*DataExportRequest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("data_export_requests: scan: %w", err)
 	}
+	out.Kind = "gdpr_full"
+	return out, nil
+}
+
+// scanOneUsageLog scans the usage-log projection (adds `format` after `status`).
+func scanOneUsageLog(row pgx.Row) (*DataExportRequest, error) {
+	out := &DataExportRequest{}
+	err := row.Scan(
+		&out.ID, &out.UserID, &out.Status, &out.Format, &out.RequestedAt,
+		&out.StartedAt, &out.CompletedAt, &out.OSSObjectKey,
+		&out.SignedURLExpiresAt, &out.EmailSentAt, &out.FailureReason,
+		&out.CreatedAt, &out.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("data_export_requests: scan usage-log: %w", err)
+	}
+	out.Kind = "usage_logs"
 	return out, nil
 }

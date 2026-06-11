@@ -40,6 +40,11 @@ var CodeMetadata = map[string]struct {
 	"429_rate_limit_rpm":         {429, "invalid_request_error"},
 	"429_rate_limit_tpm":         {429, "invalid_request_error"},
 	"429_rate_limit_gdpr_export": {429, "invalid_request_error"},
+	// Story 9.3 (BR-EX-5) — usage-log export race-condition safety net. A
+	// SEPARATE key namespace from gdpr_export so usage-log exports do not
+	// consume the GDPR-export quota. One envelope code per HTTP scenario
+	// (§5.1.2 rule); the paired rest-api-spec §5.1.2 row is the dual-write.
+	"429_rate_limit_usage_log_export": {429, "invalid_request_error"},
 	"500_gateway_misconfigured":  {500, "server_error"},
 	"500_internal_error":         {500, "server_error"},
 	"501_not_implemented":        {501, "server_error"},
