@@ -281,11 +281,15 @@ jobs:
           test "$(docker exec clickhouse clickhouse-client --query 'EXISTS TABLE he_api.request_logs_hourly_agg')" = "1"
           echo "migration 002 up: request_logs + hourly_agg MV present"
 
-      - name: Run ClickHouse integration suite (9.1-INT-001/002)
+      - name: Run ClickHouse integration suite (9.1-INT-001/002; 9.2-INT-001..006)
         env:
           HE_API_CLICKHOUSE_TEST_DSN: clickhouse://localhost:9000/he_api
         run: |
           go test -tags=integration -count=1 -v ./apps/analytics-svc/internal/clickhouse/...
+          # Story 9.2 — the GET /v1/me/usage/logs read path (IDOR / PII / ordering
+          # / filter narrowing) over the SAME request_logs table, against the same
+          # live ClickHouse + migration 002.
+          go test -tags=integration -count=1 -v ./apps/api-gateway/internal/analyticsquery/...
 
       # 9.1-INT-003 (reverse) — the down migration drops the MV then the table;
       # the 001 he_api database is untouched (non-destructive round-trip).

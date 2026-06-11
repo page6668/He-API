@@ -38,6 +38,7 @@ export default async function ConsoleLayout({
 
   const t = await getTranslations('account');
   const tDashboard = await getTranslations('dashboard');
+  const tLogs = await getTranslations('logs');
 
   return (
     <div className="mx-auto flex max-w-5xl gap-6 px-6 py-8">
@@ -45,6 +46,7 @@ export default async function ConsoleLayout({
         <ConsoleSidebarNav
           items={[
             { href: `/${resolvedLocale}/dashboard`, label: tDashboard('nav.sidebar') },
+            { href: `/${resolvedLocale}/logs`, label: tLogs('nav.sidebar') },
             { href: `/${resolvedLocale}/keys`, label: t('keys.nav.sidebar') },
             { href: `/${resolvedLocale}/settings/profile`, label: t('settings.sidebar.profile') },
             { href: `/${resolvedLocale}/settings/security`, label: t('settings.sidebar.security') },

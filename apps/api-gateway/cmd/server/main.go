@@ -432,6 +432,21 @@ func main() {
 			mux.Handle("GET /v1/me/usage/summary",
 				jwtVerifier.RequireJWT(http.HandlerFunc(usageHandler.HandleSummary)))
 			logger.Info("usage summary endpoint wired (GET /v1/me/usage/summary; 消费 ← usage_ledger)")
+
+			// Story 9.2 AC1 — 实时调用日志 read endpoint (GET /v1/me/usage/logs),
+			// sibling to /summary. Reuses the SAME usageStore connection (no new
+			// ClickHouse path — BR-RD-10) via the LogsStore facet, IDOR-fenced and
+			// wrapped by the identical RequireJWT. The *chStore returned by
+			// OpenStore implements LogsStore; the assertion is defensive (always
+			// true for the production store).
+			if logsStore, ok := usageStore.(analyticsquery.LogsStore); ok {
+				logsHandler := analyticsquery.NewLogsHandler(logsStore, logger)
+				mux.Handle("GET /v1/me/usage/logs",
+					jwtVerifier.RequireJWT(http.HandlerFunc(logsHandler.HandleLogs)))
+				logger.Info("usage logs endpoint wired (GET /v1/me/usage/logs; IDOR-fenced, 1000-row recent window)")
+			} else {
+				logger.Warn("usage store does not implement LogsStore — GET /v1/me/usage/logs disabled")
+			}
 		}
 	} else {
 		logger.Warn("HE_API_CLICKHOUSE_DSN unset — GET /v1/me/usage/summary disabled")

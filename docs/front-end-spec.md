@@ -536,6 +536,8 @@ Done!
 
 每行点击展开 detail panel：full request / response / token breakdown / cost / he_request_id（用于客服）。
 
+> **Story 9.2 实现说明（MVP 子集）**：`/{locale}/logs` 页（Server Component + `getUsageLogs` Server Action → 网关 `GET /v1/me/usage/logs`）落地本线框的**过滤 + 分页表格**部分。列 = Time / Model / Status / Streaming / Tokens / Latency / API Key / Request ID（8 列，`<th scope>` 语义表格）。过滤栏 = Model / Status / Streaming / 时间范围 / 每页（filter+pagination 反映在 URL query，可分享/back-safe，BR-UI-3），分页走 ≤1000 条最近窗口（Prev/Next，has_more）。状态以 **文本+图标**呈现（非仅颜色，WCAG 1.4.1）。**故意省略**：① **cost / 消费 列**（per-request 成本 non-authoritative，H-1-R / BR-UI-4，余额消费见 /dashboard 与 usage_ledger）；② 行展开 detail panel + Download（Download 属 Story 9.3 历史下载范围）。i18n `logs` namespace ×10 + RTL（时间戳/ID/数字 cell 保持 LTR）。
+
 ### P-11 Settings
 
 子页面通过左侧 sidebar 切换：

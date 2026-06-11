@@ -1,0 +1,83 @@
+{
+  "page": {
+    "title": "调用日志",
+    "description": "查看最近的 API 调用记录，支持多维过滤与分页。",
+    "heading": "调用日志"
+  },
+  "nav": {
+    "sidebar": "调用日志"
+  },
+  "table": {
+    "caption": "最近的 API 调用",
+    "columns": {
+      "time": "时间",
+      "model": "模型",
+      "status": "状态",
+      "streaming": "流式",
+      "tokens": "Token",
+      "latency": "延迟",
+      "apiKey": "API 密钥",
+      "requestId": "请求 ID"
+    },
+    "streaming": {
+      "yes": "是",
+      "no": "否"
+    },
+    "latencyUnit": "毫秒"
+  },
+  "status": {
+    "success": "成功",
+    "client_error": "客户端错误",
+    "server_error": "服务端错误"
+  },
+  "filters": {
+    "legend": "筛选日志",
+    "model": {
+      "label": "模型",
+      "placeholder": "例如 qwen-max"
+    },
+    "status": {
+      "label": "状态",
+      "all": "全部状态"
+    },
+    "streaming": {
+      "label": "流式",
+      "all": "全部",
+      "yes": "是",
+      "no": "否"
+    },
+    "start": {
+      "label": "起始"
+    },
+    "end": {
+      "label": "结束"
+    },
+    "limit": {
+      "label": "每页"
+    },
+    "apply": "应用",
+    "reset": "重置",
+    "errors": {
+      "range": "结束时间必须晚于起始时间。"
+    }
+  },
+  "pagination": {
+    "label": "分页",
+    "prev": "上一页",
+    "next": "下一页",
+    "page": "第 {page} 页"
+  },
+  "empty": {
+    "title": "没有符合筛选条件的调用记录",
+    "reset": "重置筛选"
+  },
+  "loading": {
+    "label": "正在加载调用日志…"
+  },
+  "errors": {
+    "generic": "无法加载调用日志，请重试。",
+    "unavailable": "调用日志暂时不可用，请稍后重试。",
+    "malformed": "加载调用日志时出现问题。",
+    "retry": "重试"
+  }
+}

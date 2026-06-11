@@ -1,0 +1,83 @@
+{
+  "page": {
+    "title": "Request Logs",
+    "description": "Your most recent API requests, with filtering and pagination.",
+    "heading": "Request Logs"
+  },
+  "nav": {
+    "sidebar": "Request Logs"
+  },
+  "table": {
+    "caption": "Recent API requests",
+    "columns": {
+      "time": "Time",
+      "model": "Model",
+      "status": "Status",
+      "streaming": "Streaming",
+      "tokens": "Tokens",
+      "latency": "Latency",
+      "apiKey": "API Key",
+      "requestId": "Request ID"
+    },
+    "streaming": {
+      "yes": "Yes",
+      "no": "No"
+    },
+    "latencyUnit": "ms"
+  },
+  "status": {
+    "success": "Success",
+    "client_error": "Client error",
+    "server_error": "Server error"
+  },
+  "filters": {
+    "legend": "Filter logs",
+    "model": {
+      "label": "Model",
+      "placeholder": "e.g. qwen-max"
+    },
+    "status": {
+      "label": "Status",
+      "all": "All statuses"
+    },
+    "streaming": {
+      "label": "Streaming",
+      "all": "All",
+      "yes": "Yes",
+      "no": "No"
+    },
+    "start": {
+      "label": "From"
+    },
+    "end": {
+      "label": "To"
+    },
+    "limit": {
+      "label": "Per page"
+    },
+    "apply": "Apply",
+    "reset": "Reset",
+    "errors": {
+      "range": "End time must be after start time."
+    }
+  },
+  "pagination": {
+    "label": "Pagination",
+    "prev": "Previous",
+    "next": "Next",
+    "page": "Page {page}"
+  },
+  "empty": {
+    "title": "No requests match these filters",
+    "reset": "Reset filters"
+  },
+  "loading": {
+    "label": "Loading request logs…"
+  },
+  "errors": {
+    "generic": "We couldn't load your request logs. Please try again.",
+    "unavailable": "Request logs are temporarily unavailable. Please try again.",
+    "malformed": "Something went wrong loading your request logs.",
+    "retry": "Retry"
+  }
+}

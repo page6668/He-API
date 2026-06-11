@@ -1,0 +1,83 @@
+{
+  "page": {
+    "title": "[en-pending] Request Logs",
+    "description": "[en-pending] Your most recent API requests, with filtering and pagination.",
+    "heading": "[en-pending] Request Logs"
+  },
+  "nav": {
+    "sidebar": "[en-pending] Request Logs"
+  },
+  "table": {
+    "caption": "[en-pending] Recent API requests",
+    "columns": {
+      "time": "[en-pending] Time",
+      "model": "[en-pending] Model",
+      "status": "[en-pending] Status",
+      "streaming": "[en-pending] Streaming",
+      "tokens": "[en-pending] Tokens",
+      "latency": "[en-pending] Latency",
+      "apiKey": "[en-pending] API Key",
+      "requestId": "[en-pending] Request ID"
+    },
+    "streaming": {
+      "yes": "[en-pending] Yes",
+      "no": "[en-pending] No"
+    },
+    "latencyUnit": "[en-pending] ms"
+  },
+  "status": {
+    "success": "[en-pending] Success",
+    "client_error": "[en-pending] Client error",
+    "server_error": "[en-pending] Server error"
+  },
+  "filters": {
+    "legend": "[en-pending] Filter logs",
+    "model": {
+      "label": "[en-pending] Model",
+      "placeholder": "[en-pending] e.g. qwen-max"
+    },
+    "status": {
+      "label": "[en-pending] Status",
+      "all": "[en-pending] All statuses"
+    },
+    "streaming": {
+      "label": "[en-pending] Streaming",
+      "all": "[en-pending] All",
+      "yes": "[en-pending] Yes",
+      "no": "[en-pending] No"
+    },
+    "start": {
+      "label": "[en-pending] From"
+    },
+    "end": {
+      "label": "[en-pending] To"
+    },
+    "limit": {
+      "label": "[en-pending] Per page"
+    },
+    "apply": "[en-pending] Apply",
+    "reset": "[en-pending] Reset",
+    "errors": {
+      "range": "[en-pending] End time must be after start time."
+    }
+  },
+  "pagination": {
+    "label": "[en-pending] Pagination",
+    "prev": "[en-pending] Previous",
+    "next": "[en-pending] Next",
+    "page": "[en-pending] Page {page}"
+  },
+  "empty": {
+    "title": "[en-pending] No requests match these filters",
+    "reset": "[en-pending] Reset filters"
+  },
+  "loading": {
+    "label": "[en-pending] Loading request logs…"
+  },
+  "errors": {
+    "generic": "[en-pending] We couldn't load your request logs. Please try again.",
+    "unavailable": "[en-pending] Request logs are temporarily unavailable. Please try again.",
+    "malformed": "[en-pending] Something went wrong loading your request logs.",
+    "retry": "[en-pending] Retry"
+  }
+}

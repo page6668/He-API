@@ -1,0 +1,110 @@
+schema: 1
+story: "9.2"
+story_title: "实时调用日志（最近 1000 条）"
+slug: realtime-call-logs
+gate: PASS
+status_reason: "Both ACs VERIFIED with independent code+test evidence (100% traceability). Backend go -race + console vitest 10/10 + tsc 0-errors + integration-tag compile all GREEN. IDOR fence + PII-exclusion + 1000-row window enforced and tested at unit AND integration level (defense-in-depth). Zero critical / zero high. The only red signals are PRE-EXISTING auth-surface bugs (next build / i18n codegen / 2.2 union), confirmed clean vs HEAD and out of 9.2 scope — escalated, not introduced by this story."
+reviewer: "Turing (QA)"
+updated: "2026-06-11T20:52:39+08:00"
+
+review_round: 1
+risk_level: HIGH                 # security_sensitive + new API endpoint + new UI + user-facing
+review_mode: full_testing
+review_mode_type: full
+
+waiver:
+  active: false
+
+# ---- Independent test execution (Step 4) ----
+test_results:
+  project_type: fullstack
+  backend:
+    command: "go test ./apps/api-gateway/internal/analyticsquery/... -race"
+    result: PASS
+    detail: "ok  github.com/he-api/he-api/apps/api-gateway/internal/analyticsquery  1.587s"
+  backend_integration_compile:
+    command: "go vet -tags=integration ./apps/api-gateway/internal/analyticsquery/..."
+    result: PASS
+    detail: "compiles clean; runs in CI clickhouse-integration job (no ClickHouse in dev env)"
+  console_unit:
+    command: "npx vitest run __tests__/9.2-request-logs.test.tsx"
+    result: PASS
+    detail: "10/10 passed (incl. real ×10 logs.json key-parity import, 4 [BLIND-SPOT] cases)"
+  console_typecheck:
+    command: "npx tsc --noEmit"
+    result: PASS
+    detail: "0 errors across the whole console (not just 9.2 files)"
+  integrity_check:
+    dev_evidence_found: true
+    dev_claimed_pass: true
+    discrepancy: false
+
+# ---- AC coverage (Step 4.6) ----
+ac_coverage:
+  coverage_rate: 100
+  passed: true
+  details:
+    - ac_id: AC1
+      title: "GET /v1/me/usage/logs — JWT-cookie, per-user IDOR-fenced, paginated + multi-dim filter"
+      status: VERIFIED
+      code:
+        - "logs_handler.go: JWT-sub user_id, strict param whitelist (user_id param → 400), 401/400/503 openaierr"
+        - "logs_store.go: unconditional WHERE user_id=? (BR-RD-1), BR-RD-9 13-col projection (no PII/cost), ts DESC,he_request_id DESC tie-break, total_count=min(matching,1000) window cap, defer rows.Close()"
+        - "main.go:442-449: conditional mount under RequireJWT via LogsStore type-assertion on shared OpenStore conn (BR-RD-8/10)"
+      tests: "handler unit (-race) + integration (CI, INT-001..005)"
+    - ac_id: AC2
+      title: "Console 调用日志页 — filterable/paginated table (states + i18n×10 + a11y)"
+      status: VERIFIED
+      code:
+        - "page.tsx: Server Component reads searchParams → getUsageLogs action; 401 redirect, 503/error inline, Suspense skeleton"
+        - "get-usage-logs.ts: 'use server', cookie passthrough, cache:'no-store', discriminated union ok/unauthorized/error"
+        - "RequestLogsTable.tsx: 8 semantic cols, NO cost col (BR-UI-4), status text+icon (WCAG 1.4.1), Intl numbers, dir=ltr code cells (RTL), empty-state + reset CTA"
+        - "RequestLogsFilters.tsx: labeled <form>, end>start inline validation (query NOT fired), offset-reset, URL-reflected"
+        - "me-usage.ts: Zod LogEntry/UsageLogsPage safety-net mirroring the 13-field Go projection"
+        - "layout.tsx:49 sidebar nav /logs with aria-current"
+      tests: "vitest 10/10 (UNIT-017..024, INT-009 action contract, INT-010 ×10 key-parity)"
+
+# ---- Issues ----
+top_issues: []
+issues_by_severity:
+  critical: 0
+  high: 0
+  medium: 1
+  low: 0
+
+medium_issues:
+  - id: PRE-EXISTING-AUTH-BLOCKER
+    finding: "`next build` + `next lint` + i18n-keys codegen all fail on HEAD due to a non-async maskEmail export in app/[locale]/_actions/auth.ts ('use server') and a leading-digit i18n key (2fa.section_title). Confirmed via `git diff HEAD -- auth.ts` = EMPTY: untouched by 9.2."
+    impact: "Blocks console production build/deploy and the console-i18n-keys-completeness CI job for the WHOLE repo — not a 9.2 regression. 9.2 correctly did NOT fix it (CLAUDE.md scope discipline) and authored packages/i18n-keys/src/logs.ts byte-identical to the codegen emit() output."
+    severity: MEDIUM
+    blocks_this_story: false
+    recommendation: "Open a separate fix-it story for the auth/2.2 surface BEFORE Epic-9 console release (it gates any console build, including this page's deployability)."
+
+# ---- E2E (Step 5) ----
+e2e:
+  executed: false
+  skipped: true
+  skip_reason: "Integrated stack (console+gateway+auth-svc+ClickHouse seeded 2-user session) unavailable in dev env (project_toolchain_env_limits). E2E-001..004 are honest test.skip stubs (9.1-H-B precedent). The headline IDOR + PII risks are covered defense-in-depth at UNIT (TestLogsIDORRejectsUserIDParam / TestLogsWhereAlwaysFenced / TestLogsResponseExcludesPII) and INT (TestLogsCrossUserIsolation / TestLogsProjectionExcludesPII — CI-wired)."
+  failed_scenarios: []
+
+blind_spot:
+  covered: ["UNIT-019 states", "UNIT-020 503/401", "UNIT-021 Zod safety-net", "UNIT-023 pagination+offset-reset", "UNIT-004 offset+limit window boundary", "UNIT-005 has_more/window math"]
+  missing_scenarios: []
+
+deliverable_bindings_verified: 5/5
+
+# ---- Round 2+ optimization cache ----
+incremental_context:
+  cached_risk_level: HIGH
+  cached_review_mode: full_testing
+  cached_project_type: fullstack
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+recommendations:
+  immediate: []
+  future:
+    - "Run E2E-001..004 once the integrated-stack harness exists (epic-9 exit)."
+    - "Land the auth/2.2 fix-it story to unblock next build + i18n codegen before Epic-9 console release."
