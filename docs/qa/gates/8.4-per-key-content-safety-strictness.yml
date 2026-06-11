@@ -1,0 +1,155 @@
+schema: 1
+story: "8.4"
+story_title: "严格度配置（per Key）— per-Key content-safety strictness"
+gate: "PASS"
+status_reason: "All 4 ACs verified at source and by independent test execution; the 4 HARD merge-gates (G1 3×3 matrix, G2 first-qualifying-hit, G3 fail-closed, G4 strict==pre-8.4 byte-identity) are green; 8.2/8.3 detection no-FN suites pass unchanged (gating is post-detection). Two documented toolchain follow-ups (proto .proto-source regen + atlas.sum hash) are deferred to a buf/atlas-capable CI step per the ratified OQ-8.4-7 / L-1 — non-blocking, with compensating verification (wire round-trip test, by-construction reversibility)."
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-11T00:00:00Z"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "HIGH"
+  cached_review_mode: "full_testing"
+  cached_project_type: "web_backend"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+top_issues: []
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 0           # multi-package Go suite; per-package pass below (counts not aggregated)
+    passed_count: 0
+    failed_count: 0
+    skipped_count: 0
+    pass_rate: 100
+    coverage_percentage: 0
+    failed_tests: []
+  e2e:
+    executed: true      # gateway httptest integration suites (INT-001/002, INT-010..) run inside the Go lanes
+    passed: true
+    skipped: false
+    skip_reason: ""
+    scenarios_tested: 0
+    scenarios_passed: 0
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+# Per-package independent execution (QA ran these directly, not Dev evidence):
+test_lanes:
+  - lane: "apps/api-gateway/internal/contentsafety/... -race"
+    result: PASS
+    note: "pure gate (Blocks/MinSeverity/ParseStrictness), ScanTextMin/ScanMin first-qualifying, StreamGuardMin, recorder SafetyEvent.Strictness no-op"
+  - lane: "apps/api-gateway/internal/middleware/ -race"
+    result: PASS
+    note: "CachedClaims.ContentSafetyStrictness carry + omitempty rollout"
+  - lane: "packages/proto/gen/go/he/auth/v1/ -race"
+    result: PASS
+    note: "UNIT-047 wire-tag round-trip pins fields 8/8/10/10 (H-1)"
+  - lane: "apps/api-gateway/internal/handlers/"
+    result: PASS
+    note: "input/output/stream gating, resolve-once, fail-closed resolver, PATCH enum-before-RPC, event-on-block-only"
+  - lane: "apps/auth-svc/internal/apikey/ (no -race)"
+    result: PASS
+    note: "ok 233.7s — Validate carries strictness, Update present-only + enum re-validate + reused config_updated sentinel/audit"
+  - lane: "apps/auth-svc/internal/repository/"
+    result: PASS
+    note: "api_keys column SELECT/UPDATE/scan"
+
+evidence:
+  directory: ""
+  tests_reviewed: 0
+  trace:
+    ac_covered: [1, 2, 3, 4]
+    ac_gaps: []
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 8
+  security_sensitive: true
+  dev_gate_score: 96
+
+hard_gates:
+  G1_gating_matrix_3x3:
+    status: PASS
+    tests: ["TestStrictness_BlocksMatrix", "TestStrictness_BlocksBoundaryAtThreshold", "TestMinSeverity_RatifiedMapping"]
+  G2_first_qualifying_hit:
+    status: PASS
+    tests: ["TestScanTextMin_FirstQualifyingHit", "TestScanTextMin_SubThresholdPassThrough", "TestScanMin_FirstQualifyingAcrossMessages", "TestStreamGuardMin_FirstQualifyingAcrossSeam", "TestSafetyStrictness_InputFirstQualifying"]
+  G3_fail_closed:
+    status: PASS
+    tests: ["TestParseStrictness_FailClosed", "TestResolveStrictnessFromClaims_FailClosed", "TestSafetyStrictness_StrictAndFailClosedBlockAll"]
+  G4_strict_byte_identity:
+    status: PASS
+    note: "Holds BY CONSTRUCTION — ScanText delegates to ScanTextMin(_, SeverityLow), Scan→ScanMin(_, SeverityLow); NewStreamGuard kept byte-identical."
+    tests: ["TestScanTextMin_StrictEqualsPre84", "TestStreamGuardMin_StrictEqualsBlockAll"]
+  detection_no_FN_8283:
+    status: PASS
+    note: "8.2/8.3 no-false-negative suites pass unchanged; gating is strictly post-detection (BR-2.6)."
+
+ac_coverage:
+  AC1_storage_and_config_path:
+    status: VERIFIED
+    evidence: "migrations/postgres/0013 (VARCHAR(10) NOT NULL DEFAULT 'strict' CHECK); auth-svc update.go present-arm + defence-in-depth enum re-validate (:109) + reused config_updated sentinel/audit; me_keys_update.go gateway enum-before-RPC (:157-165) + ≥1-field gate + read-back (:228); validate.go/list.go carry the column."
+  AC2_severity_gating_both_directions:
+    status: VERIFIED
+    evidence: "strictness.go Blocks/MinSeverity (loose=high/default=medium/strict=low); ScanTextMin first-qualifying; applied at chat_completions.go:503-505 (input), chat_completions_safety_output.go:73-78 (redact), chat_completions_stream.go:78-81,248-251 (stream guard ×2)."
+  AC3_hot_path_threading_fail_closed:
+    status: VERIFIED
+    evidence: "bearer_auth.go:213 CachedClaims.ContentSafetyStrictness omitempty + :385 newClaims populate; resolve-once in ServeHTTP (chat_completions.go:454-455 → withResolvedStrictness); resolvedStrictness(ctx) re-read at all 3 sites; fail-closed on nil/!ok claims + ParseStrictness; reused config_updated purge (no new cache code)."
+  AC4_no_regression_failclosed_perf_85event_migration_docs:
+    status: VERIFIED
+    evidence: "G4 by construction; 3×3 matrix + fail-closed asserted; SafetyEvent.Strictness (recorder.go:41) recorded on gated-block only; proto round-trip UNIT-047; migration additive+reversible by construction; docs backfilled (§9.3 mapping, data-models, rest-api-spec)."
+
+# Non-blocking follow-ups (documented, precedent-aligned, with compensating controls):
+follow_ups:
+  - id: "FU-8.4-1"
+    severity: low
+    finding: "The .proto SOURCE (packages/proto/he/auth/v1/auth.proto) was NOT hand-edited — the 4 additive fields live only in the generated auth.pb.go. Dev disclosed this clearly."
+    compensating_control: "auth_strictness_roundtrip_test.go (UNIT-047) pins the wire tags 8/8/10/10; descriptor init verified clean."
+    suggested_action: "A buf-capable CI/regen step should add the four fields to the .proto source and re-vendor (project_toolchain_env_limits: buf cannot run locally)."
+  - id: "FU-8.4-2"
+    severity: low
+    finding: "Migration 0013 apply + `atlas migrate down 1` not exercised locally (atlas/docker unavailable); atlas.sum row carries the established placeholder hash."
+    compensating_control: "DDL hand-authored per 0006/0012 forward-only convention; reversibility asserted by construction (additive ADD COLUMN, NOT NULL+DEFAULT atomic backfill). Ratified by Architect L-1 / OQ-8.4-7."
+    suggested_action: "atlas-capable CI/operator regenerates the real atlas.sum hash and runs the apply/down round-trip."
+  - id: "FU-8.4-3"
+    severity: low
+    finding: "auth-svc -race lane may hit the 600s default timeout on slow hosts due to the PRE-EXISTING bcrypt cost-12 TestGenerate (not an 8.4 test)."
+    compensating_control: "8.4 logic is race-clean (gateway side ran -race green; 8.4 auth-svc tests use cost-4/no-bcrypt). Package passes without -race in 233.7s."
+    suggested_action: "Raise -timeout on the auth-svc -race CI lane (test.yml:62) — pre-existing infra concern, independent of this story."
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 3 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "Run the buf .proto regen + atlas.sum hash regen in a buf/atlas-capable CI step before/at deploy."
+      - "Confirm migration 0013 apply + down-1 round-trip in CI (reversibility verified by construction locally)."
+
+nfr_validation:
+  security: { status: PASS, notes: "Fail-closed-to-strict on absent/empty/unknown is a HARD gate (G3) and holds at two independent surfaces (column DEFAULT 'strict' + resolver). Anti-enumeration 404 posture preserved. No lexicon leak (matched term → 8.5 event seam only)." }
+  performance: { status: PASS, notes: "Gate is a pure rank compare on the rare hit path; clean path Bloom-excluded as before. BENCH-001 soft-gate present." }
+  reliability: { status: PASS, notes: "Resolve-once per request; input+output never diverge. Reused 5.2 config_updated coherency (≤300s, safe direction)." }
+  maintainability: { status: PASS, notes: "Pure gate isolated in contentsafety; additive seams (ScanTextMin/NewStreamGuardMin) keep all 8.2/8.3 call sites byte-identical." }
+
+history:
+  - at: "2026-06-11T00:00:00Z"
+    gate: PASS
+    note: "Round 1 full review. All 4 ACs VERIFIED + 4 HARD gates green + all test lanes pass independently. 3 non-blocking toolchain follow-ups documented."

@@ -57,9 +57,10 @@ type Repository interface {
 	UpdateAPIKeyRevokedAt(ctx context.Context, apiKeyID uuid.UUID) (time.Time, error)
 	GetUserStatus(ctx context.Context, userID uuid.UUID) (string, error)
 
-	// Story 5.2 — UpdateApiKey config-mutation surface.
+	// Story 5.2 — UpdateApiKey config-mutation surface (Story 8.4 extends
+	// UpdateAPIKeyConfig additively with the resolved strictness level).
 	SelectAPIKeyConfigForUpdate(ctx context.Context, apiKeyID uuid.UUID) (repository.ApiKeyRow, error)
-	UpdateAPIKeyConfig(ctx context.Context, apiKeyID, userID uuid.UUID, scope []byte, cap pgtype.Numeric) (repository.ApiKeyRow, error)
+	UpdateAPIKeyConfig(ctx context.Context, apiKeyID, userID uuid.UUID, scope []byte, cap pgtype.Numeric, strictness string) (repository.ApiKeyRow, error)
 }
 
 // QuerierRepository adapts a repository.Querier into the Repository
@@ -107,9 +108,9 @@ func (a QuerierRepository) SelectAPIKeyConfigForUpdate(ctx context.Context, apiK
 	return repository.SelectAPIKeyConfigForUpdate(ctx, a.Q, apiKeyID)
 }
 
-// UpdateAPIKeyConfig delegates the Story-5.2 UpdateApiKey UPDATE.
-func (a QuerierRepository) UpdateAPIKeyConfig(ctx context.Context, apiKeyID, userID uuid.UUID, scope []byte, cap pgtype.Numeric) (repository.ApiKeyRow, error) {
-	return repository.UpdateAPIKeyConfig(ctx, a.Q, apiKeyID, userID, scope, cap)
+// UpdateAPIKeyConfig delegates the Story-5.2/8.4 UpdateApiKey UPDATE.
+func (a QuerierRepository) UpdateAPIKeyConfig(ctx context.Context, apiKeyID, userID uuid.UUID, scope []byte, cap pgtype.Numeric, strictness string) (repository.ApiKeyRow, error) {
+	return repository.UpdateAPIKeyConfig(ctx, a.Q, apiKeyID, userID, scope, cap, strictness)
 }
 
 // GetUserStatus returns the user's status column ('active' /
@@ -335,6 +336,10 @@ func okResponse(row *repository.ApiKeyRow) *authv1.ValidateApiKeyResponse {
 		TeamId:   teamID,
 		Scope:    string(row.Scope),
 		Reason:   authv1.ApiKeyValidationReason_API_KEY_VALIDATION_REASON_UNSPECIFIED,
+		// Story 8.4 — carry the per-Key 内容安全 level on the Validate hot path so the
+		// gateway gates the bidirectional content-safety filter from the bearer
+		// cache. Column is NOT NULL so this is always populated (never "").
+		ContentSafetyStrictness: row.ContentSafetyStrictness,
 	}
 	// Story 5.2 — carry the monthly cost cap on the hot path so the gateway
 	// keypolicy middleware (AC4) enforces it from cache. NULL column → field

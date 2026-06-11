@@ -46,13 +46,19 @@ type ApiKeyRow struct {
 	LastUsedAt          pgtype.Timestamptz // nullable; Story-3.2 fire-and-forget UPDATE
 	RevokedAt           pgtype.Timestamptz // nullable; .Valid==false when key is active
 	CreatedAt           time.Time
+	// ContentSafetyStrictness is the Story-8.4 per-Key 内容安全 level
+	// (content_safety_strictness VARCHAR(10) NOT NULL DEFAULT 'strict' CHECK ∈
+	// {strict,default,loose}). NOT NULL → never "" on a selected row. Carried on
+	// the Validate hot path (gates the bidirectional filter) AND the List/Update
+	// config read-back paths.
+	ContentSafetyStrictness string
 }
 
 const (
 	// lookupAPIKeysByPrefixSQL drives the AC2 Validate hot path. ORDER BY id
 	// ASC for deterministic bcrypt iteration (BR-2.3). LIMIT bounds the
 	// candidate fanout (BR-2.3 max_candidates=100).
-	lookupAPIKeysByPrefixSQL = `SELECT id, user_id, team_id, key_prefix, key_hash, scope, monthly_cost_cap_usd, revoked_at, created_at
+	lookupAPIKeysByPrefixSQL = `SELECT id, user_id, team_id, key_prefix, key_hash, scope, monthly_cost_cap_usd, revoked_at, created_at, content_safety_strictness
 FROM he_api.api_keys
 WHERE key_prefix = $1
 ORDER BY id ASC
@@ -88,7 +94,7 @@ RETURNING id, created_at`
 	// SELECT list** per BR-2.5 defence-in-depth — the column never enters
 	// auth-svc memory on this path; 5.1-UNIT-019 grep-asserts.
 	listAPIKeysByUserSQL = `SELECT id, user_id, team_id, name, key_prefix, scope,
-       monthly_cost_cap_usd, current_month_cost_usd, last_used_at, revoked_at, created_at
+       monthly_cost_cap_usd, current_month_cost_usd, last_used_at, revoked_at, created_at, content_safety_strictness
 FROM he_api.api_keys
 WHERE user_id = $1
 ORDER BY created_at DESC, id ASC
@@ -122,7 +128,7 @@ RETURNING revoked_at`
 	// FOR UPDATE serializes concurrent config writes on the same id
 	// (last-writer-wins per Architect Q-G).
 	selectAPIKeyConfigForUpdateSQL = `SELECT id, user_id, team_id, name, key_prefix, scope,
-       monthly_cost_cap_usd, current_month_cost_usd, last_used_at, revoked_at, created_at
+       monthly_cost_cap_usd, current_month_cost_usd, last_used_at, revoked_at, created_at, content_safety_strictness
 FROM he_api.api_keys
 WHERE id = $1
 LIMIT 1
@@ -137,10 +143,10 @@ FOR UPDATE`
 	// Returns the full updated row so the handler builds the response without
 	// a re-SELECT.
 	updateAPIKeyConfigSQL = `UPDATE he_api.api_keys
-SET scope = $3, monthly_cost_cap_usd = $4
+SET scope = $3, monthly_cost_cap_usd = $4, content_safety_strictness = $5
 WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL
 RETURNING id, user_id, team_id, name, key_prefix, scope,
-          monthly_cost_cap_usd, current_month_cost_usd, last_used_at, revoked_at, created_at`
+          monthly_cost_cap_usd, current_month_cost_usd, last_used_at, revoked_at, created_at, content_safety_strictness`
 )
 
 // LookupAPIKeysByPrefix returns every api_keys row whose key_prefix matches
@@ -167,7 +173,7 @@ func LookupAPIKeysByPrefix(ctx context.Context, q Querier, prefix string) ([]Api
 		if err := rows.Scan(
 			&r.ID, &r.UserID, &r.TeamID,
 			&r.KeyPrefix, &r.KeyHash, &r.Scope,
-			&r.MonthlyCostCapUSD, &r.RevokedAt, &r.CreatedAt,
+			&r.MonthlyCostCapUSD, &r.RevokedAt, &r.CreatedAt, &r.ContentSafetyStrictness,
 		); err != nil {
 			return nil, err
 		}
@@ -249,7 +255,7 @@ func ListAPIKeysByUser(ctx context.Context, q Querier, userID uuid.UUID) ([]ApiK
 			&r.ID, &r.UserID, &r.TeamID,
 			&r.Name, &r.KeyPrefix, &r.Scope,
 			&r.MonthlyCostCapUSD, &r.CurrentMonthCostUSD,
-			&r.LastUsedAt, &r.RevokedAt, &r.CreatedAt,
+			&r.LastUsedAt, &r.RevokedAt, &r.CreatedAt, &r.ContentSafetyStrictness,
 		); err != nil {
 			return nil, err
 		}
@@ -307,6 +313,7 @@ func scanAPIKeyConfigRow(row pgx.Row) (ApiKeyRow, error) {
 	if err := row.Scan(
 		&r.ID, &r.UserID, &r.TeamID, &r.Name, &r.KeyPrefix, &r.Scope,
 		&r.MonthlyCostCapUSD, &r.CurrentMonthCostUSD, &r.LastUsedAt, &r.RevokedAt, &r.CreatedAt,
+		&r.ContentSafetyStrictness,
 	); err != nil {
 		return ApiKeyRow{}, err
 	}
@@ -386,13 +393,15 @@ func ResetMonthlyCosts(ctx context.Context, q Querier) (int64, error) {
 	return tag.RowsAffected(), nil
 }
 
-// UpdateAPIKeyConfig writes the merged scope JSONB + monthly_cost_cap_usd for
-// the Story-5.2 UpdateApiKey RPC (AC1). The WHERE clause re-asserts ownership
-// + revoke-state against TOCTOU; a concurrent revoke between SELECT and
-// UPDATE collapses to ErrAPIKeyNotFound (BR-1.8). Returns the full updated
-// row. `cap` with Valid=false stores SQL NULL ("no cap" per BR-4.1).
-func UpdateAPIKeyConfig(ctx context.Context, q Querier, apiKeyID, userID uuid.UUID, scope []byte, cap pgtype.Numeric) (ApiKeyRow, error) {
-	r, err := scanAPIKeyConfigRow(q.QueryRow(ctx, updateAPIKeyConfigSQL, apiKeyID, userID, scope, cap))
+// UpdateAPIKeyConfig writes the merged scope JSONB + monthly_cost_cap_usd +
+// content_safety_strictness for the Story-5.2/8.4 UpdateApiKey RPC. The WHERE
+// clause re-asserts ownership + revoke-state against TOCTOU; a concurrent revoke
+// between SELECT and UPDATE collapses to ErrAPIKeyNotFound (BR-1.8). Returns the
+// full updated row. `cap` with Valid=false stores SQL NULL ("no cap"). `strictness`
+// is the already-resolved level (caller preserves the existing value when the
+// patch omits it; the column is NOT NULL so this is never "").
+func UpdateAPIKeyConfig(ctx context.Context, q Querier, apiKeyID, userID uuid.UUID, scope []byte, cap pgtype.Numeric, strictness string) (ApiKeyRow, error) {
+	r, err := scanAPIKeyConfigRow(q.QueryRow(ctx, updateAPIKeyConfigSQL, apiKeyID, userID, scope, cap, strictness))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ApiKeyRow{}, ErrAPIKeyNotFound

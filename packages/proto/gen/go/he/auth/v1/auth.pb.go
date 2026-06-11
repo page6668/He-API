@@ -2568,8 +2568,13 @@ type ValidateApiKeyResponse struct {
 	// api-gateway keypolicy middleware (AC4) enforces the cap from the bearer
 	// cache WITHOUT a per-request PG round-trip (Q-A cache-shape extension).
 	MonthlyCostCapUsd *string `protobuf:"bytes,7,opt,name=monthly_cost_cap_usd,json=monthlyCostCapUsd,proto3,oneof" json:"monthly_cost_cap_usd,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// Story 8.4 — the key's content_safety_strictness ("strict"/"default"/"loose").
+	// Column is NOT NULL so this is always populated on ok=true; "" only if the RPC
+	// predates 8.4 (the gateway resolver fail-closes "" → strict). Carried on the
+	// Validate hot path so the gateway gates the bidirectional filter from cache.
+	ContentSafetyStrictness string `protobuf:"bytes,8,opt,name=content_safety_strictness,json=contentSafetyStrictness,proto3" json:"content_safety_strictness,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *ValidateApiKeyResponse) Reset() {
@@ -2647,6 +2652,13 @@ func (x *ValidateApiKeyResponse) GetReason() ApiKeyValidationReason {
 func (x *ValidateApiKeyResponse) GetMonthlyCostCapUsd() string {
 	if x != nil && x.MonthlyCostCapUsd != nil {
 		return *x.MonthlyCostCapUsd
+	}
+	return ""
+}
+
+func (x *ValidateApiKeyResponse) GetContentSafetyStrictness() string {
+	if x != nil {
+		return x.ContentSafetyStrictness
 	}
 	return ""
 }
@@ -2906,8 +2918,11 @@ type ApiKeyEntry struct {
 	LastUsedAt          *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=last_used_at,json=lastUsedAt,proto3,oneof" json:"last_used_at,omitempty"`
 	RevokedAt           *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=revoked_at,json=revokedAt,proto3,oneof" json:"revoked_at,omitempty"`
 	CreatedAt           *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// Story 8.4 — the key's content_safety_strictness on the LIST/GET read path so
+	// the owner can observe the effective level (NOT NULL → always populated).
+	ContentSafetyStrictness string `protobuf:"bytes,10,opt,name=content_safety_strictness,json=contentSafetyStrictness,proto3" json:"content_safety_strictness,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *ApiKeyEntry) Reset() {
@@ -3001,6 +3016,13 @@ func (x *ApiKeyEntry) GetCreatedAt() *timestamppb.Timestamp {
 		return x.CreatedAt
 	}
 	return nil
+}
+
+func (x *ApiKeyEntry) GetContentSafetyStrictness() string {
+	if x != nil {
+		return x.ContentSafetyStrictness
+	}
+	return ""
 }
 
 type RevokeApiKeyRequest struct {
@@ -3224,8 +3246,13 @@ type UpdateApiKeyRequest struct {
 	ClearMonthlyCap   bool                   `protobuf:"varint,5,opt,name=clear_monthly_cap,json=clearMonthlyCap,proto3" json:"clear_monthly_cap,omitempty"`              // true → set monthly_cost_cap_usd = NULL
 	ClientIp          string                 `protobuf:"bytes,6,opt,name=client_ip,json=clientIp,proto3" json:"client_ip,omitempty"`                                      // audit (hashed)
 	UserAgent         string                 `protobuf:"bytes,7,opt,name=user_agent,json=userAgent,proto3" json:"user_agent,omitempty"`                                   // audit (hashed)
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// Story 8.4 — present → set api_keys.content_safety_strictness; absent →
+	// untouched (proto3 optional present/absent semantics, mirroring the cap
+	// pointer). The gateway validates the {strict,default,loose} enum BEFORE the
+	// RPC; no "clear" flag is needed (the column is NOT NULL — no NULL state).
+	ContentSafetyStrictness *string `protobuf:"bytes,8,opt,name=content_safety_strictness,json=contentSafetyStrictness,proto3,oneof" json:"content_safety_strictness,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *UpdateApiKeyRequest) Reset() {
@@ -3307,6 +3334,13 @@ func (x *UpdateApiKeyRequest) GetUserAgent() string {
 	return ""
 }
 
+func (x *UpdateApiKeyRequest) GetContentSafetyStrictness() string {
+	if x != nil && x.ContentSafetyStrictness != nil {
+		return *x.ContentSafetyStrictness
+	}
+	return ""
+}
+
 // UpdateApiKeyResponse mirrors ApiKeyEntry's field set (minus key_hash) so
 // the Console UI renders the post-update row with the same component as
 // ListApiKeys. revoked_at is always null on a successful UPDATE (revoked
@@ -3322,8 +3356,11 @@ type UpdateApiKeyResponse struct {
 	LastUsedAt          *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=last_used_at,json=lastUsedAt,proto3,oneof" json:"last_used_at,omitempty"`
 	RevokedAt           *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=revoked_at,json=revokedAt,proto3,oneof" json:"revoked_at,omitempty"` // always null on UPDATE
 	CreatedAt           *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// Story 8.4 — the persisted content_safety_strictness echoed on the PATCH
+	// read-back so the owner sees the effective level (NOT NULL → always populated).
+	ContentSafetyStrictness string `protobuf:"bytes,10,opt,name=content_safety_strictness,json=contentSafetyStrictness,proto3" json:"content_safety_strictness,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *UpdateApiKeyResponse) Reset() {
@@ -3410,6 +3447,13 @@ func (x *UpdateApiKeyResponse) GetRevokedAt() *timestamppb.Timestamp {
 		return x.RevokedAt
 	}
 	return nil
+}
+
+func (x *UpdateApiKeyResponse) GetContentSafetyStrictness() string {
+	if x != nil {
+		return x.ContentSafetyStrictness
+	}
+	return ""
 }
 
 func (x *UpdateApiKeyResponse) GetCreatedAt() *timestamppb.Timestamp {
@@ -3551,351 +3595,7 @@ func (x *GetCapNotificationContextResponse) GetKeyMonthlyCostCapUsd() string {
 
 var File_he_auth_v1_auth_proto protoreflect.FileDescriptor
 
-const file_he_auth_v1_auth_proto_rawDesc = "" +
-	"\n" +
-	"\x15he/auth/v1/auth.proto\x12\n" +
-	"he.auth.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9b\x01\n" +
-	"\x13RegisterUserRequest\x12\x14\n" +
-	"\x05email\x18\x01 \x01(\tR\x05email\x12\x1a\n" +
-	"\bpassword\x18\x02 \x01(\tR\bpassword\x12\x16\n" +
-	"\x06locale\x18\x03 \x01(\tR\x06locale\x12\x1b\n" +
-	"\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1d\n" +
-	"\n" +
-	"user_agent\x18\x05 \x01(\tR\tuserAgent\".\n" +
-	"\x14RegisterUserResponse\x12\x16\n" +
-	"\x06status\x18\x01 \x01(\tR\x06status\"f\n" +
-	"\x12VerifyEmailRequest\x12\x14\n" +
-	"\x05token\x18\x01 \x01(\tR\x05token\x12\x1b\n" +
-	"\tclient_ip\x18\x02 \x01(\tR\bclientIp\x12\x1d\n" +
-	"\n" +
-	"user_agent\x18\x03 \x01(\tR\tuserAgent\"r\n" +
-	"\x13VerifyEmailResponse\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12*\n" +
-	"\x11email_verified_at\x18\x02 \x01(\tR\x0femailVerifiedAt\x12\x16\n" +
-	"\x06status\x18\x03 \x01(\tR\x06status\"m\n" +
-	"\x19ResendVerificationRequest\x12\x14\n" +
-	"\x05email\x18\x01 \x01(\tR\x05email\x12\x1b\n" +
-	"\tclient_ip\x18\x02 \x01(\tR\bclientIp\x12\x1d\n" +
-	"\n" +
-	"user_agent\x18\x03 \x01(\tR\tuserAgent\"4\n" +
-	"\x1aResendVerificationResponse\x12\x16\n" +
-	"\x06status\x18\x01 \x01(\tR\x06status\"\x80\x01\n" +
-	"\x10LoginUserRequest\x12\x14\n" +
-	"\x05email\x18\x01 \x01(\tR\x05email\x12\x1a\n" +
-	"\bpassword\x18\x02 \x01(\tR\bpassword\x12\x1b\n" +
-	"\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x1d\n" +
-	"\n" +
-	"user_agent\x18\x04 \x01(\tR\tuserAgent\"\xc9\x02\n" +
-	"\x11LoginUserResponse\x12/\n" +
-	"\x06status\x18\x01 \x01(\x0e2\x17.he.auth.v1.LoginStatusR\x06status\x12!\n" +
-	"\faccess_token\x18\x02 \x01(\tR\vaccessToken\x12#\n" +
-	"\rrefresh_token\x18\x03 \x01(\tR\frefreshToken\x12D\n" +
-	"\x1faccess_token_expires_in_seconds\x18\x04 \x01(\x05R\x1baccessTokenExpiresInSeconds\x12F\n" +
-	" refresh_token_expires_in_seconds\x18\x05 \x01(\x05R\x1crefreshTokenExpiresInSeconds\x12\x1b\n" +
-	"\tmfa_token\x18\x06 \x01(\tR\bmfaToken\x12\x10\n" +
-	"\x03aal\x18\a \x01(\x05R\x03aal\"v\n" +
-	"\x13RefreshTokenRequest\x12#\n" +
-	"\rrefresh_token\x18\x01 \x01(\tR\frefreshToken\x12\x1b\n" +
-	"\tclient_ip\x18\x02 \x01(\tR\bclientIp\x12\x1d\n" +
-	"\n" +
-	"user_agent\x18\x03 \x01(\tR\tuserAgent\"\xec\x01\n" +
-	"\x14RefreshTokenResponse\x12!\n" +
-	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n" +
-	"\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12D\n" +
-	"\x1faccess_token_expires_in_seconds\x18\x03 \x01(\x05R\x1baccessTokenExpiresInSeconds\x12F\n" +
-	" refresh_token_expires_in_seconds\x18\x04 \x01(\x05R\x1crefreshTokenExpiresInSeconds\"\xa0\x01\n" +
-	"\x11BeginOAuthRequest\x12\x1a\n" +
-	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x1b\n" +
-	"\treturn_to\x18\x02 \x01(\tR\breturnTo\x12\x16\n" +
-	"\x06locale\x18\x03 \x01(\tR\x06locale\x12\x1b\n" +
-	"\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1d\n" +
-	"\n" +
-	"user_agent\x18\x05 \x01(\tR\tuserAgent\"|\n" +
-	"\x12BeginOAuthResponse\x12#\n" +
-	"\rauthorize_url\x18\x01 \x01(\tR\fauthorizeUrl\x12\x19\n" +
-	"\bstate_id\x18\x02 \x01(\tR\astateId\x12&\n" +
-	"\x0fexpires_at_unix\x18\x03 \x01(\x03R\rexpiresAtUnix\"\x9d\x01\n" +
-	"\x14CompleteOAuthRequest\x12\x1a\n" +
-	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x12\n" +
-	"\x04code\x18\x02 \x01(\tR\x04code\x12\x19\n" +
-	"\bstate_id\x18\x03 \x01(\tR\astateId\x12\x1b\n" +
-	"\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1d\n" +
-	"\n" +
-	"user_agent\x18\x05 \x01(\tR\tuserAgent\"\xb1\x02\n" +
-	"\x15CompleteOAuthResponse\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12!\n" +
-	"\faccess_token\x18\x02 \x01(\tR\vaccessToken\x12#\n" +
-	"\rrefresh_token\x18\x03 \x01(\tR\frefreshToken\x12!\n" +
-	"\frequires_2fa\x18\x04 \x01(\bR\vrequires2fa\x12\x1e\n" +
-	"\vis_new_user\x18\x05 \x01(\bR\tisNewUser\x12:\n" +
-	"\flink_outcome\x18\x06 \x01(\x0e2\x17.he.auth.v1.LinkOutcomeR\vlinkOutcome\x12\x1b\n" +
-	"\treturn_to\x18\a \x01(\tR\breturnTo\x12\x1b\n" +
-	"\tmfa_token\x18\b \x01(\tR\bmfaToken\"l\n" +
-	"\x15EnrollTOTPInitRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1b\n" +
-	"\tclient_ip\x18\x02 \x01(\tR\bclientIp\x12\x1d\n" +
-	"\n" +
-	"user_agent\x18\x03 \x01(\tR\tuserAgent\"\xa8\x01\n" +
-	"\x16EnrollTOTPInitResponse\x12\x1f\n" +
-	"\votpauth_uri\x18\x01 \x01(\tR\n" +
-	"otpauthUri\x12\x1e\n" +
-	"\vqr_code_png\x18\x02 \x01(\fR\tqrCodePng\x12%\n" +
-	"\x0erecovery_codes\x18\x03 \x03(\tR\rrecoveryCodes\x12&\n" +
-	"\x0fexpires_at_unix\x18\x04 \x01(\x03R\rexpiresAtUnix\"\xbb\x01\n" +
-	"\x17EnrollTOTPVerifyRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x12\n" +
-	"\x04code\x18\x02 \x01(\tR\x04code\x127\n" +
-	"\x18ack_recovery_codes_saved\x18\x03 \x01(\bR\x15ackRecoveryCodesSaved\x12\x1b\n" +
-	"\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1d\n" +
-	"\n" +
-	"user_agent\x18\x05 \x01(\tR\tuserAgent\"T\n" +
-	"\x18EnrollTOTPVerifyResponse\x12\x0e\n" +
-	"\x02ok\x18\x01 \x01(\bR\x02ok\x12(\n" +
-	"\x10enrolled_at_unix\x18\x02 \x01(\x03R\x0eenrolledAtUnix\"\x83\x01\n" +
-	"\x14ChallengeTOTPRequest\x12\x1b\n" +
-	"\tmfa_token\x18\x01 \x01(\tR\bmfaToken\x12\x12\n" +
-	"\x04code\x18\x02 \x01(\tR\x04code\x12\x1b\n" +
-	"\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x1d\n" +
-	"\n" +
-	"user_agent\x18\x04 \x01(\tR\tuserAgent\"\x9c\x02\n" +
-	"\x15ChallengeTOTPResponse\x12!\n" +
-	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n" +
-	"\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12D\n" +
-	"\x1faccess_token_expires_in_seconds\x18\x03 \x01(\x05R\x1baccessTokenExpiresInSeconds\x12F\n" +
-	" refresh_token_expires_in_seconds\x18\x04 \x01(\x05R\x1crefreshTokenExpiresInSeconds\x12\x10\n" +
-	"\x03aal\x18\x05 \x01(\x05R\x03aal\x12\x1b\n" +
-	"\treturn_to\x18\x06 \x01(\tR\breturnTo\"\x85\x01\n" +
-	"\x16UseRecoveryCodeRequest\x12\x1b\n" +
-	"\tmfa_token\x18\x01 \x01(\tR\bmfaToken\x12\x12\n" +
-	"\x04code\x18\x02 \x01(\tR\x04code\x12\x1b\n" +
-	"\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x1d\n" +
-	"\n" +
-	"user_agent\x18\x04 \x01(\tR\tuserAgent\"\x86\x03\n" +
-	"\x17UseRecoveryCodeResponse\x12!\n" +
-	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n" +
-	"\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12D\n" +
-	"\x1faccess_token_expires_in_seconds\x18\x03 \x01(\x05R\x1baccessTokenExpiresInSeconds\x12F\n" +
-	" refresh_token_expires_in_seconds\x18\x04 \x01(\x05R\x1crefreshTokenExpiresInSeconds\x12\x10\n" +
-	"\x03aal\x18\x05 \x01(\x05R\x03aal\x128\n" +
-	"\x18recovery_codes_remaining\x18\x06 \x01(\x05R\x16recoveryCodesRemaining\x12,\n" +
-	"\x12recovery_codes_low\x18\a \x01(\bR\x10recoveryCodesLow\x12\x1b\n" +
-	"\treturn_to\x18\b \x01(\tR\breturnTo\"\xb7\x01\n" +
-	"\x12DisableTOTPRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x126\n" +
-	"\x06factor\x18\x02 \x01(\x0e2\x1e.he.auth.v1.VerificationFactorR\x06factor\x12\x14\n" +
-	"\x05value\x18\x03 \x01(\tR\x05value\x12\x1b\n" +
-	"\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1d\n" +
-	"\n" +
-	"user_agent\x18\x05 \x01(\tR\tuserAgent\"%\n" +
-	"\x13DisableTOTPResponse\x12\x0e\n" +
-	"\x02ok\x18\x01 \x01(\bR\x02ok\"\xc3\x01\n" +
-	"\x1eRegenerateRecoveryCodesRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x126\n" +
-	"\x06factor\x18\x02 \x01(\x0e2\x1e.he.auth.v1.VerificationFactorR\x06factor\x12\x14\n" +
-	"\x05value\x18\x03 \x01(\tR\x05value\x12\x1b\n" +
-	"\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1d\n" +
-	"\n" +
-	"user_agent\x18\x05 \x01(\tR\tuserAgent\"H\n" +
-	"\x1fRegenerateRecoveryCodesResponse\x12%\n" +
-	"\x0erecovery_codes\x18\x01 \x03(\tR\rrecoveryCodes\"'\n" +
-	"\fGetMeRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\"\x97\x03\n" +
-	"\rGetMeResponse\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
-	"\x05email\x18\x02 \x01(\tR\x05email\x12&\n" +
-	"\fdisplay_name\x18\x03 \x01(\tH\x00R\vdisplayName\x88\x01\x01\x12\x16\n" +
-	"\x06locale\x18\x04 \x01(\tR\x06locale\x12\x1a\n" +
-	"\btimezone\x18\x05 \x01(\tR\btimezone\x12!\n" +
-	"\ftotp_enabled\x18\x06 \x01(\bR\vtotpEnabled\x12*\n" +
-	"\x0eoauth_provider\x18\a \x01(\tH\x01R\roauthProvider\x88\x01\x01\x129\n" +
-	"\n" +
-	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
-	"\n" +
-	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x12\n" +
-	"\x04etag\x18\n" +
-	" \x01(\tR\x04etagB\x0f\n" +
-	"\r_display_nameB\x11\n" +
-	"\x0f_oauth_provider\"\x95\x02\n" +
-	"\x14UpdateProfileRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12&\n" +
-	"\fdisplay_name\x18\x02 \x01(\tH\x00R\vdisplayName\x88\x01\x01\x12\x1b\n" +
-	"\x06locale\x18\x03 \x01(\tH\x01R\x06locale\x88\x01\x01\x12\x1f\n" +
-	"\btimezone\x18\x04 \x01(\tH\x02R\btimezone\x88\x01\x01\x12\x19\n" +
-	"\bif_match\x18\x05 \x01(\tR\aifMatch\x12\x1b\n" +
-	"\tclient_ip\x18\x06 \x01(\tR\bclientIp\x12\x1d\n" +
-	"\n" +
-	"user_agent\x18\a \x01(\tR\tuserAgentB\x0f\n" +
-	"\r_display_nameB\t\n" +
-	"\a_localeB\v\n" +
-	"\t_timezone\"\xc6\x03\n" +
-	"\x15UpdateProfileResponse\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
-	"\x05email\x18\x02 \x01(\tR\x05email\x12&\n" +
-	"\fdisplay_name\x18\x03 \x01(\tH\x00R\vdisplayName\x88\x01\x01\x12\x16\n" +
-	"\x06locale\x18\x04 \x01(\tR\x06locale\x12\x1a\n" +
-	"\btimezone\x18\x05 \x01(\tR\btimezone\x12!\n" +
-	"\ftotp_enabled\x18\x06 \x01(\bR\vtotpEnabled\x12*\n" +
-	"\x0eoauth_provider\x18\a \x01(\tH\x01R\roauthProvider\x88\x01\x01\x129\n" +
-	"\n" +
-	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
-	"\n" +
-	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x12\n" +
-	"\x04etag\x18\n" +
-	" \x01(\tR\x04etag\x12%\n" +
-	"\x0elocale_changed\x18\v \x01(\bR\rlocaleChangedB\x0f\n" +
-	"\r_display_nameB\x11\n" +
-	"\x0f_oauth_provider\"x\n" +
-	"\x15ValidateApiKeyRequest\x12#\n" +
-	"\rplaintext_key\x18\x01 \x01(\tR\fplaintextKey\x12\x1b\n" +
-	"\tclient_ip\x18\x02 \x01(\tR\bclientIp\x12\x1d\n" +
-	"\n" +
-	"user_agent\x18\x03 \x01(\tR\tuserAgent\"\x99\x02\n" +
-	"\x16ValidateApiKeyResponse\x12\x0e\n" +
-	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x1c\n" +
-	"\n" +
-	"api_key_id\x18\x02 \x01(\tR\bapiKeyId\x12\x17\n" +
-	"\auser_id\x18\x03 \x01(\tR\x06userId\x12\x17\n" +
-	"\ateam_id\x18\x04 \x01(\tR\x06teamId\x12\x14\n" +
-	"\x05scope\x18\x05 \x01(\tR\x05scope\x12:\n" +
-	"\x06reason\x18\x06 \x01(\x0e2\".he.auth.v1.ApiKeyValidationReasonR\x06reason\x124\n" +
-	"\x14monthly_cost_cap_usd\x18\a \x01(\tH\x00R\x11monthlyCostCapUsd\x88\x01\x01B\x17\n" +
-	"\x15_monthly_cost_cap_usd\"~\n" +
-	"\x13CreateApiKeyRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n" +
-	"\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x1d\n" +
-	"\n" +
-	"user_agent\x18\x04 \x01(\tR\tuserAgent\"\xc0\x01\n" +
-	"\x14CreateApiKeyResponse\x12\x1c\n" +
-	"\n" +
-	"api_key_id\x18\x01 \x01(\tR\bapiKeyId\x12\x1d\n" +
-	"\n" +
-	"key_prefix\x18\x02 \x01(\tR\tkeyPrefix\x12\x12\n" +
-	"\x04name\x18\x03 \x01(\tR\x04name\x129\n" +
-	"\n" +
-	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x1c\n" +
-	"\tplaintext\x18\x05 \x01(\tR\tplaintext\"-\n" +
-	"\x12ListApiKeysRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\"B\n" +
-	"\x13ListApiKeysResponse\x12+\n" +
-	"\x04keys\x18\x01 \x03(\v2\x17.he.auth.v1.ApiKeyEntryR\x04keys\"\xd6\x03\n" +
-	"\vApiKeyEntry\x12\x1c\n" +
-	"\n" +
-	"api_key_id\x18\x01 \x01(\tR\bapiKeyId\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n" +
-	"\n" +
-	"key_prefix\x18\x03 \x01(\tR\tkeyPrefix\x12\x14\n" +
-	"\x05scope\x18\x04 \x01(\tR\x05scope\x124\n" +
-	"\x14monthly_cost_cap_usd\x18\x05 \x01(\tH\x00R\x11monthlyCostCapUsd\x88\x01\x01\x123\n" +
-	"\x16current_month_cost_usd\x18\x06 \x01(\tR\x13currentMonthCostUsd\x12A\n" +
-	"\flast_used_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampH\x01R\n" +
-	"lastUsedAt\x88\x01\x01\x12>\n" +
-	"\n" +
-	"revoked_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampH\x02R\trevokedAt\x88\x01\x01\x129\n" +
-	"\n" +
-	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAtB\x17\n" +
-	"\x15_monthly_cost_cap_usdB\x0f\n" +
-	"\r_last_used_atB\r\n" +
-	"\v_revoked_at\"\x88\x01\n" +
-	"\x13RevokeApiKeyRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1c\n" +
-	"\n" +
-	"api_key_id\x18\x02 \x01(\tR\bapiKeyId\x12\x1b\n" +
-	"\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x1d\n" +
-	"\n" +
-	"user_agent\x18\x04 \x01(\tR\tuserAgent\"\x9f\x01\n" +
-	"\x14RevokeApiKeyResponse\x12\x1c\n" +
-	"\n" +
-	"api_key_id\x18\x01 \x01(\tR\bapiKeyId\x129\n" +
-	"\n" +
-	"revoked_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\trevokedAt\x12.\n" +
-	"\x13was_already_revoked\x18\x03 \x01(\bR\x11wasAlreadyRevoked\"\xa0\x01\n" +
-	"\n" +
-	"ScopePatch\x12\x16\n" +
-	"\x06models\x18\x01 \x03(\tR\x06models\x12%\n" +
-	"\x0emodels_present\x18\x02 \x01(\bR\rmodelsPresent\x12!\n" +
-	"\fip_whitelist\x18\x03 \x03(\tR\vipWhitelist\x120\n" +
-	"\x14ip_whitelist_present\x18\x04 \x01(\bR\x12ipWhitelistPresent\"\xb1\x02\n" +
-	"\x13UpdateApiKeyRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1c\n" +
-	"\n" +
-	"api_key_id\x18\x02 \x01(\tR\bapiKeyId\x12,\n" +
-	"\x05scope\x18\x03 \x01(\v2\x16.he.auth.v1.ScopePatchR\x05scope\x124\n" +
-	"\x14monthly_cost_cap_usd\x18\x04 \x01(\tH\x00R\x11monthlyCostCapUsd\x88\x01\x01\x12*\n" +
-	"\x11clear_monthly_cap\x18\x05 \x01(\bR\x0fclearMonthlyCap\x12\x1b\n" +
-	"\tclient_ip\x18\x06 \x01(\tR\bclientIp\x12\x1d\n" +
-	"\n" +
-	"user_agent\x18\a \x01(\tR\tuserAgentB\x17\n" +
-	"\x15_monthly_cost_cap_usd\"\xdf\x03\n" +
-	"\x14UpdateApiKeyResponse\x12\x1c\n" +
-	"\n" +
-	"api_key_id\x18\x01 \x01(\tR\bapiKeyId\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n" +
-	"\n" +
-	"key_prefix\x18\x03 \x01(\tR\tkeyPrefix\x12\x14\n" +
-	"\x05scope\x18\x04 \x01(\tR\x05scope\x124\n" +
-	"\x14monthly_cost_cap_usd\x18\x05 \x01(\tH\x00R\x11monthlyCostCapUsd\x88\x01\x01\x123\n" +
-	"\x16current_month_cost_usd\x18\x06 \x01(\tR\x13currentMonthCostUsd\x12A\n" +
-	"\flast_used_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampH\x01R\n" +
-	"lastUsedAt\x88\x01\x01\x12>\n" +
-	"\n" +
-	"revoked_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampH\x02R\trevokedAt\x88\x01\x01\x129\n" +
-	"\n" +
-	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAtB\x17\n" +
-	"\x15_monthly_cost_cap_usdB\x0f\n" +
-	"\r_last_used_atB\r\n" +
-	"\v_revoked_at\"@\n" +
-	" GetCapNotificationContextRequest\x12\x1c\n" +
-	"\n" +
-	"api_key_id\x18\x01 \x01(\tR\bapiKeyId\"\xe2\x01\n" +
-	"!GetCapNotificationContextResponse\x12\x1d\n" +
-	"\n" +
-	"user_email\x18\x01 \x01(\tR\tuserEmail\x12\x1f\n" +
-	"\vuser_locale\x18\x02 \x01(\tR\n" +
-	"userLocale\x12*\n" +
-	"\x11user_display_name\x18\x03 \x01(\tR\x0fuserDisplayName\x12\x19\n" +
-	"\bkey_name\x18\x04 \x01(\tR\akeyName\x126\n" +
-	"\x18key_monthly_cost_cap_usd\x18\x05 \x01(\tR\x14keyMonthlyCostCapUsd*_\n" +
-	"\vLoginStatus\x12\x1c\n" +
-	"\x18LOGIN_STATUS_UNSPECIFIED\x10\x00\x12\x13\n" +
-	"\x0fLOGIN_STATUS_OK\x10\x01\x12\x1d\n" +
-	"\x19LOGIN_STATUS_REQUIRES_2FA\x10\x02*y\n" +
-	"\vLinkOutcome\x12\x1c\n" +
-	"\x18LINK_OUTCOME_UNSPECIFIED\x10\x00\x12\x19\n" +
-	"\x15LINK_OUTCOME_NEW_USER\x10\x01\x12\x17\n" +
-	"\x13LINK_OUTCOME_LINKED\x10\x02\x12\x18\n" +
-	"\x14LINK_OUTCOME_RELOGIN\x10\x03*y\n" +
-	"\x12VerificationFactor\x12#\n" +
-	"\x1fVERIFICATION_FACTOR_UNSPECIFIED\x10\x00\x12\x1c\n" +
-	"\x18VERIFICATION_FACTOR_TOTP\x10\x01\x12 \n" +
-	"\x1cVERIFICATION_FACTOR_PASSWORD\x10\x02*\x93\x01\n" +
-	"\x16ApiKeyValidationReason\x12)\n" +
-	"%API_KEY_VALIDATION_REASON_UNSPECIFIED\x10\x00\x12'\n" +
-	"#API_KEY_VALIDATION_REASON_NOT_FOUND\x10\x01\x12%\n" +
-	"!API_KEY_VALIDATION_REASON_REVOKED\x10\x022\xb3\x0e\n" +
-	"\vAuthService\x12Q\n" +
-	"\fRegisterUser\x12\x1f.he.auth.v1.RegisterUserRequest\x1a .he.auth.v1.RegisterUserResponse\x12N\n" +
-	"\vVerifyEmail\x12\x1e.he.auth.v1.VerifyEmailRequest\x1a\x1f.he.auth.v1.VerifyEmailResponse\x12c\n" +
-	"\x12ResendVerification\x12%.he.auth.v1.ResendVerificationRequest\x1a&.he.auth.v1.ResendVerificationResponse\x12H\n" +
-	"\tLoginUser\x12\x1c.he.auth.v1.LoginUserRequest\x1a\x1d.he.auth.v1.LoginUserResponse\x12Q\n" +
-	"\fRefreshToken\x12\x1f.he.auth.v1.RefreshTokenRequest\x1a .he.auth.v1.RefreshTokenResponse\x12K\n" +
-	"\n" +
-	"BeginOAuth\x12\x1d.he.auth.v1.BeginOAuthRequest\x1a\x1e.he.auth.v1.BeginOAuthResponse\x12T\n" +
-	"\rCompleteOAuth\x12 .he.auth.v1.CompleteOAuthRequest\x1a!.he.auth.v1.CompleteOAuthResponse\x12W\n" +
-	"\x0eEnrollTOTPInit\x12!.he.auth.v1.EnrollTOTPInitRequest\x1a\".he.auth.v1.EnrollTOTPInitResponse\x12]\n" +
-	"\x10EnrollTOTPVerify\x12#.he.auth.v1.EnrollTOTPVerifyRequest\x1a$.he.auth.v1.EnrollTOTPVerifyResponse\x12T\n" +
-	"\rChallengeTOTP\x12 .he.auth.v1.ChallengeTOTPRequest\x1a!.he.auth.v1.ChallengeTOTPResponse\x12Z\n" +
-	"\x0fUseRecoveryCode\x12\".he.auth.v1.UseRecoveryCodeRequest\x1a#.he.auth.v1.UseRecoveryCodeResponse\x12N\n" +
-	"\vDisableTOTP\x12\x1e.he.auth.v1.DisableTOTPRequest\x1a\x1f.he.auth.v1.DisableTOTPResponse\x12r\n" +
-	"\x17RegenerateRecoveryCodes\x12*.he.auth.v1.RegenerateRecoveryCodesRequest\x1a+.he.auth.v1.RegenerateRecoveryCodesResponse\x12<\n" +
-	"\x05GetMe\x12\x18.he.auth.v1.GetMeRequest\x1a\x19.he.auth.v1.GetMeResponse\x12T\n" +
-	"\rUpdateProfile\x12 .he.auth.v1.UpdateProfileRequest\x1a!.he.auth.v1.UpdateProfileResponse\x12W\n" +
-	"\x0eValidateApiKey\x12!.he.auth.v1.ValidateApiKeyRequest\x1a\".he.auth.v1.ValidateApiKeyResponse\x12Q\n" +
-	"\fCreateApiKey\x12\x1f.he.auth.v1.CreateApiKeyRequest\x1a .he.auth.v1.CreateApiKeyResponse\x12N\n" +
-	"\vListApiKeys\x12\x1e.he.auth.v1.ListApiKeysRequest\x1a\x1f.he.auth.v1.ListApiKeysResponse\x12Q\n" +
-	"\fRevokeApiKey\x12\x1f.he.auth.v1.RevokeApiKeyRequest\x1a .he.auth.v1.RevokeApiKeyResponse\x12Q\n" +
-	"\fUpdateApiKey\x12\x1f.he.auth.v1.UpdateApiKeyRequest\x1a .he.auth.v1.UpdateApiKeyResponse\x12x\n" +
-	"\x19GetCapNotificationContext\x12,.he.auth.v1.GetCapNotificationContextRequest\x1a-.he.auth.v1.GetCapNotificationContextResponseBBZ@github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1;authv1b\x06proto3"
+const file_he_auth_v1_auth_proto_rawDesc = "\n\x15he/auth/v1/auth.proto\x12\nhe.auth.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9b\x01\n\x13RegisterUserRequest\x12\x14\n\x05email\x18\x01 \x01(\tR\x05email\x12\x1a\n\bpassword\x18\x02 \x01(\tR\bpassword\x12\x16\n\x06locale\x18\x03 \x01(\tR\x06locale\x12\x1b\n\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x05 \x01(\tR\tuserAgent\".\n\x14RegisterUserResponse\x12\x16\n\x06status\x18\x01 \x01(\tR\x06status\"f\n\x12VerifyEmailRequest\x12\x14\n\x05token\x18\x01 \x01(\tR\x05token\x12\x1b\n\tclient_ip\x18\x02 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x03 \x01(\tR\tuserAgent\"r\n\x13VerifyEmailResponse\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12*\n\x11email_verified_at\x18\x02 \x01(\tR\x0femailVerifiedAt\x12\x16\n\x06status\x18\x03 \x01(\tR\x06status\"m\n\x19ResendVerificationRequest\x12\x14\n\x05email\x18\x01 \x01(\tR\x05email\x12\x1b\n\tclient_ip\x18\x02 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x03 \x01(\tR\tuserAgent\"4\n\x1aResendVerificationResponse\x12\x16\n\x06status\x18\x01 \x01(\tR\x06status\"\x80\x01\n\x10LoginUserRequest\x12\x14\n\x05email\x18\x01 \x01(\tR\x05email\x12\x1a\n\bpassword\x18\x02 \x01(\tR\bpassword\x12\x1b\n\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x04 \x01(\tR\tuserAgent\"\xc9\x02\n\x11LoginUserResponse\x12/\n\x06status\x18\x01 \x01(\x0e2\x17.he.auth.v1.LoginStatusR\x06status\x12!\n\faccess_token\x18\x02 \x01(\tR\vaccessToken\x12#\n\rrefresh_token\x18\x03 \x01(\tR\frefreshToken\x12D\n\x1faccess_token_expires_in_seconds\x18\x04 \x01(\x05R\x1baccessTokenExpiresInSeconds\x12F\n refresh_token_expires_in_seconds\x18\x05 \x01(\x05R\x1crefreshTokenExpiresInSeconds\x12\x1b\n\tmfa_token\x18\x06 \x01(\tR\bmfaToken\x12\x10\n\x03aal\x18\a \x01(\x05R\x03aal\"v\n\x13RefreshTokenRequest\x12#\n\rrefresh_token\x18\x01 \x01(\tR\frefreshToken\x12\x1b\n\tclient_ip\x18\x02 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x03 \x01(\tR\tuserAgent\"\xec\x01\n\x14RefreshTokenResponse\x12!\n\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12D\n\x1faccess_token_expires_in_seconds\x18\x03 \x01(\x05R\x1baccessTokenExpiresInSeconds\x12F\n refresh_token_expires_in_seconds\x18\x04 \x01(\x05R\x1crefreshTokenExpiresInSeconds\"\xa0\x01\n\x11BeginOAuthRequest\x12\x1a\n\bprovider\x18\x01 \x01(\tR\bprovider\x12\x1b\n\treturn_to\x18\x02 \x01(\tR\breturnTo\x12\x16\n\x06locale\x18\x03 \x01(\tR\x06locale\x12\x1b\n\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x05 \x01(\tR\tuserAgent\"|\n\x12BeginOAuthResponse\x12#\n\rauthorize_url\x18\x01 \x01(\tR\fauthorizeUrl\x12\x19\n\bstate_id\x18\x02 \x01(\tR\astateId\x12&\n\x0fexpires_at_unix\x18\x03 \x01(\x03R\rexpiresAtUnix\"\x9d\x01\n\x14CompleteOAuthRequest\x12\x1a\n\bprovider\x18\x01 \x01(\tR\bprovider\x12\x12\n\x04code\x18\x02 \x01(\tR\x04code\x12\x19\n\bstate_id\x18\x03 \x01(\tR\astateId\x12\x1b\n\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x05 \x01(\tR\tuserAgent\"\xb1\x02\n\x15CompleteOAuthResponse\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12!\n\faccess_token\x18\x02 \x01(\tR\vaccessToken\x12#\n\rrefresh_token\x18\x03 \x01(\tR\frefreshToken\x12!\n\frequires_2fa\x18\x04 \x01(\bR\vrequires2fa\x12\x1e\n\vis_new_user\x18\x05 \x01(\bR\tisNewUser\x12:\n\flink_outcome\x18\x06 \x01(\x0e2\x17.he.auth.v1.LinkOutcomeR\vlinkOutcome\x12\x1b\n\treturn_to\x18\a \x01(\tR\breturnTo\x12\x1b\n\tmfa_token\x18\b \x01(\tR\bmfaToken\"l\n\x15EnrollTOTPInitRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1b\n\tclient_ip\x18\x02 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x03 \x01(\tR\tuserAgent\"\xa8\x01\n\x16EnrollTOTPInitResponse\x12\x1f\n\votpauth_uri\x18\x01 \x01(\tR\notpauthUri\x12\x1e\n\vqr_code_png\x18\x02 \x01(\fR\tqrCodePng\x12%\n\x0erecovery_codes\x18\x03 \x03(\tR\rrecoveryCodes\x12&\n\x0fexpires_at_unix\x18\x04 \x01(\x03R\rexpiresAtUnix\"\xbb\x01\n\x17EnrollTOTPVerifyRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12\x12\n\x04code\x18\x02 \x01(\tR\x04code\x127\n\x18ack_recovery_codes_saved\x18\x03 \x01(\bR\x15ackRecoveryCodesSaved\x12\x1b\n\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x05 \x01(\tR\tuserAgent\"T\n\x18EnrollTOTPVerifyResponse\x12\x0e\n\x02ok\x18\x01 \x01(\bR\x02ok\x12(\n\x10enrolled_at_unix\x18\x02 \x01(\x03R\x0eenrolledAtUnix\"\x83\x01\n\x14ChallengeTOTPRequest\x12\x1b\n\tmfa_token\x18\x01 \x01(\tR\bmfaToken\x12\x12\n\x04code\x18\x02 \x01(\tR\x04code\x12\x1b\n\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x04 \x01(\tR\tuserAgent\"\x9c\x02\n\x15ChallengeTOTPResponse\x12!\n\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12D\n\x1faccess_token_expires_in_seconds\x18\x03 \x01(\x05R\x1baccessTokenExpiresInSeconds\x12F\n refresh_token_expires_in_seconds\x18\x04 \x01(\x05R\x1crefreshTokenExpiresInSeconds\x12\x10\n\x03aal\x18\x05 \x01(\x05R\x03aal\x12\x1b\n\treturn_to\x18\x06 \x01(\tR\breturnTo\"\x85\x01\n\x16UseRecoveryCodeRequest\x12\x1b\n\tmfa_token\x18\x01 \x01(\tR\bmfaToken\x12\x12\n\x04code\x18\x02 \x01(\tR\x04code\x12\x1b\n\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x04 \x01(\tR\tuserAgent\"\x86\x03\n\x17UseRecoveryCodeResponse\x12!\n\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12D\n\x1faccess_token_expires_in_seconds\x18\x03 \x01(\x05R\x1baccessTokenExpiresInSeconds\x12F\n refresh_token_expires_in_seconds\x18\x04 \x01(\x05R\x1crefreshTokenExpiresInSeconds\x12\x10\n\x03aal\x18\x05 \x01(\x05R\x03aal\x128\n\x18recovery_codes_remaining\x18\x06 \x01(\x05R\x16recoveryCodesRemaining\x12,\n\x12recovery_codes_low\x18\a \x01(\bR\x10recoveryCodesLow\x12\x1b\n\treturn_to\x18\b \x01(\tR\breturnTo\"\xb7\x01\n\x12DisableTOTPRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x126\n\x06factor\x18\x02 \x01(\x0e2\x1e.he.auth.v1.VerificationFactorR\x06factor\x12\x14\n\x05value\x18\x03 \x01(\tR\x05value\x12\x1b\n\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x05 \x01(\tR\tuserAgent\"%\n\x13DisableTOTPResponse\x12\x0e\n\x02ok\x18\x01 \x01(\bR\x02ok\"\xc3\x01\n\x1eRegenerateRecoveryCodesRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x126\n\x06factor\x18\x02 \x01(\x0e2\x1e.he.auth.v1.VerificationFactorR\x06factor\x12\x14\n\x05value\x18\x03 \x01(\tR\x05value\x12\x1b\n\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x05 \x01(\tR\tuserAgent\"H\n\x1fRegenerateRecoveryCodesResponse\x12%\n\x0erecovery_codes\x18\x01 \x03(\tR\rrecoveryCodes\"'\n\fGetMeRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\"\x97\x03\n\rGetMeResponse\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n\x05email\x18\x02 \x01(\tR\x05email\x12&\n\fdisplay_name\x18\x03 \x01(\tH\x00R\vdisplayName\x88\x01\x01\x12\x16\n\x06locale\x18\x04 \x01(\tR\x06locale\x12\x1a\n\btimezone\x18\x05 \x01(\tR\btimezone\x12!\n\ftotp_enabled\x18\x06 \x01(\bR\vtotpEnabled\x12*\n\x0eoauth_provider\x18\a \x01(\tH\x01R\roauthProvider\x88\x01\x01\x129\n\ncreated_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n\nupdated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x12\n\x04etag\x18\n \x01(\tR\x04etagB\x0f\n\r_display_nameB\x11\n\x0f_oauth_provider\"\x95\x02\n\x14UpdateProfileRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12&\n\fdisplay_name\x18\x02 \x01(\tH\x00R\vdisplayName\x88\x01\x01\x12\x1b\n\x06locale\x18\x03 \x01(\tH\x01R\x06locale\x88\x01\x01\x12\x1f\n\btimezone\x18\x04 \x01(\tH\x02R\btimezone\x88\x01\x01\x12\x19\n\bif_match\x18\x05 \x01(\tR\aifMatch\x12\x1b\n\tclient_ip\x18\x06 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\a \x01(\tR\tuserAgentB\x0f\n\r_display_nameB\t\n\a_localeB\v\n\t_timezone\"\xc6\x03\n\x15UpdateProfileResponse\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n\x05email\x18\x02 \x01(\tR\x05email\x12&\n\fdisplay_name\x18\x03 \x01(\tH\x00R\vdisplayName\x88\x01\x01\x12\x16\n\x06locale\x18\x04 \x01(\tR\x06locale\x12\x1a\n\btimezone\x18\x05 \x01(\tR\btimezone\x12!\n\ftotp_enabled\x18\x06 \x01(\bR\vtotpEnabled\x12*\n\x0eoauth_provider\x18\a \x01(\tH\x01R\roauthProvider\x88\x01\x01\x129\n\ncreated_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n\nupdated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x12\n\x04etag\x18\n \x01(\tR\x04etag\x12%\n\x0elocale_changed\x18\v \x01(\bR\rlocaleChangedB\x0f\n\r_display_nameB\x11\n\x0f_oauth_provider\"x\n\x15ValidateApiKeyRequest\x12#\n\rplaintext_key\x18\x01 \x01(\tR\fplaintextKey\x12\x1b\n\tclient_ip\x18\x02 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x03 \x01(\tR\tuserAgent\"\xd5\x02\n\x16ValidateApiKeyResponse\x12\x0e\n\x02ok\x18\x01 \x01(\bR\x02ok\x12\x1c\n\napi_key_id\x18\x02 \x01(\tR\bapiKeyId\x12\x17\n\auser_id\x18\x03 \x01(\tR\x06userId\x12\x17\n\ateam_id\x18\x04 \x01(\tR\x06teamId\x12\x14\n\x05scope\x18\x05 \x01(\tR\x05scope\x12:\n\x06reason\x18\x06 \x01(\x0e2\".he.auth.v1.ApiKeyValidationReasonR\x06reason\x124\n\x14monthly_cost_cap_usd\x18\a \x01(\tH\x00R\x11monthlyCostCapUsd\x88\x01\x01\x12:\n\x19content_safety_strictness\x18\b \x01(\tR\x17contentSafetyStrictnessB\x17\n\x15_monthly_cost_cap_usd\"~\n\x13CreateApiKeyRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x04 \x01(\tR\tuserAgent\"\xc0\x01\n\x14CreateApiKeyResponse\x12\x1c\n\napi_key_id\x18\x01 \x01(\tR\bapiKeyId\x12\x1d\n\nkey_prefix\x18\x02 \x01(\tR\tkeyPrefix\x12\x12\n\x04name\x18\x03 \x01(\tR\x04name\x129\n\ncreated_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x1c\n\tplaintext\x18\x05 \x01(\tR\tplaintext\"-\n\x12ListApiKeysRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\"B\n\x13ListApiKeysResponse\x12+\n\x04keys\x18\x01 \x03(\v2\x17.he.auth.v1.ApiKeyEntryR\x04keys\"\x92\x04\n\vApiKeyEntry\x12\x1c\n\napi_key_id\x18\x01 \x01(\tR\bapiKeyId\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n\nkey_prefix\x18\x03 \x01(\tR\tkeyPrefix\x12\x14\n\x05scope\x18\x04 \x01(\tR\x05scope\x124\n\x14monthly_cost_cap_usd\x18\x05 \x01(\tH\x00R\x11monthlyCostCapUsd\x88\x01\x01\x123\n\x16current_month_cost_usd\x18\x06 \x01(\tR\x13currentMonthCostUsd\x12A\n\flast_used_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampH\x01R\nlastUsedAt\x88\x01\x01\x12>\n\nrevoked_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampH\x02R\trevokedAt\x88\x01\x01\x129\n\ncreated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12:\n\x19content_safety_strictness\x18\n \x01(\tR\x17contentSafetyStrictnessB\x17\n\x15_monthly_cost_cap_usdB\x0f\n\r_last_used_atB\r\n\v_revoked_at\"\x88\x01\n\x13RevokeApiKeyRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1c\n\napi_key_id\x18\x02 \x01(\tR\bapiKeyId\x12\x1b\n\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x04 \x01(\tR\tuserAgent\"\x9f\x01\n\x14RevokeApiKeyResponse\x12\x1c\n\napi_key_id\x18\x01 \x01(\tR\bapiKeyId\x129\n\nrevoked_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\trevokedAt\x12.\n\x13was_already_revoked\x18\x03 \x01(\bR\x11wasAlreadyRevoked\"\xa0\x01\n\nScopePatch\x12\x16\n\x06models\x18\x01 \x03(\tR\x06models\x12%\n\x0emodels_present\x18\x02 \x01(\bR\rmodelsPresent\x12!\n\fip_whitelist\x18\x03 \x03(\tR\vipWhitelist\x120\n\x14ip_whitelist_present\x18\x04 \x01(\bR\x12ipWhitelistPresent\"\x90\x03\n\x13UpdateApiKeyRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1c\n\napi_key_id\x18\x02 \x01(\tR\bapiKeyId\x12,\n\x05scope\x18\x03 \x01(\v2\x16.he.auth.v1.ScopePatchR\x05scope\x124\n\x14monthly_cost_cap_usd\x18\x04 \x01(\tH\x00R\x11monthlyCostCapUsd\x88\x01\x01\x12*\n\x11clear_monthly_cap\x18\x05 \x01(\bR\x0fclearMonthlyCap\x12\x1b\n\tclient_ip\x18\x06 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\a \x01(\tR\tuserAgent\x12?\n\x19content_safety_strictness\x18\b \x01(\tH\x01R\x17contentSafetyStrictness\x88\x01\x01B\x17\n\x15_monthly_cost_cap_usdB\x1c\n\x1a_content_safety_strictness\"\x9b\x04\n\x14UpdateApiKeyResponse\x12\x1c\n\napi_key_id\x18\x01 \x01(\tR\bapiKeyId\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n\nkey_prefix\x18\x03 \x01(\tR\tkeyPrefix\x12\x14\n\x05scope\x18\x04 \x01(\tR\x05scope\x124\n\x14monthly_cost_cap_usd\x18\x05 \x01(\tH\x00R\x11monthlyCostCapUsd\x88\x01\x01\x123\n\x16current_month_cost_usd\x18\x06 \x01(\tR\x13currentMonthCostUsd\x12A\n\flast_used_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampH\x01R\nlastUsedAt\x88\x01\x01\x12>\n\nrevoked_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampH\x02R\trevokedAt\x88\x01\x01\x129\n\ncreated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12:\n\x19content_safety_strictness\x18\n \x01(\tR\x17contentSafetyStrictnessB\x17\n\x15_monthly_cost_cap_usdB\x0f\n\r_last_used_atB\r\n\v_revoked_at\"@\n GetCapNotificationContextRequest\x12\x1c\n\napi_key_id\x18\x01 \x01(\tR\bapiKeyId\"\xe2\x01\n!GetCapNotificationContextResponse\x12\x1d\n\nuser_email\x18\x01 \x01(\tR\tuserEmail\x12\x1f\n\vuser_locale\x18\x02 \x01(\tR\nuserLocale\x12*\n\x11user_display_name\x18\x03 \x01(\tR\x0fuserDisplayName\x12\x19\n\bkey_name\x18\x04 \x01(\tR\akeyName\x126\n\x18key_monthly_cost_cap_usd\x18\x05 \x01(\tR\x14keyMonthlyCostCapUsd*_\n\vLoginStatus\x12\x1c\n\x18LOGIN_STATUS_UNSPECIFIED\x10\x00\x12\x13\n\x0fLOGIN_STATUS_OK\x10\x01\x12\x1d\n\x19LOGIN_STATUS_REQUIRES_2FA\x10\x02*y\n\vLinkOutcome\x12\x1c\n\x18LINK_OUTCOME_UNSPECIFIED\x10\x00\x12\x19\n\x15LINK_OUTCOME_NEW_USER\x10\x01\x12\x17\n\x13LINK_OUTCOME_LINKED\x10\x02\x12\x18\n\x14LINK_OUTCOME_RELOGIN\x10\x03*y\n\x12VerificationFactor\x12#\n\x1fVERIFICATION_FACTOR_UNSPECIFIED\x10\x00\x12\x1c\n\x18VERIFICATION_FACTOR_TOTP\x10\x01\x12 \n\x1cVERIFICATION_FACTOR_PASSWORD\x10\x02*\x93\x01\n\x16ApiKeyValidationReason\x12)\n%API_KEY_VALIDATION_REASON_UNSPECIFIED\x10\x00\x12'\n#API_KEY_VALIDATION_REASON_NOT_FOUND\x10\x01\x12%\n!API_KEY_VALIDATION_REASON_REVOKED\x10\x022\xb3\x0e\n\vAuthService\x12Q\n\fRegisterUser\x12\x1f.he.auth.v1.RegisterUserRequest\x1a .he.auth.v1.RegisterUserResponse\x12N\n\vVerifyEmail\x12\x1e.he.auth.v1.VerifyEmailRequest\x1a\x1f.he.auth.v1.VerifyEmailResponse\x12c\n\x12ResendVerification\x12%.he.auth.v1.ResendVerificationRequest\x1a&.he.auth.v1.ResendVerificationResponse\x12H\n\tLoginUser\x12\x1c.he.auth.v1.LoginUserRequest\x1a\x1d.he.auth.v1.LoginUserResponse\x12Q\n\fRefreshToken\x12\x1f.he.auth.v1.RefreshTokenRequest\x1a .he.auth.v1.RefreshTokenResponse\x12K\n\nBeginOAuth\x12\x1d.he.auth.v1.BeginOAuthRequest\x1a\x1e.he.auth.v1.BeginOAuthResponse\x12T\n\rCompleteOAuth\x12 .he.auth.v1.CompleteOAuthRequest\x1a!.he.auth.v1.CompleteOAuthResponse\x12W\n\x0eEnrollTOTPInit\x12!.he.auth.v1.EnrollTOTPInitRequest\x1a\".he.auth.v1.EnrollTOTPInitResponse\x12]\n\x10EnrollTOTPVerify\x12#.he.auth.v1.EnrollTOTPVerifyRequest\x1a$.he.auth.v1.EnrollTOTPVerifyResponse\x12T\n\rChallengeTOTP\x12 .he.auth.v1.ChallengeTOTPRequest\x1a!.he.auth.v1.ChallengeTOTPResponse\x12Z\n\x0fUseRecoveryCode\x12\".he.auth.v1.UseRecoveryCodeRequest\x1a#.he.auth.v1.UseRecoveryCodeResponse\x12N\n\vDisableTOTP\x12\x1e.he.auth.v1.DisableTOTPRequest\x1a\x1f.he.auth.v1.DisableTOTPResponse\x12r\n\x17RegenerateRecoveryCodes\x12*.he.auth.v1.RegenerateRecoveryCodesRequest\x1a+.he.auth.v1.RegenerateRecoveryCodesResponse\x12<\n\x05GetMe\x12\x18.he.auth.v1.GetMeRequest\x1a\x19.he.auth.v1.GetMeResponse\x12T\n\rUpdateProfile\x12 .he.auth.v1.UpdateProfileRequest\x1a!.he.auth.v1.UpdateProfileResponse\x12W\n\x0eValidateApiKey\x12!.he.auth.v1.ValidateApiKeyRequest\x1a\".he.auth.v1.ValidateApiKeyResponse\x12Q\n\fCreateApiKey\x12\x1f.he.auth.v1.CreateApiKeyRequest\x1a .he.auth.v1.CreateApiKeyResponse\x12N\n\vListApiKeys\x12\x1e.he.auth.v1.ListApiKeysRequest\x1a\x1f.he.auth.v1.ListApiKeysResponse\x12Q\n\fRevokeApiKey\x12\x1f.he.auth.v1.RevokeApiKeyRequest\x1a .he.auth.v1.RevokeApiKeyResponse\x12Q\n\fUpdateApiKey\x12\x1f.he.auth.v1.UpdateApiKeyRequest\x1a .he.auth.v1.UpdateApiKeyResponse\x12x\n\x19GetCapNotificationContext\x12,.he.auth.v1.GetCapNotificationContextRequest\x1a-.he.auth.v1.GetCapNotificationContextResponseBBZ@github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1;authv1b\x06proto3"
 
 var (
 	file_he_auth_v1_auth_proto_rawDescOnce sync.Once

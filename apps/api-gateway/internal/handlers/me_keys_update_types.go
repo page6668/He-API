@@ -20,6 +20,10 @@ import "encoding/json"
 type UpdateKeyRequest struct {
 	Scope             *UpdateScopePatch `json:"scope,omitempty"`
 	MonthlyCostCapUSD json.RawMessage   `json:"monthly_cost_cap_usd,omitempty"` // null vs missing vs string distinguishable
+	// Story 8.4 — per-Key 内容安全严格度. Pointer distinguishes "absent" (preserve)
+	// from "present" (set). Validated against {strict,default,loose} at the gateway
+	// BEFORE the RPC (BR-1.2). No null/"clear" form — the column is NOT NULL.
+	ContentSafetyStrictness *string `json:"content_safety_strictness,omitempty"`
 }
 
 // UpdateScopePatch carries the optional scope mutation. Pointers distinguish
@@ -42,4 +46,7 @@ type UpdateKeyResponse struct {
 	LastUsedAt          *string         `json:"last_used_at"`           // RFC 3339; nil → null
 	RevokedAt           *string         `json:"revoked_at"`             // RFC 3339; nil → null
 	CreatedAt           string          `json:"created_at"`
+	// Story 8.4 — appended LAST (additive; existing field order unchanged) so the
+	// owner observes the effective per-Key level on the read-back.
+	ContentSafetyStrictness string `json:"content_safety_strictness"`
 }

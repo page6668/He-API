@@ -294,12 +294,13 @@ func (h *MeKeysHandler) translateUpstreamError(w http.ResponseWriter, r *http.Re
 // → JSON `null`). The Scope field carries the JSONB body verbatim.
 func protoEntryToJSON(p *authv1.ApiKeyEntry) KeyEntry {
 	out := KeyEntry{
-		APIKeyID:            p.GetApiKeyId(),
-		Name:                p.GetName(),
-		KeyPrefix:           p.GetKeyPrefix(),
-		Scope:               json.RawMessage(stringOrEmpty(p.GetScope(), `{}`)),
-		CurrentMonthCostUSD: p.GetCurrentMonthCostUsd(),
-		CreatedAt:           p.GetCreatedAt().AsTime().UTC().Format(time.RFC3339),
+		APIKeyID:                p.GetApiKeyId(),
+		Name:                    p.GetName(),
+		KeyPrefix:               p.GetKeyPrefix(),
+		Scope:                   json.RawMessage(stringOrEmpty(p.GetScope(), `{}`)),
+		CurrentMonthCostUSD:     p.GetCurrentMonthCostUsd(),
+		CreatedAt:               p.GetCreatedAt().AsTime().UTC().Format(time.RFC3339),
+		ContentSafetyStrictness: p.GetContentSafetyStrictness(), // Story 8.4 read-back
 	}
 	if p.MonthlyCostCapUsd != nil {
 		v := *p.MonthlyCostCapUsd

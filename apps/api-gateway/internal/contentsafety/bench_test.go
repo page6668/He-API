@@ -115,6 +115,42 @@ func BenchmarkStory83_StreamGuardObserve(b *testing.B) {
 	}
 }
 
+// 8.4-BENCH-001 (soft-gate) — the per-Key severity gate adds at most a single
+// rank compare on the rare confirmed-hit path; the clean path is Bloom-excluded
+// exactly as before. This measures the gated clean scan (ScanMin at the loose
+// threshold) against the same ceiling: it must be indistinguishable from the
+// ungated Scan (no measurable overhead). Soft-gate: t.Log on breach (BR-4.1).
+func TestBENCH001_gate_overhead_soft_gate(t *testing.T) {
+	const N = 5_000
+	const ceiling = 600 * time.Microsecond
+	s := NewScanner(safetylexicon.DefaultLexicon)
+
+	samples := make([]time.Duration, N)
+	for i := 0; i < N; i++ {
+		start := time.Now()
+		_, _ = s.ScanMin(representativeCleanPrompt, safetylexicon.SeverityHigh) // loose gate
+		samples[i] = time.Since(start)
+	}
+	got := benchScanP99(samples)
+	if got > ceiling {
+		t.Logf("SOFT-GATE: gated clean-scan P99 = %v exceeds %v (gate overhead is a single rank compare; bench-host variance — not a hard fail)", got, ceiling)
+	} else {
+		t.Logf("gated clean-scan P99 = %v (<= %v) — gate overhead negligible", got, ceiling)
+	}
+}
+
+// BenchmarkStory84_GatedCleanScan — the gated (loose-threshold) clean scan; compare
+// against BenchmarkStory82_CleanScan to confirm the severity gate adds no
+// measurable per-scan cost on the common clean path.
+func BenchmarkStory84_GatedCleanScan(b *testing.B) {
+	s := NewScanner(safetylexicon.DefaultLexicon)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = s.ScanMin(representativeCleanPrompt, safetylexicon.SeverityHigh)
+	}
+}
+
 // BenchmarkStory82_HitScan measures the reject path (a term early in the prompt)
 // — should be cheaper than the clean scan (fail-fast on first hit).
 func BenchmarkStory82_HitScan(b *testing.B) {

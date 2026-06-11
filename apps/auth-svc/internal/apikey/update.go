@@ -54,12 +54,19 @@ const (
 // these to 400 envelopes; they are defence-in-depth (the gateway already
 // validated the same inputs before the RPC).
 var (
-	errEmptyPatch   = errors.New("empty_patch")
-	errInvalidCIDR  = errors.New("invalid_cidr")
-	errCapRange     = errors.New("cap_out_of_range")
-	errCapFormat    = errors.New("cap_invalid_format")
-	errInvalidScope = errors.New("invalid_scope_json")
+	errEmptyPatch        = errors.New("empty_patch")
+	errInvalidCIDR       = errors.New("invalid_cidr")
+	errCapRange          = errors.New("cap_out_of_range")
+	errCapFormat         = errors.New("cap_invalid_format")
+	errInvalidScope      = errors.New("invalid_scope_json")
+	errInvalidStrictness = errors.New("invalid_content_safety_strictness")
 )
+
+// validStrictness is the closed Story-8.4 level enum {strict, default, loose}.
+// auth-svc re-validates it as defence-in-depth (the gateway already validated the
+// same token BEFORE the RPC, and the DB CHECK is a third layer) — mirroring the
+// cap-range / CIDR re-validation posture.
+var validStrictness = map[string]bool{"strict": true, "default": true, "loose": true}
 
 // scopeShape is the canonical api_keys.scope JSONB shape. Marshalled via a
 // map[string]json.RawMessage merge so any future keys are preserved verbatim
@@ -90,9 +97,18 @@ func (s *Service) UpdateApiKey(ctx context.Context, req *authv1.UpdateApiKeyRequ
 	scopePatch := req.GetScope()
 	scopePresent := scopePatch != nil && (scopePatch.GetModelsPresent() || scopePatch.GetIpWhitelistPresent())
 	capPresent := req.MonthlyCostCapUsd != nil || req.GetClearMonthlyCap()
-	if !scopePresent && !capPresent {
+	strictnessPresent := req.ContentSafetyStrictness != nil // Story 8.4 — proto3-optional presence
+	if !scopePresent && !capPresent && !strictnessPresent {
 		span.SetAttributes(attribute.String("apikey.update.outcome", "empty_patch"))
 		return nil, connect.NewError(connect.CodeInvalidArgument, errEmptyPatch)
+	}
+
+	// Story 8.4 — validate the strictness enum (defence-in-depth) BEFORE the
+	// SELECT/UPDATE so a bad token never hits the DB CHECK. Present & invalid →
+	// InvalidArgument (the gateway maps to 400).
+	if strictnessPresent && !validStrictness[req.GetContentSafetyStrictness()] {
+		span.SetAttributes(attribute.String("apikey.update.outcome", "invalid_strictness"))
+		return nil, connect.NewError(connect.CodeInvalidArgument, errInvalidStrictness)
 	}
 
 	// --- Q-I pending_deletion gate -------------------------------------------
@@ -165,13 +181,26 @@ func (s *Service) UpdateApiKey(ctx context.Context, req *authv1.UpdateApiKeyRequ
 		capChanged = true
 	}
 
+	// --- Strictness (BR-1.2 / Story 8.4) -------------------------------------
+	// Preserve the existing level when the patch omits it (present-only mutation,
+	// mirroring the cap/scope arms); the column is NOT NULL so row.* is never "".
+	strictnessVal := row.ContentSafetyStrictness
+	strictnessChanged := false
+	if strictnessPresent {
+		strictnessVal = req.GetContentSafetyStrictness() // already enum-validated above
+		strictnessChanged = true
+	}
+
 	changedFields := append([]string{}, changedScope...)
 	if capChanged {
 		changedFields = append(changedFields, "monthly_cost_cap_usd")
 	}
+	if strictnessChanged {
+		changedFields = append(changedFields, "content_safety_strictness")
+	}
 
 	// --- UPDATE (TOCTOU-guarded) ---------------------------------------------
-	updated, updErr := s.Repo.UpdateAPIKeyConfig(ctx, apiKeyID, userID, mergedScope, capVal)
+	updated, updErr := s.Repo.UpdateAPIKeyConfig(ctx, apiKeyID, userID, mergedScope, capVal, strictnessVal)
 	if updErr != nil {
 		if errors.Is(updErr, repository.ErrAPIKeyNotFound) {
 			// Concurrent revoke landed between SELECT and UPDATE.
@@ -316,6 +345,9 @@ func rowToUpdateResponse(r *repository.ApiKeyRow) *authv1.UpdateApiKeyResponse {
 		KeyPrefix: r.KeyPrefix,
 		Scope:     string(r.Scope),
 		CreatedAt: timestamppb.New(r.CreatedAt),
+		// Story 8.4 — echo the persisted level on the read-back so the owner sees
+		// what they set (NOT NULL → always populated).
+		ContentSafetyStrictness: r.ContentSafetyStrictness,
 	}
 	if r.CurrentMonthCostUSD.Valid {
 		out.CurrentMonthCostUsd = numericToDecimalString(r.CurrentMonthCostUSD)

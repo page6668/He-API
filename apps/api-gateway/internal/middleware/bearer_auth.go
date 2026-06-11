@@ -203,6 +203,14 @@ type CachedClaims struct {
 	ScopeModels       []string `json:"scope_models,omitempty"`
 	ScopeIPWhitelist  []string `json:"scope_ip_whitelist,omitempty"`
 	MonthlyCostCapUSD *string  `json:"monthly_cost_cap_usd,omitempty"`
+
+	// Story 8.4 — the per-Key 内容安全严格度 carried onto the hot path so the
+	// gateway gates the bidirectional content-safety filter from the bearer cache.
+	// `omitempty` IS the backward-compat mechanism (mirrors MonthlyCostCapUSD): a
+	// pre-8.4 Redis entry (lacking this key) deserialises "" during the 5-min
+	// rollout window, and the gateway resolver maps "" → strict (fail-closed,
+	// BR-3.1). Populated in newClaims from ValidateApiKeyResponse.
+	ContentSafetyStrictness string `json:"content_safety_strictness,omitempty"`
 }
 
 // scopeJSON is the api_keys.scope JSONB shape the gateway parses from the
@@ -371,6 +379,10 @@ func (a *APIKeyAuthenticator) RequireAPIKey(next http.Handler) http.Handler {
 			UserID:   resp.Msg.GetUserId(),
 			TeamID:   resp.Msg.GetTeamId(),
 			Scope:    resp.Msg.GetScope(),
+			// Story 8.4 — carry the per-Key strictness level (NOT NULL column →
+			// non-empty from a post-8.4 RPC; "" only from a pre-8.4 RPC, which the
+			// gateway resolver fail-closes to strict).
+			ContentSafetyStrictness: resp.Msg.GetContentSafetyStrictness(),
 		}
 		// Story 5.2 (Q-A) — derive the structured policy fields for the
 		// keypolicy middleware + carry the monthly cap onto the hot path.

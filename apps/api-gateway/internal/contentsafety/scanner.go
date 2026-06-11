@@ -65,9 +65,23 @@ func (s *Scanner) maxTermLen() int {
 // makes the verdict and the reported Match fully deterministic (BR-4.3). The
 // handler passes every message's content regardless of role (all client-supplied
 // → all an injection surface, BR-1.5).
+//
+// Scan is the block-all (== strict) entry point, preserved BYTE-IDENTICAL for
+// pre-8.4 callers: Scan(contents) == ScanMin(contents, SeverityLow) (Story 8.4
+// BR-2.3 / G4).
 func (s *Scanner) Scan(contents []string) (safetylexicon.Match, bool) {
+	return s.ScanMin(contents, safetylexicon.SeverityLow)
+}
+
+// ScanMin is the Story-8.4 severity-aware input variant of Scan: it scans the
+// contents in array order and returns the FIRST AT-OR-ABOVE-threshold hit
+// (rank(Severity) >= rank(min)). A sub-threshold match in an earlier message
+// does NOT short-circuit and does NOT mask a later qualifying match (BR-2.3
+// "first-qualifying-hit"). With min == SeverityLow every confirmed hit qualifies,
+// so ScanMin(contents, SeverityLow) == Scan's pre-8.4 first-any-hit behaviour.
+func (s *Scanner) ScanMin(contents []string, min safetylexicon.Severity) (safetylexicon.Match, bool) {
 	for _, c := range contents {
-		if m, hit := s.ScanText(c); hit {
+		if m, hit := s.ScanTextMin(c, min); hit {
 			return m, true
 		}
 	}
@@ -98,17 +112,39 @@ func (s *Scanner) Scan(contents []string) (safetylexicon.Match, bool) {
 // re-normalization inside MightContain/Lookup is accepted and measured by the
 // soft-gate benchmark, NEVER traded for a miss (UNIT-018).
 func (s *Scanner) ScanText(content string) (safetylexicon.Match, bool) {
+	return s.ScanTextMin(content, safetylexicon.SeverityLow)
+}
+
+// ScanTextMin is the Story-8.4 severity-aware scan (BR-2.3 / OQ-8.4-2, Architect
+// Round-1 Option A). It runs the IDENTICAL §9.3 detection pipeline as ScanText
+// (shared Normalize → longest-first rune window → Bloom fast-exclude → Lookup
+// confirm) but ACTS only on a confirmed Match whose severity is AT OR ABOVE the
+// `min` threshold (rank(Severity) >= rank(min)). A confirmed BUT sub-threshold
+// hit is SKIPPED and the scan CONTINUES, so it can never short-circuit and mask
+// a later qualifying match — the fail-fast contract becomes "first QUALIFYING
+// hit", not "first ANY hit".
+//
+// Detection is UNCHANGED: a sub-threshold term is still fully DETECTED (the
+// no-false-negative scanner is untouched); ScanTextMin only decides whether a
+// detected term is reported as a hit (BR-2.6). The zero-regression invariant
+// holds BY CONSTRUCTION: with min == SeverityLow every severity qualifies, so
+// ScanText(t) == ScanTextMin(t, SeverityLow) for ALL t (G4 / UNIT-014) and every
+// existing 8.2/8.3 caller/test is unaffected.
+func (s *Scanner) ScanTextMin(content string, min safetylexicon.Severity) (safetylexicon.Match, bool) {
 	norm := safetylexicon.Normalize(content)
 	if norm == "" {
 		return safetylexicon.Match{}, false // empty / whitespace-only → no candidate
 	}
 	runes := []rune(norm)
 	n := len(runes)
+	minRank := severityRank(min)
 
 	for i := 0; i < n; i++ {
 		// Longest-first at this start position → on overlap (e.g. both "ab" and
-		// "abc" stored, content "abc") the longest canonical is reported, pinning
-		// the matched_rule for the Story-8.5 event (Architect Low #1 / UNIT-017).
+		// "abc" stored, content "abc") the longest QUALIFYING canonical is
+		// reported, pinning the matched_rule for the Story-8.5 event (Architect
+		// Low #1 / UNIT-017). A longer but sub-threshold match does not block a
+		// shorter qualifying one at the same position.
 		for _, L := range s.descLengths {
 			if i+L > n {
 				continue // window would run past the end at this length
@@ -117,9 +153,14 @@ func (s *Scanner) ScanText(content string) (safetylexicon.Match, bool) {
 			if !s.lex.MightContain(candidate) {
 				continue // §9.3 layer-1 Bloom fast-exclude
 			}
-			if m, ok := s.lex.Lookup(candidate); ok {
-				return m, true // §9.3 layer-2 authoritative confirm → first hit
+			m, ok := s.lex.Lookup(candidate)
+			if !ok {
+				continue // Bloom false-positive — not a member
 			}
+			if severityRank(m.Severity) < minRank {
+				continue // confirmed but BELOW threshold → detected, not acted on; keep scanning
+			}
+			return m, true // §9.3 layer-2 confirm AND at-or-above threshold → first qualifying hit
 		}
 	}
 	return safetylexicon.Match{}, false

@@ -42,22 +42,37 @@ const streamWindowFloor = 512
 // captured the guard latches blocked so a defensive re-Observe is idempotent.
 type StreamGuard struct {
 	scanner *Scanner
+	// min is the Story-8.4 severity threshold for THIS per-request guard: Observe
+	// terminates only on a confirmed term AT OR ABOVE min (BR-2.5). SeverityLow ==
+	// block-all == the pre-8.4 (strict) posture. Detection is unchanged; min only
+	// gates whether a detected term terminates the stream.
+	min     safetylexicon.Severity
 	window  int // max runes retained between Observe calls; ≥ longest corpus term
 	buf     []rune
 	blocked bool
 	match   safetylexicon.Match
 }
 
-// NewStreamGuard builds a per-request guard over the supplied Scanner. The window
-// is computed from corpus truth (max(streamWindowFloor, scanner max term-length))
-// so it is ≥ the longest stored term — a term can never be split out of the
-// window (BR-2.5 no-FN-by-construction).
+// NewStreamGuard builds a per-request block-ALL guard over the supplied Scanner —
+// the pre-8.4 (strict) posture, BYTE-IDENTICAL for every existing 8.3 caller. It
+// is NewStreamGuardMin(s, SeverityLow); the window/no-FN invariants are unchanged.
 func NewStreamGuard(s *Scanner) *StreamGuard {
+	return NewStreamGuardMin(s, safetylexicon.SeverityLow)
+}
+
+// NewStreamGuardMin builds a per-request guard that terminates only on a confirmed
+// term AT OR ABOVE the `min` severity (Story 8.4 BR-2.5). The handler constructs
+// it per stream with MinSeverity(resolvedLevel). The window is computed from
+// corpus truth (max(streamWindowFloor, scanner max term-length)) so it is ≥ the
+// longest stored term — a term can never be split out of the window (BR-2.5
+// no-FN-by-construction); the severity gate is POST-detection and does NOT change
+// the buffer growth or the window bound (BLIND-RESOURCE-001).
+func NewStreamGuardMin(s *Scanner, min safetylexicon.Severity) *StreamGuard {
 	window := streamWindowFloor
 	if mt := s.maxTermLen(); mt > window {
 		window = mt
 	}
-	return &StreamGuard{scanner: s, window: window}
+	return &StreamGuard{scanner: s, min: min, window: window}
 }
 
 // Window reports the realized rune window budget (≥ max(TermLengths())). Exposed
@@ -86,9 +101,11 @@ func (g *StreamGuard) Observe(delta string) (safetylexicon.Match, bool) {
 	g.buf = append(g.buf, []rune(delta)...)
 
 	// Scan the FULL buffer (carry-over overlap + the entire new delta) BEFORE any
-	// trim. ScanText applies the SHARED Normalize, so width/case/zero-width
-	// evasion folds to canonical here too (M-3).
-	if m, hit := g.scanner.ScanText(string(g.buf)); hit {
+	// trim. ScanTextMin applies the SHARED Normalize, so width/case/zero-width
+	// evasion folds to canonical here too (M-3); the `min` gate skips sub-threshold
+	// confirmed terms and continues, so a sub-threshold term never short-circuits
+	// and masks a later qualifying one across the seam (Story 8.4 G2 / UNIT-020).
+	if m, hit := g.scanner.ScanTextMin(string(g.buf), g.min); hit {
 		g.blocked = true
 		g.match = m
 		return m, true

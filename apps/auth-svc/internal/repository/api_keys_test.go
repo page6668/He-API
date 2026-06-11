@@ -14,10 +14,12 @@ import (
 )
 
 func apiKeysRowCols() []string {
-	// Story 5.2 — lookupAPIKeysByPrefixSQL now selects monthly_cost_cap_usd
-	// (between scope and revoked_at) so the Validate hot path can carry the
-	// cap to the gateway keypolicy middleware (AC4).
-	return []string{"id", "user_id", "team_id", "key_prefix", "key_hash", "scope", "monthly_cost_cap_usd", "revoked_at", "created_at"}
+	// Story 5.2 — lookupAPIKeysByPrefixSQL selects monthly_cost_cap_usd (between
+	// scope and revoked_at) so the Validate hot path can carry the cap to the
+	// gateway keypolicy middleware (AC4). Story 8.4 appends
+	// content_safety_strictness (last) so the gateway gates the content-safety
+	// filter from the bearer cache.
+	return []string{"id", "user_id", "team_id", "key_prefix", "key_hash", "scope", "monthly_cost_cap_usd", "revoked_at", "created_at", "content_safety_strictness"}
 }
 
 // Scenario: 3.2-UNIT-001
@@ -26,7 +28,7 @@ func apiKeysRowCols() []string {
 func TestLookupAPIKeysByPrefix_Empty(t *testing.T) {
 	t.Parallel()
 	mock := newMock(t)
-	mock.ExpectQuery(`SELECT id, user_id, team_id, key_prefix, key_hash, scope, monthly_cost_cap_usd, revoked_at, created_at\s+FROM he_api\.api_keys\s+WHERE key_prefix = \$1`).
+	mock.ExpectQuery(`SELECT id, user_id, team_id, key_prefix, key_hash, scope, monthly_cost_cap_usd, revoked_at, created_at, content_safety_strictness\s+FROM he_api\.api_keys\s+WHERE key_prefix = \$1`).
 		WithArgs("he-NOPREFIX").
 		WillReturnRows(pgxmock.NewRows(apiKeysRowCols()))
 
@@ -52,7 +54,7 @@ func TestLookupAPIKeysByPrefix_SingleRow(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM he_api\.api_keys WHERE key_prefix = \$1`).
 		WithArgs("he-ABC123XY").
 		WillReturnRows(pgxmock.NewRows(apiKeysRowCols()).
-			AddRow(wantID, wantUser, pgtype.UUID{}, "he-ABC123XY", "$2a$04$h", []byte(`{}`), pgtype.Numeric{}, pgtype.Timestamptz{}, now),
+			AddRow(wantID, wantUser, pgtype.UUID{}, "he-ABC123XY", "$2a$04$h", []byte(`{}`), pgtype.Numeric{}, pgtype.Timestamptz{}, now, "strict"),
 		)
 
 	rows, err := repository.LookupAPIKeysByPrefix(context.Background(), mock, "he-ABC123XY")
@@ -87,8 +89,8 @@ func TestLookupAPIKeysByPrefix_MultiRowDeterministic(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM he_api\.api_keys WHERE key_prefix = \$1`).
 		WithArgs("he-COLLIDED").
 		WillReturnRows(pgxmock.NewRows(apiKeysRowCols()).
-			AddRow(id1, user, pgtype.UUID{}, "he-COLLIDED", "$2a$04$1", []byte(`{}`), pgtype.Numeric{}, pgtype.Timestamptz{}, now).
-			AddRow(id2, user, pgtype.UUID{}, "he-COLLIDED", "$2a$04$2", []byte(`{}`), pgtype.Numeric{}, pgtype.Timestamptz{}, now),
+			AddRow(id1, user, pgtype.UUID{}, "he-COLLIDED", "$2a$04$1", []byte(`{}`), pgtype.Numeric{}, pgtype.Timestamptz{}, now, "strict").
+			AddRow(id2, user, pgtype.UUID{}, "he-COLLIDED", "$2a$04$2", []byte(`{}`), pgtype.Numeric{}, pgtype.Timestamptz{}, now, "strict"),
 		)
 
 	rows, err := repository.LookupAPIKeysByPrefix(context.Background(), mock, "he-COLLIDED")

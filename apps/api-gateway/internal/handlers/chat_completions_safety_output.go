@@ -66,10 +66,16 @@ func (h *ChatCompletionsHandler) redactResponse(ctx context.Context, resp *ChatR
 	if h.outputScanner == nil || resp == nil {
 		return safetylexicon.Match{}, false
 	}
+	// Story 8.4 — read the once-resolved per-request level (same value the input
+	// scan used; BR-3.5) and redact only choices with a confirmed match AT OR
+	// ABOVE the threshold. strict == ScanTextMin(_, SeverityLow) == the pre-8.4
+	// redact-all (byte-identical).
+	level := resolvedStrictness(ctx)
+	min := contentsafety.MinSeverity(level)
 	var first safetylexicon.Match
 	redacted := false
 	for i := range resp.Choices {
-		m, hit := h.outputScanner.ScanText(resp.Choices[i].Message.Content)
+		m, hit := h.outputScanner.ScanTextMin(resp.Choices[i].Message.Content, min)
 		if !hit {
 			continue
 		}
@@ -81,7 +87,7 @@ func (h *ChatCompletionsHandler) redactResponse(ctx context.Context, resp *ChatR
 		}
 		// One event per redacted choice (OQ-8.3-7) — the matched term reaches ONLY
 		// the 8.5 seam, never the caller-facing body (no lexicon leak, AC1).
-		h.recordSafetyOutputBlock(ctx, m)
+		h.recordSafetyOutputBlock(ctx, m, level)
 	}
 	return first, redacted
 }
@@ -91,7 +97,7 @@ func (h *ChatCompletionsHandler) redactResponse(ctx context.Context, resp *ChatR
 // identity helpers 8.2 uses, and hands it to the injected Recorder (the Story-8.5
 // seam). Mirrors recordSafetyBlock (input) verbatim except DirectionOutput.
 // Fire-and-forget; the no-op default persists nothing (zero-DB this story).
-func (h *ChatCompletionsHandler) recordSafetyOutputBlock(ctx context.Context, m safetylexicon.Match) {
+func (h *ChatCompletionsHandler) recordSafetyOutputBlock(ctx context.Context, m safetylexicon.Match, level contentsafety.Strictness) {
 	if h.safetyRecorder == nil {
 		return
 	}
@@ -102,10 +108,11 @@ func (h *ChatCompletionsHandler) recordSafetyOutputBlock(ctx context.Context, m 
 		Direction:   contentsafety.DirectionOutput,
 		MatchedRule: m.Canonical, // == Match.Canonical (≤100 runes, fits VARCHAR(100))
 		Category:    string(m.Category),
-		Severity:    string(m.Severity), // carried for 8.5; does NOT gate the 8.3 decision (8.4 owns strictness)
+		Severity:    string(m.Severity), // the matched term's severity (carried for 8.5)
 		Action:      contentsafety.ActionBlocked,
 		UserID:      userID,
 		APIKeyID:    apiKeyID,
 		HeRequestID: heRequestID,
+		Strictness:  string(level), // Story 8.4 — the effective level under which it was redacted (OQ-8.4-5)
 	})
 }

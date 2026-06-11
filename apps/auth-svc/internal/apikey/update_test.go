@@ -88,7 +88,7 @@ func TestUpdateApiKey(t *testing.T) {
 			selectConfig: func(_ context.Context, _ uuid.UUID) (repository.ApiKeyRow, error) {
 				return baseRow(apiKeyID, userID, `{"models":["qwen-max"],"ip_whitelist":["10.0.0.0/8"]}`), nil
 			},
-			updateConfig: func(_ context.Context, _, _ uuid.UUID, scope []byte, cap pgtype.Numeric) (repository.ApiKeyRow, error) {
+			updateConfig: func(_ context.Context, _, _ uuid.UUID, scope []byte, cap pgtype.Numeric, _ string) (repository.ApiKeyRow, error) {
 				gotScope = scope
 				gotCap = cap
 				r := baseRow(apiKeyID, userID, string(scope))
@@ -135,7 +135,7 @@ func TestUpdateApiKey(t *testing.T) {
 			selectConfig: func(_ context.Context, _ uuid.UUID) (repository.ApiKeyRow, error) {
 				return baseRow(apiKeyID, userID, `{}`), nil
 			},
-			updateConfig: func(_ context.Context, _, _ uuid.UUID, scope []byte, cap pgtype.Numeric) (repository.ApiKeyRow, error) {
+			updateConfig: func(_ context.Context, _, _ uuid.UUID, scope []byte, cap pgtype.Numeric, _ string) (repository.ApiKeyRow, error) {
 				gotCap = cap
 				r := baseRow(apiKeyID, userID, string(scope))
 				r.MonthlyCostCapUSD = cap
@@ -171,7 +171,7 @@ func TestUpdateApiKey(t *testing.T) {
 				r.MonthlyCostCapUSD = numericFromString(t, "99.99")
 				return r, nil
 			},
-			updateConfig: func(_ context.Context, _, _ uuid.UUID, scope []byte, cap pgtype.Numeric) (repository.ApiKeyRow, error) {
+			updateConfig: func(_ context.Context, _, _ uuid.UUID, scope []byte, cap pgtype.Numeric, _ string) (repository.ApiKeyRow, error) {
 				gotCap = cap
 				return baseRow(apiKeyID, userID, string(scope)), nil
 			},
@@ -274,7 +274,7 @@ func TestUpdateApiKey(t *testing.T) {
 			selectConfig: func(_ context.Context, _ uuid.UUID) (repository.ApiKeyRow, error) {
 				return baseRow(apiKeyID, userID, `{}`), nil
 			},
-			updateConfig: func(_ context.Context, _, _ uuid.UUID, scope []byte, _ pgtype.Numeric) (repository.ApiKeyRow, error) {
+			updateConfig: func(_ context.Context, _, _ uuid.UUID, scope []byte, _ pgtype.Numeric, _ string) (repository.ApiKeyRow, error) {
 				return baseRow(apiKeyID, userID, string(scope)), nil
 			},
 		}
@@ -298,7 +298,7 @@ func TestUpdateApiKey(t *testing.T) {
 			selectConfig: func(_ context.Context, _ uuid.UUID) (repository.ApiKeyRow, error) {
 				return baseRow(apiKeyID, userID, `{}`), nil
 			},
-			updateConfig: func(_ context.Context, _, _ uuid.UUID, scope []byte, _ pgtype.Numeric) (repository.ApiKeyRow, error) {
+			updateConfig: func(_ context.Context, _, _ uuid.UUID, scope []byte, _ pgtype.Numeric, _ string) (repository.ApiKeyRow, error) {
 				return baseRow(apiKeyID, userID, string(scope)), nil
 			},
 		}
@@ -338,7 +338,7 @@ func TestUpdateApiKey(t *testing.T) {
 			selectConfig: func(_ context.Context, _ uuid.UUID) (repository.ApiKeyRow, error) {
 				return baseRow(apiKeyID, userID, `{}`), nil
 			},
-			updateConfig: func(_ context.Context, _, _ uuid.UUID, _ []byte, _ pgtype.Numeric) (repository.ApiKeyRow, error) {
+			updateConfig: func(_ context.Context, _, _ uuid.UUID, _ []byte, _ pgtype.Numeric, _ string) (repository.ApiKeyRow, error) {
 				return repository.ApiKeyRow{}, repository.ErrAPIKeyNotFound
 			},
 		}

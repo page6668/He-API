@@ -73,9 +73,12 @@ func (h *ChatCompletionsHandler) serveStream(w http.ResponseWriter, r *http.Requ
 	chunker := streaming.NewMockChunker(selected, MockContent, id, created)
 	// Story 8.3 — §9.3 出参 guard, per-request (constructed fresh per stream, never
 	// shared). nil outputScanner → no guard attached → byte-identical pre-8.3 loop.
+	// Story 8.4 — gate the stream guard by the once-resolved per-request level
+	// (BR-2.5/BR-3.5). strict == NewStreamGuardMin(_, SeverityLow) == pre-8.4.
+	level := resolvedStrictness(ctx)
 	var guard *contentsafety.StreamGuard
 	if h.outputScanner != nil {
-		guard = contentsafety.NewStreamGuard(h.outputScanner)
+		guard = contentsafety.NewStreamGuardMin(h.outputScanner, contentsafety.MinSeverity(level))
 		chunker.AttachOutputGuard(guard)
 	}
 
@@ -89,7 +92,7 @@ func (h *ChatCompletionsHandler) serveStream(w http.ResponseWriter, r *http.Requ
 	contentFiltered := errors.Is(streamErr, streaming.ErrContentFiltered)
 	if contentFiltered && guard != nil {
 		if m, ok := guard.Blocked(); ok {
-			h.recordSafetyOutputBlock(ctx, m)
+			h.recordSafetyOutputBlock(ctx, m, level)
 		}
 	}
 
@@ -241,9 +244,11 @@ func (h *ChatCompletionsHandler) attemptAdapterStream(ctx context.Context, w htt
 	chunker := streaming.NewAdapterChunker(stream, servedModel)
 	// Story 8.3 — §9.3 出参 guard, per-request (fresh per stream attempt, never
 	// shared). nil outputScanner → no guard → byte-identical pre-8.3 loop.
+	// Story 8.4 — gate by the once-resolved per-request level (BR-2.5/BR-3.5).
+	level := resolvedStrictness(ctx)
 	var guard *contentsafety.StreamGuard
 	if h.outputScanner != nil {
-		guard = contentsafety.NewStreamGuard(h.outputScanner)
+		guard = contentsafety.NewStreamGuardMin(h.outputScanner, contentsafety.MinSeverity(level))
 		chunker.AttachOutputGuard(guard)
 	}
 
@@ -265,7 +270,7 @@ func (h *ChatCompletionsHandler) attemptAdapterStream(ctx context.Context, w htt
 	if errors.Is(streamErr, streaming.ErrContentFiltered) {
 		if guard != nil {
 			if m, ok := guard.Blocked(); ok {
-				h.recordSafetyOutputBlock(ctx, m)
+				h.recordSafetyOutputBlock(ctx, m, level)
 			}
 		}
 		h.maybeStreamTPMDeduct(ctx, apiKeyID, req.Model, chunker.TailUsage(), streamErr, false)

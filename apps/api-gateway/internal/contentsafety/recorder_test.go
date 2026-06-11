@@ -104,3 +104,24 @@ func TestRecorder_UNIT022_NopRecorderNoPanicNoState(t *testing.T) {
 	// A second call with a zero-value event is equally safe.
 	r.Record(context.Background(), SafetyEvent{})
 }
+
+// 8.4-UNIT-046 — the additive SafetyEvent.Strictness field defaults to "" (no-op /
+// pre-8.4) and the NopRecorder ignores it (zero DB write this story; Story 8.5
+// owns persistence). A populated level fits comfortably (≤10 runes).
+func TestRecorder_Story84_UNIT046_StrictnessFieldNoOp(t *testing.T) {
+	// Default zero value is "" — a SafetyEvent built without a level (the 8.2/8.3
+	// no-op shape) is unchanged.
+	if (SafetyEvent{}).Strictness != "" {
+		t.Fatal("SafetyEvent.Strictness default must be empty string (additive, no-op)")
+	}
+	var r Recorder = NopRecorder{}
+	defer func() {
+		if rec := recover(); rec != nil {
+			t.Fatalf("NopRecorder.Record panicked with Strictness set: %v", rec)
+		}
+	}()
+	// The no-op recorder ignores the populated level (no DB write).
+	r.Record(context.Background(), SafetyEvent{
+		Direction: DirectionInput, Action: ActionBlocked, MatchedRule: "x", Strictness: "loose",
+	})
+}

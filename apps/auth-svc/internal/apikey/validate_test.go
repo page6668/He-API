@@ -48,7 +48,7 @@ type fakeRepo struct {
 	// Story 5.2 — UpdateApiKey config-mutation surface.
 	selectConfig     func(ctx context.Context, apiKeyID uuid.UUID) (repository.ApiKeyRow, error)
 	selectConfigHits int
-	updateConfig     func(ctx context.Context, apiKeyID, userID uuid.UUID, scope []byte, cap pgtype.Numeric) (repository.ApiKeyRow, error)
+	updateConfig     func(ctx context.Context, apiKeyID, userID uuid.UUID, scope []byte, cap pgtype.Numeric, strictness string) (repository.ApiKeyRow, error)
 	updateConfigHits int
 }
 
@@ -122,12 +122,12 @@ func (f *fakeRepo) SelectAPIKeyConfigForUpdate(ctx context.Context, apiKeyID uui
 	return f.selectConfig(ctx, apiKeyID)
 }
 
-func (f *fakeRepo) UpdateAPIKeyConfig(ctx context.Context, apiKeyID, userID uuid.UUID, scope []byte, cap pgtype.Numeric) (repository.ApiKeyRow, error) {
+func (f *fakeRepo) UpdateAPIKeyConfig(ctx context.Context, apiKeyID, userID uuid.UUID, scope []byte, cap pgtype.Numeric, strictness string) (repository.ApiKeyRow, error) {
 	f.updateConfigHits++
 	if f.updateConfig == nil {
 		return repository.ApiKeyRow{}, errors.New("fakeRepo.updateConfig unwired")
 	}
-	return f.updateConfig(ctx, apiKeyID, userID, scope, cap)
+	return f.updateConfig(ctx, apiKeyID, userID, scope, cap, strictness)
 }
 
 // newTestService bundles a Service + in-memory tracetest exporter so each

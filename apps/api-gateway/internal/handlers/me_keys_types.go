@@ -54,6 +54,9 @@ type KeyEntry struct {
 	LastUsedAt          *string         `json:"last_used_at"`           // RFC 3339; nil → null
 	RevokedAt           *string         `json:"revoked_at"`             // RFC 3339; nil → null
 	CreatedAt           string          `json:"created_at"`
+	// Story 8.4 — appended LAST (additive) so the LIST/GET read path surfaces the
+	// effective per-Key 内容安全 level.
+	ContentSafetyStrictness string `json:"content_safety_strictness"`
 }
 
 // ListKeysResponse is the outbound JSON body for GET /v1/me/keys.

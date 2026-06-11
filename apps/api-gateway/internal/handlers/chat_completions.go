@@ -292,7 +292,7 @@ func WithSafetyRecorder(r contentsafety.Recorder) ChatHandlerOption {
 // injected Recorder (BR-3.1/BR-3.2). The matched term goes ONLY here (the 8.5
 // seam), NEVER to the caller-facing envelope (no lexicon leak). Fire-and-forget
 // on the reject path — the no-op default persists nothing (zero-DB, BR-3.4).
-func (h *ChatCompletionsHandler) recordSafetyBlock(ctx context.Context, m safetylexicon.Match) {
+func (h *ChatCompletionsHandler) recordSafetyBlock(ctx context.Context, m safetylexicon.Match, level contentsafety.Strictness) {
 	if h.safetyRecorder == nil {
 		return
 	}
@@ -303,11 +303,12 @@ func (h *ChatCompletionsHandler) recordSafetyBlock(ctx context.Context, m safety
 		Direction:   contentsafety.DirectionInput,
 		MatchedRule: m.Canonical, // == Match.Canonical (≤100 runes, fits VARCHAR(100))
 		Category:    string(m.Category),
-		Severity:    string(m.Severity), // carried for 8.5; does NOT gate the 8.2 decision (8.4 owns strictness)
+		Severity:    string(m.Severity), // the matched term's severity (carried for 8.5)
 		Action:      contentsafety.ActionBlocked,
 		UserID:      userID,
 		APIKeyID:    apiKeyID,
 		HeRequestID: heRequestID,
+		Strictness:  string(level), // Story 8.4 — the effective level under which it was blocked (OQ-8.4-5)
 	})
 }
 
@@ -444,6 +445,16 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Story 8.4 — resolve the per-Key 内容安全严格度 ONCE per request (BR-3.5) and
+	// carry it on the context so the input scan, the non-stream redact, AND the
+	// StreamGuard all gate under the SAME level (no mid-request drift). Fail-closed
+	// to Strict when the bearer claims are absent/empty/unknown (BR-3.4). Cheap,
+	// pure read — done unconditionally so the output paths see it even when the
+	// input scanner is unwired.
+	strictness := resolveStrictnessFromClaims(ctx)
+	ctx = withResolvedStrictness(ctx, strictness)
+	r = r.WithContext(ctx)
+
 	// BR-1.2 — MaxBytesReader bounds body reads at 1 MiB. The json decoder
 	// surfaces MaxBytesReader truncation as *http.MaxBytesError (Go 1.19+);
 	// match it explicitly to return 413 instead of the generic 400.
@@ -484,9 +495,15 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	// usage/billing (the metering hooks fire downstream — BR-1.3). A clean request
 	// falls through BYTE-IDENTICALLY to the pre-8.2 path.
 	if h.safetyScanner != nil {
+		// Story 8.4 — gate the input reject by the resolved per-Key level: a
+		// confirmed match blocks only when its severity meets the threshold
+		// (ScanTextMin skips sub-threshold confirmed hits and continues, so a low
+		// term never masks a later qualifying high term — BR-2.3). strict ==
+		// ScanTextMin(_, SeverityLow) == the pre-8.4 block-all (byte-identical).
+		min := contentsafety.MinSeverity(strictness)
 		for i := range req.Messages {
-			if match, hit := h.safetyScanner.ScanText(req.Messages[i].Content); hit {
-				h.recordSafetyBlock(ctx, match)
+			if match, hit := h.safetyScanner.ScanTextMin(req.Messages[i].Content, min); hit {
+				h.recordSafetyBlock(ctx, match, strictness)
 				_ = openaierr.Write(w, ctx, http.StatusBadRequest, "400_content_filter",
 					"Request was blocked by the content safety filter.", nil)
 				return

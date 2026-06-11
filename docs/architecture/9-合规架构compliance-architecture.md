@@ -43,4 +43,20 @@
   - 用户 GDPR 删除时不删除（合规优先于个人删除请求）
 ```
 
+### 严格度 → 严重度 gating（per Key，Story 8.4）
+
+每个 API-Key 携带一个 `content_safety_strictness` 严格度（`api_keys.content_safety_strictness VARCHAR(10) NOT NULL DEFAULT 'strict'`），作为**后检测**的严重度阈值门控**双向**过滤（入参拒绝 + 出参脱敏/流式终止）。词典每个命中词带 `severity ∈ {high, medium, low}`（Story 8.1），严格度按 8.1 OQ-8.1-5 ratified 映射到最低拦截严重度：
+
+| 严格度 level | minSeverity | 拦截 | 说明 |
+|--------------|-------------|------|------|
+| `loose`   | high   | 仅 high            | 实验/内部 Key，仅拦最高危（政治/暴恐等） |
+| `default` | medium | high + medium      | 标准 |
+| `strict`  | low    | high + medium + low | 备案-保守；== 8.2/8.3 上线的 block-all 行为 |
+
+规则：`Blocks(sev, level) := rank(sev) ≥ rank(minSeverity(level))`，rank high(3) > medium(2) > low(1)，阈值**含等**（at-threshold 拦截）。
+
+**Fail-closed（硬性合规不变量）**：缺失 / 空 / 未知 严格度值一律解析为 `strict`（block-all）——迁移列 DEFAULT、Redis 缓存 `omitempty` rollout 窗口、未知 token 三个面都 fail-closed。放宽（default/loose）只能由显式、已校验、已持久化的 Key 配置产生（`PATCH /v1/me/keys/{id}`）。检测（无漏报）从不被门控削弱——子阈值命中仍被**检测**，只是不被**执行**（first-qualifying-hit：子阈值命中不会短路并掩盖后面的合格命中）。
+
+> 备注：层 (3) 模型分类器（轻量 BERT）仍为后续 Epic；Story 8.4 只新增此后检测严重度门，不改动 8.2/8.3 的检测/无漏报机制。
+
 ---

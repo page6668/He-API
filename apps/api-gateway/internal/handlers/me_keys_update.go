@@ -35,6 +35,11 @@ const (
 	capMaxUSD = 999999.99
 )
 
+// validStrictnessLevels is the closed Story-8.4 enum {strict, default, loose}.
+// The gateway is the authoritative validator — the enum check happens BEFORE the
+// UpdateApiKey RPC (mirroring the cap-range / model-registry / CIDR checks).
+var validStrictnessLevels = map[string]bool{"strict": true, "default": true, "loose": true}
+
 // HandleUpdate implements AC1 — PATCH /v1/me/keys/{api_key_id}.
 func (h *MeKeysHandler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
@@ -146,6 +151,21 @@ func (h *MeKeysHandler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// --- content_safety_strictness (BR-1.2 / BR-1.4 / Story 8.4) -------------
+	// Gateway validates the enum BEFORE the RPC (authoritative validator); a bad
+	// token → 400 with param="content_safety_strictness", no DB side-effect.
+	if req.ContentSafetyStrictness != nil {
+		level := *req.ContentSafetyStrictness
+		if !validStrictnessLevels[level] {
+			param := "content_safety_strictness"
+			_ = openaierr.Write(w, r.Context(), http.StatusBadRequest, "400_invalid_request",
+				"invalid content_safety_strictness (want strict|default|loose)", &param)
+			return
+		}
+		protoReq.ContentSafetyStrictness = &level
+		hasField = true
+	}
+
 	// BR-1.3 — at least one field must be present.
 	if !hasField {
 		_ = openaierr.Write(w, r.Context(), http.StatusBadRequest, "400_invalid_request",
@@ -199,12 +219,13 @@ func validCapRange(s string) bool {
 // shape (BR-1.13 field order). Mirrors protoEntryToJSON (me_keys.go).
 func updateRespToJSON(p *authv1.UpdateApiKeyResponse) UpdateKeyResponse {
 	out := UpdateKeyResponse{
-		APIKeyID:            p.GetApiKeyId(),
-		Name:                p.GetName(),
-		KeyPrefix:           p.GetKeyPrefix(),
-		Scope:               json.RawMessage(stringOrEmpty(p.GetScope(), `{}`)),
-		CurrentMonthCostUSD: p.GetCurrentMonthCostUsd(),
-		CreatedAt:           p.GetCreatedAt().AsTime().UTC().Format(time.RFC3339),
+		APIKeyID:                p.GetApiKeyId(),
+		Name:                    p.GetName(),
+		KeyPrefix:               p.GetKeyPrefix(),
+		Scope:                   json.RawMessage(stringOrEmpty(p.GetScope(), `{}`)),
+		CurrentMonthCostUSD:     p.GetCurrentMonthCostUsd(),
+		CreatedAt:               p.GetCreatedAt().AsTime().UTC().Format(time.RFC3339),
+		ContentSafetyStrictness: p.GetContentSafetyStrictness(), // Story 8.4 read-back
 	}
 	if p.MonthlyCostCapUsd != nil {
 		v := *p.MonthlyCostCapUsd

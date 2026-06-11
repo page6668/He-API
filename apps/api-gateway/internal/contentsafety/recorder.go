@@ -32,6 +32,13 @@ type SafetyEvent struct {
 	UserID      string // bearer-auth owner user_id (middleware context)
 	APIKeyID    string // validated api_keys.id (middleware context)
 	HeRequestID string // request correlation id (requestid context)
+	// Strictness is the Story-8.4 effective per-Key level ("strict"/"default"/
+	// "loose") under which this match was ACTED ON (blocked/redacted/terminated),
+	// so Story 8.5's 备案 log can attribute "blocked under <level>" WITHOUT
+	// re-deriving it (OQ-8.4-5). Additive + optional: "" on a pre-8.4 / no-op
+	// recorder. An event is recorded ONLY on a gated-block — a sub-threshold
+	// detected-but-not-blocked match records NOTHING (BR-4.4).
+	Strictness string
 }
 
 // Direction / Action literals — the only values Story 8.2 ever emits. Exported so

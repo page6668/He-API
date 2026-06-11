@@ -103,6 +103,8 @@ func rowToProtoEntry(r *repository.ApiKeyRow) *authv1.ApiKeyEntry {
 		KeyPrefix: r.KeyPrefix,
 		Scope:     string(r.Scope),
 		CreatedAt: timestamppb.New(r.CreatedAt),
+		// Story 8.4 — surface the per-Key level on the LIST/GET read path.
+		ContentSafetyStrictness: r.ContentSafetyStrictness,
 	}
 
 	// current_month_cost_usd defaults to "0" if the NUMERIC column is null /
