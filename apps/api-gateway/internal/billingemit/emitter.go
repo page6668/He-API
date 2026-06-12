@@ -19,11 +19,17 @@ import (
 
 	"github.com/segmentio/kafka-go"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/encoding/protojson"
 
+	obs "github.com/he-api/he-api/packages/go-observability"
 	billingv1 "github.com/he-api/he-api/packages/proto/gen/go/he/billing/v1"
 )
+
+// tracerName names the producer's tracer (parity with the meter name above).
+const tracerName = "apps/api-gateway/internal/billingemit"
 
 // writeTimeout bounds the detached produce so a stuck broker cannot leak
 // goroutines indefinitely.
@@ -89,12 +95,30 @@ func (e *KafkaEmitter) Emit(ctx context.Context, ev *billingv1.UsageEvent) {
 		Key:   []byte(ev.GetUserId()),
 		Value: body,
 	}
+	// Story 9.4 BR-TR-8/11 — inject W3C trace context into the kafka headers so
+	// billing-svc's credit-apply span links back to the originating request trace.
+	// Only when the caller is inside a trace; produced outside one (cold path) the
+	// headers stay empty and the consumer correctly roots a new trace (BR-TR-11).
+	// The producer span is opened on the request ctx (active trace) BEFORE detach.
+	var span trace.Span
+	pctx := ctx
+	if trace.SpanContextFromContext(ctx).IsValid() {
+		pctx, span = otel.Tracer(tracerName).Start(ctx, Topic+" produce",
+			trace.WithSpanKind(trace.SpanKindProducer))
+		obs.InjectKafkaHeaders(pctx, &msg)
+	}
 	go func() {
 		// Detach from the request ctx (which is cancelled on handler return) but
 		// keep a bounded deadline. acks=all is configured on the writer.
-		wctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), writeTimeout)
+		wctx, cancel := context.WithTimeout(context.WithoutCancel(pctx), writeTimeout)
 		defer cancel()
+		if span != nil {
+			defer span.End()
+		}
 		if err := e.w.WriteMessages(wctx, msg); err != nil {
+			if span != nil {
+				span.SetStatus(codes.Error, "produce failed") // static reason — no PII (BR-TR-7)
+			}
 			e.fail(wctx, "write", ev, err)
 		}
 		e.done()

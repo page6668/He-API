@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"golang.org/x/net/http2"
 )
 
@@ -23,18 +24,18 @@ const DefaultUpstreamTimeout = 60 * time.Second
 type ErrorKind string
 
 const (
-	ErrorKindAuthRevoked      ErrorKind = "auth_revoked"
-	ErrorKindQuotaExhausted   ErrorKind = "quota_exhausted"
-	ErrorKindUpstream5xx      ErrorKind = "upstream_5xx"
-	ErrorKindUpstream4xx      ErrorKind = "upstream_4xx"
-	ErrorKindUpstreamTimeout  ErrorKind = "upstream_timeout"
-	ErrorKindTLS              ErrorKind = "tls"
-	ErrorKindDNS              ErrorKind = "dns"
+	ErrorKindAuthRevoked       ErrorKind = "auth_revoked"
+	ErrorKindQuotaExhausted    ErrorKind = "quota_exhausted"
+	ErrorKindUpstream5xx       ErrorKind = "upstream_5xx"
+	ErrorKindUpstream4xx       ErrorKind = "upstream_4xx"
+	ErrorKindUpstreamTimeout   ErrorKind = "upstream_timeout"
+	ErrorKindTLS               ErrorKind = "tls"
+	ErrorKindDNS               ErrorKind = "dns"
 	ErrorKindConnectionRefused ErrorKind = "connection_refused"
-	ErrorKindMissingUsage     ErrorKind = "missing_usage"
-	ErrorKindEmptyChoices     ErrorKind = "empty_choices"
-	ErrorKindMalformedChunk   ErrorKind = "malformed_chunk"
-	ErrorKindUsageConstraint  ErrorKind = "usage_constraint_violation"
+	ErrorKindMissingUsage      ErrorKind = "missing_usage"
+	ErrorKindEmptyChoices      ErrorKind = "empty_choices"
+	ErrorKindMalformedChunk    ErrorKind = "malformed_chunk"
+	ErrorKindUsageConstraint   ErrorKind = "usage_constraint_violation"
 )
 
 // Client is the upstream HTTPS client over the DeepSeek API. HTTP/2 is
@@ -66,7 +67,14 @@ func NewClient(baseURL, apiKey string, timeout time.Duration) *Client {
 		BaseURL: baseURL,
 		APIKey:  apiKey,
 		HTTPClient: &http.Client{
-			Transport: transport,
+			// Story 9.4 BR-TR-6 (T6.2): wrap the OQ7 forced-HTTP/2 transport so the
+			// adapter→vendor model call surfaces as a client span (TTFB) on the
+			// request's trace. *http2.Transport implements http.RoundTripper, so
+			// otelhttp.NewTransport wraps it as its base and the forced-HTTP/2 policy
+			// is FULLY preserved — the wrapper only injects `traceparent` + times the
+			// call. NEVER routed through obs.NewHTTPClient() (http.DefaultTransport
+			// would drop the forced-HTTP/2 policy).
+			Transport: otelhttp.NewTransport(transport),
 			Timeout:   timeout,
 		},
 	}

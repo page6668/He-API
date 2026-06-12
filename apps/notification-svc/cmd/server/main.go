@@ -25,13 +25,13 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/segmentio/kafka-go"
 
-	obs "github.com/he-api/he-api/packages/go-observability"
 	"github.com/he-api/he-api/apps/notification-svc/internal/audit"
 	"github.com/he-api/he-api/apps/notification-svc/internal/authsvcclient"
 	"github.com/he-api/he-api/apps/notification-svc/internal/events"
 	"github.com/he-api/he-api/apps/notification-svc/internal/handlers"
 	gdprratelimit "github.com/he-api/he-api/apps/notification-svc/internal/ratelimit"
 	"github.com/he-api/he-api/apps/notification-svc/internal/sendgrid"
+	obs "github.com/he-api/he-api/packages/go-observability"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/notification/v1/notificationv1connect"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/usagelog/v1/usagelogv1connect"
 
@@ -58,6 +58,7 @@ func main() {
 		os.Exit(1)
 	}
 	otel.SetTracerProvider(tp)
+	obs.SetupPropagation() // Story 9.4 BR-TR-1 — global W3C propagator (extract incoming traceparent)
 	defer func() {
 		sctx, scancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer scancel()
@@ -169,7 +170,7 @@ func main() {
 		// (dedupe sentinels) + the auth-svc gRPC endpoint (Q-L Fix-A context
 		// lookup). Env var follows the repo's HE_API_*_URL convention.
 		if authURL := strings.TrimSpace(os.Getenv("HE_API_AUTH_SVC_URL")); authURL != "" {
-			authClient := authsvcclient.New(&http.Client{Timeout: 10 * time.Second}, authURL)
+			authClient := authsvcclient.New(obs.NewHTTPClient(obs.WithTimeout(10*time.Second)), authURL) // Story 9.4 BR-TR-2
 			capServer = handlers.NewCapThresholdServer(handlers.NewRedisDedupeStore(rdb), authClient, sender, logger)
 			logger.Info("notification-svc Story-5.4 cap-threshold RPC enabled")
 		} else {

@@ -80,6 +80,7 @@ func run(ctx context.Context, logger *slog.Logger, addr string) error {
 		return err
 	}
 	otel.SetTracerProvider(tp)
+	obs.SetupPropagation() // Story 9.4 BR-TR-1 — global W3C propagator (extract incoming traceparent)
 	defer shutdown(tp.Shutdown)
 
 	mp, err := obs.NewMeterProvider(ctx, serviceName, serviceNS, serviceVersion)
@@ -196,7 +197,9 @@ func unimplementedOrReal(pool *pgxpool.Pool, rdb *redis.Client, logger *slog.Log
 	}
 	snapshot := subscription.NewSnapshotWriter(snapRedis, logger)
 	if url := os.Getenv("HE_API_PAYMENT_SVC_URL"); url != "" {
-		client := paymentv1connect.NewPaymentServiceClient(http.DefaultClient, url)
+		// Story 9.4 (TRACE-ORPHAN-001): instrumented client so the billing-svc→payment-svc
+		// connect hop injects `traceparent` and stays on the originating trace (BR-TR-2).
+		client := paymentv1connect.NewPaymentServiceClient(obs.NewHTTPClient(), url)
 		updater := paymentclient.NewSubscriptionUpdater(client)
 		svc := subscription.NewService(cat, subReader, updater, snapshot, logger)
 		srv.SetSubscriptions(svc, subReader, cat)
@@ -296,7 +299,9 @@ func buildPostDeduction(logger *slog.Logger, pool *pgxpool.Pool, rdb *redis.Clie
 
 	var charger autorecharge.Charger
 	if url := os.Getenv("HE_API_PAYMENT_SVC_URL"); url != "" {
-		client := paymentv1connect.NewPaymentServiceClient(http.DefaultClient, url)
+		// Story 9.4 (TRACE-ORPHAN-001): instrumented client so the billing-svc→payment-svc
+		// connect hop injects `traceparent` and stays on the originating trace (BR-TR-2).
+		client := paymentv1connect.NewPaymentServiceClient(obs.NewHTTPClient(), url)
 		charger = paymentclient.NewCharger(client)
 	} else {
 		logger.Warn("HE_API_PAYMENT_SVC_URL unset — auto-recharge off-session charge disabled (low-balance alerts still fire)")

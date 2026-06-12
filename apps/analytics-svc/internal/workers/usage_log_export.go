@@ -31,10 +31,14 @@ import (
 	"github.com/segmentio/kafka-go"
 	"google.golang.org/protobuf/proto"
 
+	obs "github.com/he-api/he-api/packages/go-observability"
 	usagelogv1 "github.com/he-api/he-api/packages/proto/gen/go/he/usagelog/v1"
 
 	"github.com/he-api/he-api/apps/analytics-svc/internal/dumps"
 )
+
+// usageLogExportTracerName names the usage-log-export consumer's tracer.
+const usageLogExportTracerName = "apps/analytics-svc/internal/workers/usage_log_export"
 
 // UsageLogExportConsumerGroup is the Kafka consumer-group name per BR-EX-10.
 const UsageLogExportConsumerGroup = "analytics-svc.usage-log-export"
@@ -103,12 +107,16 @@ func (w *UsageLogExportWorker) Run(ctx context.Context) error {
 			w.Logger.WarnContext(ctx, "kafka fetch failed", slog.String("error", err.Error()))
 			continue
 		}
-		if err := w.Process(ctx, msg); err != nil {
-			w.Logger.ErrorContext(ctx, "usage-log export job failed",
+		// Story 9.4 BR-TR-9 — consumer span LINKED to the request that asked for
+		// this export (link, not child — Q-KAFKA); legacy messages root anew.
+		hctx, span := obs.StartConsumerSpan(ctx, usageLogExportTracerName, UsageLogExportTopic+" consume", msg)
+		if err := w.Process(hctx, msg); err != nil {
+			w.Logger.ErrorContext(hctx, "usage-log export job failed",
 				slog.String("kafka_offset", fmt.Sprintf("%d", msg.Offset)),
 				slog.String("error", err.Error()),
 			)
 		}
+		span.End()
 		if err := w.Reader.CommitMessages(ctx, msg); err != nil {
 			w.Logger.WarnContext(ctx, "kafka commit failed", slog.String("error", err.Error()))
 		}

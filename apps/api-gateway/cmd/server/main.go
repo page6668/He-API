@@ -54,8 +54,8 @@ import (
 	"github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1/authv1connect"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/billing/v1/billingv1connect"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/notification/v1/notificationv1connect"
-	"github.com/he-api/he-api/packages/proto/gen/go/he/usagelog/v1/usagelogv1connect"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/payment/v1/paymentv1connect"
+	"github.com/he-api/he-api/packages/proto/gen/go/he/usagelog/v1/usagelogv1connect"
 	safetylexicon "github.com/he-api/he-api/packages/safety-lexicon"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -100,6 +100,12 @@ func main() {
 		os.Exit(1)
 	}
 	otel.SetTracerProvider(tp)
+	// Story 9.4 BR-TR-1 — install the GLOBAL W3C composite propagator right after
+	// the tracer provider (placement-before-use), so otelhttp server handlers
+	// EXTRACT the incoming `traceparent` (server span becomes a CHILD, not a root)
+	// and every obs.NewHTTPClient INJECTS it on the way out. Without this every
+	// service starts a fresh root trace and the chain is broken.
+	obs.SetupPropagation()
 	defer func() {
 		sctx, scancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer scancel()
@@ -129,7 +135,7 @@ func main() {
 	// and the gateway is the only ingress.
 	authSvcURL := envOr("HE_API_AUTH_SVC_URL", defaultAuthSvcURL)
 	authUpstream := authv1connect.NewAuthServiceClient(
-		&http.Client{Timeout: 10 * time.Second},
+		obs.NewHTTPClient(obs.WithTimeout(10*time.Second)), // Story 9.4 BR-TR-2: traceparent-injecting client
 		authSvcURL,
 	)
 	deployEnv := handlers.ParseDeployEnv(os.Getenv("HE_API_DEPLOY_ENV"))
@@ -261,7 +267,7 @@ func main() {
 	// enforcement happens inside the handler (handlers/account_data.go).
 	notificationSvcURL := envOr("HE_API_NOTIFICATION_SVC_URL", defaultNotificationSvcURL)
 	notificationUpstream := notificationv1connect.NewNotificationServiceClient(
-		&http.Client{Timeout: 10 * time.Second},
+		obs.NewHTTPClient(obs.WithTimeout(10*time.Second)), // Story 9.4 BR-TR-2
 		notificationSvcURL,
 	)
 	accountData := handlers.NewAccountDataProxy(notificationUpstream)
@@ -277,7 +283,7 @@ func main() {
 	// fields body validation happen inside the handler.
 	usageLogExport := handlers.NewUsageLogExportProxy(
 		usagelogv1connect.NewUsageLogExportServiceClient(
-			&http.Client{Timeout: 10 * time.Second},
+			obs.NewHTTPClient(obs.WithTimeout(10*time.Second)), // Story 9.4 BR-TR-2
 			notificationSvcURL,
 		),
 	)
@@ -487,7 +493,7 @@ func main() {
 	// notification-svc Connect client URL). The sticky-trip sentinel shares the
 	// keypolicy Redis client.
 	capNotifier := notifyclient.New(
-		&http.Client{Timeout: 10 * time.Second},
+		obs.NewHTTPClient(obs.WithTimeout(10*time.Second)), // Story 9.4 BR-TR-2
 		notificationSvcURL,
 		logger,
 	)
@@ -841,7 +847,7 @@ func buildBillingClient(logger *slog.Logger) billingv1connect.BillingServiceClie
 		return nil
 	}
 	logger.Info("billing-svc client wired", slog.String("endpoint", endpoint))
-	return billingv1connect.NewBillingServiceClient(&http.Client{Timeout: 10 * time.Second}, endpoint)
+	return billingv1connect.NewBillingServiceClient(obs.NewHTTPClient(obs.WithTimeout(10*time.Second)), endpoint) // Story 9.4 BR-TR-2
 }
 
 // buildPaymentClient constructs the payment-svc Connect client (Story 7.3 —
@@ -853,7 +859,7 @@ func buildPaymentClient(logger *slog.Logger) paymentv1connect.PaymentServiceClie
 		return nil
 	}
 	logger.Info("payment-svc client wired", slog.String("endpoint", endpoint))
-	return paymentv1connect.NewPaymentServiceClient(&http.Client{Timeout: 15 * time.Second}, endpoint)
+	return paymentv1connect.NewPaymentServiceClient(obs.NewHTTPClient(obs.WithTimeout(15*time.Second)), endpoint) // Story 9.4 BR-TR-2
 }
 
 // mustRedisOptions parses a Redis URL; on parse failure it logs WARN and

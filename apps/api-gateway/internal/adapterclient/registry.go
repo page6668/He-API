@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	"connectrpc.com/connect"
+	obs "github.com/he-api/he-api/packages/go-observability"
 	adapterv1 "github.com/he-api/he-api/packages/proto/gen/go/he/adapter/v1"
 	adapterv1connect "github.com/he-api/he-api/packages/proto/gen/go/he/adapter/v1/adapterv1connect"
 )
@@ -258,7 +259,7 @@ type connectClientHandle struct {
 }
 
 func newConnectClientHandle(endpoint string) *connectClientHandle {
-	httpc := &http.Client{}
+	httpc := obs.NewHTTPClient() // Story 9.4 BR-TR-2/BR-TR-6 — instruments the upstream-model client span
 	return &connectClientHandle{
 		endpoint: endpoint,
 		httpc:    httpc,

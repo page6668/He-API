@@ -1,0 +1,145 @@
+schema: 1
+story: "9.4"
+story_title: "全链路 trace（OpenTelemetry）"
+gate: "PASS"
+status_reason: >
+  Round 3 (incremental): the sole remaining open item, ADAPTER-DARK-001 (MEDIUM,
+  architecture_concern), is now RESOLVED and independently re-verified. Per the
+  Architect escalation ruling, Dev added T6 — instrumenting EXACTLY the adapter tier:
+  all 6 adapter mains (apps/adapters/{deepseek,doubao,ernie,glm,kimi,qwen}/cmd/server/main.go)
+  now build obs.NewTracerProvider + otel.SetTracerProvider + obs.SetupPropagation() and
+  wrap the mux with obs.WrapHTTPHandler (gateway→adapter traceparent is EXTRACTED, the
+  adapter server span joins the trace), and each internal/upstream/client.go wraps its
+  bespoke vendor transport with otelhttp.NewTransport(<existing>) so the adapter→vendor
+  model call is the TTFB client span (BR-TR-6, the key business span). The dark
+  gateway→adapter→vendor edge is closed and AC1's worked example ("adapter→<vendor> ...
+  one trace_id") is delivered. The two HIGH must_fix items (TRACE-ORPHAN-001,
+  TAUDIT-SCOPE-001) remain RESOLVED from Round 2. QA independently re-verified: all 6
+  mains + 6 upstream wraps present (grep), ALPN/forced-HTTP2 policy preserved in place
+  (otelhttp wraps the bespoke transport as its base — deepseek *http2.Transport,
+  qwen/doubao ForceAttemptHTTP2 intact), zero span attributes set by adapter code (PII
+  clean), and the guards have teeth (UNIT-009 exemption narrowed apps/adapters/ →
+  internal/upstream/ so adapter mains are back on the anti-orphan path; UNIT-016 positive
+  guard added, RED→GREEN). Test runs GREEN: obs unit/blind-spot/T-AUDIT/UNIT-016 under
+  go test -race; INT-001/-004 in-process under -tags=integration; build/vet/race for all
+  6 adapter modules (incl. the HTTP/2 fake-upstream tests — no ALPN regression); otel
+  pinned v1.26.0 / otelhttp v0.51.0, no workspace drift. Remaining UNCHECKED items are
+  the honest, long-standing CI/staging deferrals of the multi-container integration
+  (9.4-INT-002/005/006/007/008) + staging E2E (9.4-E2E-001) — not runnable locally
+  (project_toolchain_env_limits), accepted policy since Round 1 (9.1/9.2/9.3 precedent),
+  never a gate blocker. Reliability NFR (was CONCERNS: chain discontinuous at the adapter
+  edge) is now PASS.
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-12T00:00:00Z"
+
+review_round: 3
+review_mode_type: incremental
+issues_from_previous_round: 1
+issues_resolved: 1
+improvement_percentage: 100
+
+incremental_context:
+  cached_risk_level: "HIGH"
+  cached_review_mode: "full_testing"
+  cached_project_type: "library"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false   # Round 3 — ADAPTER-DARK-001 ruled (T6) and delivered; no open architecture question
+
+top_issues:
+  - id: "TRACE-ORPHAN-001"
+    severity: high
+    status: RESOLVED   # Round 2 — re-verified; unchanged in Round 3
+    finding: >
+      [RESOLVED Round 2] auth-svc→notification-svc (main.go:206) and billing-svc→payment-svc
+      (main.go:202,302) swapped off http.DefaultClient to obs.NewHTTPClient(); zero
+      inter-service DefaultClient/bare-client orphans by grep.
+    suggested_action: "None — closed."
+  - id: "TAUDIT-SCOPE-001"
+    severity: high
+    status: RESOLVED   # Round 2 — re-verified; tightened further by T6.4 in Round 3
+    finding: >
+      [RESOLVED Round 2; tightened Round 3] The 9.4-UNIT-009 guard walks every service under
+      apps/, flags both &http.Client{ and http.DefaultClient on inter-service RPC paths,
+      comment-aware with a package-path external allow-list. Round-3 T6.4 narrowed the
+      adapter exemption from the blanket apps/adapters/ to internal/upstream/ only, so the
+      adapter mains are back ON the anti-orphan path. go test -race GREEN.
+    suggested_action: "None — closed."
+  - id: "ADAPTER-DARK-001"
+    severity: medium
+    status: RESOLVED   # Round 3 — T6 delivered + independently re-verified
+    finding: >
+      [RESOLVED Round 3] The 6 adapter services were un-instrumented, so gateway→adapter→vendor
+      (BR-TR-6, the model-TTFB span) went dark. Per the Architect escalation ruling, Dev added
+      T6: all 6 mains install TracerProvider + SetupPropagation() + WrapHTTPHandler (server span
+      joins the trace), and all 6 internal/upstream/client.go wrap their bespoke ALPN/forced-HTTP2
+      transport with otelhttp.NewTransport(<existing>) (TTFB client span). QA re-verification:
+      grep confirms 6/6 mains + 6/6 upstream wraps; the bespoke transport is passed as the
+      otelhttp base (ALPN/forced-HTTP2 preserved — deepseek *http2.Transport AllowHTTP:false,
+      qwen/doubao ForceAttemptHTTP2:true intact); adapter code sets ZERO span attributes (PII
+      clean, UNIT-008 GREEN over apps/); UNIT-016 positive guard PASS (ran, not skipped);
+      build/vet/race GREEN for all 6 modules incl. the HTTP/2 fake-upstream tests; otel pinned
+      v1.26.0/v0.51.0, no drift. AC1's adapter→vendor worked example is now delivered.
+    suggested_action: >
+      None — closed. Live proof (9.4-INT-002, real adapter container → fake vendor, assert the
+      TTFB client span) remains a CI/staging scenario (project_toolchain_env_limits) — now
+      deliverable; unit-level wiring proven statically (UNIT-016) + behaviourally (UNIT-003 +
+      the adapters' own transport/HTTP-2 tests).
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 26
+    passed_count: 26
+    failed_count: 0
+    skipped_count: 0
+    pass_rate: 100
+    coverage_percentage: 0
+    failed_tests: []
+    # obs: unit/blind-spot + T-AUDIT 9.4-UNIT-009 + positive 9.4-UNIT-016 + PII 9.4-UNIT-008
+    # under go test -race -count=1 → ok. In-process integration 9.4-INT-001/-004 under
+    # -tags=integration → ok. All 6 adapter modules (deepseek/doubao/ernie/glm/kimi/qwen):
+    # go build + go vet + go test -race → GREEN, incl. internal/upstream transport tests +
+    # cmd/fake-upstream HTTP/2 (no ALPN regression). Vitest 1.4-UNIT-057/057b/057c
+    # Dev-claimed (collector/grafana YAML), not re-run here.
+  e2e:
+    executed: false
+    passed: false
+    skipped: true
+    skip_reason: "Multi-container integration (collector/Jaeger/Kafka) + staging E2E not runnable locally (project_toolchain_env_limits); 9.4-INT-002/005/006/007/008 + 9.4-E2E-001 honestly deferred to CI/staging. Accepted policy since Round 1; never a gate blocker."
+    scenarios_tested: 0
+    scenarios_passed: 0
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: ""
+  issues: []   # Round 3 — no open issues; all prior items RESOLVED
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 4
+  security_sensitive: true
+  dev_gate_score: 97
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 0 }   # Round 3 — ADAPTER-DARK-001 closed
+  recommendations:
+    must_fix: []
+    monitor:
+      - "9.4-INT-002 (adapter→vendor TTFB client span) — run in CI/staging to confirm the span surfaces end-to-end against a live collector/Jaeger; unit wiring already proven (UNIT-016)."
+      - "Production Jaeger storage/retention (in-memory in staging, ~2h eviction) — documented follow-up, out of 9.4 scope."
+
+nfr_validation:
+  security: { status: PASS, notes: "PII allow-list asserted on both layers — code (9.4-UNIT-008 spans / -015 Kafka headers, GREEN, now covering the adapter span path: adapters set zero span attributes) + collector redaction keep-list (service-agnostic; drops prompt/authorization/client.address/url.full). No external OTLP egress (in-cluster collector only; §11.3 DataExportSuspect unaffected)." }
+  performance: { status: PASS, notes: "ParentBased(TraceIDRatioBased) head sampler; no per-span SDK scrub (Q-PII); otelhttp.NewTransport wraps the bespoke vendor transport in place so the per-vendor keep-alive/ALPN/forced-HTTP2 pool is preserved (no regression; HTTP/2 fake-upstream tests GREEN)." }
+  reliability: { status: PASS, notes: "Round 3 — the full request chain is now continuous across all instrumented edges incl. the adapter tier (gateway→adapter→vendor). Degraded-mode + back-compat (legacy header-less Kafka msg roots a new trace) GREEN. (Was CONCERNS in Round 2 solely due to the un-instrumented adapter edge.)" }
+  maintainability: { status: PASS, notes: "Shared-package design (one wire format for all services + adapters); T6 is pure pattern reuse of T1.3; idiomatic Go/OTel; well-documented WHY comments on the transport wrap." }

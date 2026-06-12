@@ -80,6 +80,7 @@ func run(ctx context.Context, logger *slog.Logger, cat modelscatalogue.Catalogue
 		return err
 	}
 	otel.SetTracerProvider(tp)
+	obs.SetupPropagation() // Story 9.4 BR-TR-1 — global W3C propagator (extract incoming traceparent)
 	defer func() {
 		sctx, scancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer scancel()

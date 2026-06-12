@@ -70,6 +70,7 @@ func main() {
 		os.Exit(1)
 	}
 	otel.SetTracerProvider(tp)
+	obs.SetupPropagation() // Story 9.4 BR-TR-1 — global W3C propagator (extract incoming traceparent)
 	defer func() {
 		sctx, scancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer scancel()
@@ -312,9 +313,9 @@ func (d *kafkaDLQ) Publish(ctx context.Context, key, value []byte) error {
 
 type noopStore struct{}
 
-func (*noopStore) MarkProcessing(_ context.Context, _ string) (bool, error)     { return false, nil }
+func (*noopStore) MarkProcessing(_ context.Context, _ string) (bool, error)        { return false, nil }
 func (*noopStore) MarkCompleted(_ context.Context, _, _ string, _ time.Time) error { return nil }
-func (*noopStore) MarkFailed(_ context.Context, _, _ string) error              { return nil }
+func (*noopStore) MarkFailed(_ context.Context, _, _ string) error                 { return nil }
 func (*noopStore) LookupEmailContext(_ context.Context, _ string) (workers.EmailContext, error) {
 	return workers.EmailContext{}, nil
 }

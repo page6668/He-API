@@ -7,11 +7,17 @@ import (
 
 	"github.com/segmentio/kafka-go"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/encoding/protojson"
 
+	obs "github.com/he-api/he-api/packages/go-observability"
 	analyticsv1 "github.com/he-api/he-api/packages/proto/gen/go/he/analytics/v1"
 )
+
+// tracerName names the producer's tracer (parity with the meter name above).
+const tracerName = "apps/api-gateway/internal/analyticslog"
 
 // writeTimeout bounds the detached produce so a stuck broker cannot leak
 // goroutines indefinitely (billingemit parity).
@@ -74,10 +80,27 @@ func (e *KafkaEmitter) Emit(ctx context.Context, ev *analyticsv1.UsageLogEvent) 
 		Key:   []byte(ev.GetUserId()),
 		Value: body,
 	}
+	// Story 9.4 BR-TR-8/11 — inject W3C trace context so analytics-svc's ingest
+	// span links back to the originating request trace. Only when inside a trace
+	// (else the consumer roots a new trace, BR-TR-11). Span opened on the request
+	// ctx BEFORE detach.
+	var span trace.Span
+	pctx := ctx
+	if trace.SpanContextFromContext(ctx).IsValid() {
+		pctx, span = otel.Tracer(tracerName).Start(ctx, Topic+" produce",
+			trace.WithSpanKind(trace.SpanKindProducer))
+		obs.InjectKafkaHeaders(pctx, &msg)
+	}
 	go func() {
-		wctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), writeTimeout)
+		wctx, cancel := context.WithTimeout(context.WithoutCancel(pctx), writeTimeout)
 		defer cancel()
+		if span != nil {
+			defer span.End()
+		}
 		if err := e.w.WriteMessages(wctx, msg); err != nil {
+			if span != nil {
+				span.SetStatus(codes.Error, "produce failed") // static reason — no PII (BR-TR-7)
+			}
 			e.fail(wctx, "write", ev, err)
 		}
 		e.done()

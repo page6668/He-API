@@ -6,7 +6,22 @@
 |------|------|------|
 | **Metrics** | Prometheus + Grafana | RED + USE 指标 + 业务指标 |
 | **Logs** | Loki + Promtail | 结构化 JSON 日志 |
-| **Traces** | OpenTelemetry + Jaeger（后端） | 全链路 trace |
+| **Traces** | OpenTelemetry + Jaeger（后端，Grafana Jaeger datasource 可视） | 全链路 trace |
+
+> **Story 9.4 — 全链路 trace 落地 (Q-STORE ratified: KEEP Jaeger, NO Tempo).** Story 1.4
+> shipped the OTel SDK + collector + Jaeger + Grafana datasource; Story 3.6 stamped
+> `he.request_id` on every server span. 9.4 closes the CONTINUITY gap so one request
+> is ONE trace end-to-end and viewable in Grafana via the existing **Jaeger** datasource
+> (`uid: jaeger`) — the epic-9 AC「Grafana 可看到完整请求链路」is satisfied without a
+> Tempo migration. Mechanism: a GLOBAL W3C `tracecontext`+`baggage` propagator
+> (`obs.SetupPropagation()`, every service main) + outbound-client instrumentation
+> (`obs.NewHTTPClient` → `otelhttp.NewTransport`, zero bare `&http.Client{}` on any
+> RPC path) for the sync hops, and manual W3C header inject/extract over
+> `kafka.Message.Headers` (`obs.Inject/ExtractKafkaHeaders`) for the async hops — every
+> Kafka consumer joins the originating trace via a **span LINK** (Q-KAFKA: link, not
+> child, for all 4 topics). trace↔log correlation is bidirectional: the Loki→Jaeger
+> `derivedField` on `trace_id` (1.4/3.6) **plus** the new Jaeger→Loki `tracesToLogsV2`
+> reverse link (9.4 BR-TR-14). Operator runbook: `docs/architecture/runbook-trace-a-request.md`.
 
 ## 11.2 关键 Dashboard
 
@@ -87,5 +102,6 @@
 | Date | Story | Change |
 |------|-------|--------|
 | 2026-05-19 | Story 3.6 (Dev) | §11.5 created; `he.request_id` registered as the first reserved `he.*` span attribute (per BR-2.8 + T8.9). |
+| 2026-06-11 | Story 9.4 (Dev) | NO new `he.*` attribute added — 9.4 reuses `he.request_id` (now continuous across the whole trace once the global propagator is installed). Reaffirms BR-TR-7: span attributes (and Kafka headers) are an ALLOW-LIST of registered `he.*` + OTel `http.*`/`rpc.*`/`db.system` semconv ONLY — NEVER prompt/response bodies, `Authorization`/`X-He-Api-Key`, api-key plaintext/hash, email, or client IP. Runtime backstop = otel-collector `redaction` keep-list (`infra/helm/observability/otel-collector/values-staging.yaml`), whose `allowed_keys` MUST stay ⊇ this registry. |
 
 ---

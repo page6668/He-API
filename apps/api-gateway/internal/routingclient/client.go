@@ -20,6 +20,7 @@ import (
 
 	"connectrpc.com/connect"
 
+	obs "github.com/he-api/he-api/packages/go-observability"
 	routingv1 "github.com/he-api/he-api/packages/proto/gen/go/he/routing/v1"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/routing/v1/routingv1connect"
 )
@@ -43,7 +44,7 @@ type connectClientHandle struct {
 }
 
 func newConnectClientHandle(endpoint string) *connectClientHandle {
-	httpc := &http.Client{}
+	httpc := obs.NewHTTPClient() // Story 9.4 BR-TR-2 — traceparent-injecting transport
 	return &connectClientHandle{
 		httpc:  httpc,
 		client: routingv1connect.NewRoutingServiceClient(httpc, endpoint),

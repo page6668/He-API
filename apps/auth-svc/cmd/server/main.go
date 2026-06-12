@@ -129,6 +129,7 @@ func main() {
 		os.Exit(1)
 	}
 	otel.SetTracerProvider(tp)
+	obs.SetupPropagation() // Story 9.4 BR-TR-1 — global W3C propagator (extract incoming traceparent)
 	defer func() {
 		sctx, scancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer scancel()
@@ -201,7 +202,9 @@ func main() {
 
 	// === notification-svc client ============================================
 	notifURL := envOr("HE_API_NOTIFICATION_SVC_URL", defaultNotificationSvcURL)
-	notifClient := notification.NewClient(http.DefaultClient, notifURL)
+	// Story 9.4 (TRACE-ORPHAN-001): instrumented client so the auth-svc→notification-svc
+	// connect hop injects `traceparent` and stays on the originating trace (BR-TR-2).
+	notifClient := notification.NewClient(obs.NewHTTPClient(), notifURL)
 
 	// === audit publisher (Kafka if HE_API_AUDIT_KAFKA_BROKERS set; NoOp else) ===
 	// Production runs against a managed Kafka broker per Story 1.6

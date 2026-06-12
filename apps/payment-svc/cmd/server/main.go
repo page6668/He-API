@@ -96,6 +96,7 @@ func run(ctx context.Context, logger *slog.Logger, addr string) error {
 		return err
 	}
 	otel.SetTracerProvider(tp)
+	obs.SetupPropagation() // Story 9.4 BR-TR-1 — global W3C propagator (extract incoming traceparent)
 	defer shutdown(tp.Shutdown)
 
 	mp, err := obs.NewMeterProvider(ctx, serviceName, serviceNS, serviceVersion)

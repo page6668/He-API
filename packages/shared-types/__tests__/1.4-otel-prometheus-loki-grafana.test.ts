@@ -314,12 +314,37 @@ describe('AC1.A / T4: OTel Collector values-staging.yaml', () => {
     expect(v?.config?.exporters?.prometheus?.endpoint).toBe('0.0.0.0:8889');
   });
 
-  test('1.4-UNIT-057: pipelines.traces = otlp → batch → otlp', () => {
+  // Story 9.4 (Q-COLLECTOR) added the PII keep-list + tail-sampling processors to
+  // the traces pipeline, superseding the 1.4 `[batch]`-only contract. The scrub
+  // MUST precede the sampling decision and the export.
+  test('1.4-UNIT-057: pipelines.traces = otlp → redaction → tail_sampling → batch → otlp (9.4)', () => {
     const v = loadYaml<any>(path);
     const t = v?.config?.service?.pipelines?.traces;
     expect(t?.receivers).toEqual(['otlp']);
-    expect(t?.processors).toEqual(['batch']);
+    expect(t?.processors).toEqual(['redaction', 'tail_sampling', 'batch']);
     expect(t?.exporters).toEqual(['otlp']);
+  });
+
+  // Story 9.4 BR-TR-16 — the redaction keep-list is the runtime PII backstop. Its
+  // allowed_keys MUST be a superset of the registered §11.5 `he.*` set (9.4-INT-008)
+  // and MUST NOT keep client-IP / Authorization / body attributes.
+  test('1.4-UNIT-057b: redaction keep-list ⊇ §11.5 he.* and excludes PII (9.4)', () => {
+    const v = loadYaml<any>(path);
+    const r = v?.config?.processors?.redaction;
+    expect(r?.allow_all_keys).toBe(false);
+    const keys: string[] = r?.allowed_keys ?? [];
+    expect(keys).toContain('he.request_id'); // the only registered §11.5 key today
+    for (const banned of ['client.address', 'url.full', 'authorization', 'prompt']) {
+      expect(keys).not.toContain(banned);
+    }
+  });
+
+  // Story 9.4 Q-COLLECTOR — ERROR/non-OK traces retained at 100% via tail sampling.
+  test('1.4-UNIT-057c: tail_sampling keeps ERROR status at 100% (9.4)', () => {
+    const v = loadYaml<any>(path);
+    const policies = v?.config?.processors?.tail_sampling?.policies ?? [];
+    const errPolicy = policies.find((p: any) => p?.type === 'status_code');
+    expect(errPolicy?.status_code?.status_codes).toEqual(['ERROR']);
   });
 
   test('1.4-UNIT-058: pipelines.metrics = otlp → batch → prometheus', () => {

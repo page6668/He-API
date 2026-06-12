@@ -16,10 +16,14 @@ import (
 	"github.com/segmentio/kafka-go"
 	"google.golang.org/protobuf/encoding/protojson"
 
+	obs "github.com/he-api/he-api/packages/go-observability"
 	analyticsv1 "github.com/he-api/he-api/packages/proto/gen/go/he/analytics/v1"
 
 	"github.com/he-api/he-api/apps/analytics-svc/internal/clickhouse"
 )
+
+// requestLogTracerName names the request.logged consumer's tracer.
+const requestLogTracerName = "apps/analytics-svc/internal/workers/request_log"
 
 // RequestLogConsumerGroup is the Kafka consumer-group name (BR-ING-6).
 const RequestLogConsumerGroup = "analytics-svc-request-log"
@@ -103,21 +107,28 @@ func (w *RequestLogWorker) Run(ctx context.Context) error {
 			continue
 		}
 
+		// Story 9.4 BR-TR-9 — consumer span LINKED to the producing request trace
+		// (link, not child — Q-KAFKA); legacy header-less messages root anew.
+		_, span := obs.StartConsumerSpan(ctx, requestLogTracerName, RequestLogTopic+" consume", msg)
+
 		ev := &analyticsv1.UsageLogEvent{}
 		if perr := protojson.Unmarshal(msg.Value, ev); perr != nil {
 			w.toDLQ(ctx, msg, "unmarshal_failed", perr)
 			w.commitOne(ctx, msg)
+			span.End()
 			continue
 		}
 		row, rerr := clickhouse.EventToRow(ev, w.Logger)
 		if rerr != nil {
 			w.toDLQ(ctx, msg, "malformed_event", rerr)
 			w.commitOne(ctx, msg)
+			span.End()
 			continue
 		}
 
 		full := w.Writer.Add(row)
 		pending = append(pending, msg)
+		span.End()
 		if full {
 			if ferr := w.flushAndCommit(ctx, &pending); ferr != nil {
 				w.backoff(ctx)

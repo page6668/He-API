@@ -93,3 +93,33 @@ ArgoCD sync to prod (Blue-Green or Canary)
 | `fx-refresh` | 7.2 | `0 0 * * *` | `fx-refresh` (billing-svc chart) | **生产数据面** | 每日 UTC 00:00 从 FX provider 拉 USD→CNY，向 `he_api.fx_rates` APPEND 一行（最新行 = `ORDER BY fetched_at DESC LIMIT 1`）。专用二进制 `apps/billing-svc/cmd/fx-refresh`（own `main` + Dockerfile + Helm image `he-api/fx-refresh`，Architect H-1 — 非 server 子命令；5.4 同构）。`concurrencyPolicy: Forbid` + `startingDeadlineSeconds: 200` + `backoffLimit: 0`（一次执行）+ `successful/failedJobsHistoryLimit: 3` + `timeZone: Etc/UTC`。**STALE-SERVE**（BR-C-3）：provider timeout/非2xx/malformed/rate≤0 → 不写、保留上一行、`fx_refresh.failed` metric + alert、**exit 0**（次日重试）；零/空汇率绝不持久化或服务。infra 错误（PG connect/insert）→ exit 1（人工介入）。FX provider base-URL/key 为新 secret（`HE_API_FX_PROVIDER_URL`，env 注入，绝不打日志 — BR-C-7；见 `docs/dev/secrets/fxrate-provider.md`）；dev/CI 可用 `FX_MANUAL_USD_CNY` override。CI 金标门 `scripts/ci/verify-cron-schedule.sh` 锁定 `0 0 * * *` 字面量（H-2）。换算仅 read-side display（Q-SOT）：不改 USD 记账 SoT。 |
 
 ---
+
+## 7.6 Trace 采样与 Collector 策略（Story 9.4）
+
+全链路 trace 的传播/可视机制见 `docs/architecture/11-可观测性observability.md §11.1`；本节固化**采样比例**与 **otel-collector 管道**策略（Architect Q-SAMPLE / Q-COLLECTOR ratified）。
+
+### 7.6.1 头部采样（head sampling，SDK 侧）
+
+- Sampler 恒为 `ParentBased(TraceIDRatioBased(ratio))`（`packages/go-observability/tracer.go`，两条构造分支均应用）。`ParentBased` 保证子服务**绝不**独立决定丢弃 gateway 已采样的 span（无半截 trace / 无空洞）。**gateway 是采样根**。
+- 比例经环境变量驱动，无需重新部署即可调：`OTEL_TRACES_SAMPLER=parentbased_traceidratio`、`OTEL_TRACES_SAMPLER_ARG=<float∈[0,1]>`。不可解析/越界 → fallback `1.0` + 启动 warn slog（绝不 panic）。
+
+| 环境 | `OTEL_TRACES_SAMPLER_ARG` | 说明 |
+|------|---------------------------|------|
+| 非生产（dev/staging） | `1.0` | 全采样，便于调试 |
+| 生产 | `0.1` | 有界，仅在拿到真实流量数据后再调 |
+
+### 7.6.2 尾部采样 + PII 兜底（collector 侧）
+
+`infra/helm/observability/otel-collector/values-staging.yaml` 的 traces 管道为
+`otlp → redaction → tail_sampling → batch → otlp(Jaeger)`：
+
+- **`redaction`（PII keep-list，BR-TR-16）**：`allow_all_keys=false` + `allowed_keys`（§11.5 注册 `he.*` 的超集 + 我们 emit 的 OTel semconv）。任何不在白名单的 span attribute 在落 Jaeger 前被**丢弃** — 这是 BR-TR-7 代码级纪律的运行时兜底。`client.address`/`url.full`/`Authorization`/请求体类 key **故意不列入**，因此一律被剥离。`allowed_keys` 必须保持 ⊇ §11.5 注册集（CI 静态门 `1.4-UNIT-057b` + 集成 `9.4-INT-008`）。
+- **`tail_sampling`（Q-COLLECTOR）**：`status_code=[ERROR]` 策略以 **100%** 保留所有错误/非 OK trace（这是 Q-SAMPLE「错误必采」的归属地 —— 头部采样在根 span 时点无法预知错误）；其余按 `probabilistic.sampling_percentage=10` 基线保留。
+  - **头/尾交互注记**：头部采样在 SDK 侧先丢弃，被丢弃的 trace（含其错误）不会抵达 collector，故无法被尾部「错误必采」追回。若要让生产「错误 100% 保留」完全生效，可将 gateway 根的头部比例提到 `1.0`、把削量职责完全交给 collector 尾部 —— 这是一个**运维调节旋钮**，不在 9.4 默认值内（9.4 默认遵循上表 prod=0.1）。
+
+### 7.6.3 存储与保留
+
+- Trace 后端 = **Jaeger**（`uid: jaeger`，Grafana 既有 datasource 可视），**不迁 Tempo**（Q-STORE ratified）。
+- Jaeger staging 存储为 in-memory（1.4 Q4，~2h 自然驱逐）；生产存储/保留期是已知的**后续工作**，不在 9.4 范围。derived-field/tracesToLogs 链接命中已驱逐 trace 时 Grafana 显示「trace not found」，operator 回退到 logs-only（见 runbook）。
+
+---

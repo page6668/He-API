@@ -19,6 +19,8 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	obs "github.com/he-api/he-api/packages/go-observability"
 )
 
 // maxWebhookBody bounds the proxied body (defence against a giant POST).
@@ -38,7 +40,7 @@ func NewWebhookProxyHandler(logger *slog.Logger, baseURL string, client *http.Cl
 		logger = slog.Default()
 	}
 	if client == nil {
-		client = &http.Client{Timeout: 15 * time.Second}
+		client = obs.NewHTTPClient(obs.WithTimeout(15 * time.Second)) // Story 9.4 BR-TR-2
 	}
 	return &WebhookProxyHandler{baseURL: baseURL, client: client, logger: logger}
 }

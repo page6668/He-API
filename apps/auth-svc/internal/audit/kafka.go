@@ -30,7 +30,15 @@ import (
 	"log/slog"
 
 	"github.com/segmentio/kafka-go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+
+	obs "github.com/he-api/he-api/packages/go-observability"
 )
+
+// auditTracerName names the audit producer's tracer.
+const auditTracerName = "apps/auth-svc/internal/audit"
 
 // KafkaWriter is the narrow surface KafkaPublisher needs. `*kafka.Writer`
 // satisfies it; the tests pass a fake recording writer so the audit unit
@@ -75,5 +83,21 @@ func (p *KafkaPublisher) Publish(ctx context.Context, event Event) error {
 		Value: payload,
 		Time:  event.Timestamp,
 	}
-	return p.writer.WriteMessages(ctx, msg)
+	// Story 9.4 BR-TR-8/11 — inject W3C trace context into the headers when the
+	// caller is inside a trace so the audit.event consumer links back to the
+	// originating request; produced outside one, headers stay empty (BR-TR-11).
+	var span trace.Span
+	if trace.SpanContextFromContext(ctx).IsValid() {
+		ctx, span = otel.Tracer(auditTracerName).Start(ctx, "audit.event produce",
+			trace.WithSpanKind(trace.SpanKindProducer))
+		obs.InjectKafkaHeaders(ctx, &msg)
+	}
+	err = p.writer.WriteMessages(ctx, msg)
+	if span != nil {
+		if err != nil {
+			span.SetStatus(codes.Error, "produce failed") // static reason — no PII (BR-TR-7)
+		}
+		span.End()
+	}
+	return err
 }

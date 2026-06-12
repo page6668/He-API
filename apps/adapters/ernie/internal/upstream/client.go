@@ -4,6 +4,8 @@ import (
 	"crypto/tls"
 	"net/http"
 	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // DefaultUpstreamTimeout is the BR-1.8 default outbound deadline (60s).
@@ -39,7 +41,14 @@ func NewClient(baseURL, apiKey string, timeout time.Duration) *Client {
 		BaseURL: baseURL,
 		APIKey:  apiKey,
 		HTTPClient: &http.Client{
-			Transport: transport,
+			// Story 9.4 BR-TR-6 (T6.2): wrap the bespoke OQ-4.2-5 ALPN transport so
+			// the adapter→vendor model call surfaces as a client span (TTFB) on the
+			// request's trace. otelhttp.NewTransport takes `transport` as its base
+			// RoundTripper, so the ForceAttemptHTTP2/ALPN policy is FULLY preserved —
+			// the wrapper only injects `traceparent` + times the call. NEVER routed
+			// through obs.NewHTTPClient() (that uses http.DefaultTransport and would
+			// drop the ALPN policy).
+			Transport: otelhttp.NewTransport(transport),
 			Timeout:   timeout,
 		},
 	}

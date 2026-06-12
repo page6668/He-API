@@ -21,10 +21,12 @@ data:
         type: loki
         access: proxy
         url: http://loki.monitoring.svc.cluster.local:3100
+        uid: loki
         editable: false
         jsonData:
           # Loki → Jaeger derived field for the trace_id stamped on every JSON log line
-          # by sample-otel-app via slog handler + SpanFromContext.
+          # by the obs slog handler + SpanFromContext (1.4/3.6). Story 9.4 keeps this
+          # FORWARD link unchanged — it already shipped; do not duplicate it.
           derivedFields:
             - matcherRegex: '"trace_id":"(\w+)"'
               name: trace_id
@@ -36,3 +38,18 @@ data:
         url: http://jaeger-query.monitoring.svc.cluster.local:16686
         uid: jaeger
         editable: false
+        jsonData:
+          # Story 9.4 BR-TR-14 (Architect M1) — the REVERSE pivot: from a trace
+          # span jump to its Loki logs, keyed on trace_id. The forward Loki→Jaeger
+          # derivedField above already existed (1.4/3.6); this trace→logs link was
+          # the genuine remaining delta. customQuery line-matches the trace id in
+          # the JSON slog `"trace_id":"<id>"` field, so it works regardless of the
+          # Loki stream labels. Operators may narrow the {} selector per env.
+          tracesToLogsV2:
+            datasourceUid: loki
+            spanStartTimeShift: '-1h'
+            spanEndTimeShift: '1h'
+            filterByTraceID: false
+            filterBySpanID: false
+            customQuery: true
+            query: '{job=~".+"} |= `$${__trace.traceId}`'

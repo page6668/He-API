@@ -33,6 +33,71 @@ config:
     batch:
       timeout: 5s
       send_batch_size: 1024
+    # Story 9.4 BR-TR-16 / Q-COLLECTOR — defense-in-depth PII keep-list. With
+    # allow_all_keys=false the redaction processor DROPS any span attribute whose
+    # key is not explicitly allowed, BEFORE the trace reaches Jaeger storage. This
+    # is the runtime backstop to the code-level discipline (BR-TR-7): even a future
+    # careless span cannot leak a prompt/key/email/client-IP into the store.
+    # The list is a SUPERSET of the registered §11.5 `he.*` keys + the OTel semconv
+    # we emit. Deliberately EXCLUDED (so they are stripped): client.address /
+    # net.sock.peer.addr (client IP), url.full (query secrets), and anything
+    # carrying request/response bodies, Authorization, or api-key material.
+    redaction:
+      allow_all_keys: false
+      allowed_keys:
+        # he.* allow-list (⊇ §11.5 registry: he.request_id; + forward-safe keys)
+        - he.request_id
+        - he.selected_model
+        - he.cost_usd
+        # HTTP server/client semconv (no client IP, no full URL)
+        - http.request.method
+        - http.method
+        - http.response.status_code
+        - http.status_code
+        - http.route
+        - http.target
+        - url.path
+        - url.scheme
+        - server.address
+        - server.port
+        - network.protocol.version
+        - network.protocol.name
+        - network.transport
+        - user_agent.original
+        # RPC (connect/gRPC) semconv
+        - rpc.system
+        - rpc.service
+        - rpc.method
+        - rpc.grpc.status_code
+        # storage semconv (no statement text / no params)
+        - db.system
+        - db.name
+        - db.operation
+        # messaging (Kafka) semconv
+        - messaging.system
+        - messaging.destination.name
+        - messaging.operation
+        # span status
+        - otel.status_code
+        - otel.status_description
+      summary: debug
+    # Story 9.4 Q-COLLECTOR — tail sampling: ALWAYS keep ERROR / non-OK traces at
+    # 100% (the home of "errors always sampled" from Q-SAMPLE — head sampling can't
+    # know an error at root-span time), and a bounded probabilistic baseline for the
+    # rest. See infrastructure-deployment.md for the head ↔ tail volume interaction.
+    tail_sampling:
+      decision_wait: 10s
+      num_traces: 50000
+      expected_new_traces_per_sec: 100
+      policies:
+        - name: keep-errors
+          type: status_code
+          status_code:
+            status_codes: [ERROR]
+        - name: baseline-probabilistic
+          type: probabilistic
+          probabilistic:
+            sampling_percentage: 10
     k8sattributes:
       auth_type: serviceAccount
       passthrough: false
@@ -63,8 +128,11 @@ config:
   service:
     pipelines:
       traces:
+        # Story 9.4 — redaction (PII keep-list) → tail_sampling (errors 100% +
+        # baseline) → batch → Jaeger. Order matters: scrub BEFORE the sampling
+        # decision and BEFORE export.
         receivers: [otlp]
-        processors: [batch]
+        processors: [redaction, tail_sampling, batch]
         exporters: [otlp]
       metrics:
         receivers: [otlp]

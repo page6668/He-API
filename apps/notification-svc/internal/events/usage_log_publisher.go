@@ -13,11 +13,18 @@ import (
 	"time"
 
 	"github.com/segmentio/kafka-go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	obs "github.com/he-api/he-api/packages/go-observability"
 	usagelogv1 "github.com/he-api/he-api/packages/proto/gen/go/he/usagelog/v1"
 )
+
+// usageLogTracerName names the usage-log-export producer's tracer.
+const usageLogTracerName = "apps/notification-svc/internal/events"
 
 // TopicUsageLogExportRequested is the Kafka topic name (matches
 // `usage.log.export.requested` declared in the kafka-topics Terraform module).
@@ -64,5 +71,20 @@ func (p *UsageLogExportPublisher) Publish(ctx context.Context, exportID, userID,
 		Value: body,
 		Time:  rangeEnd,
 	}
-	return p.writer.WriteMessages(ctx, msg)
+	// Story 9.4 BR-TR-8/11 — inject W3C trace context when inside a trace so the
+	// analytics-svc export worker links back to the request that asked for the dump.
+	var span trace.Span
+	if trace.SpanContextFromContext(ctx).IsValid() {
+		ctx, span = otel.Tracer(usageLogTracerName).Start(ctx, TopicUsageLogExportRequested+" produce",
+			trace.WithSpanKind(trace.SpanKindProducer))
+		obs.InjectKafkaHeaders(ctx, &msg)
+	}
+	err = p.writer.WriteMessages(ctx, msg)
+	if span != nil {
+		if err != nil {
+			span.SetStatus(codes.Error, "produce failed") // static reason — no PII (BR-TR-7)
+		}
+		span.End()
+	}
+	return err
 }

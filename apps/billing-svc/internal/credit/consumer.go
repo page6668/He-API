@@ -7,8 +7,12 @@ import (
 	"github.com/segmentio/kafka-go"
 	"google.golang.org/protobuf/encoding/protojson"
 
+	obs "github.com/he-api/he-api/packages/go-observability"
 	paymentv1 "github.com/he-api/he-api/packages/proto/gen/go/he/payment/v1"
 )
+
+// consumerTracerName names the credit consumer's tracer.
+const consumerTracerName = "apps/billing-svc/internal/credit"
 
 // Topic / consumer-group constants for the payment.completed stream.
 const (
@@ -61,7 +65,12 @@ func (c *Consumer) Run(ctx context.Context) {
 			)
 			continue
 		}
-		commit, herr := c.handle(ctx, msg)
+		// Story 9.4 BR-TR-9 — start a consumer span LINKED to the producing
+		// request trace (link, not child — Q-KAFKA). Legacy header-less messages
+		// root a fresh trace (back-compat).
+		hctx, span := obs.StartConsumerSpan(ctx, consumerTracerName, Topic+" consume", msg)
+		commit, herr := c.handle(hctx, msg)
+		span.End()
 		if herr != nil {
 			// PG fault — retain the offset; Kafka redelivers, the fence dedups.
 			c.logger.WarnContext(ctx, "credit_consume_retain_offset",
