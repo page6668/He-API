@@ -21,6 +21,18 @@ option go_package = "github.com/he-api/he-api/packages/proto/gen/go/he/adapter/v
 
 service AdapterService {
   rpc Chat(ChatRequest) returns (stream ChatChunk);
+
+  // Story 9.6 (Q-ASR-WIRE, RATIFIED) — ADDITIVE unary RPC for audio
+  // transcription (Whisper-compatible ASR). Audio-in/text-out does NOT fit the
+  // streaming-text `Chat` contract, so a new RPC is required. Adding an RPC
+  // method + new messages shifts NO existing wire tag → wire-compatible: the 5
+  // non-Doubao adapters never register a `Transcribe` handler and return
+  // `connect.CodeUnimplemented`; only `doubao-asr` resolves to the Doubao
+  // service which serves it. Unary (Whisper transcription is single
+  // request/response — no streaming). `buf` cannot run locally
+  // (project_toolchain_env_limits) → the vendored adapter.pb.go +
+  // adapterv1connect are hand-edited and round-trip-tested.
+  rpc Transcribe(TranscribeRequest) returns (TranscribeResponse);
 }
 
 // ChatRequest carries the OpenAI-compatible inbound request shape (minus the
@@ -92,4 +104,33 @@ message Usage {
   int32 prompt_tokens = 1;
   int32 completion_tokens = 2;
   int32 total_tokens = 3;
+}
+
+// Story 9.6 — TranscribeRequest carries a Whisper-compatible audio-transcription
+// request. Audio rides inline as bounded `bytes` (≤ 25 MiB, gateway-enforced
+// pre-send — Connect-RPC over HTTP/2 handles multi-MiB unary bodies fine). The
+// adapter does a NON-identity translation to the vendor ASR upstream (Volcano
+// ASR ≠ Whisper). `he_request_id` is propagated for billing/trace correlation
+// (mirrors ChatRequest field 9). Appended AFTER the existing messages so the
+// vendored msgTypes indices 0-5 are unperturbed (additive blast-radius proof).
+message TranscribeRequest {
+  string model = 1;
+  bytes audio = 2;                  // raw audio bytes, bounded ≤ maxAudioBodyBytes
+  string mime_type = 3;             // from the multipart part / sniff — drives the upstream format
+  string language = 4;              // optional ISO-639-1
+  string prompt = 5;                // optional context prompt
+  string response_format = 6;       // json | text | verbose_json (gateway shapes the HTTP body)
+  optional double temperature = 7;  // optional sampling temperature ∈ [0,1]
+  string he_request_id = 8;         // propagated from gateway (billing/trace correlation)
+}
+
+// Story 9.6 — TranscribeResponse carries the recognised transcript + the
+// vendor-authoritative audio duration (the per-minute billing dimension, AC3).
+// `segments_json` carries Volcano segment timestamps when present (feeds the
+// Whisper `verbose_json.segments`); empty otherwise (never fabricated).
+message TranscribeResponse {
+  string text = 1;
+  string language = 2;
+  double duration_seconds = 3;      // vendor-reported; the billing lever (AC3 BR-2.5)
+  bytes segments_json = 4;          // passthrough — JSON-encoded segment array; empty when absent
 }

@@ -32,7 +32,7 @@ const perToken = billingv1.BillingMode_BILLING_MODE_PER_TOKEN
 // computeFixed runs ComputeCost and returns the NUMERIC(12,4) string form.
 func computeFixed(t *testing.T, s *Snapshot, model string, p, c uint32, mode billingv1.BillingMode) (string, Result, error) {
 	t.Helper()
-	r, err := s.ComputeCost(model, p, c, mode)
+	r, err := s.ComputeCost(model, p, c, 0, mode)
 	if err != nil {
 		return "", r, err
 	}
@@ -134,7 +134,7 @@ func TestComputeCost_ErrNoPricing(t *testing.T) {
 	}
 	// Empty/nil snapshot also reports ErrNoPricing, never panics.
 	var nilSnap *Snapshot
-	if _, err := nilSnap.ComputeCost("m", 1, 1, perToken); err != ErrNoPricing {
+	if _, err := nilSnap.ComputeCost("m", 1, 1, 0, perToken); err != ErrNoPricing {
 		t.Fatalf("nil snapshot err = %v, want ErrNoPricing", err)
 	}
 }

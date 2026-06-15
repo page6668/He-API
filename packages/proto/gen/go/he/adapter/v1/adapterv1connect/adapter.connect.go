@@ -51,11 +51,15 @@ const (
 const (
 	// AdapterServiceChatProcedure is the fully-qualified name of the AdapterService's Chat RPC.
 	AdapterServiceChatProcedure = "/he.adapter.v1.AdapterService/Chat"
+	// AdapterServiceTranscribeProcedure is the fully-qualified name of the AdapterService's Transcribe RPC.
+	AdapterServiceTranscribeProcedure = "/he.adapter.v1.AdapterService/Transcribe"
 )
 
 // AdapterServiceClient is a client for the he.adapter.v1.AdapterService service.
 type AdapterServiceClient interface {
 	Chat(context.Context, *connect.Request[v1.ChatRequest]) (*connect.ServerStreamForClient[v1.ChatChunk], error)
+	// Story 9.6 — additive unary ASR RPC (see adapter.proto).
+	Transcribe(context.Context, *connect.Request[v1.TranscribeRequest]) (*connect.Response[v1.TranscribeResponse], error)
 }
 
 // NewAdapterServiceClient constructs a client for the he.adapter.v1.AdapterService service. By
@@ -75,12 +79,19 @@ func NewAdapterServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(adapterServiceMethods.ByName("Chat")),
 			connect.WithClientOptions(opts...),
 		),
+		transcribe: connect.NewClient[v1.TranscribeRequest, v1.TranscribeResponse](
+			httpClient,
+			baseURL+AdapterServiceTranscribeProcedure,
+			connect.WithSchema(adapterServiceMethods.ByName("Transcribe")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // adapterServiceClient implements AdapterServiceClient.
 type adapterServiceClient struct {
-	chat *connect.Client[v1.ChatRequest, v1.ChatChunk]
+	chat       *connect.Client[v1.ChatRequest, v1.ChatChunk]
+	transcribe *connect.Client[v1.TranscribeRequest, v1.TranscribeResponse]
 }
 
 // Chat calls he.adapter.v1.AdapterService.Chat.
@@ -88,9 +99,18 @@ func (c *adapterServiceClient) Chat(ctx context.Context, req *connect.Request[v1
 	return c.chat.CallServerStream(ctx, req)
 }
 
+// Transcribe calls he.adapter.v1.AdapterService.Transcribe.
+func (c *adapterServiceClient) Transcribe(ctx context.Context, req *connect.Request[v1.TranscribeRequest]) (*connect.Response[v1.TranscribeResponse], error) {
+	return c.transcribe.CallUnary(ctx, req)
+}
+
 // AdapterServiceHandler is an implementation of the he.adapter.v1.AdapterService service.
 type AdapterServiceHandler interface {
 	Chat(context.Context, *connect.Request[v1.ChatRequest], *connect.ServerStream[v1.ChatChunk]) error
+	// Story 9.6 — additive unary ASR RPC. Adapters that do not serve audio
+	// (the 5 non-Doubao adapters) embed UnimplementedAdapterServiceHandler →
+	// connect.CodeUnimplemented.
+	Transcribe(context.Context, *connect.Request[v1.TranscribeRequest]) (*connect.Response[v1.TranscribeResponse], error)
 }
 
 // NewAdapterServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -106,10 +126,18 @@ func NewAdapterServiceHandler(svc AdapterServiceHandler, opts ...connect.Handler
 		connect.WithSchema(adapterServiceMethods.ByName("Chat")),
 		connect.WithHandlerOptions(opts...),
 	)
+	adapterServiceTranscribeHandler := connect.NewUnaryHandler(
+		AdapterServiceTranscribeProcedure,
+		svc.Transcribe,
+		connect.WithSchema(adapterServiceMethods.ByName("Transcribe")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/he.adapter.v1.AdapterService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AdapterServiceChatProcedure:
 			adapterServiceChatHandler.ServeHTTP(w, r)
+		case AdapterServiceTranscribeProcedure:
+			adapterServiceTranscribeHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -121,4 +149,10 @@ type UnimplementedAdapterServiceHandler struct{}
 
 func (UnimplementedAdapterServiceHandler) Chat(context.Context, *connect.Request[v1.ChatRequest], *connect.ServerStream[v1.ChatChunk]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("he.adapter.v1.AdapterService.Chat is not implemented"))
+}
+
+// Transcribe returns CodeUnimplemented — the 5 non-Doubao adapters embed this
+// stub and never serve audio (Story 9.6 blast-radius proof, INT-007).
+func (UnimplementedAdapterServiceHandler) Transcribe(context.Context, *connect.Request[v1.TranscribeRequest]) (*connect.Response[v1.TranscribeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.adapter.v1.AdapterService.Transcribe is not implemented"))
 }

@@ -493,8 +493,189 @@ func (x *Usage) GetTotalTokens() int32 {
 	return 0
 }
 
+// Story 9.6 — TranscribeRequest carries a Whisper-compatible audio-transcription
+// request (audio inline as bounded bytes; non-identity adapter translate to the
+// vendor ASR upstream). Hand-edited per project_toolchain_env_limits; appended
+// at msgTypes index 6 so existing indices 0-5 are unperturbed.
+type TranscribeRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Model          string                 `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
+	Audio          []byte                 `protobuf:"bytes,2,opt,name=audio,proto3" json:"audio,omitempty"`                       // raw audio bytes, bounded ≤ maxAudioBodyBytes
+	MimeType       string                 `protobuf:"bytes,3,opt,name=mime_type,json=mimeType,proto3" json:"mime_type,omitempty"` // from the multipart part / sniff
+	Language       string                 `protobuf:"bytes,4,opt,name=language,proto3" json:"language,omitempty"`                 // optional ISO-639-1
+	Prompt         string                 `protobuf:"bytes,5,opt,name=prompt,proto3" json:"prompt,omitempty"`                     // optional context prompt
+	ResponseFormat string                 `protobuf:"bytes,6,opt,name=response_format,json=responseFormat,proto3" json:"response_format,omitempty"`
+	Temperature    *float64               `protobuf:"fixed64,7,opt,name=temperature,proto3,oneof" json:"temperature,omitempty"` // optional ∈ [0,1]
+	HeRequestId    string                 `protobuf:"bytes,8,opt,name=he_request_id,json=heRequestId,proto3" json:"he_request_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *TranscribeRequest) Reset() {
+	*x = TranscribeRequest{}
+	mi := &file_he_adapter_v1_adapter_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TranscribeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TranscribeRequest) ProtoMessage() {}
+
+func (x *TranscribeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_he_adapter_v1_adapter_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TranscribeRequest.ProtoReflect.Descriptor instead.
+func (*TranscribeRequest) Descriptor() ([]byte, []int) {
+	return file_he_adapter_v1_adapter_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *TranscribeRequest) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *TranscribeRequest) GetAudio() []byte {
+	if x != nil {
+		return x.Audio
+	}
+	return nil
+}
+
+func (x *TranscribeRequest) GetMimeType() string {
+	if x != nil {
+		return x.MimeType
+	}
+	return ""
+}
+
+func (x *TranscribeRequest) GetLanguage() string {
+	if x != nil {
+		return x.Language
+	}
+	return ""
+}
+
+func (x *TranscribeRequest) GetPrompt() string {
+	if x != nil {
+		return x.Prompt
+	}
+	return ""
+}
+
+func (x *TranscribeRequest) GetResponseFormat() string {
+	if x != nil {
+		return x.ResponseFormat
+	}
+	return ""
+}
+
+func (x *TranscribeRequest) GetTemperature() float64 {
+	if x != nil && x.Temperature != nil {
+		return *x.Temperature
+	}
+	return 0
+}
+
+func (x *TranscribeRequest) GetHeRequestId() string {
+	if x != nil {
+		return x.HeRequestId
+	}
+	return ""
+}
+
+// Story 9.6 — TranscribeResponse carries the transcript + the vendor-reported
+// audio duration (the per-minute billing dimension). Appended at msgTypes
+// index 7.
+type TranscribeResponse struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Text            string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
+	Language        string                 `protobuf:"bytes,2,opt,name=language,proto3" json:"language,omitempty"`
+	DurationSeconds float64                `protobuf:"fixed64,3,opt,name=duration_seconds,json=durationSeconds,proto3" json:"duration_seconds,omitempty"` // vendor-reported; the billing lever
+	SegmentsJson    []byte                 `protobuf:"bytes,4,opt,name=segments_json,json=segmentsJson,proto3" json:"segments_json,omitempty"`            // passthrough; empty when absent
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *TranscribeResponse) Reset() {
+	*x = TranscribeResponse{}
+	mi := &file_he_adapter_v1_adapter_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TranscribeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TranscribeResponse) ProtoMessage() {}
+
+func (x *TranscribeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_he_adapter_v1_adapter_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TranscribeResponse.ProtoReflect.Descriptor instead.
+func (*TranscribeResponse) Descriptor() ([]byte, []int) {
+	return file_he_adapter_v1_adapter_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *TranscribeResponse) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *TranscribeResponse) GetLanguage() string {
+	if x != nil {
+		return x.Language
+	}
+	return ""
+}
+
+func (x *TranscribeResponse) GetDurationSeconds() float64 {
+	if x != nil {
+		return x.DurationSeconds
+	}
+	return 0
+}
+
+func (x *TranscribeResponse) GetSegmentsJson() []byte {
+	if x != nil {
+		return x.SegmentsJson
+	}
+	return nil
+}
+
 var File_he_adapter_v1_adapter_proto protoreflect.FileDescriptor
 
+// Story 9.6 (T1) — rawDesc regenerated via packages/proto/cmd/descgen (a
+// throwaway generator that read the prior compiled descriptor and appended the
+// TranscribeRequest/TranscribeResponse messages + the Transcribe method
+// programmatically). `buf` cannot run locally (project_toolchain_env_limits);
+// the existing ChatRequest..Usage descriptor bytes are byte-identical to the
+// pre-9.6 rawDesc (additive blast-radius proof — see UNIT-009/010).
 const file_he_adapter_v1_adapter_proto_rawDesc = "" +
 	"\n" +
 	"\x1bhe/adapter/v1/adapter.proto\x12\rhe.adapter.v1\"\xae\x03\n" +
@@ -542,9 +723,26 @@ const file_he_adapter_v1_adapter_proto_rawDesc = "" +
 	"\x05Usage\x12#\n" +
 	"\rprompt_tokens\x18\x01 \x01(\x05R\fpromptTokens\x12+\n" +
 	"\x11completion_tokens\x18\x02 \x01(\x05R\x10completionTokens\x12!\n" +
-	"\ftotal_tokens\x18\x03 \x01(\x05R\vtotalTokens2P\n" +
+	"\ftotal_tokens\x18\x03 \x01(\x05R\vtotalTokens\"\x94\x02\n" +
+	"\x11TranscribeRequest\x12\x14\n" +
+	"\x05model\x18\x01 \x01(\tR\x05model\x12\x14\n" +
+	"\x05audio\x18\x02 \x01(\fR\x05audio\x12\x1b\n" +
+	"\tmime_type\x18\x03 \x01(\tR\bmimeType\x12\x1a\n" +
+	"\blanguage\x18\x04 \x01(\tR\blanguage\x12\x16\n" +
+	"\x06prompt\x18\x05 \x01(\tR\x06prompt\x12'\n" +
+	"\x0fresponse_format\x18\x06 \x01(\tR\x0eresponseFormat\x12%\n" +
+	"\vtemperature\x18\a \x01(\x01H\x00R\vtemperature\x88\x01\x01\x12\"\n" +
+	"\rhe_request_id\x18\b \x01(\tR\vheRequestIdB\x0e\n" +
+	"\f_temperature\"\x94\x01\n" +
+	"\x12TranscribeResponse\x12\x12\n" +
+	"\x04text\x18\x01 \x01(\tR\x04text\x12\x1a\n" +
+	"\blanguage\x18\x02 \x01(\tR\blanguage\x12)\n" +
+	"\x10duration_seconds\x18\x03 \x01(\x01R\x0fdurationSeconds\x12#\n" +
+	"\rsegments_json\x18\x04 \x01(\fR\fsegmentsJson2\xa3\x01\n" +
 	"\x0eAdapterService\x12>\n" +
-	"\x04Chat\x12\x1a.he.adapter.v1.ChatRequest\x1a\x18.he.adapter.v1.ChatChunk0\x01BHZFgithub.com/he-api/he-api/packages/proto/gen/go/he/adapter/v1;adapterv1b\x06proto3"
+	"\x04Chat\x12\x1a.he.adapter.v1.ChatRequest\x1a\x18.he.adapter.v1.ChatChunk0\x01\x12Q\n" +
+	"\n" +
+	"Transcribe\x12 .he.adapter.v1.TranscribeRequest\x1a!.he.adapter.v1.TranscribeResponseBHZFgithub.com/he-api/he-api/packages/proto/gen/go/he/adapter/v1;adapterv1b\x06proto3"
 
 var (
 	file_he_adapter_v1_adapter_proto_rawDescOnce sync.Once
@@ -558,14 +756,16 @@ func file_he_adapter_v1_adapter_proto_rawDescGZIP() []byte {
 	return file_he_adapter_v1_adapter_proto_rawDescData
 }
 
-var file_he_adapter_v1_adapter_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_he_adapter_v1_adapter_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_he_adapter_v1_adapter_proto_goTypes = []any{
-	(*ChatRequest)(nil), // 0: he.adapter.v1.ChatRequest
-	(*ChatMessage)(nil), // 1: he.adapter.v1.ChatMessage
-	(*ChatChunk)(nil),   // 2: he.adapter.v1.ChatChunk
-	(*Choice)(nil),      // 3: he.adapter.v1.Choice
-	(*Delta)(nil),       // 4: he.adapter.v1.Delta
-	(*Usage)(nil),       // 5: he.adapter.v1.Usage
+	(*ChatRequest)(nil),        // 0: he.adapter.v1.ChatRequest
+	(*ChatMessage)(nil),        // 1: he.adapter.v1.ChatMessage
+	(*ChatChunk)(nil),          // 2: he.adapter.v1.ChatChunk
+	(*Choice)(nil),             // 3: he.adapter.v1.Choice
+	(*Delta)(nil),              // 4: he.adapter.v1.Delta
+	(*Usage)(nil),              // 5: he.adapter.v1.Usage
+	(*TranscribeRequest)(nil),  // 6: he.adapter.v1.TranscribeRequest
+	(*TranscribeResponse)(nil), // 7: he.adapter.v1.TranscribeResponse
 }
 var file_he_adapter_v1_adapter_proto_depIdxs = []int32{
 	1, // 0: he.adapter.v1.ChatRequest.messages:type_name -> he.adapter.v1.ChatMessage
@@ -573,9 +773,11 @@ var file_he_adapter_v1_adapter_proto_depIdxs = []int32{
 	5, // 2: he.adapter.v1.ChatChunk.usage:type_name -> he.adapter.v1.Usage
 	4, // 3: he.adapter.v1.Choice.delta:type_name -> he.adapter.v1.Delta
 	0, // 4: he.adapter.v1.AdapterService.Chat:input_type -> he.adapter.v1.ChatRequest
-	2, // 5: he.adapter.v1.AdapterService.Chat:output_type -> he.adapter.v1.ChatChunk
-	5, // [5:6] is the sub-list for method output_type
-	4, // [4:5] is the sub-list for method input_type
+	6, // 5: he.adapter.v1.AdapterService.Transcribe:input_type -> he.adapter.v1.TranscribeRequest
+	2, // 6: he.adapter.v1.AdapterService.Chat:output_type -> he.adapter.v1.ChatChunk
+	7, // 7: he.adapter.v1.AdapterService.Transcribe:output_type -> he.adapter.v1.TranscribeResponse
+	6, // [6:8] is the sub-list for method output_type
+	4, // [4:6] is the sub-list for method input_type
 	4, // [4:4] is the sub-list for extension type_name
 	4, // [4:4] is the sub-list for extension extendee
 	0, // [0:4] is the sub-list for field type_name
@@ -590,13 +792,14 @@ func file_he_adapter_v1_adapter_proto_init() {
 	file_he_adapter_v1_adapter_proto_msgTypes[2].OneofWrappers = []any{}
 	file_he_adapter_v1_adapter_proto_msgTypes[3].OneofWrappers = []any{}
 	file_he_adapter_v1_adapter_proto_msgTypes[4].OneofWrappers = []any{}
+	file_he_adapter_v1_adapter_proto_msgTypes[6].OneofWrappers = []any{} // TranscribeRequest.temperature (proto3 optional)
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_he_adapter_v1_adapter_proto_rawDesc), len(file_he_adapter_v1_adapter_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

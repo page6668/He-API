@@ -608,6 +608,24 @@ func main() {
 	mux.Handle("POST /v1/embeddings",
 		bearerAuth.RequireAPIKey(analyticsMiddleware(keyPolicy(rateLimitMW.Wrap(embeddingsHandler)))))
 
+	// Story 9.6 — POST /v1/audio/transcriptions (Whisper-compatible ASR). SAME
+	// middleware chain as /v1/chat/completions (bearer → analytics → key-policy →
+	// rate-limit → billing-gate); the billingGate pre-flight `balance>0` gate is
+	// unchanged (no token estimate). The handler does NOT increment the TPM axis
+	// (ASR has no token dimension — BR-3.7); RPM/QPS still apply via rateLimitMW.
+	// It emits a PER_MINUTE usage event (billing-svc computes the duration-based
+	// cost — money one-SoT). Reuses the same adapter registry (doubao-asr →
+	// Doubao Transcriber handle), usage emitter, and 8.2 safety scanner.
+	audioTranscriptions := handlers.NewAudioTranscriptionsHandler(
+		logger,
+		handlers.WithAudioAdapterRegistry(adapterRegistry),
+		handlers.WithAudioUsageEmitter(usageEmitter),
+		handlers.WithAudioSafetyScanner(safetyScanner),
+		handlers.WithAudioSafetyRecorder(safetylog.NewPersistingRecorder(ctx, billingPool, logger)),
+	)
+	mux.Handle("POST /v1/audio/transcriptions",
+		bearerAuth.RequireAPIKey(analyticsMiddleware(keyPolicy(rateLimitMW.Wrap(billingGate(audioTranscriptions))))))
+
 	// Story 4.7 — unauthenticated mirror of /v1/models. Mounted OUTSIDE
 	// the bearer middleware chain; both handlers share a snapshot built
 	// from the same modelsCatalogue + capabilitiesByModelID so the bodies

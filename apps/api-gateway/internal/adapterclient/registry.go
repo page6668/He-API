@@ -118,6 +118,16 @@ const (
 	DoubaoAdapterEndpointEnv = "DOUBAO_ADAPTER_ENDPOINT"
 )
 
+// Story 9.6 — Doubao ASR model id. The audio-transcription model rides the
+// EXISTING Doubao service (Q-ASR-TOPOLOGY, single-service-per-vendor): it
+// resolves to DOUBAO_ADAPTER_ENDPOINT and SHARES the Doubao ClientHandle via M2
+// endpoint-dedup (the same handle that serves doubao-pro/doubao-lite Chat). The
+// Doubao adapter serves the additive `Transcribe` RPC; the 5 non-Doubao
+// adapters return CodeUnimplemented (never reached — only doubao-asr resolves
+// here). The ASR upstream config (base URL + token + app-id + cluster) is
+// adapter-side env, distinct from the Ark chat config.
+const DoubaoASRModelID = "doubao-asr"
+
 // Story 4.6 — Ernie (Baidu Qianfan v2 OpenAI-compat) adapter constants.
 //
 // BR-1.10 multi-model-id-per-service dispatch DEGENERATE N=1 case:
@@ -149,6 +159,17 @@ const (
 // the handler can consume without knowing the underlying transport.
 type ClientHandle interface {
 	Chat(ctx contextLike, req *adapterv1.ChatRequest, headers http.Header) (Stream, error)
+}
+
+// Transcriber is the Story-9.6 ASR seam alongside ClientHandle.Chat. It is a
+// SEPARATE optional interface (not a method added to ClientHandle) so the
+// existing chat-path ClientHandle fakes are unperturbed (additive blast
+// radius): only the production connectClientHandle + the Doubao service satisfy
+// it, and the ASR handler type-asserts the resolved handle to it. A handle that
+// does not implement Transcriber (no adapter for an ASR-routed model) surfaces
+// as a clean 502/unimplemented at the call site.
+type Transcriber interface {
+	Transcribe(ctx contextLike, req *adapterv1.TranscribeRequest, headers http.Header) (*adapterv1.TranscribeResponse, error)
 }
 
 // contextLike is a forward-declared type alias to context.Context — kept
@@ -249,6 +270,7 @@ func LoadFromEnv() *Registry {
 		GLM4VModelID:      glmEndpoint, // Story 9.5 — VL rides the glm service (N=2, shared handle)
 		DoubaoProModelID:  doubaoEndpoint,
 		DoubaoLiteModelID: doubaoEndpoint,
+		DoubaoASRModelID:  doubaoEndpoint, // Story 9.6 — ASR rides the doubao service (shared handle, M2 endpoint-dedup)
 		ErnieModelID:      os.Getenv(ErnieAdapterEndpointEnv),
 	})
 }
@@ -292,6 +314,25 @@ func (c *connectClientHandle) Chat(ctx contextLike, req *adapterv1.ChatRequest, 
 		return nil, err
 	}
 	return &connectStreamAdapter{stream: stream}, nil
+}
+
+// Transcribe implements the Story-9.6 Transcriber seam (unary ASR). Mirrors
+// Chat: forwards the propagated headers (X-He-Request-Id etc.) and the
+// TranscribeRequest over the additive Connect-RPC. Only the Doubao service
+// serves this; the 5 non-Doubao adapters return CodeUnimplemented (never
+// reached — only doubao-asr resolves to a handle here).
+func (c *connectClientHandle) Transcribe(ctx contextLike, req *adapterv1.TranscribeRequest, headers http.Header) (*adapterv1.TranscribeResponse, error) {
+	connectReq := connect.NewRequest(req)
+	for k, vs := range headers {
+		for _, v := range vs {
+			connectReq.Header().Add(k, v)
+		}
+	}
+	resp, err := c.client.Transcribe(ctx, connectReq)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Msg, nil
 }
 
 // connectStreamAdapter wraps connect.ServerStreamForClient[adapterv1.ChatChunk]

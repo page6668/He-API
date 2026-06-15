@@ -41,6 +41,10 @@ enum BillingMode {
   BILLING_MODE_UNSPECIFIED = 0; // proto3 zero-value; engine treats it as PER_TOKEN
   BILLING_MODE_PER_TOKEN = 1;
   BILLING_MODE_PER_CALL = 2; // reserved — OFF in 7.1
+  // Story 9.6 — per-audio-duration billing (ASR). cost =
+  // ceil(audio_duration_seconds) × price_per_minute_audio_usd/60 × (1+markup).
+  // Additive next enum value; existing modes unchanged.
+  BILLING_MODE_PER_MINUTE = 3;
 }
 
 // UsageEvent is the `usage.recorded` Kafka payload (JSON-serialized on the wire,
@@ -62,6 +66,11 @@ message UsageEvent {
   bool is_ab_leg = 11;
   string ts = 12; // RFC3339 event timestamp (post-flush)
   BillingMode billing_mode = 13;
+  // Story 9.6 — vendor-reported audio duration for ASR (PER_MINUTE) events.
+  // 0/absent for token/chat/embedding events (proto3 zero-value → non-breaking
+  // for every existing consumer). The billing dimension the per-minute cost
+  // formula reads. Additive next tag (1-13 used).
+  double audio_duration_seconds = 14;
 }
 
 // CheckBalanceRequest asks for a user's PG-authoritative balance.

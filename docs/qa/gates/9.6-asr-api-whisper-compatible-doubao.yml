@@ -1,0 +1,116 @@
+schema: 1
+story: "9.6"
+story_title: "ASR API（兼容 Whisper）+ Doubao"
+gate: "PASS"
+status_reason: "Round 3 (incremental). The SOLE remaining open item M-2 (AC2 boot-vs-request fail-fast) is RESOLVED per the Architect Round-2 ruling (option b — CONDITIONAL boot fail-fast) and independently QA-verified. apps/adapters/doubao/cmd/server/main.go now fails fast at boot IFF `doubao-asr` ∈ the operator's EXPLICIT DOUBAO_BOUND_MODEL_IDS set AND asrCfg.Configured()==false (pure asrBootGateError helper + asrModelID const + gated os.Exit(1) in the unconfigured else branch); else boots and retains the request-time connect.CodeUnavailable defence-in-depth (asr_transcribe.go:46-49) so chat-only/default deployments are unregressed. The gate reads the explicit bound set BEFORE the asrCfg.Configured() auto-append (the Architect-confirmed seam) — verified by construction: the auto-append runs only on the Configured() branch, the gate on the else branch. cmd/server/main_test.go (NEW) — TestASRBootGate covers the full T3.3 matrix: (a) asr bound + unconfigured → fatal, (b) asr unbound + unconfigured → boots, (c) asr bound + configured → boots, + chat-only-default → boots, + asr-only → boots. ALL 5 PASS under -race; gofmt + vet clean. All Round-1 items (M-1/L-1/L-2/L-3) remain RESOLVED (Round-2-verified, unchanged files); the 3 non-negotiable gate items remain PASS. 0 critical / 0 high / 0 medium / 0 low."
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-15T18:30:00+0800"
+
+review_round: 3
+review_mode_type: incremental
+issues_from_previous_round: 1
+issues_resolved: 1
+improvement_percentage: 100
+
+incremental_context:
+  cached_risk_level: "HIGH"
+  cached_review_mode: "full_testing"
+  cached_project_type: "web_backend"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+
+resolved_issues:
+  - id: "M-2"
+    severity: medium
+    finding: "AC2(g) boot-vs-request fail-fast deviated from the (Round-1) ratified contract. Was an architecture_concern requiring an Architect ruling — NOT Dev-resolvable as a plain code fix."
+    resolution: "Architect Round-2 ruled option (b): CONDITIONAL boot fail-fast (fail-fast at boot IFF doubao-asr ∈ explicit DOUBAO_BOUND_MODEL_IDS AND ASR env unset; else boot + request-time CodeUnavailable). Dev implemented via pure asrBootGateError(boundModelIDs, asrConfigured) helper + asrModelID const + gated os.Exit(1) in the unconfigured else branch (cmd/server/main.go:87-97, 162-175). cmd/server/main_test.go (NEW) TestASRBootGate — 5-case matrix all PASS -race. Seam correct: gate reads explicit bound set before the Configured()-branch auto-append. gofmt/vet clean. QA-verified Round 3."
+  - id: "M-1"
+    severity: medium
+    finding: "INT-005 content-safety (prompt-only) branch present but exercised by NO test."
+    resolution: "audio_transcriptions_safety_test.go (3 tests, wired DefaultLexicon scanner). RESOLVED Round 2, unchanged Round 3."
+  - id: "L-1"
+    severity: low
+    finding: "gofmt -l flagged catalogue.go."
+    resolution: "gofmt clean. RESOLVED Round 2, unchanged Round 3."
+  - id: "L-2"
+    severity: low
+    finding: "Out-of-scope deletion of genusagelog/main.go."
+    resolution: "File restored; proto GREEN. RESOLVED Round 2, unchanged Round 3."
+  - id: "L-3"
+    severity: low
+    finding: "Designed AC4 resource scenarios implemented but unasserted."
+    resolution: "audio_transcriptions_resource_test.go (3 tests). RESOLVED Round 2, unchanged Round 3."
+
+top_issues: []
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 0          # per-module suites; all touched packages report `ok`
+    passed_count: 0
+    failed_count: 0
+    skipped_count: 0
+    pass_rate: 100
+    coverage_percentage: 0
+    failed_tests: []
+    integrity_check: "QA independently re-ran `go test -race ./...` on the doubao module (where the Round-3 M-2 change lives) — all 6 packages `ok`. Forced fresh `go test -race -count=1 -run TestASRBootGate -v` → 5/5 boot-matrix cases PASS. gofmt + go vet clean. No discrepancy with Dev claim."
+  e2e:
+    executed: true     # in-process httptest full-flow + fake-upstream + proto round-trip
+    passed: true
+    skipped: false
+    skip_reason: "Cross-service CI/staging e2e (T7.1) env-limited (atlas/docker unavailable); in-process httptest variant covered."
+    scenarios_tested: 1
+    scenarios_passed: 1
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: "docs/qa/evidence/9.6/"
+  issues: []
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 6
+  security_sensitive: true
+  dev_gate_score: 95
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 0 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "Q-ASR-UPSTREAM live-Volcano contract (VENDOR-DOC-CONFIRM, Medium) — tested against fake-upstream; live-doc confirm is a pre-production gate (env-limit deferral, not a code defect)."
+      - "T7.1 cross-service CI/staging e2e + INT-014 atlas migrate apply/reverse of 0016 — env-limited locally (atlas/docker unavailable); hand-verified additive; run in CI."
+
+nfr_validation:
+  security: { status: PASS, notes: "INT-005 prompt content-safety exercised (Round 2). PII no-leak CLEAN (INT-020). Body-cap-before-parse, single-file-part, magic-byte sniff, reject-before-dispatch, temp RemoveAll on all paths (INT-021/BLIND-FLOW-001/BLIND-RESOURCE-003). M-2 boot gate now closes the deploy-time-misconfig detection on this money/security endpoint (scoped to declared ASR intent)." }
+  performance: { status: PASS, notes: "25 MiB read cap before parse; ParseMultipartForm(1<<20) bounded temp spill (test-proven mid-dispatch); no audio processing on our tier." }
+  reliability: { status: PASS, notes: "Both additive protos proven non-breaking; -race clean; missing-duration fail-closed. M-2: shared chat service never crashes on unset ASR env unless doubao-asr is explicitly bound (no shared-service regression); request-time CodeUnavailable retained as defence-in-depth." }
+  maintainability: { status: PASS, notes: "vet clean; gofmt clean. M-2 decision logic extracted to a pure asrBootGateError helper (deterministically unit-tested, no process spawn); in-code rationale documents the Architect ruling." }
+
+evidence_summary:
+  ac_covered: [1, 2, 3, 4]
+  ac_gaps: []
+  ratified_contracts_implemented: [Q-ASR-WIRE, Q-ASR-TOPOLOGY, Q-ASR-UPSTREAM, Q-ASR-BILLING, Q-ASR-MODELID, Q-ASR-RESPFORMAT, Q-ASR-LIMITS]
+  ratified_contract_deviations: []   # AC2(g) M-2 resolved per Architect Round-2 ruling (conditional boot fail-fast)
+  non_negotiable_gate_items:
+    INT-020_PII_no_leak: "PASS — audio bytes/transcript never reach any log/span/error/analytics sink."
+    INT-012_money_one_SoT: "PASS — exactly-once usage_ledger + atomic debit; shared ComputeCost."
+    BLIND-DATA-001_txn_rollback: "PASS — ON CONFLICT DO NOTHING → rollback, no second debit."
+    INT-003_chat_fence_all_ids: "PASS — every Chat:true id passes byte-identically; comma-ok; doubao-asr→400."
+  round3_verification:
+    - "apps/adapters/doubao/cmd/server/main.go — asrBootGateError helper (M-2 option-b conditional boot fail-fast)"
+    - "apps/adapters/doubao/cmd/server/main_test.go (NEW) — TestASRBootGate 5-case matrix, PASS -race"
+  env_limit_deferrals:
+    - "T7.1 cross-service CI/staging e2e (atlas/docker unavailable) — in-process httptest variant covered."
+    - "INT-014 atlas migrate apply/reverse of 0016 — hand-verified additive; not executed locally."
+    - "Q-ASR-UPSTREAM live-Volcano contract (VENDOR-DOC-CONFIRM, Medium) — tested against fake-upstream; live-doc confirm is a pre-production gate."

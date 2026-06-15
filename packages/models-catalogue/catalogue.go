@@ -20,11 +20,18 @@ import "fmt"
 // (Architect Round-1 OQ-4.7-3 ratified values). No JSON tags here — the
 // api-gateway owns the wire encoding via its own tagged mirror type.
 type Capabilities struct {
-	Chat                bool
-	Streaming           bool
-	FunctionCalling     bool
-	Vision              bool
-	JSONMode            bool
+	Chat            bool
+	Streaming       bool
+	FunctionCalling bool
+	Vision          bool
+	JSONMode        bool
+	// Transcription (Story 9.6) — the model accepts an audio file at
+	// POST /v1/audio/transcriptions (Whisper-compatible ASR). All existing
+	// chat/vision models are Transcription:false (proto/Go zero value); the
+	// ASR id (doubao-asr) is Chat:false, Transcription:true. The gateway gates
+	// /v1/audio/transcriptions on Transcription==true and /v1/chat/completions
+	// on Chat==true (the BR-1.6 do-not-regress fence).
+	Transcription       bool
 	ContextWindowTokens int
 	MaxOutputTokens     int
 }

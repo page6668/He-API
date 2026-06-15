@@ -122,8 +122,8 @@ func Test_4_7_INT_001_v1_and_public_byte_identical(t *testing.T) {
 	if err := json.Unmarshal(bearerBody, &resp); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if len(resp.Data) != 13 {
-		t.Errorf("len(data) = %d, want 13 (Story 9.5)", len(resp.Data))
+	if len(resp.Data) != 14 {
+		t.Errorf("len(data) = %d, want 14 (Story 9.6 — +doubao-asr)", len(resp.Data))
 	}
 	zero := handlers.ModelCapabilities{}
 	for _, e := range resp.Data {
@@ -158,8 +158,8 @@ func Test_4_7_INT_002_public_models_no_bearer_200(t *testing.T) {
 	if err := json.Unmarshal(body, &parsed); err != nil {
 		t.Fatalf("unmarshal: %v\nbody=%s", err, body)
 	}
-	if len(parsed.Data) != 13 {
-		t.Errorf("len(data) = %d, want 13 (Story 9.5)", len(parsed.Data))
+	if len(parsed.Data) != 14 {
+		t.Errorf("len(data) = %d, want 14 (Story 9.6 — +doubao-asr)", len(parsed.Data))
 	}
 }
 

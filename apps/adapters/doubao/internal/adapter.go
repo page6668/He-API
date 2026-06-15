@@ -78,10 +78,20 @@ type Service struct {
 	adapterv1connect.UnimplementedAdapterServiceHandler
 
 	client        *upstream.Client
+	asrClient     *upstream.ASRClient // Story 9.6 — Volcano ASR (nil → Transcribe fail-fasts)
 	endpointMap   *upstream.EndpointMap
 	normaliser    usage.Normaliser
 	logger        *slog.Logger
 	boundModelIDs []string
+}
+
+// WithASRClient wires the Story-9.6 Volcano ASR upstream client. A nil client
+// (a chat-only deployment that has not set the ASR envs) makes Transcribe
+// fail-fast with CodeUnavailable at request time (the 4.5 BR-1.12 precedent),
+// leaving the existing Chat path untouched.
+func (s *Service) WithASRClient(c *upstream.ASRClient) *Service {
+	s.asrClient = c
+	return s
 }
 
 // NewService constructs a Service. logger must be non-nil — pass

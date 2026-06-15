@@ -783,6 +783,20 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Story 9.6 BR-1.6 — do-not-regress Chat:true fence. The catalogue now
+	// contains a NON-chat model (doubao-asr, Transcription-only). A KNOWN
+	// catalogue model whose Chat==false sent to /v1/chat/completions → 400 BEFORE
+	// dispatch (prevents an ASR id being mis-dispatched as chat). The comma-ok
+	// guard fences ONLY known non-chat ids: an UNKNOWN model id is unaffected
+	// (falls through to the existing mock/adapter path, byte-identical pre-9.6),
+	// and every existing Chat:true id passes unchanged (INT-003 positive
+	// regression). The model id (≤100 chars, validated) is not PII.
+	if caps, known := capabilitiesByModelID[req.Model]; known && !caps.Chat {
+		_ = openaierr.Write(w, ctx, http.StatusBadRequest, "400_invalid_request",
+			fmt.Sprintf("Model '%s' does not support chat completions.", req.Model), nil)
+		return
+	}
+
 	// Story 9.5 BR-1.3 — Vision-capability gate (fail-closed, pre-dispatch). If
 	// ANY message carries an image_url part, the requested model MUST be
 	// vision-capable (Story-4.7 capabilitiesByModelID). A non-vision model + image

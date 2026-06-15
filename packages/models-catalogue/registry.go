@@ -48,6 +48,12 @@ var DefaultRegistry = Registry{
 		// adapter services (BR-2.4 multi-model-id) and advertise vision:true.
 		{ID: "qwen-vl-max", Vendor: "alibaba"},
 		{ID: "glm-4v", Vendor: "zhipu"},
+		// Story 9.6 — the first audio model (ASR). Appended at the END so the
+		// existing index ordering (0-12) is preserved (BR-1.10). It is
+		// Chat:false / Transcription:true — the ONLY non-chat model in the
+		// catalogue, which is exactly why the BR-1.6 Chat:true fence is needed
+		// on /v1/chat/completions. Rides the existing doubao adapter service.
+		{ID: "doubao-asr", Vendor: "bytedance"},
 	},
 	Capabilities: map[string]Capabilities{
 		"qwen-max":          {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 32768, MaxOutputTokens: 8192},
@@ -66,6 +72,11 @@ var DefaultRegistry = Registry{
 		// support for the VL ids). Streaming:true (BR-2.7 — output is text deltas).
 		"qwen-vl-max": {Chat: true, Streaming: true, FunctionCalling: false, Vision: true, JSONMode: false, ContextWindowTokens: 32768, MaxOutputTokens: 8192},
 		"glm-4v":      {Chat: true, Streaming: true, FunctionCalling: false, Vision: true, JSONMode: false, ContextWindowTokens: 8192, MaxOutputTokens: 4096},
+		// Story 9.6 — ASR id. Chat:false (NOT a chat model — gated off
+		// /v1/chat/completions by the BR-1.6 fence), Transcription:true (gates
+		// ON /v1/audio/transcriptions). No token window (audio has no token
+		// dimension); not streaming (Whisper transcription is single-shot).
+		"doubao-asr": {Chat: false, Streaming: false, FunctionCalling: false, Vision: false, JSONMode: false, Transcription: true, ContextWindowTokens: 0, MaxOutputTokens: 0},
 	},
 }
 

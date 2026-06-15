@@ -31,6 +31,7 @@ var (
 
 	thousand = decimal.NewFromInt(1000)
 	hundred  = decimal.NewFromInt(100)
+	sixty    = decimal.NewFromInt(60) // Story 9.6 — seconds-per-minute (ceil-to-second ASR billing)
 	one      = decimal.NewFromInt(1)
 )
 
@@ -47,6 +48,10 @@ type Row struct {
 	PriceOut     decimal.Decimal // USD per 1k output tokens
 	Markup       decimal.Decimal // percent, e.g. 10.00
 	PerCallPrice *decimal.Decimal
+	// PricePerMinuteAudio (Story 9.6) — USD per audio MINUTE for PER_MINUTE
+	// (ASR) billing. nil for every token model (the nullable
+	// model_pricing.price_per_minute_audio_usd column); set for doubao-asr.
+	PricePerMinuteAudio *decimal.Decimal
 }
 
 // Snapshot is an immutable model_id → Row view. The zero value (and a nil
@@ -106,13 +111,33 @@ type Result struct {
 //
 // All arithmetic is Decimal — NEVER float64 (M-1). Rounding is half-away-from-
 // zero == HALF-UP for the non-negative money domain (Q-ROUND).
-func (s *Snapshot) ComputeCost(modelID string, promptTokens, completionTokens uint32, mode billingv1.BillingMode) (Result, error) {
+func (s *Snapshot) ComputeCost(modelID string, promptTokens, completionTokens uint32, audioDurationSeconds float64, mode billingv1.BillingMode) (Result, error) {
 	row, ok := s.Row(modelID)
 	if !ok {
 		return Result{}, ErrNoPricing
 	}
 
 	outOfRange := row.Markup.LessThan(markupMin) || row.Markup.GreaterThan(markupMax)
+	multiplier := one.Add(row.Markup.Div(hundred))
+
+	// Story 9.6 — PER_MINUTE (ASR) mode REPLACES per-token: bill per audio
+	// duration, ceil-to-SECOND (Q-ASR-BILLING RATIFIED):
+	//
+	//	cost = ceil(duration_seconds) × price_per_minute_audio_usd/60 × (1+markup)
+	//
+	// Fail-CLOSED: a PER_MINUTE event for a model with NO per-minute price →
+	// ErrNoPricing (the caller DLQs; never a silent zero-cost ledger row —
+	// BR-D-3). The duration arrives as a proto double; NewFromFloat→Ceil pins it
+	// to an exact integer-second count BEFORE any money arithmetic, so the
+	// per-second math stays pure-Decimal (M-1 — no float64 on the money path).
+	if mode == billingv1.BillingMode_BILLING_MODE_PER_MINUTE {
+		if row.PricePerMinuteAudio == nil {
+			return Result{}, ErrNoPricing
+		}
+		seconds := decimal.NewFromFloat(audioDurationSeconds).Ceil()
+		cost := seconds.Mul(row.PricePerMinuteAudio.Div(sixty)).Mul(multiplier).Round(CostScale)
+		return Result{Cost: cost, MarkupOutOfRange: outOfRange}, nil
+	}
 
 	// Per-call mode REPLACES per-token when enabled for the model (Q-PERCALL).
 	// Unreachable in 7.1 (no row carries PerCallPrice), but wired for forward-
@@ -130,7 +155,6 @@ func (s *Snapshot) ComputeCost(modelID string, promptTokens, completionTokens ui
 	base := prompt.Div(thousand).Mul(row.PriceIn).
 		Add(completion.Div(thousand).Mul(row.PriceOut))
 
-	multiplier := one.Add(row.Markup.Div(hundred))
 	cost := base.Mul(multiplier).Round(CostScale)
 
 	return Result{Cost: cost, MarkupOutOfRange: outOfRange}, nil
