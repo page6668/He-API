@@ -1,0 +1,102 @@
+schema: 1
+story: "10.2"
+story_title: "Python SDK (drop-in OpenAI 替代)"
+gate: "PASS"
+status_reason: "Round 1 full review (LOW risk → automated_only, pure-consumer library, no UI/API/DB/security surface). QA INDEPENDENTLY re-executed the suite — 40 passed / 1 skipped (the live E2E, correctly HE_API_TEST_GATEWAY_URL-gated) — byte-matching Dev's claim (integrity: consistent). Both ACs verified at 100% via populated traceability + in-code semantic check: AC1 (publishable pkg) independently confirmed — `python -m build` → wheel+sdist, `twine check` PASSED, fresh-venv `pip install` of the BUILT wheel imports `he_api` v0.1.0, and the `sdk-python` CI lane (ruff+build+twine+pytest) is wired in test.yml; AC2 (drop-in identity) confirmed — `Client`/`AsyncClient` subclass `openai.OpenAI`/`AsyncOpenAI` overriding ONLY `__init__` (R-OQ-1), `DEFAULT_BASE_URL` single const (R-OQ-3), `OPENAI_API_KEY` provably never read (key isolation, BR-10.2.7), `get_balance`/`get_usage` the only new code (R-OQ-4c), layered openai pin `>=1.40,<2` + fail-loud drift guard (BR-10.2.9). Tests are genuine (85 asserts/41 tests) and REUSE the gateway's own `_protocol_invariants.py` shape oracle; usage-sum invariant, SSE `[DONE]`, error `.code`/`he_request_id` passthrough, and OQ5 `x-he-cost-usd is None` tolerance all asserted. All 8 blind-spot scenarios covered. ruff clean. No `NOT IMPLEMENTED` sentinel; no test deleted. 0 critical / 0 high / 0 medium / 0 new low. → PASS, close to Done."
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-15T23:40:00+0800"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "LOW"
+  cached_review_mode: "automated_only"
+  cached_project_type: "library"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+top_issues: []
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 41
+    passed_count: 40
+    failed_count: 0
+    skipped_count: 1
+    pass_rate: 100        # 40/40 runnable; 1 skip is the live-gated E2E (by design)
+    coverage_percentage: 0
+    failed_tests: []
+    integrity_check: "QA independently ran `.venv/bin/python -m pytest -q` (DYLD_LIBRARY_PATH=/opt/homebrew/opt/expat/lib per project_toolchain_env_limits): 40 passed, 1 skipped in 1.43s. The single skip is `TestAC2DropIn::test_10_2_e2e_001_live_dropin_equivalence` (HE_API_TEST_GATEWAY_URL-gated). EXACTLY matches Dev's claim (40 pass / 1 live-skip) — no discrepancy. openai 1.40.8 / httpx 0.27.2 / respx 0.23.1 in the test venv."
+  e2e:
+    executed: false
+    passed: true
+    skipped: true
+    skip_reason: "Review mode is automated_only (LOW risk, pure-consumer library — no UI/server to drive). The one designed live E2E (10.2-E2E-001) is itself HE_API_TEST_GATEWAY_URL-gated and skips hermetically; full drop-in equivalence is proven via respx hermetic mocks against the gateway shape oracle."
+    scenarios_tested: 0
+    scenarios_passed: 0
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: "docs/qa/evidence/10.2/"
+  issues: []
+
+risk_assessment:
+  risk_level: LOW
+  review_mode: automated_only
+  complexity_count: 2
+  security_sensitive: false
+  dev_gate_score: 95
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 0 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "PyPI name `he-api` ownership + OIDC trusted-publishing — PO follow-up, tracked to Story 10.7 (R-OQ-2). This Story ships a `twine check`-clean artifact only; first real publish is deferred."
+      - "Production gateway domain confirm — `DEFAULT_BASE_URL = https://api.he-api.com/v1` is a single overridable constant; a wrong default is a one-line fix (R-OQ-3, infra confirm)."
+      - "openai pin drift — runtime `openai>=1.40,<2`; the in-suite guard (10.2-UNIT-003) fails loud if a 2.x leaks in. Re-run the gateway contract suite before deliberately bumping the major."
+
+nfr_validation:
+  security: { status: PASS, notes: "Key isolation verified in-code AND in-test (10.2-UNIT-012): `OPENAI_API_KEY` is never consulted — a missing/empty `HE_API_KEY` raises the native `openai.OpenAIError` BEFORE the upstream env fallback, so a real OpenAI key can never be silently routed to the He gateway (BR-10.2.7). Empty string treated as missing (BLIND-BOUNDARY-002), so no bare `Authorization: Bearer` is ever sent. Pure consumer — no new auth/crypto/PII/payment logic; credential handling is inherited from the openai SDK. No secrets in source." }
+  performance: { status: PASS, notes: "Thin subclass; zero added per-request overhead beyond the inherited openai client. balance/usage are single forwarded GETs via the inherited escape-hatch." }
+  reliability: { status: PASS, notes: "Drop-in identity by inheritance, not rewrite — SSE streaming, retries, pydantic models, `.with_raw_response`, async parity all inherited and asserted shape-faithful against `_protocol_invariants.py`. Layered pin (runtime `>=1.40,<2` + tight test `==1.40.*` + fail-loud drift guard) catches upstream breaking changes early. OQ5: `x-he-cost-usd` treated as possibly-absent, never billed from (10.2-INT-023)." }
+  maintainability: { status: PASS, notes: "ruff clean (scoped to the package). hatchling backend, `__version__` single source of truth (asserted == importlib.metadata.version). Well-documented modules; new code minimal (only get_balance/get_usage). Establishes the SDK packaging paradigm reused by 10.3 (TS, Done) and 10.4 (Go, Approved)." }
+
+evidence_summary:
+  ac_covered: [1, 2]
+  ac_gaps: []
+  ratified_contracts_implemented: [R-OQ-1, R-OQ-2, R-OQ-3, R-OQ-4, R-OQ-5, R-OQ-6]
+  ratified_contract_deviations: []
+  blind_spot_coverage:
+    total: 8
+    covered: 8
+    coverage_rate: 100
+    scenarios: [BOUNDARY-001, BOUNDARY-002, BOUNDARY-003, ERROR-001, ERROR-002, ERROR-003, CONCURRENCY-001, RESOURCE-001]
+  task_checkbox_verification:
+    all_checked: true
+    consistent_with_deliverables: true
+    notes: "T0–T5 all [x]; File List deliverables all exist on disk and are exercised by the suite + CI lane."
+  independent_ac1_verification:
+    build: "python -m build → he_api-0.1.0-py3-none-any.whl + .tar.gz"
+    twine_check: "PASSED (wheel + sdist)"
+    clean_install_smoke: "fresh venv pip install of BUILT wheel → import he_api OK, __version__ = 0.1.0"
+    ci_lane: ".github/workflows/test.yml:564 `sdk-python` (ruff + build + twine + pytest)"
+  unrelated_preexisting_changes:
+    - "docs/stories/9.1b-usage-trend-chart.md modified — separate story, NOT in 10.2's File List; excluded from the 10.2 commit."
+  env_limit_notes:
+    - "Local dev venv needs DYLD_LIBRARY_PATH=/opt/homebrew/opt/expat/lib + httpx<0.28 (broken homebrew py3.12 / openai-1.40↔httpx-0.28 proxies kwarg) — project_toolchain_env_limits. Shipped runtime dep is just `openai>=1.40,<2`; CI uses a clean setup-python runner."

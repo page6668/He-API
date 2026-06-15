@@ -555,3 +555,45 @@ jobs:
           [ -n "${GLM_FAKE_PID:-}" ]         && kill "$GLM_FAKE_PID"         || true
           [ -n "${DOUBAO_FAKE_PID:-}" ]      && kill "$DOUBAO_FAKE_PID"      || true
           [ -n "${ERNIE_FAKE_PID:-}" ]       && kill "$ERNIE_FAKE_PID"       || true
+
+  # Story 10.2 T4.1 — he-api Python SDK lane (the repo's first PUBLISHABLE Python
+  # package). Mirrors the `gateway / openai-sdk-contract` paradigm (setup-python +
+  # pip + pytest) but is fully HERMETIC: respx mocks the httpx transport, so NO
+  # gateway / Postgres / Redis is needed. The live drop-in arm (10.2-E2E-001)
+  # skips automatically because HE_API_TEST_GATEWAY_URL is unset here (R-OQ-5).
+  sdk-python:
+    name: sdk-python
+    runs-on: ubuntu-22.04
+    needs: [unit-go]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install he-api SDK + test deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e "packages/sdk-python[test]" ruff
+
+      - name: Lint (ruff — scoped to the SDK package only)
+        run: ruff check packages/sdk-python/he_api packages/sdk-python/tests
+
+      - name: Build + twine check (artifact-only; real publish deferred to 10.7)
+        run: |
+          python -m build --no-isolation packages/sdk-python
+          twine check packages/sdk-python/dist/*
+
+      - name: Run hermetic test suite
+        run: pytest packages/sdk-python/tests -v --junitxml=/tmp/sdk-python-report.xml
+
+      - name: Upload test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-python-artifacts
+          path: /tmp/sdk-python-report.xml
+          if-no-files-found: ignore
+          retention-days: 7

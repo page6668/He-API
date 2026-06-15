@@ -1,0 +1,19 @@
+# Story 10.2 — hermetic test dependencies for the he-api Python SDK.
+#
+# Mirrors apps/api-gateway/tests/requirements.txt: the openai SDK has had two
+# breaking response-parsing changes in 12 months, so the TEST pin is tight
+# (==1.40.*) while the package RUNTIME dep stays a compatible range
+# (openai>=1.40,<2 in pyproject) — "loose runtime + tight test + drift guard".
+#
+# httpx is pinned <0.28 because openai 1.40 passes the `proxies` kwarg that
+# httpx removed in 0.28.
+openai==1.40.*
+pytest==8.*
+pytest-asyncio
+respx
+httpx>=0.23,<0.28
+# build/twine/hatchling power the in-process packaging integration tests
+# (10.2-INT-001/002/003) — `python -m build --no-isolation` + `twine check`.
+build
+twine
+hatchling

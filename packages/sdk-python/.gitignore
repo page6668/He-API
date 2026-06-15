@@ -1,0 +1,9 @@
+# Story 10.2 — build + local-env artifacts (never committed)
+.venv/
+dist/
+build/
+*.egg-info/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.pyc

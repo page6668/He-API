@@ -68,10 +68,10 @@ he-api/                                  (Monorepo, Turborepo)
 │   ├── go-observability/                Go observability 共享包 (Story 1.5 — TracerProvider / slog JSON / otelhttp wrap)
 │   ├── models-catalogue/                model catalogue SoT (Story 6.1 lift — gateway + routing-svc)
 │   ├── plan-catalogue/                  subscription tier catalogue SoT (Story 7.8 — Free/Pro/Team/Enterprise → Entitlement + SandboxCeiling; panic-at-construction 1:1; gateway entitlement + billing-svc subscription + GET /v1/billing/plans)
-│   ├── sdk-python/                      Python SDK
-│   │   ├── he_api/
-│   │   ├── tests/
-│   │   ├── pyproject.toml
+│   ├── sdk-python/                      Python SDK (pip: he-api) — LANDED Story 10.2; repo's first PUBLISHABLE Python pkg. Client/AsyncClient subclass openai.OpenAI/AsyncOpenAI (override only __init__), hermetic respx tests, drop-in.
+│   │   ├── he_api/                      __init__.py (re-exports openai exc + Client/AsyncClient + __version__ SoT) + client.py (subclasses + balance/usage convenience) + _config.py (DEFAULT_BASE_URL)
+│   │   ├── tests/                       pytest hermetic respx (41 scenarios) + conftest (imports gateway _protocol_invariants oracle) + requirements.txt
+│   │   ├── pyproject.toml               PEP 621, build backend hatchling, runtime openai>=1.40,<2, requires-python>=3.9, ruff-scoped
 │   │   └── README.md
 │   ├── sdk-typescript/                  TS SDK (npm: @he-api/sdk) — LANDED Story 10.3; repo's first PUBLISHABLE npm pkg (non-private). Client extends OpenAI (openai-node ^4), pure ESM, drop-in.
 │   │   ├── src/                         index.ts (re-exports openai + Client) + client.ts (Client extends OpenAI)

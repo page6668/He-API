@@ -1,0 +1,78 @@
+# Story 10.2 — first PUBLISHABLE Python package in the repo (sets the packaging
+# /test/publish paradigm 10.3-TS / 10.4-Go mirror). PEP 517/621, build backend
+# hatchling (R-OQ-6). No real PyPI publish in this Story — artifact + twine-check
+# only; first publish + OIDC trusted-publishing is deferred to Story 10.7 (R-OQ-2).
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "he-api"                       # distribution name (pip install he-api); import name is he_api (BR-10.2.2)
+description = "He-API Python SDK — a drop-in, OpenAI-compatible client for the He-API gateway."
+readme = "README.md"
+requires-python = ">=3.9"             # R-OQ-6: lowest non-EOL Python; max drop-in reach (3.12 is only the CI test runtime)
+license = { text = "Apache-2.0" }
+authors = [{ name = "He-API" }]
+keywords = ["he-api", "openai", "llm", "sdk", "gateway", "drop-in"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+# Runtime dep: COMPATIBLE RANGE, not a tight pin (R-OQ-1 layered pin) — avoids
+# resolver conflicts for end users who also depend on openai; major 2 is the
+# known breaking boundary. Tight ==1.40.* + drift guard live in [test] / tests.
+dependencies = ["openai>=1.40,<2"]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://he-api.com"
+Documentation = "https://docs.he-api.com"
+Repository = "https://github.com/he-api/he-api"
+
+# Hermetic test/dev deps: tight openai pin (mirrors gateway requirements.txt
+# lesson: 2 breaking response-parse changes in 12 months) + respx transport mock
+# (R-OQ-5). httpx is pinned <0.28 because openai 1.40 passes the `proxies` kwarg
+# removed in httpx 0.28.
+[project.optional-dependencies]
+test = [
+  "openai==1.40.*",
+  "pytest==8.*",
+  "pytest-asyncio",
+  "respx",
+  "httpx>=0.23,<0.28",
+  # AC1 packaging integration tests (10.2-INT-001/002/003) build + twine-check the
+  # dist in-process; hatchling lets `python -m build --no-isolation` run offline.
+  "build",
+  "twine",
+  "hatchling",
+]
+
+[tool.hatch.version]
+path = "he_api/__init__.py"          # __version__ is the single source of truth (BR-10.2.4)
+
+[tool.hatch.build.targets.wheel]
+packages = ["he_api"]
+
+[tool.hatch.build.targets.sdist]
+include = ["he_api", "README.md", "pyproject.toml"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+# ruff scoped to THIS package only (R-OQ-6) — does not touch apps/api-gateway/tests.
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
