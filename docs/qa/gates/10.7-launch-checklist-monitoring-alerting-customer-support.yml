@@ -1,0 +1,147 @@
+schema: 1
+story: "10.7"
+story_title: "上线检查表 + 监控告警 + 客服接入"
+gate: PASS
+status_reason: "Launch-readiness story across 3 runtimes (infra/console/CI) built to all 6 Architect-ratified OQ contracts. 100% AC coverage, 0 critical / 0 high. The highest-risk OQ-2 ZERO-PII contract is enforced structurally (buildBootPayload accepts only appId+locale — user PII is unreachable by construction), not just filtered. 64 vitest + 2 bash gates pass on independent re-execution."
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-16T05:40:00Z"
+
+review_round: 1
+risk_level: HIGH        # security_sensitive=true + complexity 5/8 + multi-secret + HMAC crypto + egress compliance
+review_mode: full_testing
+
+waiver:
+  active: false
+
+top_issues: []   # 0 critical, 0 high, 0 medium, 0 low
+
+# ---------------------------------------------------------------------------
+# Independent test execution (QA re-ran, did not rely on Dev evidence)
+# ---------------------------------------------------------------------------
+test_results:
+  project_type: fullstack            # Next.js console + Go monorepo + helm/CI
+  automated:
+    shared_types_vitest:
+      command: "npx vitest run __tests__/10.7-alerting.test.ts __tests__/10.7-launch.test.ts"
+      total: 29
+      passed: 29
+      failed: 0
+      result: PASS
+    console_vitest:
+      command: "npx vitest run __tests__/10.7-intercom.test.ts components/business/IntercomMessenger.test.tsx"
+      total: 35
+      passed: 35
+      failed: 0
+      result: PASS
+    alertmanager_gold_gate_selftest:
+      command: "bash scripts/ci/verify-alertmanager-routes.test.sh"
+      total: 4
+      passed: 4
+      failed: 0
+      result: PASS    # incl. drift-rejection fixtures (critical→slack, blackhole catch-all, inline routing_key)
+    go_live_verifier:
+      command: "bash scripts/ci/verify-go-live-checklist.sh"
+      exit_code: 0
+      result: PASS
+    total_passed: 68    # 64 vitest + 4 bash gold-gate cases
+    integrity_check:
+      dev_claimed: "64 vitest GREEN + 3 bash gates"
+      qa_independent: "64 vitest GREEN + gold-gate self-test 4/4 + verifier exit 0"
+      discrepancy: false
+  e2e:
+    executed: false
+    skipped: true
+    skip_reason: "The only E2E scenario (synthetic-page PagerDuty drill, E2E-001) is a runbook MANUAL operator step by the OQ-10.7-3 ruling — no automatable running-app surface in this launch-readiness story. All other surfaces are config/static/unit verifiable."
+  toolchain_note: "Local env has no helm/bats/docker (per project_toolchain_env_limits). Alertmanager/PrometheusRule YAML verified via yaml-parse unit tests + bash gold-gate (plain bash, not bats) + the CI helm-lint-observability matrix carries the helm-render lane."
+
+# ---------------------------------------------------------------------------
+# AC coverage (semantic verification against ratified contracts)
+# ---------------------------------------------------------------------------
+ac_coverage:
+  coverage_rate: 100
+  passed: true
+  details:
+    - ac_id: AC1
+      title: "PagerDuty/Alertmanager last-mile + gateway §11.3 rules + CI gold-gate"
+      status: VERIFIED
+      evidence:
+        - "values-staging.yaml: severity=critical → pagerduty (routing_key_file) + 飞书 mirror with continue:true (P0 dual-channel, OQ-1.3)"
+        - "non-blackhole catch-all is the default receiver with a real webhook notifier (OQ-1.4)"
+        - "all receiver secrets via *_file refs (routing_key_file/url_file/api_url_file/smtp_auth_password_file) ← ExternalSecret→Vault; ZERO plaintext (BR-10.7.3, repo-wide grep clean)"
+        - "api-gateway/templates/prometheusrule.yaml: 4 §11.3 RED rules present (GatewayP95LatencyHigh warn / GatewayErrorRateHigh crit·pagerduty / UpstreamModelDown warn / DataExportSuspect crit·pagerduty §9.1 egress sentinel)"
+        - "verify-alertmanager-routes.sh asserts all 4 invariants; self-test 4/4 incl. drift-rejection fixtures"
+    - ac_id: AC2
+      title: "Intercom ZERO-PII Messenger + dormant HMAC + PRC region-gate + i18n×10"
+      status: VERIFIED
+      evidence:
+        - "OQ-2 HARD CONTRACT — buildBootPayload({appId,locale}) returns EXACTLY {app_id, language_override}; user PII is structurally unreachable (function signature accepts no user object). UNIT-010 property test asserts no FORBIDDEN_INTERCOM_KEYS and no PII values serialize."
+        - "INTERCOM_SECRET server-only: referenced only in identity.ts (process.env), hmac.ts/route.ts (server); never NEXT_PUBLIC_*, never imported by 'use client' IntercomMessenger.tsx. UNIT-011 static bundle scan enforces."
+        - "HMAC seam BUILD-but-DORMANT: /api/intercom-hash returns 404 unless INTERCOM_IDENTITY_VERIFICATION=on (UNIT-012). HMAC↔widget binding intentionally dormant per OQ-2 (NOT an orphan)."
+        - "PRC region-gate: shouldBootIntercom returns false for cf-ipcountry=CN; graceful degrade on missing app_id (UNIT-013/BOUNDARY-010)"
+        - "he_request_id support handle validated against §11.5 regex (reused, not re-declared, L-2); i18n support.json ×10 + language_override mapping"
+    - ac_id: AC3
+      title: "go-live runbook + verifier + 3 SDK release pipelines (dry-run only)"
+      status: VERIFIED
+      evidence:
+        - "go-live-checklist.md: 6 sections (可观测/支付/合规/容灾/客户面/SDK), every item [Source:]-traceable; verifier exit 0"
+        - "release-sdk-{python,typescript,go}.yml: workflow_dispatch ONLY (no push/release auto-publish trigger); dry-run job always runs (twine check / npm pack --dry-run / go vet+build+tag-validate)"
+        - "real publish double-gated: if confirm_publish=='publish' AND environment: sdk-release (protected) — PO-gated, NOT executed this story (L-004/L-008)"
+
+# ---------------------------------------------------------------------------
+# Blind-spot coverage (from 47-scenario test design)
+# ---------------------------------------------------------------------------
+blind_spot_verification:
+  total_scenarios: 11
+  covered: 11
+  coverage_rate: 100
+  notes:
+    - "ERROR-010 Intercom load failure graceful degrade — covered (IntercomMessenger.test.tsx)"
+    - "ERROR-011 HMAC-disabled route 404 degrade — covered"
+    - "BOUNDARY-010 missing app_id never boots — covered"
+    - "ERROR-001 receiver secret not synced → deploy gate (ExternalSecret disabled by default in dev/CI) — config-verified"
+    - "DATA-001 critical→pagerduty consistency — gold-gate enforced"
+
+# ---------------------------------------------------------------------------
+# PO-gated items — verified DORMANT/dry-run, correctly NOT activated (out of auto-scope)
+# ---------------------------------------------------------------------------
+po_gated_verified_dormant:
+  - "T2 PII-bearing Intercom attributes — HMAC seam built but 404-dormant; UNIT-012 proves dormancy. Activation requires PO + legal sign-off (compliant identity-bearing path)."
+  - "T4 real SDK publish — pipelines dry-run only; publish job double-gated (input + protected env). Activation requires PO name ownership (PyPI he-api / npm @he-api / Go org he-api) + OIDC publisher creds."
+
+# ---------------------------------------------------------------------------
+# Architectural fences held
+# ---------------------------------------------------------------------------
+fences_held:
+  - "L-005 no-new-gateway-surface: no new gateway route / proto / gRPC RPC / DB migration / Kafka topic / envelope error code. Only new server seam = console-internal app/api/intercom-hash (dormant), NOT a gateway endpoint."
+
+pre_existing_baselines_excluded:
+  note: "Repo-wide failures (2.2 auth-keys codegen, 1.2 lint.yml/main_test, 1.6 migration-count) are pre-existing on HEAD and read files NOT in this diff. Confirmed unrelated; not held against 10.7. Ref project_auth_surface_prebroken_head."
+
+quality_score: 98
+expires: "2026-06-30T00:00:00Z"
+
+evidence:
+  tests_reviewed: 68
+  risk_coverage: "All 3 P0 gate-suites (ZERO-PII, secret no-leak, alert-route integrity) independently verified + the DataExportSuspect §9.1 egress sentinel + irreversible-publish guard."
+  files_collected: 0    # no defects → no evidence artifacts needed
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: "ZERO-PII enforced structurally + tested; all secrets server-only / *_file refs; secret-scan gates in CI; PRC region-gate prevents PIPL-sensitive egress; irreversible SDK publish double-gated."
+  reliability:
+    status: PASS
+    notes: "P0 alerts dual-channel (PagerDuty + 飞书 mirror) so single-channel failure can't silence P0; non-blackhole catch-all prevents lost alerts; gold-gate prevents route drift."
+  maintainability:
+    status: PASS
+    notes: "Allow-listed payload shape, reused §11.5 regex, traceable runbook ([Source:] per item), CI-locked route config."
+  performance:
+    status: N/A
+    notes: "No hot-path / latency surface added (config + docs + client widget + dormant BFF route)."
+
+recommendations:
+  immediate: []
+  future:
+    - action: "L-1 — confirm kube-prometheus-stack-pinned Alertmanager image ≥ 0.26 supports *_file receiver fields before staging deploy; else fall back to envsubst-mounted Secret."
+      refs: ["infra/helm/observability/kube-prometheus-stack/values-staging.yaml"]
+    - action: "PO sign-off gates (tracked, not blocking this story): (a) Intercom identity-bearing path risk appetite to un-dormant HMAC seam; (b) SDK name ownership + OIDC creds before real publish."

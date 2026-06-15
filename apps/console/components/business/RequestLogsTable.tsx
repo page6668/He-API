@@ -16,6 +16,7 @@ import { useTranslations } from 'next-intl';
 
 import { type LogEntry, type LogStatusClass, type UsageLogsPage } from '@/lib/api/me-usage';
 import { LtrText } from '@/components/business/LtrText';
+import { openSupportWithRequestId } from '@/lib/intercom/messenger';
 
 export interface RequestLogsTableProps {
   page: UsageLogsPage;
@@ -109,6 +110,7 @@ interface LogRowProps {
 
 function LogRow({ row, locale, t }: LogRowProps) {
   const cls = logStatusClass(row.status_code);
+  const tSupport = useTranslations('support');
   return (
     <tr className="border-b border-neutral-100 last:border-0">
       {/* LTR islands (BR-10.1.8) via the reusable <LtrText> primitive — these
@@ -137,6 +139,17 @@ function LogRow({ row, locale, t }: LogRowProps) {
       </td>
       <td className="px-3 py-2">
         <code className="text-xs" dir="ltr">{row.he_request_id}</code>
+        {/* Story 10.7 AC2 (BR-10.7.9 / front-end-spec:537) — one-click brings
+            the non-PII he_request_id handle into the customer-support session.
+            Degrades silently if the Messenger isn't booted (region-gated / blocked). */}
+        <button
+          type="button"
+          className="ms-2 text-xs text-blue-600 underline hover:text-blue-800"
+          aria-label={tSupport('logEntry.ariaLabel', { requestId: row.he_request_id })}
+          onClick={() => openSupportWithRequestId(row.he_request_id)}
+        >
+          {tSupport('logEntry.action')}
+        </button>
       </td>
     </tr>
   );

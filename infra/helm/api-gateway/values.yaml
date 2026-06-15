@@ -196,3 +196,16 @@ securityContext:
     drop: ["ALL"]
   seccompProfile:
     type: RuntimeDefault
+
+# -----------------------------------------------------------------------------
+# Story 10.7 AC1 (OQ-10.7-5) — gateway RED alert rules (§11.3). Thresholds are
+# quoted strings so the Helm template renders them verbatim into PromQL. The
+# rules' severity/channel labels feed the Alertmanager route (critical →
+# PagerDuty + 飞书 mirror; warning·feishu → 飞书 + email).
+# -----------------------------------------------------------------------------
+prometheusRule:
+  enabled: true
+  p95LatencySecondsThreshold: "0.5"
+  errorRateThreshold: "0.01"
+  upstreamErrorRateThreshold: "0.1"
+  overseasEgressBytesThreshold: "0"

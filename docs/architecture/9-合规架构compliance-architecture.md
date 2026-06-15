@@ -9,6 +9,7 @@
 | 海外 SaaS 不接触请求/响应内容 | Sentry 自托管在境内（不用 sentry.io）；PostHog 自托管；不发任何用户内容到 SaaS |
 | 备份不出境 | OSS 跨 region 复制限定境内（cn-shanghai → cn-shenzhen） |
 | 监控告警平台 | Grafana 自托管；告警通过飞书机器人（境内） + PagerDuty（仅传 metric 标识，不传内容） |
+| 客服平台 (Intercom，海外 SaaS) | **ZERO-PII** (Story 10.7 OQ-10.7-2 裁定)：仅发送非 PII 的 `he_request_id` 句柄，绝不发 email/name/user_id/IP/内容；Identity-Verification HMAC seam BUILD-but-DORMANT（PO 批准个人信息出境合规路径前不启用）；**PRC region-gate** — 境内用户不 boot Intercom，走飞书/邮件分离通道；运行时由 §11.3 `DataExportSuspect`（境外 egress>0 → critical）哨兵兜底。PII-bearing 扩展为 PO-gated。 |
 
 ## 9.2 三件套备案
 

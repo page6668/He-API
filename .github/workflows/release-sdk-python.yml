@@ -1,0 +1,62 @@
+name: release-sdk-python
+
+# Story 10.7 AC3 (OQ-10.7-4) — first-release pipeline for the `he-api` Python SDK
+# (packages/sdk-python). Built here; REAL PUBLISH IS PO-GATED and NOT executed in
+# this story. This workflow is workflow_dispatch-only (never auto-triggered on
+# push/PR), so the CI auto-path can only ever run the dry-run job. The real
+# publish job is double-gated: the protected `sdk-release` environment (manual
+# approval) AND an explicit `confirm_publish: publish` input. PyPI publishing
+# uses OIDC trusted-publishing (no long-lived token) — the PO must claim the
+# `he-api` project name + configure the PyPI publisher first (BR-10.7.14).
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_publish:
+        description: "Type 'publish' to run the REAL PyPI publish (PO-gated). Anything else = dry-run only."
+        required: false
+        default: "dry-run"
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    name: dry-run (build + twine check, NO publish)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build tooling
+        run: pip install build twine
+      - name: Build sdist + wheel (artifact-only)
+        run: python -m build packages/sdk-python
+      - name: twine check (metadata validation — never uploads)
+        run: twine check packages/sdk-python/dist/*
+
+  publish:
+    name: publish (PyPI · OIDC trusted-publishing · PO-gated)
+    needs: dry-run
+    # 🔴 Real publish only when explicitly confirmed AND approved in the
+    # protected environment. Irreversible external action — never auto-triggered.
+    if: ${{ github.event.inputs.confirm_publish == 'publish' }}
+    environment: sdk-release
+    runs-on: ubuntu-22.04
+    permissions:
+      id-token: write   # OIDC trusted-publishing (no API token)
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build distribution
+        run: |
+          pip install build
+          python -m build packages/sdk-python
+      - name: Publish to PyPI (OIDC trusted-publishing)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: packages/sdk-python/dist/

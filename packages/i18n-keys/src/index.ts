@@ -7,3 +7,4 @@ export * from './dashboard';
 export * from './logs';
 export * from './models';
 export * from './playground';
+export * from './support';

@@ -298,6 +298,13 @@ he-api/                                  (Monorepo, Turborepo)
 > - `apps/console/__tests__/10.6-playground-benchmark.test.ts`（19 vitest，C-U）+ `e2e/{playground,marketing-benchmark}.spec.ts`（计费调用 `page.route` mock，不烧额度）+ `apps/api-gateway/internal/handlers/playground_chat_test.go`（19 Go，-race GREEN）。
 > 条目添加来源：Story 10.6 Dev（Linus），2026-06-16.
 
+> **注**: Story 10.7 — 上线检查表 + 监控告警 + 客服接入（6 个 OQ 已裁定）新增条目：
+> - **AC1 (infra)**: `infra/helm/observability/kube-prometheus-stack/values-staging.yaml` — EXTEND，新增 `alertmanager.config`（route tree §11.4 + receivers via `*_file` secret-refs + `alertmanagerSpec.secrets`）；`templates/externalsecret-alerting.yaml` — NEW（ExternalSecret→Vault `kv/data/he-api/alerting/*`，默认 disabled）；`values.yaml` +`alertingExternalSecret` 块。`infra/helm/api-gateway/templates/prometheusrule.yaml` — NEW（§11.3 四条 RED 规则，含 `DataExportSuspect` §9.1 egress 哨兵）+ `values.yaml` `prometheusRule` 块。`scripts/ci/verify-alertmanager-routes.sh`(+`.test.sh`) — NEW 金标门（critical→pagerduty + 双通道 + 非黑洞 catch-all + secret-ref），接 `infra-lint.yml` `verify-alertmanager-routes` job。
+> - **AC2 (console)**: `apps/console/lib/intercom/{config,region,boot-payload,hmac,identity,messenger}.ts` — NEW（ZERO-PII boot builder + PRC region-gate + DORMANT HMAC seam，secret server-only）；`apps/console/lib/request-id.ts` — NEW（`HE_REQUEST_ID_REGEX` §11.5 单一源，L-2）；`apps/console/app/api/intercom-hash/route.ts` — NEW BFF（dormant 404，非网关端点/proto/migration）；`components/business/IntercomMessenger.tsx` — NEW（authed-only mount + graceful degrade + locale/logout 生命周期）；`app/[locale]/(console)/layout.tsx` — EDIT（mount + cf-ipcountry region-gate）；`components/business/RequestLogsTable.tsx` — EDIT（`he_request_id` 一键带入客服会话）；`messages/{10 locales}/support.json` — NEW i18n namespace（en+zh-CN 译，其余 8 en 回落）+ `packages/i18n-keys/src/support.ts`（手工生成）。
+> - **AC3 (docs+CI)**: `docs/runbooks/go-live-checklist.md` — NEW 6-section operator runbook（每项 `[Source:]` 可追溯，SDK 首发 PO-gated）；`scripts/ci/verify-go-live-checklist.sh` — NEW 轻量 verifier（接 `infra-lint.yml`）；`.github/workflows/release-sdk-{python,typescript,go}.yml` — NEW OIDC trusted-publishing 管线（**dry-run only**，真发布 PO-gated，workflow_dispatch-only）。
+> - **测试**: `apps/console/__tests__/10.7-intercom.test.ts`（29 vitest）+ `components/business/IntercomMessenger.test.tsx`（6 vitest）+ `packages/shared-types/__tests__/10.7-{alerting,launch}.test.ts`（29 vitest）+ 两个 bash 金标门/harness。NO gateway/proto/DB/migration/envelope 改动（L-005 fence）。
+> 条目添加来源：Story 10.7 Dev（Linus），2026-06-16.
+
 > **注**: Story 4.8 — adapter-fake CI-only binary annotation. Each of the six
 > per-vendor `apps/adapters/{vendor}/cmd/fake-upstream/main.go` binaries is
 > a TEST-ONLY HTTP server that replaces the real vendor upstream in the

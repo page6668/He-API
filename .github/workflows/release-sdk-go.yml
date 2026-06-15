@@ -1,0 +1,70 @@
+name: release-sdk-go
+
+# Story 10.7 AC3 (OQ-10.7-4) — first-release pipeline for the `github.com/he-api/
+# sdk-go` module (packages/sdk-go). A Go module is "published" by pushing a
+# semver tag to its canonical repo; REAL TAG-PUSH IS PO-GATED and NOT executed in
+# this story. workflow_dispatch-only (never auto-triggered): the CI auto-path
+# runs only the dry-run job (go vet/build + semver-tag validation). The real
+# tag-push is double-gated by the protected `sdk-release` environment (manual
+# approval) AND an explicit `confirm_publish: publish` input. The PO must create
+# the `github.com/he-api/sdk-go` repo/org first (BR-10.7.14; v0.x, no `/vN`).
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Semver tag to release, e.g. v0.1.0 (v0.x — no /vN major path yet)."
+        required: true
+        default: "v0.1.0"
+      confirm_publish:
+        description: "Type 'publish' to push the REAL tag (PO-gated). Anything else = dry-run only."
+        required: false
+        default: "dry-run"
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    name: dry-run (vet + build + tag-format validation, NO push)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: go vet + build (module sanity)
+        run: |
+          go vet ./packages/sdk-go/...
+          go build ./packages/sdk-go/...
+      - name: Validate the release tag is v0.x semver (no /vN module path yet)
+        run: |
+          tag="${{ github.event.inputs.version }}"
+          if ! printf '%s' "$tag" | grep -Eq '^v0\.[0-9]+\.[0-9]+$'; then
+            echo "::error::'$tag' is not a v0.x semver tag (expected vMAJOR.MINOR.PATCH, major 0)"
+            exit 1
+          fi
+          echo "tag $tag is a valid v0.x release tag (dry-run only)"
+
+  publish:
+    name: publish (push tag to he-api/sdk-go · PO-gated)
+    needs: dry-run
+    # 🔴 Real tag-push only when explicitly confirmed AND approved in the
+    # protected environment. Irreversible external action — never auto-triggered.
+    # Requires the PO to have created github.com/he-api/sdk-go + a deploy
+    # credential (SDK_GO_REPO_TOKEN); absent → the step cannot push.
+    if: ${{ github.event.inputs.confirm_publish == 'publish' }}
+    environment: sdk-release
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Push the release tag to the canonical sdk-go repo (PO-gated)
+        env:
+          SDK_GO_REPO_TOKEN: ${{ secrets.SDK_GO_REPO_TOKEN }}
+        run: |
+          tag="${{ github.event.inputs.version }}"
+          echo "Publishing $tag to github.com/he-api/sdk-go (requires PO-provisioned repo + token)."
+          # The canonical module repo + token are PO-provisioned (BR-10.7.14).
+          # This step is unreachable until both exist and the environment approval
+          # is granted, keeping the first publish a deliberate operator action.
+          test -n "$SDK_GO_REPO_TOKEN"

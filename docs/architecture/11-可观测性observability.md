@@ -83,6 +83,15 @@
 - **P2 (medium)**: 飞书 + Slack
 - **P3 (info)**: Slack
 
+> **Story 10.7 (AC1) — wiring LANDED**: this matrix is now the source of truth for
+> the inline Alertmanager route tree in `infra/helm/observability/kube-prometheus-stack/values-staging.yaml`.
+> P0 is **dual-channel** (`severity=critical → PagerDuty + 飞书 mirror`, `continue:true`)
+> so a single-channel delivery failure can't silence a P0; an explicit non-blackhole
+> catch-all is mandatory. Receiver secrets (PagerDuty routing key / 飞书 / Slack webhooks /
+> SMTP password) are mounted via ExternalSecret→Vault `kv/data/he-api/alerting/*` and
+> referenced by `*_file` (never inline). The mapping is locked by the CI gold gate
+> `scripts/ci/verify-alertmanager-routes.sh` (route drift = silent P0 loss).
+
 ## 11.5 Span Attribute Naming
 
 > Landed by Story 3.6 per Architect Round 1 High-Issue ruling (BR-2.8). Source of truth for all `he.*` OTel span attributes the gateway + downstream services emit.

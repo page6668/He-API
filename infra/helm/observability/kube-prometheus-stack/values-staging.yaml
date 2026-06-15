@@ -76,6 +76,103 @@ alertmanager:
       limits:
         cpu: 200m
         memory: 128Mi
+    # Story 10.7 AC1 (OQ-10.7-1.2) — mount the alerting secrets provisioned by
+    # the ExternalSecret (templates/externalsecret-alerting.yaml ← Vault
+    # kv/data/he-api/alerting/*) at /etc/alertmanager/secrets/<name>/<key>, so
+    # receivers reference them via *_file (the secret values NEVER inline in git;
+    # BR-10.7.3 / BR-C-7). dev/CI leave externalSecret disabled → the receivers
+    # read from absent files and stay effectively disabled (no real keys).
+    secrets:
+      - alertmanager-alerting-secrets
+
+  # Story 10.7 AC1 — the LAST-MILE consume side. The emit side (auth-svc /
+  # routing-svc / api-gateway PrometheusRules) already labels every alert with
+  # `severity`(warning|critical) + `channel`(feishu|pagerduty). This route tree
+  # is the §11.4 channel matrix as SoT; the verify-alertmanager-routes.sh gold
+  # gate (CI) locks `severity=critical → pagerduty` + the non-blackhole catch-all
+  # against drift (route drift = silent P0 loss, BR-10.7.6).
+  # [Source: docs/architecture/11-可观测性observability.md §11.4:81-84]
+  config:
+    global:
+      resolve_timeout: 5m
+      # P1 email leg (§11.4). smarthost/from are non-secret config; the SMTP
+      # password is mounted via _file (never inline).
+      smtp_smarthost: "smtp.internal.he-api.com:587"
+      smtp_from: "alerts@he-api.com"
+      smtp_auth_username: "alerts@he-api.com"
+      smtp_auth_password_file: /etc/alertmanager/secrets/alertmanager-alerting-secrets/smtp_auth_password
+      smtp_require_tls: true
+    route:
+      # Explicit, non-blackhole default receiver (OQ-10.7-1.4 / BR-10.7.6): an
+      # unmatched alert must still surface (飞书), never vanish.
+      receiver: catch-all
+      group_by: ['alertname', 'service']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+        # P0 — severity=critical → PagerDuty, then CONTINUE so the same critical
+        # ALSO hits the 飞书 mirror (dual-channel, OQ-10.7-1.3): a single-channel
+        # delivery failure can never silence a P0.
+        - matchers: ['severity = "critical"']
+          receiver: pagerduty
+          continue: true
+        - matchers: ['severity = "critical"']
+          receiver: feishu
+        # P1 — warning routed to 飞书 (channel=feishu) → 飞书 + 邮件.
+        - matchers: ['channel = "feishu"']
+          receiver: feishu-email
+        # P2/P3 — channel=slack → 飞书 + Slack (§11.4 medium/info).
+        - matchers: ['channel = "slack"']
+          receiver: feishu-slack
+    receivers:
+      # Non-blackhole catch-all — still notifies 飞书 so an unmatched/unlabelled
+      # alert is visible (not dropped).
+      - name: catch-all
+        webhook_configs:
+          - url_file: /etc/alertmanager/secrets/alertmanager-alerting-secrets/feishu_webhook_url
+            send_resolved: true
+      # P0 — PagerDuty (Events API v2). routing_key via *_file (Alertmanager
+      # ≥0.26, L-1). The `details` interpolate ONLY non-PII operational metadata
+      # (alertname/severity/service/team/runbook_url) — NEVER user_id/email/IP/
+      # body (BR-10.7.4, §11.5 allow-list; §9.1: PagerDuty 仅传 metric 标识).
+      - name: pagerduty
+        pagerduty_configs:
+          - routing_key_file: /etc/alertmanager/secrets/alertmanager-alerting-secrets/pagerduty_routing_key
+            send_resolved: true
+            description: '{{ .CommonAnnotations.summary }}'
+            details:
+              alertname: '{{ .CommonLabels.alertname }}'
+              severity: '{{ .CommonLabels.severity }}'
+              service: '{{ .CommonLabels.service }}'
+              team: '{{ .CommonLabels.team }}'
+              runbook_url: '{{ .CommonAnnotations.runbook_url }}'
+      # 飞书 mirror for P0 (and reused by the catch-all path).
+      - name: feishu
+        webhook_configs:
+          - url_file: /etc/alertmanager/secrets/alertmanager-alerting-secrets/feishu_webhook_url
+            send_resolved: true
+      # P1 — 飞书 + 邮件.
+      - name: feishu-email
+        webhook_configs:
+          - url_file: /etc/alertmanager/secrets/alertmanager-alerting-secrets/feishu_webhook_url
+            send_resolved: true
+        email_configs:
+          - to: "oncall@he-api.com"
+            send_resolved: true
+            headers:
+              Subject: '[He-API] {{ .CommonLabels.alertname }} ({{ .CommonLabels.severity }})'
+      # P2/P3 — 飞书 + Slack. api_url via *_file (no inline webhook).
+      - name: feishu-slack
+        webhook_configs:
+          - url_file: /etc/alertmanager/secrets/alertmanager-alerting-secrets/feishu_webhook_url
+            send_resolved: true
+        slack_configs:
+          - api_url_file: /etc/alertmanager/secrets/alertmanager-alerting-secrets/slack_webhook_url
+            channel: '#he-api-alerts'
+            send_resolved: true
+            title: '{{ .CommonLabels.alertname }} ({{ .CommonLabels.severity }})'
+            text: '{{ .CommonAnnotations.summary }} — {{ .CommonAnnotations.runbook_url }}'
 
 # M-3 ruling option (a): node-exporter requires hostNetwork/hostPID/hostPath,
 # which the `monitoring` namespace's `pod-security.kubernetes.io/enforce: baseline`

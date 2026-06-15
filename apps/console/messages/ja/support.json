@@ -1,0 +1,10 @@
+{
+  "entry": {
+    "label": "Contact support",
+    "ariaLabel": "Open customer support chat"
+  },
+  "logEntry": {
+    "action": "Get help with this request",
+    "ariaLabel": "Open support chat for request {requestId}"
+  }
+}

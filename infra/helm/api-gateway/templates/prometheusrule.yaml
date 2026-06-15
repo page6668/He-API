@@ -1,0 +1,98 @@
+{{- if .Values.prometheusRule.enabled }}
+# Story 10.7 AC1 (OQ-10.7-5 RULE IN) — gateway RED alert rules (§11.3).
+#
+# §11.3 defines four core gateway alerts but no PrometheusRule existed under
+# infra/helm/api-gateway/templates/ (only deployment/service/networkpolicy/
+# cronjob/configmap). Without them the Story-10.7 Alertmanager wiring has no
+# gateway RED signal to route. The `severity` + `channel` labels MUST match the
+# Alertmanager route config (kube-prometheus-stack values, Story 10.7 AC1):
+# critical → PagerDuty (+ 飞书 mirror); warning(channel=feishu) → 飞书 + email.
+#
+# `DataExportSuspect` is the §9.1 runtime sentinel: any overseas egress (which
+# should be 0) pages immediately — it backstops the OQ-10.7-2 zero-PII Intercom
+# egress contract (a misconfig that leaked PII to a US SaaS would trip it).
+#
+# Annotation templates interpolate ONLY non-PII operational metadata
+# (alertname / severity / service / runbook_url) — never user_id/email/IP/body
+# (BR-10.7.4, §11.5 allow-list, §9.1).
+#
+# [Source: docs/architecture/11-可观测性observability.md §11.3:37-77, §11.4:81-84]
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "api-gateway.fullname" . }}
+  labels:
+    {{- include "api-gateway.labels" . | nindent 4 }}
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: api-gateway.red-§11.3
+      interval: 30s
+      rules:
+        - alert: GatewayP95LatencyHigh
+          expr: |
+            histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > {{ .Values.prometheusRule.p95LatencySecondsThreshold | default "0.5" }}
+          for: 5m
+          labels:
+            severity: warning
+            team: gateway
+            service: api-gateway
+            channel: feishu
+          annotations:
+            summary: "api-gateway P95 latency高于阈值"
+            description: |
+              Gateway P95 request latency exceeded
+              {{ .Values.prometheusRule.p95LatencySecondsThreshold | default "0.5" }}s over the last 5 minutes.
+            runbook_url: "https://runbooks.he-api.com/gateway/p95-latency-high"
+
+        - alert: GatewayErrorRateHigh
+          expr: |
+            sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > {{ .Values.prometheusRule.errorRateThreshold | default "0.01" }}
+          for: 5m
+          labels:
+            severity: critical
+            team: gateway
+            service: api-gateway
+            channel: pagerduty
+          annotations:
+            summary: "api-gateway 5xx 错误率高于阈值"
+            description: |
+              Gateway 5xx error ratio exceeded
+              {{ .Values.prometheusRule.errorRateThreshold | default "0.01" }} over the last 5 minutes.
+            runbook_url: "https://runbooks.he-api.com/gateway/error-rate-high"
+
+        - alert: UpstreamModelDown
+          expr: |
+            sum(rate(adapter_upstream_errors_total[5m])) > {{ .Values.prometheusRule.upstreamErrorRateThreshold | default "0.1" }}
+          for: 3m
+          labels:
+            severity: warning
+            team: gateway
+            service: api-gateway
+            channel: feishu
+            routing_action: failover
+          annotations:
+            summary: "上游模型错误率升高 — failover 触发"
+            description: |
+              adapter_upstream_errors_total rate exceeded
+              {{ .Values.prometheusRule.upstreamErrorRateThreshold | default "0.1" }} over the last 5 minutes;
+              the gateway should be failing over (he_routing_failover_total, Story 6.3).
+            runbook_url: "https://runbooks.he-api.com/gateway/upstream-model-down"
+
+        - alert: DataExportSuspect
+          expr: |
+            increase(network_egress_to_overseas_bytes[10m]) > {{ .Values.prometheusRule.overseasEgressBytesThreshold | default "0" }}
+          for: 1m
+          labels:
+            severity: critical
+            team: gateway
+            service: api-gateway
+            channel: pagerduty
+          annotations:
+            summary: "检测到向境外网络的数据传输（不应发生）— §9.1 数据不出境哨兵"
+            description: |
+              network_egress_to_overseas_bytes increased over the last 10 minutes.
+              Per §9.1 数据不出境 this MUST be 0; any non-zero value is the highest-priority
+              compliance incident and backstops the OQ-10.7-2 zero-PII Intercom contract.
+            runbook_url: "https://runbooks.he-api.com/compliance/data-export-suspect"
+{{- end }}

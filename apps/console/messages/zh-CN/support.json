@@ -1,0 +1,10 @@
+{
+  "entry": {
+    "label": "联系客服",
+    "ariaLabel": "打开客服在线聊天"
+  },
+  "logEntry": {
+    "action": "就此请求获取帮助",
+    "ariaLabel": "打开客服聊天并关联请求 {requestId}"
+  }
+}

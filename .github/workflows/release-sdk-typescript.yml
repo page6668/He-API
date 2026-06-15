@@ -1,0 +1,71 @@
+name: release-sdk-typescript
+
+# Story 10.7 AC3 (OQ-10.7-4) — first-release pipeline for the `@he-api/sdk` npm
+# package (packages/sdk-typescript). Built here; REAL PUBLISH IS PO-GATED and NOT
+# executed in this story. workflow_dispatch-only (never auto-triggered): the CI
+# auto-path runs only the dry-run job (`npm pack --dry-run`). The real publish is
+# double-gated by the protected `sdk-release` environment (manual approval) AND
+# an explicit `confirm_publish: publish` input. Publish uses npm provenance
+# (OIDC `id-token`) — the PO must own the `@he-api` scope first (BR-10.7.14).
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_publish:
+        description: "Type 'publish' to run the REAL npm publish (PO-gated). Anything else = dry-run only."
+        required: false
+        default: "dry-run"
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    name: dry-run (build + npm pack --dry-run, NO publish)
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: packages/sdk-typescript
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+      - name: Install + build
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @he-api/sdk build
+      - name: npm pack --dry-run (validates the tarball — never publishes)
+        run: npm pack --dry-run
+
+  publish:
+    name: publish (npm · provenance · PO-gated)
+    needs: dry-run
+    # 🔴 Real publish only when explicitly confirmed AND approved in the
+    # protected environment. Irreversible external action — never auto-triggered.
+    if: ${{ github.event.inputs.confirm_publish == 'publish' }}
+    environment: sdk-release
+    runs-on: ubuntu-22.04
+    permissions:
+      id-token: write   # npm provenance (OIDC)
+      contents: read
+    defaults:
+      run:
+        working-directory: packages/sdk-typescript
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+      - name: Install + build
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @he-api/sdk build
+      - name: npm publish (public, provenance)
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

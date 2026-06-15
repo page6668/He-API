@@ -9,6 +9,15 @@ on:
       - 'apps/sample-otel-app/**'
       - '.github/workflows/infra-lint.yml'
       - '.tflint.hcl'
+      # Story 10.7 AC1 — re-run the Alertmanager route gold gate when it changes.
+      - 'scripts/ci/verify-alertmanager-routes.sh'
+      - 'scripts/ci/verify-alertmanager-routes.test.sh'
+      # Story 10.7 AC3 — re-run the go-live verifier on runbook / pipeline changes.
+      - 'scripts/ci/verify-go-live-checklist.sh'
+      - 'docs/runbooks/go-live-checklist.md'
+      - '.github/workflows/release-sdk-python.yml'
+      - '.github/workflows/release-sdk-typescript.yml'
+      - '.github/workflows/release-sdk-go.yml'
 
 # Match the convention set by Story 1.2 (m-new-1) — group per ref; cancel only on PR pushes.
 concurrency:
@@ -218,3 +227,33 @@ jobs:
           docker run --rm -v "${PWD}/infra/k8s-base:/manifests" \
             ghcr.io/yannh/kubeconform:latest \
             -strict -summary /manifests
+
+  # Story 10.7 AC1 (BR-10.7.6) — Alertmanager route integrity gold gate. A
+  # drifted route (critical → non-PagerDuty), a missing non-blackhole catch-all,
+  # or a plaintext secret in the committed values is a launch-grade incident, so
+  # this gate fails the PR. Mirrors the Story 5.4/7.2 verify-cron-schedule gate.
+  verify-alertmanager-routes:
+    name: verify-alertmanager-routes
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Alertmanager route gold gate (+ its drift tests)
+        run: |
+          chmod +x scripts/ci/verify-alertmanager-routes.sh scripts/ci/verify-alertmanager-routes.test.sh
+          scripts/ci/verify-alertmanager-routes.sh
+          scripts/ci/verify-alertmanager-routes.test.sh
+
+  # Story 10.7 AC3 — go-live launch-readiness verifier (machine-checkable items).
+  verify-go-live-checklist:
+    name: verify-go-live-checklist
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Go-live checklist verifier
+        run: |
+          chmod +x scripts/ci/verify-go-live-checklist.sh
+          scripts/ci/verify-go-live-checklist.sh
