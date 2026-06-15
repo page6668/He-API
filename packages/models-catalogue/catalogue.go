@@ -31,7 +31,14 @@ type Capabilities struct {
 	// ASR id (doubao-asr) is Chat:false, Transcription:true. The gateway gates
 	// /v1/audio/transcriptions on Transcription==true and /v1/chat/completions
 	// on Chat==true (the BR-1.6 do-not-regress fence).
-	Transcription       bool
+	Transcription bool
+	// Speech (Story 9.7) — the model synthesizes speech at POST /v1/audio/speech
+	// (OpenAI-Audio-Speech-compatible TTS). All existing chat/vision/ASR models
+	// are Speech:false (Go zero value); the TTS id (doubao-tts) is Chat:false,
+	// Transcription:false, Speech:true. The gateway gates /v1/audio/speech on
+	// Speech==true (the BR-1.6 do-not-regress fence, paired with the 9.6
+	// Transcription + Chat:true fences).
+	Speech              bool
 	ContextWindowTokens int
 	MaxOutputTokens     int
 }

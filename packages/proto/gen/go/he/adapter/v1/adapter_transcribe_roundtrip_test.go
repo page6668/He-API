@@ -159,8 +159,9 @@ func TestFileDescriptor_AfterHandEdit(t *testing.T) {
 	}
 
 	msgs := fd.Messages()
-	if msgs.Len() != 8 {
-		t.Fatalf("message count = %d, want 8 (6 existing + 2 new)", msgs.Len())
+	// 9.7 added SynthesizeRequest/SynthesizeResponse (additive) → 10 total.
+	if msgs.Len() != 10 {
+		t.Fatalf("message count = %d, want 10 (6 chat + 2 transcribe + 2 synthesize)", msgs.Len())
 	}
 	for _, name := range []string{"ChatRequest", "ChatMessage", "ChatChunk", "Choice", "Delta", "Usage", "TranscribeRequest", "TranscribeResponse"} {
 		if msgs.ByName(protoreflect.Name(name)) == nil {
@@ -172,8 +173,9 @@ func TestFileDescriptor_AfterHandEdit(t *testing.T) {
 	if svc == nil {
 		t.Fatal("AdapterService missing")
 	}
-	if svc.Methods().Len() != 2 {
-		t.Fatalf("method count = %d, want 2 (Chat + Transcribe)", svc.Methods().Len())
+	// 9.7 added the Synthesize method (additive) → 3 total.
+	if svc.Methods().Len() != 3 {
+		t.Fatalf("method count = %d, want 3 (Chat + Transcribe + Synthesize)", svc.Methods().Len())
 	}
 	m := svc.Methods().ByName("Transcribe")
 	if m == nil {

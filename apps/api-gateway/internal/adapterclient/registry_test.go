@@ -818,3 +818,31 @@ func TestRegistry_VisionIds_ShareVendorHandle_M2(t *testing.T) {
 		t.Fatalf("qwen-vl-max and glm-4v must live behind DISTINCT vendor handles")
 	}
 }
+
+// 9.7-INT-014 — doubao-tts resolves to DOUBAO_ADAPTER_ENDPOINT and SHARES the
+// Doubao ClientHandle with chat (doubao-pro) + ASR (doubao-asr) via M2
+// endpoint-dedup; the resolved handle satisfies the Synthesizer seam.
+func TestRegistry_DoubaoTTS_SharesHandle_AndSatisfiesSynthesizer(t *testing.T) {
+	reg := NewRegistry(map[string]string{
+		DoubaoProModelID: "https://doubao",
+		DoubaoASRModelID: "https://doubao",
+		DoubaoTTSModelID: "https://doubao",
+	})
+	hPro, okPro := reg.Resolve(DoubaoProModelID)
+	hTTS, okTTS := reg.Resolve(DoubaoTTSModelID)
+	if !okPro || !okTTS {
+		t.Fatalf("doubao-pro ok=%v, doubao-tts ok=%v; want both true", okPro, okTTS)
+	}
+	if hPro != hTTS {
+		t.Fatalf("doubao-tts must share the doubao ClientHandle (M2 endpoint-dedup); got %p vs %p", hPro, hTTS)
+	}
+	// The production handle must satisfy the Story-9.7 Synthesizer seam (the
+	// speech handler type-asserts to it).
+	if _, ok := hTTS.(Synthesizer); !ok {
+		t.Fatalf("resolved doubao-tts handle (%T) does not implement Synthesizer", hTTS)
+	}
+	// It also still satisfies Transcriber (9.6) — the same connect handle serves all.
+	if _, ok := hTTS.(Transcriber); !ok {
+		t.Fatalf("resolved doubao handle does not implement Transcriber (9.6 regression)")
+	}
+}

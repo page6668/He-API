@@ -128,6 +128,17 @@ const (
 // adapter-side env, distinct from the Ark chat config.
 const DoubaoASRModelID = "doubao-asr"
 
+// Story 9.7 — Doubao TTS model id. The text-to-speech model rides the EXISTING
+// Doubao service (Q-TTS-TOPOLOGY, single-service-per-vendor): it resolves to
+// DOUBAO_ADAPTER_ENDPOINT and SHARES the Doubao ClientHandle via M2
+// endpoint-dedup (the same handle that serves doubao-pro/doubao-lite Chat +
+// doubao-asr Transcribe). The Doubao adapter serves the additive `Synthesize`
+// RPC; the 5 non-Doubao adapters return CodeUnimplemented (never reached — only
+// doubao-tts resolves here). The TTS upstream config (Volcano base URL + token +
+// app-id + cluster + voice_type) is adapter-side env, distinct from the chat +
+// ASR config.
+const DoubaoTTSModelID = "doubao-tts"
+
 // Story 4.6 — Ernie (Baidu Qianfan v2 OpenAI-compat) adapter constants.
 //
 // BR-1.10 multi-model-id-per-service dispatch DEGENERATE N=1 case:
@@ -170,6 +181,17 @@ type ClientHandle interface {
 // as a clean 502/unimplemented at the call site.
 type Transcriber interface {
 	Transcribe(ctx contextLike, req *adapterv1.TranscribeRequest, headers http.Header) (*adapterv1.TranscribeResponse, error)
+}
+
+// Synthesizer is the Story-9.7 TTS seam alongside ClientHandle.Chat +
+// Transcriber. Like Transcriber it is a SEPARATE optional interface (not a
+// method on ClientHandle) so existing chat-path fakes are unperturbed (additive
+// blast radius): only the production connectClientHandle + the Doubao service
+// satisfy it, and the speech handler type-asserts the resolved handle to it. A
+// handle that does not implement Synthesizer (no adapter for a speech-routed
+// model) surfaces as a clean 502/unimplemented at the call site.
+type Synthesizer interface {
+	Synthesize(ctx contextLike, req *adapterv1.SynthesizeRequest, headers http.Header) (*adapterv1.SynthesizeResponse, error)
 }
 
 // contextLike is a forward-declared type alias to context.Context — kept
@@ -271,6 +293,7 @@ func LoadFromEnv() *Registry {
 		DoubaoProModelID:  doubaoEndpoint,
 		DoubaoLiteModelID: doubaoEndpoint,
 		DoubaoASRModelID:  doubaoEndpoint, // Story 9.6 — ASR rides the doubao service (shared handle, M2 endpoint-dedup)
+		DoubaoTTSModelID:  doubaoEndpoint, // Story 9.7 — TTS rides the doubao service (shared handle, M2 endpoint-dedup)
 		ErnieModelID:      os.Getenv(ErnieAdapterEndpointEnv),
 	})
 }
@@ -329,6 +352,25 @@ func (c *connectClientHandle) Transcribe(ctx contextLike, req *adapterv1.Transcr
 		}
 	}
 	resp, err := c.client.Transcribe(ctx, connectReq)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Msg, nil
+}
+
+// Synthesize implements the Story-9.7 Synthesizer seam (unary TTS). Mirrors
+// Transcribe: forwards the propagated headers (X-He-Request-Id etc.) and the
+// SynthesizeRequest over the additive Connect-RPC. Only the Doubao service
+// serves this; the 5 non-Doubao adapters return CodeUnimplemented (never
+// reached — only doubao-tts resolves to a handle here).
+func (c *connectClientHandle) Synthesize(ctx contextLike, req *adapterv1.SynthesizeRequest, headers http.Header) (*adapterv1.SynthesizeResponse, error) {
+	connectReq := connect.NewRequest(req)
+	for k, vs := range headers {
+		for _, v := range vs {
+			connectReq.Header().Add(k, v)
+		}
+	}
+	resp, err := c.client.Synthesize(ctx, connectReq)
 	if err != nil {
 		return nil, err
 	}

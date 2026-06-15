@@ -138,7 +138,14 @@ func New(db DB, redis Redis, pricer Pricer, logger *slog.Logger, m *Metrics) *Le
 func (l *Ledger) Apply(ctx context.Context, ev *billingv1.UsageEvent) (Result, error) {
 	// Cost is computed BEFORE the tx (pure, no I/O). ErrNoPricing → DLQ without
 	// touching PG (no ledger row, no charge — BR-D-8).
-	res, err := l.pricer.Current().ComputeCost(ev.GetModel(), ev.GetPromptTokens(), ev.GetCompletionTokens(), ev.GetAudioDurationSeconds(), ev.GetBillingMode())
+	res, err := l.pricer.Current().ComputeCost(pricing.CostInput{
+		ModelID:              ev.GetModel(),
+		PromptTokens:         ev.GetPromptTokens(),
+		CompletionTokens:     ev.GetCompletionTokens(),
+		AudioDurationSeconds: ev.GetAudioDurationSeconds(),
+		CharacterCount:       ev.GetCharacterCount(), // Story 9.7 — TTS rune count (0 for non-TTS)
+		Mode:                 ev.GetBillingMode(),
+	})
 	if err != nil {
 		if errors.Is(err, pricing.ErrNoPricing) {
 			l.metrics.deductionInc(ctx, "no_pricing")

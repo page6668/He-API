@@ -74,6 +74,11 @@ var defaultBoundModelIDs = []string{"doubao-pro", "doubao-lite"}
 // on it, so they cannot drift.
 const asrModelID = "doubao-asr"
 
+// ttsModelID is the catalogue/registry id for the Doubao TTS model (Story 9.7).
+// The observability auto-append (when TTS is configured) and the conditional
+// boot gate key on it, so they cannot drift.
+const ttsModelID = "doubao-tts"
+
 // asrBootGateError implements the M-2 Round-2 Architect ruling (CONDITIONAL
 // boot fail-fast). An operator who EXPLICITLY binds `doubao-asr` (declares
 // intent to serve ASR) but leaves the ASR upstream env unset has a deploy-time
@@ -91,6 +96,24 @@ func asrBootGateError(boundModelIDs []string, asrConfigured bool) error {
 	for _, id := range boundModelIDs {
 		if id == asrModelID {
 			return errors.New("doubao-asr is in DOUBAO_BOUND_MODEL_IDS but the ASR upstream is not configured — set DOUBAO_ASR_UPSTREAM_{API_TOKEN,APP_ID,CLUSTER}")
+		}
+	}
+	return nil
+}
+
+// ttsBootGateError is the Story-9.7 mirror of asrBootGateError (the same M-2
+// CONDITIONAL boot fail-fast): if the operator EXPLICITLY binds `doubao-tts` but
+// leaves the TTS upstream env unset, that deploy-time misconfiguration MUST
+// surface at boot — never at a paying customer's first Synthesize on a
+// money-handling endpoint. A deployment that does NOT bind `doubao-tts` boots
+// normally and relies on the request-time CodeUnavailable defence-in-depth.
+func ttsBootGateError(boundModelIDs []string, ttsConfigured bool) error {
+	if ttsConfigured {
+		return nil
+	}
+	for _, id := range boundModelIDs {
+		if id == ttsModelID {
+			return errors.New("doubao-tts is in DOUBAO_BOUND_MODEL_IDS but the TTS upstream is not configured — set DOUBAO_TTS_UPSTREAM_{API_TOKEN,APP_ID,CLUSTER}")
 		}
 	}
 	return nil
@@ -172,6 +195,38 @@ func main() {
 		}
 		logger.Warn("doubao ASR upstream not configured — Transcribe will fail-fast (set DOUBAO_ASR_UPSTREAM_{API_TOKEN,APP_ID,CLUSTER})",
 			slog.String("event", "asr_startup_validation"))
+	}
+
+	// Story 9.7 — Volcano (火山引擎) TTS upstream. DISTINCT config from the Ark chat
+	// + the 9.6 ASR clients (a different product/endpoint). If unset, the adapter
+	// still serves Chat + Transcribe normally and Synthesize fail-fasts with
+	// CodeUnavailable at request time (the 4.5 BR-1.12 precedent — a chat/ASR-only
+	// deployment is unaffected). When the TTS envs are present, doubao-tts is served.
+	ttsCfg := upstream.TTSConfig{
+		BaseURL:   envOr("DOUBAO_TTS_UPSTREAM_BASE_URL", "https://openspeech.bytedance.com"),
+		Path:      envOr("DOUBAO_TTS_UPSTREAM_PATH", upstream.DefaultTTSPath),
+		Token:     os.Getenv("DOUBAO_TTS_UPSTREAM_API_TOKEN"),
+		AppID:     os.Getenv("DOUBAO_TTS_UPSTREAM_APP_ID"),
+		Cluster:   os.Getenv("DOUBAO_TTS_UPSTREAM_CLUSTER"),
+		VoiceType: os.Getenv("DOUBAO_TTS_UPSTREAM_VOICE_TYPE"),
+	}
+	if ttsCfg.Configured() {
+		svc = svc.WithTTSClient(upstream.NewTTSClient(ttsCfg, timeout))
+		boundModelIDs = append(append([]string{}, boundModelIDs...), ttsModelID) // observability tag
+		logger.Info("doubao TTS upstream configured", slog.String("event", "tts_startup"), slog.String("base_url", ttsCfg.BaseURL))
+	} else {
+		// Conditional boot fail-fast (M-2 ruling, repeated for TTS). boundModelIDs
+		// here is the operator's EXPLICIT bound set (the ASR auto-append above may
+		// have added asrModelID, which never matches the doubao-tts gate key).
+		if err := ttsBootGateError(boundModelIDs, false); err != nil {
+			logger.Error("TTS boot gate failed — refusing to start",
+				slog.String("event", "tts_startup_validation"),
+				slog.String("error", err.Error()),
+			)
+			os.Exit(1)
+		}
+		logger.Warn("doubao TTS upstream not configured — Synthesize will fail-fast (set DOUBAO_TTS_UPSTREAM_{API_TOKEN,APP_ID,CLUSTER})",
+			slog.String("event", "tts_startup_validation"))
 	}
 
 	// Story 9.4 (T6.1, BR-TR-6): TracerProvider + global W3C propagator BEFORE the

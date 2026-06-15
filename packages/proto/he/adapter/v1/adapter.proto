@@ -33,6 +33,20 @@ service AdapterService {
   // (project_toolchain_env_limits) → the vendored adapter.pb.go +
   // adapterv1connect are hand-edited and round-trip-tested.
   rpc Transcribe(TranscribeRequest) returns (TranscribeResponse);
+
+  // Story 9.7 (Q-TTS-WIRE, RATIFIED) — ADDITIVE unary RPC for text-to-speech
+  // synthesis (OpenAI-Audio-Speech-compatible TTS). Text-in/audio-OUT is the
+  // INVERSE of `Transcribe` (audio-in/text-out) and fits neither it nor the
+  // streaming-text `Chat`, so a new RPC is required. Adding an RPC method + new
+  // messages shifts NO existing wire tag → wire-compatible: the 5 non-Doubao
+  // adapters never register a `Synthesize` handler and return
+  // `connect.CodeUnimplemented`; only `doubao-tts` resolves to the Doubao
+  // service which serves it. Unary (9.7 returns a single complete audio body —
+  // no streaming, BR-1.5). `buf` cannot run locally
+  // (project_toolchain_env_limits) → the vendored adapter.pb.go +
+  // adapterv1connect are hand-edited (rawDesc regenerated programmatically) and
+  // round-trip-tested.
+  rpc Synthesize(SynthesizeRequest) returns (SynthesizeResponse);
 }
 
 // ChatRequest carries the OpenAI-compatible inbound request shape (minus the
@@ -133,4 +147,34 @@ message TranscribeResponse {
   string language = 2;
   double duration_seconds = 3;      // vendor-reported; the billing lever (AC3 BR-2.5)
   bytes segments_json = 4;          // passthrough — JSON-encoded segment array; empty when absent
+}
+
+// Story 9.7 — SynthesizeRequest carries an OpenAI-Audio-Speech-compatible
+// text-to-speech request. The gateway validates every field (model is
+// Speech-capable; input ≤ 4096 runes; voice in the resolved set;
+// response_format ∈ {mp3,wav,opus}; speed ∈ [0.25,4.0]) BEFORE sending. The
+// adapter does a NON-identity translation to the Volcano TTS upstream (voice →
+// voice_type, response_format → encoding, speed → speed_ratio). `he_request_id`
+// is propagated for billing/trace correlation (mirrors ChatRequest field 9 /
+// TranscribeRequest field 8). Appended AFTER the existing messages so the
+// vendored msgTypes indices 0-7 are unperturbed (additive blast-radius proof).
+message SynthesizeRequest {
+  string model = 1;
+  string input = 2;                 // the text to synthesize (≤ 4096 runes, gateway-enforced)
+  string voice = 3;                 // voice id (adapter-owned Volcano voice_type set)
+  string response_format = 4;       // mp3 | wav | opus (gateway-validated; default mp3)
+  optional double speed = 5;        // optional speech rate ∈ [0.25, 4.0]; default 1.0
+  string he_request_id = 6;         // propagated from gateway (billing/trace correlation)
+}
+
+// Story 9.7 — SynthesizeResponse carries the synthesized audio inline as bounded
+// `bytes` (≤ 20 MiB, adapter+gateway-enforced — BR-4.3). `mime_type` rides back
+// so the gateway sets the HTTP Content-Type (cross-checked against the requested
+// response_format, BR-2.6). NOTE: NO character_count field — the gateway is the
+// SOLE authority for the billed rune count (it computes len([]rune(input))
+// itself and NEVER trusts a vendor/adapter value — BR-4.5 / Architect Low-1).
+// Appended at msgTypes index 9.
+message SynthesizeResponse {
+  bytes audio = 1;
+  string mime_type = 2;             // audio/mpeg | audio/wav | audio/ogg
 }

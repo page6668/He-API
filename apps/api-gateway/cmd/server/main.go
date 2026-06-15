@@ -626,6 +626,28 @@ func main() {
 	mux.Handle("POST /v1/audio/transcriptions",
 		bearerAuth.RequireAPIKey(analyticsMiddleware(keyPolicy(rateLimitMW.Wrap(billingGate(audioTranscriptions))))))
 
+	// Story 9.7 — POST /v1/audio/speech (OpenAI-Audio-Speech-compatible TTS). SAME
+	// middleware chain as chat/ASR (bearer → analytics → key-policy → rate-limit →
+	// billing-gate); the billingGate pre-flight `balance>0` gate is unchanged (the
+	// gateway holds no USD cost — an EXACT char×price gate would be a second cost
+	// SoT, forbidden by the cost-SoT invariant). The handler does NOT increment the
+	// TPM axis (no token dimension — BR-3.7); RPM/QPS still apply via rateLimitMW.
+	// It emits a PER_CHARACTER usage event (billing-svc computes the char-based cost
+	// — money one-SoT). Reuses the same adapter registry (doubao-tts → Doubao
+	// Synthesizer handle), usage emitter, and 8.2 safety scanner. The FIRST binary
+	// response body — the analytics captureWriter passes a 200 body through unwrapped
+	// (Architect-cleared); the handler sets Content-Type + Content-Length before the
+	// first write.
+	audioSpeech := handlers.NewAudioSpeechHandler(
+		logger,
+		handlers.WithSpeechAdapterRegistry(adapterRegistry),
+		handlers.WithSpeechUsageEmitter(usageEmitter),
+		handlers.WithSpeechSafetyScanner(safetyScanner),
+		handlers.WithSpeechSafetyRecorder(safetylog.NewPersistingRecorder(ctx, billingPool, logger)),
+	)
+	mux.Handle("POST /v1/audio/speech",
+		bearerAuth.RequireAPIKey(analyticsMiddleware(keyPolicy(rateLimitMW.Wrap(billingGate(audioSpeech))))))
+
 	// Story 4.7 — unauthenticated mirror of /v1/models. Mounted OUTSIDE
 	// the bearer middleware chain; both handlers share a snapshot built
 	// from the same modelsCatalogue + capabilitiesByModelID so the bodies

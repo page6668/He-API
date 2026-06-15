@@ -668,6 +668,150 @@ func (x *TranscribeResponse) GetSegmentsJson() []byte {
 	return nil
 }
 
+// Story 9.7 — SynthesizeRequest carries an OpenAI-Audio-Speech-compatible TTS
+// request (text in; non-identity adapter translate to the Volcano TTS upstream).
+// Hand-edited per project_toolchain_env_limits; appended at msgTypes index 8 so
+// existing indices 0-7 are unperturbed (additive blast-radius proof).
+type SynthesizeRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Model          string                 `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
+	Input          string                 `protobuf:"bytes,2,opt,name=input,proto3" json:"input,omitempty"`                                         // the text to synthesize (≤ 4096 runes, gateway-enforced)
+	Voice          string                 `protobuf:"bytes,3,opt,name=voice,proto3" json:"voice,omitempty"`                                         // voice id (adapter-owned Volcano voice_type set)
+	ResponseFormat string                 `protobuf:"bytes,4,opt,name=response_format,json=responseFormat,proto3" json:"response_format,omitempty"` // mp3 | wav | opus
+	Speed          *float64               `protobuf:"fixed64,5,opt,name=speed,proto3,oneof" json:"speed,omitempty"`                                 // optional ∈ [0.25,4.0]; default 1.0
+	HeRequestId    string                 `protobuf:"bytes,6,opt,name=he_request_id,json=heRequestId,proto3" json:"he_request_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *SynthesizeRequest) Reset() {
+	*x = SynthesizeRequest{}
+	mi := &file_he_adapter_v1_adapter_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SynthesizeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SynthesizeRequest) ProtoMessage() {}
+
+func (x *SynthesizeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_he_adapter_v1_adapter_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SynthesizeRequest.ProtoReflect.Descriptor instead.
+func (*SynthesizeRequest) Descriptor() ([]byte, []int) {
+	return file_he_adapter_v1_adapter_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *SynthesizeRequest) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *SynthesizeRequest) GetInput() string {
+	if x != nil {
+		return x.Input
+	}
+	return ""
+}
+
+func (x *SynthesizeRequest) GetVoice() string {
+	if x != nil {
+		return x.Voice
+	}
+	return ""
+}
+
+func (x *SynthesizeRequest) GetResponseFormat() string {
+	if x != nil {
+		return x.ResponseFormat
+	}
+	return ""
+}
+
+func (x *SynthesizeRequest) GetSpeed() float64 {
+	if x != nil && x.Speed != nil {
+		return *x.Speed
+	}
+	return 0
+}
+
+func (x *SynthesizeRequest) GetHeRequestId() string {
+	if x != nil {
+		return x.HeRequestId
+	}
+	return ""
+}
+
+// Story 9.7 — SynthesizeResponse carries the synthesized audio inline as bounded
+// bytes + the mime_type for the gateway's HTTP Content-Type. NO character_count
+// (the gateway bills from its own rune count — BR-4.5). Appended at msgTypes
+// index 9.
+type SynthesizeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Audio         []byte                 `protobuf:"bytes,1,opt,name=audio,proto3" json:"audio,omitempty"`
+	MimeType      string                 `protobuf:"bytes,2,opt,name=mime_type,json=mimeType,proto3" json:"mime_type,omitempty"` // audio/mpeg | audio/wav | audio/ogg
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SynthesizeResponse) Reset() {
+	*x = SynthesizeResponse{}
+	mi := &file_he_adapter_v1_adapter_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SynthesizeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SynthesizeResponse) ProtoMessage() {}
+
+func (x *SynthesizeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_he_adapter_v1_adapter_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SynthesizeResponse.ProtoReflect.Descriptor instead.
+func (*SynthesizeResponse) Descriptor() ([]byte, []int) {
+	return file_he_adapter_v1_adapter_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *SynthesizeResponse) GetAudio() []byte {
+	if x != nil {
+		return x.Audio
+	}
+	return nil
+}
+
+func (x *SynthesizeResponse) GetMimeType() string {
+	if x != nil {
+		return x.MimeType
+	}
+	return ""
+}
+
 var File_he_adapter_v1_adapter_proto protoreflect.FileDescriptor
 
 // Story 9.6 (T1) — rawDesc regenerated via packages/proto/cmd/descgen (a
@@ -676,73 +820,7 @@ var File_he_adapter_v1_adapter_proto protoreflect.FileDescriptor
 // programmatically). `buf` cannot run locally (project_toolchain_env_limits);
 // the existing ChatRequest..Usage descriptor bytes are byte-identical to the
 // pre-9.6 rawDesc (additive blast-radius proof — see UNIT-009/010).
-const file_he_adapter_v1_adapter_proto_rawDesc = "" +
-	"\n" +
-	"\x1bhe/adapter/v1/adapter.proto\x12\rhe.adapter.v1\"\xae\x03\n" +
-	"\vChatRequest\x12\x14\n" +
-	"\x05model\x18\x01 \x01(\tR\x05model\x126\n" +
-	"\bmessages\x18\x02 \x03(\v2\x1a.he.adapter.v1.ChatMessageR\bmessages\x12\x16\n" +
-	"\x06stream\x18\x03 \x01(\bR\x06stream\x12%\n" +
-	"\vtemperature\x18\x04 \x01(\x01H\x00R\vtemperature\x88\x01\x01\x12\"\n" +
-	"\n" +
-	"max_tokens\x18\x05 \x01(\x05H\x01R\tmaxTokens\x88\x01\x01\x12\x1d\n" +
-	"\n" +
-	"tools_json\x18\x06 \x01(\fR\ttoolsJson\x12(\n" +
-	"\x10tool_choice_json\x18\a \x01(\fR\x0etoolChoiceJson\x120\n" +
-	"\x14response_format_json\x18\b \x01(\fR\x12responseFormatJson\x12\"\n" +
-	"\rhe_request_id\x18\t \x01(\tR\vheRequestId\x120\n" +
-	"\x14stream_include_usage\x18\n" +
-	" \x01(\bR\x12streamIncludeUsageB\x0e\n" +
-	"\f_temperatureB\r\n" +
-	"\v_max_tokens\"i\n" +
-	"\vChatMessage\x12\x12\n" +
-	"\x04role\x18\x01 \x01(\tR\x04role\x12\x18\n" +
-	"\acontent\x18\x02 \x01(\tR\acontent\x12,\n" +
-	"\x12content_parts_json\x18\x03 \x01(\fR\x10contentPartsJson\"\x8b\x02\n" +
-	"\tChatChunk\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
-	"\x06object\x18\x02 \x01(\tR\x06object\x12\x18\n" +
-	"\acreated\x18\x03 \x01(\x03R\acreated\x12\x14\n" +
-	"\x05model\x18\x04 \x01(\tR\x05model\x12/\n" +
-	"\achoices\x18\x05 \x03(\v2\x15.he.adapter.v1.ChoiceR\achoices\x12/\n" +
-	"\x05usage\x18\x06 \x01(\v2\x14.he.adapter.v1.UsageH\x00R\x05usage\x88\x01\x01\x12(\n" +
-	"\rfinish_reason\x18\a \x01(\tH\x01R\ffinishReason\x88\x01\x01B\b\n" +
-	"\x06_usageB\x10\n" +
-	"\x0e_finish_reason\"\x86\x01\n" +
-	"\x06Choice\x12\x14\n" +
-	"\x05index\x18\x01 \x01(\x05R\x05index\x12*\n" +
-	"\x05delta\x18\x02 \x01(\v2\x14.he.adapter.v1.DeltaR\x05delta\x12(\n" +
-	"\rfinish_reason\x18\x03 \x01(\tH\x00R\ffinishReason\x88\x01\x01B\x10\n" +
-	"\x0e_finish_reason\"T\n" +
-	"\x05Delta\x12\x17\n" +
-	"\x04role\x18\x01 \x01(\tH\x00R\x04role\x88\x01\x01\x12\x1d\n" +
-	"\acontent\x18\x02 \x01(\tH\x01R\acontent\x88\x01\x01B\a\n" +
-	"\x05_roleB\n" +
-	"\n" +
-	"\b_content\"|\n" +
-	"\x05Usage\x12#\n" +
-	"\rprompt_tokens\x18\x01 \x01(\x05R\fpromptTokens\x12+\n" +
-	"\x11completion_tokens\x18\x02 \x01(\x05R\x10completionTokens\x12!\n" +
-	"\ftotal_tokens\x18\x03 \x01(\x05R\vtotalTokens\"\x94\x02\n" +
-	"\x11TranscribeRequest\x12\x14\n" +
-	"\x05model\x18\x01 \x01(\tR\x05model\x12\x14\n" +
-	"\x05audio\x18\x02 \x01(\fR\x05audio\x12\x1b\n" +
-	"\tmime_type\x18\x03 \x01(\tR\bmimeType\x12\x1a\n" +
-	"\blanguage\x18\x04 \x01(\tR\blanguage\x12\x16\n" +
-	"\x06prompt\x18\x05 \x01(\tR\x06prompt\x12'\n" +
-	"\x0fresponse_format\x18\x06 \x01(\tR\x0eresponseFormat\x12%\n" +
-	"\vtemperature\x18\a \x01(\x01H\x00R\vtemperature\x88\x01\x01\x12\"\n" +
-	"\rhe_request_id\x18\b \x01(\tR\vheRequestIdB\x0e\n" +
-	"\f_temperature\"\x94\x01\n" +
-	"\x12TranscribeResponse\x12\x12\n" +
-	"\x04text\x18\x01 \x01(\tR\x04text\x12\x1a\n" +
-	"\blanguage\x18\x02 \x01(\tR\blanguage\x12)\n" +
-	"\x10duration_seconds\x18\x03 \x01(\x01R\x0fdurationSeconds\x12#\n" +
-	"\rsegments_json\x18\x04 \x01(\fR\fsegmentsJson2\xa3\x01\n" +
-	"\x0eAdapterService\x12>\n" +
-	"\x04Chat\x12\x1a.he.adapter.v1.ChatRequest\x1a\x18.he.adapter.v1.ChatChunk0\x01\x12Q\n" +
-	"\n" +
-	"Transcribe\x12 .he.adapter.v1.TranscribeRequest\x1a!.he.adapter.v1.TranscribeResponseBHZFgithub.com/he-api/he-api/packages/proto/gen/go/he/adapter/v1;adapterv1b\x06proto3"
+const file_he_adapter_v1_adapter_proto_rawDesc = "\n\x1bhe/adapter/v1/adapter.proto\x12\rhe.adapter.v1\"\xae\x03\n\vChatRequest\x12\x14\n\x05model\x18\x01 \x01(\tR\x05model\x126\n\bmessages\x18\x02 \x03(\v2\x1a.he.adapter.v1.ChatMessageR\bmessages\x12\x16\n\x06stream\x18\x03 \x01(\bR\x06stream\x12%\n\vtemperature\x18\x04 \x01(\x01H\x00R\vtemperature\x88\x01\x01\x12\"\n\nmax_tokens\x18\x05 \x01(\x05H\x01R\tmaxTokens\x88\x01\x01\x12\x1d\n\ntools_json\x18\x06 \x01(\fR\ttoolsJson\x12(\n\x10tool_choice_json\x18\a \x01(\fR\x0etoolChoiceJson\x120\n\x14response_format_json\x18\b \x01(\fR\x12responseFormatJson\x12\"\n\rhe_request_id\x18\t \x01(\tR\vheRequestId\x120\n\x14stream_include_usage\x18\n \x01(\bR\x12streamIncludeUsageB\x0e\n\f_temperatureB\r\n\v_max_tokens\"i\n\vChatMessage\x12\x12\n\x04role\x18\x01 \x01(\tR\x04role\x12\x18\n\acontent\x18\x02 \x01(\tR\acontent\x12,\n\x12content_parts_json\x18\x03 \x01(\fR\x10contentPartsJson\"\x8b\x02\n\tChatChunk\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n\x06object\x18\x02 \x01(\tR\x06object\x12\x18\n\acreated\x18\x03 \x01(\x03R\acreated\x12\x14\n\x05model\x18\x04 \x01(\tR\x05model\x12/\n\achoices\x18\x05 \x03(\v2\x15.he.adapter.v1.ChoiceR\achoices\x12/\n\x05usage\x18\x06 \x01(\v2\x14.he.adapter.v1.UsageH\x00R\x05usage\x88\x01\x01\x12(\n\rfinish_reason\x18\a \x01(\tH\x01R\ffinishReason\x88\x01\x01B\b\n\x06_usageB\x10\n\x0e_finish_reason\"\x86\x01\n\x06Choice\x12\x14\n\x05index\x18\x01 \x01(\x05R\x05index\x12*\n\x05delta\x18\x02 \x01(\v2\x14.he.adapter.v1.DeltaR\x05delta\x12(\n\rfinish_reason\x18\x03 \x01(\tH\x00R\ffinishReason\x88\x01\x01B\x10\n\x0e_finish_reason\"T\n\x05Delta\x12\x17\n\x04role\x18\x01 \x01(\tH\x00R\x04role\x88\x01\x01\x12\x1d\n\acontent\x18\x02 \x01(\tH\x01R\acontent\x88\x01\x01B\a\n\x05_roleB\n\n\b_content\"|\n\x05Usage\x12#\n\rprompt_tokens\x18\x01 \x01(\x05R\fpromptTokens\x12+\n\x11completion_tokens\x18\x02 \x01(\x05R\x10completionTokens\x12!\n\ftotal_tokens\x18\x03 \x01(\x05R\vtotalTokens\"\x94\x02\n\x11TranscribeRequest\x12\x14\n\x05model\x18\x01 \x01(\tR\x05model\x12\x14\n\x05audio\x18\x02 \x01(\fR\x05audio\x12\x1b\n\tmime_type\x18\x03 \x01(\tR\bmimeType\x12\x1a\n\blanguage\x18\x04 \x01(\tR\blanguage\x12\x16\n\x06prompt\x18\x05 \x01(\tR\x06prompt\x12'\n\x0fresponse_format\x18\x06 \x01(\tR\x0eresponseFormat\x12%\n\vtemperature\x18\a \x01(\x01H\x00R\vtemperature\x88\x01\x01\x12\"\n\rhe_request_id\x18\b \x01(\tR\vheRequestIdB\x0e\n\f_temperature\"\x94\x01\n\x12TranscribeResponse\x12\x12\n\x04text\x18\x01 \x01(\tR\x04text\x12\x1a\n\blanguage\x18\x02 \x01(\tR\blanguage\x12)\n\x10duration_seconds\x18\x03 \x01(\x01R\x0fdurationSeconds\x12#\n\rsegments_json\x18\x04 \x01(\fR\fsegmentsJson\"\xc7\x01\n\x11SynthesizeRequest\x12\x14\n\x05model\x18\x01 \x01(\tR\x05model\x12\x14\n\x05input\x18\x02 \x01(\tR\x05input\x12\x14\n\x05voice\x18\x03 \x01(\tR\x05voice\x12'\n\x0fresponse_format\x18\x04 \x01(\tR\x0eresponseFormat\x12\x19\n\x05speed\x18\x05 \x01(\x01H\x00R\x05speed\x88\x01\x01\x12\"\n\rhe_request_id\x18\x06 \x01(\tR\vheRequestIdB\b\n\x06_speed\"G\n\x12SynthesizeResponse\x12\x14\n\x05audio\x18\x01 \x01(\fR\x05audio\x12\x1b\n\tmime_type\x18\x02 \x01(\tR\bmimeType2\xf6\x01\n\x0eAdapterService\x12>\n\x04Chat\x12\x1a.he.adapter.v1.ChatRequest\x1a\x18.he.adapter.v1.ChatChunk0\x01\x12Q\n\nTranscribe\x12 .he.adapter.v1.TranscribeRequest\x1a!.he.adapter.v1.TranscribeResponse\x12Q\n\nSynthesize\x12 .he.adapter.v1.SynthesizeRequest\x1a!.he.adapter.v1.SynthesizeResponseBHZFgithub.com/he-api/he-api/packages/proto/gen/go/he/adapter/v1;adapterv1b\x06proto3"
 
 var (
 	file_he_adapter_v1_adapter_proto_rawDescOnce sync.Once
@@ -756,7 +834,7 @@ func file_he_adapter_v1_adapter_proto_rawDescGZIP() []byte {
 	return file_he_adapter_v1_adapter_proto_rawDescData
 }
 
-var file_he_adapter_v1_adapter_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_he_adapter_v1_adapter_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_he_adapter_v1_adapter_proto_goTypes = []any{
 	(*ChatRequest)(nil),        // 0: he.adapter.v1.ChatRequest
 	(*ChatMessage)(nil),        // 1: he.adapter.v1.ChatMessage
@@ -766,6 +844,8 @@ var file_he_adapter_v1_adapter_proto_goTypes = []any{
 	(*Usage)(nil),              // 5: he.adapter.v1.Usage
 	(*TranscribeRequest)(nil),  // 6: he.adapter.v1.TranscribeRequest
 	(*TranscribeResponse)(nil), // 7: he.adapter.v1.TranscribeResponse
+	(*SynthesizeRequest)(nil),  // 8: he.adapter.v1.SynthesizeRequest
+	(*SynthesizeResponse)(nil), // 9: he.adapter.v1.SynthesizeResponse
 }
 var file_he_adapter_v1_adapter_proto_depIdxs = []int32{
 	1, // 0: he.adapter.v1.ChatRequest.messages:type_name -> he.adapter.v1.ChatMessage
@@ -774,10 +854,12 @@ var file_he_adapter_v1_adapter_proto_depIdxs = []int32{
 	4, // 3: he.adapter.v1.Choice.delta:type_name -> he.adapter.v1.Delta
 	0, // 4: he.adapter.v1.AdapterService.Chat:input_type -> he.adapter.v1.ChatRequest
 	6, // 5: he.adapter.v1.AdapterService.Transcribe:input_type -> he.adapter.v1.TranscribeRequest
-	2, // 6: he.adapter.v1.AdapterService.Chat:output_type -> he.adapter.v1.ChatChunk
-	7, // 7: he.adapter.v1.AdapterService.Transcribe:output_type -> he.adapter.v1.TranscribeResponse
-	6, // [6:8] is the sub-list for method output_type
-	4, // [4:6] is the sub-list for method input_type
+	8, // 6: he.adapter.v1.AdapterService.Synthesize:input_type -> he.adapter.v1.SynthesizeRequest
+	2, // 7: he.adapter.v1.AdapterService.Chat:output_type -> he.adapter.v1.ChatChunk
+	7, // 8: he.adapter.v1.AdapterService.Transcribe:output_type -> he.adapter.v1.TranscribeResponse
+	9, // 9: he.adapter.v1.AdapterService.Synthesize:output_type -> he.adapter.v1.SynthesizeResponse
+	7, // [7:10] is the sub-list for method output_type
+	4, // [4:7] is the sub-list for method input_type
 	4, // [4:4] is the sub-list for extension type_name
 	4, // [4:4] is the sub-list for extension extendee
 	0, // [0:4] is the sub-list for field type_name
@@ -793,13 +875,14 @@ func file_he_adapter_v1_adapter_proto_init() {
 	file_he_adapter_v1_adapter_proto_msgTypes[3].OneofWrappers = []any{}
 	file_he_adapter_v1_adapter_proto_msgTypes[4].OneofWrappers = []any{}
 	file_he_adapter_v1_adapter_proto_msgTypes[6].OneofWrappers = []any{} // TranscribeRequest.temperature (proto3 optional)
+	file_he_adapter_v1_adapter_proto_msgTypes[8].OneofWrappers = []any{} // SynthesizeRequest.speed (proto3 optional)
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_he_adapter_v1_adapter_proto_rawDesc), len(file_he_adapter_v1_adapter_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

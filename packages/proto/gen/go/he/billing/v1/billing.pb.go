@@ -46,10 +46,11 @@ const (
 type BillingMode int32
 
 const (
-	BillingMode_BILLING_MODE_UNSPECIFIED BillingMode = 0 // proto3 zero-value; engine treats it as PER_TOKEN
-	BillingMode_BILLING_MODE_PER_TOKEN   BillingMode = 1
-	BillingMode_BILLING_MODE_PER_CALL    BillingMode = 2 // reserved — OFF in 7.1
-	BillingMode_BILLING_MODE_PER_MINUTE  BillingMode = 3 // Story 9.6 — per-audio-duration (ASR)
+	BillingMode_BILLING_MODE_UNSPECIFIED   BillingMode = 0 // proto3 zero-value; engine treats it as PER_TOKEN
+	BillingMode_BILLING_MODE_PER_TOKEN     BillingMode = 1
+	BillingMode_BILLING_MODE_PER_CALL      BillingMode = 2 // reserved — OFF in 7.1
+	BillingMode_BILLING_MODE_PER_MINUTE    BillingMode = 3 // Story 9.6 — per-audio-duration (ASR)
+	BillingMode_BILLING_MODE_PER_CHARACTER BillingMode = 4 // Story 9.7 — per-input-character (TTS)
 )
 
 // Enum value maps for BillingMode.
@@ -59,12 +60,14 @@ var (
 		1: "BILLING_MODE_PER_TOKEN",
 		2: "BILLING_MODE_PER_CALL",
 		3: "BILLING_MODE_PER_MINUTE",
+		4: "BILLING_MODE_PER_CHARACTER",
 	}
 	BillingMode_value = map[string]int32{
-		"BILLING_MODE_UNSPECIFIED": 0,
-		"BILLING_MODE_PER_TOKEN":   1,
-		"BILLING_MODE_PER_CALL":    2,
-		"BILLING_MODE_PER_MINUTE":  3,
+		"BILLING_MODE_UNSPECIFIED":   0,
+		"BILLING_MODE_PER_TOKEN":     1,
+		"BILLING_MODE_PER_CALL":      2,
+		"BILLING_MODE_PER_MINUTE":    3,
+		"BILLING_MODE_PER_CHARACTER": 4,
 	}
 )
 
@@ -115,8 +118,11 @@ type UsageEvent struct {
 	// Story 9.6 — vendor-reported audio duration for PER_MINUTE (ASR) events;
 	// 0 for token/chat/embedding events (proto3 zero-value, non-breaking).
 	AudioDurationSeconds float64 `protobuf:"fixed64,14,opt,name=audio_duration_seconds,json=audioDurationSeconds,proto3" json:"audio_duration_seconds,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// Story 9.7 — gateway-validated input rune count for PER_CHARACTER (TTS)
+	// events; 0 for every non-TTS event (proto3 zero-value, non-breaking).
+	CharacterCount uint32 `protobuf:"varint,15,opt,name=character_count,json=characterCount,proto3" json:"character_count,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *UsageEvent) Reset() {
@@ -243,6 +249,13 @@ func (x *UsageEvent) GetBillingMode() BillingMode {
 func (x *UsageEvent) GetAudioDurationSeconds() float64 {
 	if x != nil {
 		return x.AudioDurationSeconds
+	}
+	return 0
+}
+
+func (x *UsageEvent) GetCharacterCount() uint32 {
+	if x != nil {
+		return x.CharacterCount
 	}
 	return 0
 }
@@ -1341,126 +1354,7 @@ var File_he_billing_v1_billing_proto protoreflect.FileDescriptor
 // Story 9.6 (T5) — rawDesc regenerated via cmd/billdescgen from the AUTHORITATIVE
 // compiled descriptor (7.7/7.8 RPCs that lag the .proto are preserved) with the
 // additive BILLING_MODE_PER_MINUTE=3 + UsageEvent.audio_duration_seconds=14.
-const file_he_billing_v1_billing_proto_rawDesc = "" +
-	"\n" +
-	"\x1bhe/billing/v1/billing.proto\x12\rhe.billing.v1\"\xee\x03\n" +
-	"\n" +
-	"UsageEvent\x12\x1d\n" +
-	"\n" +
-	"ledger_key\x18\x01 \x01(\tR\tledgerKey\x12\"\n" +
-	"\rhe_request_id\x18\x02 \x01(\tR\vheRequestId\x12\x17\n" +
-	"\auser_id\x18\x03 \x01(\tR\x06userId\x12\x1c\n" +
-	"\n" +
-	"api_key_id\x18\x04 \x01(\tR\bapiKeyId\x12\x17\n" +
-	"\ateam_id\x18\x05 \x01(\tR\x06teamId\x12\x14\n" +
-	"\x05model\x18\x06 \x01(\tR\x05model\x12#\n" +
-	"\rprompt_tokens\x18\a \x01(\rR\fpromptTokens\x12+\n" +
-	"\x11completion_tokens\x18\b \x01(\rR\x10completionTokens\x12!\n" +
-	"\ftotal_tokens\x18\t \x01(\rR\vtotalTokens\x12!\n" +
-	"\fis_streaming\x18\n" +
-	" \x01(\bR\visStreaming\x12\x1a\n" +
-	"\tis_ab_leg\x18\v \x01(\bR\aisAbLeg\x12\x0e\n" +
-	"\x02ts\x18\f \x01(\tR\x02ts\x12=\n" +
-	"\fbilling_mode\x18\r \x01(\x0e2\x1a.he.billing.v1.BillingModeR\vbillingMode\x124\n" +
-	"\x16audio_duration_seconds\x18\x0e \x01(\x01R\x14audioDurationSeconds\".\n" +
-	"\x13CheckBalanceRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\"W\n" +
-	"\x14CheckBalanceResponse\x12\x1f\n" +
-	"\vcurrent_usd\x18\x01 \x01(\tR\n" +
-	"currentUsd\x12\x1e\n" +
-	"\n" +
-	"sufficient\x18\x02 \x01(\bR\n" +
-	"sufficient\"\x94\x01\n" +
-	"\x1aCreateRechargeOrderRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x16\n" +
-	"\x06amount\x18\x02 \x01(\tR\x06amount\x12\x1a\n" +
-	"\bcurrency\x18\x03 \x01(\tR\bcurrency\x12)\n" +
-	"\x10payment_provider\x18\x04 \x01(\tR\x0fpaymentProvider\"P\n" +
-	"\x1bCreateRechargeOrderResponse\x12\x19\n" +
-	"\border_id\x18\x01 \x01(\tR\aorderId\x12\x16\n" +
-	"\x06status\x18\x02 \x01(\tR\x06status\"\xbb\x01\n" +
-	"\x16SetAutoRechargeRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x18\n" +
-	"\aenabled\x18\x02 \x01(\bR\aenabled\x12#\n" +
-	"\rthreshold_usd\x18\x03 \x01(\tR\fthresholdUsd\x12\x1d\n" +
-	"\n" +
-	"amount_usd\x18\x04 \x01(\tR\tamountUsd\x12*\n" +
-	"\x11payment_method_id\x18\x05 \x01(\tR\x0fpaymentMethodId\"3\n" +
-	"\x17SetAutoRechargeResponse\x12\x18\n" +
-	"\aenabled\x18\x01 \x01(\bR\aenabled\"\xb6\x01\n" +
-	"\x18SavePaymentMethodRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12)\n" +
-	"\x10payment_provider\x18\x02 \x01(\tR\x0fpaymentProvider\x12*\n" +
-	"\x11provider_pm_token\x18\x03 \x01(\tR\x0fproviderPmToken\x12\x14\n" +
-	"\x05brand\x18\x04 \x01(\tR\x05brand\x12\x14\n" +
-	"\x05last4\x18\x05 \x01(\tR\x05last4\"J\n" +
-	"\x19SavePaymentMethodResponse\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
-	"\n" +
-	"is_default\x18\x02 \x01(\bR\tisDefault\"4\n" +
-	"\x19ListPaymentMethodsRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\"?\n" +
-	"\x1aListPaymentMethodsResponse\x12!\n" +
-	"\fmethods_json\x18\x01 \x01(\tR\vmethodsJson\"a\n" +
-	"\x1aDeletePaymentMethodRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12*\n" +
-	"\x11payment_method_id\x18\x02 \x01(\tR\x0fpaymentMethodId\"m\n" +
-	"\x1bDeletePaymentMethodResponse\x12\x18\n" +
-	"\adeleted\x18\x01 \x01(\bR\adeleted\x124\n" +
-	"\x16auto_recharge_disabled\x18\x02 \x01(\bR\x14autoRechargeDisabled\".\n" +
-	"\x13ListInvoicesRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\";\n" +
-	"\x14ListInvoicesResponse\x12#\n" +
-	"\rinvoices_json\x18\x01 \x01(\tR\finvoicesJson\"N\n" +
-	"\x14GetInvoicePdfRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1d\n" +
-	"\n" +
-	"invoice_id\x18\x02 \x01(\tR\tinvoiceId\"[\n" +
-	"\x15GetInvoicePdfResponse\x12\x10\n" +
-	"\x03pdf\x18\x01 \x01(\fR\x03pdf\x12\x1a\n" +
-	"\bfilename\x18\x02 \x01(\tR\bfilename\x12\x14\n" +
-	"\x05found\x18\x03 \x01(\bR\x05found\"1\n" +
-	"\x16GetSubscriptionRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\"s\n" +
-	"\x17GetSubscriptionResponse\x12\x12\n" +
-	"\x04plan\x18\x01 \x01(\tR\x04plan\x12\x16\n" +
-	"\x06status\x18\x02 \x01(\tR\x06status\x12,\n" +
-	"\x12current_period_end\x18\x03 \x01(\tR\x10currentPeriodEnd\"_\n" +
-	"\x11ChangePlanRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x19\n" +
-	"\bnew_plan\x18\x02 \x01(\tR\anewPlan\x12\x16\n" +
-	"\x06cancel\x18\x03 \x01(\bR\x06cancel\"\x82\x01\n" +
-	"\x12ChangePlanResponse\x12\x1c\n" +
-	"\tdirection\x18\x01 \x01(\tR\tdirection\x12\x19\n" +
-	"\bnew_plan\x18\x02 \x01(\tR\anewPlan\x123\n" +
-	"\x16deferred_to_period_end\x18\x03 \x01(\bR\x13deferredToPeriodEnd\"1\n" +
-	"\x16GetEntitlementsRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\"\xce\x01\n" +
-	"\x17GetEntitlementsResponse\x12\x12\n" +
-	"\x04plan\x18\x01 \x01(\tR\x04plan\x12\x10\n" +
-	"\x03rpm\x18\x02 \x01(\x03R\x03rpm\x12\x10\n" +
-	"\x03tpm\x18\x03 \x01(\x03R\x03tpm\x12\x10\n" +
-	"\x03qps\x18\x04 \x01(\x03R\x03qps\x12=\n" +
-	"\x1bmonthly_included_credit_usd\x18\x05 \x01(\tR\x18monthlyIncludedCreditUsd\x12*\n" +
-	"\x11monthly_quota_usd\x18\x06 \x01(\tR\x0fmonthlyQuotaUsd*\x7f\n" +
-	"\vBillingMode\x12\x1c\n" +
-	"\x18BILLING_MODE_UNSPECIFIED\x10\x00\x12\x1a\n" +
-	"\x16BILLING_MODE_PER_TOKEN\x10\x01\x12\x19\n" +
-	"\x15BILLING_MODE_PER_CALL\x10\x02\x12\x1b\n" +
-	"\x17BILLING_MODE_PER_MINUTE\x10\x032\xc6\b\n" +
-	"\x0eBillingService\x12W\n" +
-	"\fCheckBalance\x12\".he.billing.v1.CheckBalanceRequest\x1a#.he.billing.v1.CheckBalanceResponse\x12l\n" +
-	"\x13CreateRechargeOrder\x12).he.billing.v1.CreateRechargeOrderRequest\x1a*.he.billing.v1.CreateRechargeOrderResponse\x12`\n" +
-	"\x0fSetAutoRecharge\x12%.he.billing.v1.SetAutoRechargeRequest\x1a&.he.billing.v1.SetAutoRechargeResponse\x12f\n" +
-	"\x11SavePaymentMethod\x12'.he.billing.v1.SavePaymentMethodRequest\x1a(.he.billing.v1.SavePaymentMethodResponse\x12i\n" +
-	"\x12ListPaymentMethods\x12(.he.billing.v1.ListPaymentMethodsRequest\x1a).he.billing.v1.ListPaymentMethodsResponse\x12l\n" +
-	"\x13DeletePaymentMethod\x12).he.billing.v1.DeletePaymentMethodRequest\x1a*.he.billing.v1.DeletePaymentMethodResponse\x12W\n" +
-	"\fListInvoices\x12\".he.billing.v1.ListInvoicesRequest\x1a#.he.billing.v1.ListInvoicesResponse\x12Z\n" +
-	"\rGetInvoicePdf\x12#.he.billing.v1.GetInvoicePdfRequest\x1a$.he.billing.v1.GetInvoicePdfResponse\x12`\n" +
-	"\x0fGetSubscription\x12%.he.billing.v1.GetSubscriptionRequest\x1a&.he.billing.v1.GetSubscriptionResponse\x12Q\n" +
-	"\n" +
-	"ChangePlan\x12 .he.billing.v1.ChangePlanRequest\x1a!.he.billing.v1.ChangePlanResponse\x12`\n" +
-	"\x0fGetEntitlements\x12%.he.billing.v1.GetEntitlementsRequest\x1a&.he.billing.v1.GetEntitlementsResponseBHZFgithub.com/he-api/he-api/packages/proto/gen/go/he/billing/v1;billingv1b\x06proto3"
+const file_he_billing_v1_billing_proto_rawDesc = "\n\x1bhe/billing/v1/billing.proto\x12\rhe.billing.v1\"\x97\x04\n\nUsageEvent\x12\x1d\n\nledger_key\x18\x01 \x01(\tR\tledgerKey\x12\"\n\rhe_request_id\x18\x02 \x01(\tR\vheRequestId\x12\x17\n\auser_id\x18\x03 \x01(\tR\x06userId\x12\x1c\n\napi_key_id\x18\x04 \x01(\tR\bapiKeyId\x12\x17\n\ateam_id\x18\x05 \x01(\tR\x06teamId\x12\x14\n\x05model\x18\x06 \x01(\tR\x05model\x12#\n\rprompt_tokens\x18\a \x01(\rR\fpromptTokens\x12+\n\x11completion_tokens\x18\b \x01(\rR\x10completionTokens\x12!\n\ftotal_tokens\x18\t \x01(\rR\vtotalTokens\x12!\n\fis_streaming\x18\n \x01(\bR\visStreaming\x12\x1a\n\tis_ab_leg\x18\v \x01(\bR\aisAbLeg\x12\x0e\n\x02ts\x18\f \x01(\tR\x02ts\x12=\n\fbilling_mode\x18\r \x01(\x0e2\x1a.he.billing.v1.BillingModeR\vbillingMode\x124\n\x16audio_duration_seconds\x18\x0e \x01(\x01R\x14audioDurationSeconds\x12'\n\x0fcharacter_count\x18\x0f \x01(\rR\x0echaracterCount\".\n\x13CheckBalanceRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\"W\n\x14CheckBalanceResponse\x12\x1f\n\vcurrent_usd\x18\x01 \x01(\tR\ncurrentUsd\x12\x1e\n\nsufficient\x18\x02 \x01(\bR\nsufficient\"\x94\x01\n\x1aCreateRechargeOrderRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12\x16\n\x06amount\x18\x02 \x01(\tR\x06amount\x12\x1a\n\bcurrency\x18\x03 \x01(\tR\bcurrency\x12)\n\x10payment_provider\x18\x04 \x01(\tR\x0fpaymentProvider\"P\n\x1bCreateRechargeOrderResponse\x12\x19\n\border_id\x18\x01 \x01(\tR\aorderId\x12\x16\n\x06status\x18\x02 \x01(\tR\x06status\"\xbb\x01\n\x16SetAutoRechargeRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12\x18\n\aenabled\x18\x02 \x01(\bR\aenabled\x12#\n\rthreshold_usd\x18\x03 \x01(\tR\fthresholdUsd\x12\x1d\n\namount_usd\x18\x04 \x01(\tR\tamountUsd\x12*\n\x11payment_method_id\x18\x05 \x01(\tR\x0fpaymentMethodId\"3\n\x17SetAutoRechargeResponse\x12\x18\n\aenabled\x18\x01 \x01(\bR\aenabled\"\xb6\x01\n\x18SavePaymentMethodRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12)\n\x10payment_provider\x18\x02 \x01(\tR\x0fpaymentProvider\x12*\n\x11provider_pm_token\x18\x03 \x01(\tR\x0fproviderPmToken\x12\x14\n\x05brand\x18\x04 \x01(\tR\x05brand\x12\x14\n\x05last4\x18\x05 \x01(\tR\x05last4\"J\n\x19SavePaymentMethodResponse\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n\nis_default\x18\x02 \x01(\bR\tisDefault\"4\n\x19ListPaymentMethodsRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\"?\n\x1aListPaymentMethodsResponse\x12!\n\fmethods_json\x18\x01 \x01(\tR\vmethodsJson\"a\n\x1aDeletePaymentMethodRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12*\n\x11payment_method_id\x18\x02 \x01(\tR\x0fpaymentMethodId\"m\n\x1bDeletePaymentMethodResponse\x12\x18\n\adeleted\x18\x01 \x01(\bR\adeleted\x124\n\x16auto_recharge_disabled\x18\x02 \x01(\bR\x14autoRechargeDisabled\".\n\x13ListInvoicesRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\";\n\x14ListInvoicesResponse\x12#\n\rinvoices_json\x18\x01 \x01(\tR\finvoicesJson\"N\n\x14GetInvoicePdfRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1d\n\ninvoice_id\x18\x02 \x01(\tR\tinvoiceId\"[\n\x15GetInvoicePdfResponse\x12\x10\n\x03pdf\x18\x01 \x01(\fR\x03pdf\x12\x1a\n\bfilename\x18\x02 \x01(\tR\bfilename\x12\x14\n\x05found\x18\x03 \x01(\bR\x05found\"1\n\x16GetSubscriptionRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\"s\n\x17GetSubscriptionResponse\x12\x12\n\x04plan\x18\x01 \x01(\tR\x04plan\x12\x16\n\x06status\x18\x02 \x01(\tR\x06status\x12,\n\x12current_period_end\x18\x03 \x01(\tR\x10currentPeriodEnd\"_\n\x11ChangePlanRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12\x19\n\bnew_plan\x18\x02 \x01(\tR\anewPlan\x12\x16\n\x06cancel\x18\x03 \x01(\bR\x06cancel\"\x82\x01\n\x12ChangePlanResponse\x12\x1c\n\tdirection\x18\x01 \x01(\tR\tdirection\x12\x19\n\bnew_plan\x18\x02 \x01(\tR\anewPlan\x123\n\x16deferred_to_period_end\x18\x03 \x01(\bR\x13deferredToPeriodEnd\"1\n\x16GetEntitlementsRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\"\xce\x01\n\x17GetEntitlementsResponse\x12\x12\n\x04plan\x18\x01 \x01(\tR\x04plan\x12\x10\n\x03rpm\x18\x02 \x01(\x03R\x03rpm\x12\x10\n\x03tpm\x18\x03 \x01(\x03R\x03tpm\x12\x10\n\x03qps\x18\x04 \x01(\x03R\x03qps\x12=\n\x1bmonthly_included_credit_usd\x18\x05 \x01(\tR\x18monthlyIncludedCreditUsd\x12*\n\x11monthly_quota_usd\x18\x06 \x01(\tR\x0fmonthlyQuotaUsd*\x9f\x01\n\vBillingMode\x12\x1c\n\x18BILLING_MODE_UNSPECIFIED\x10\x00\x12\x1a\n\x16BILLING_MODE_PER_TOKEN\x10\x01\x12\x19\n\x15BILLING_MODE_PER_CALL\x10\x02\x12\x1b\n\x17BILLING_MODE_PER_MINUTE\x10\x03\x12\x1e\n\x1aBILLING_MODE_PER_CHARACTER\x10\x042\xc6\b\n\x0eBillingService\x12W\n\fCheckBalance\x12\".he.billing.v1.CheckBalanceRequest\x1a#.he.billing.v1.CheckBalanceResponse\x12l\n\x13CreateRechargeOrder\x12).he.billing.v1.CreateRechargeOrderRequest\x1a*.he.billing.v1.CreateRechargeOrderResponse\x12`\n\x0fSetAutoRecharge\x12%.he.billing.v1.SetAutoRechargeRequest\x1a&.he.billing.v1.SetAutoRechargeResponse\x12f\n\x11SavePaymentMethod\x12'.he.billing.v1.SavePaymentMethodRequest\x1a(.he.billing.v1.SavePaymentMethodResponse\x12i\n\x12ListPaymentMethods\x12(.he.billing.v1.ListPaymentMethodsRequest\x1a).he.billing.v1.ListPaymentMethodsResponse\x12l\n\x13DeletePaymentMethod\x12).he.billing.v1.DeletePaymentMethodRequest\x1a*.he.billing.v1.DeletePaymentMethodResponse\x12W\n\fListInvoices\x12\".he.billing.v1.ListInvoicesRequest\x1a#.he.billing.v1.ListInvoicesResponse\x12Z\n\rGetInvoicePdf\x12#.he.billing.v1.GetInvoicePdfRequest\x1a$.he.billing.v1.GetInvoicePdfResponse\x12`\n\x0fGetSubscription\x12%.he.billing.v1.GetSubscriptionRequest\x1a&.he.billing.v1.GetSubscriptionResponse\x12Q\n\nChangePlan\x12 .he.billing.v1.ChangePlanRequest\x1a!.he.billing.v1.ChangePlanResponse\x12`\n\x0fGetEntitlements\x12%.he.billing.v1.GetEntitlementsRequest\x1a&.he.billing.v1.GetEntitlementsResponseBHZFgithub.com/he-api/he-api/packages/proto/gen/go/he/billing/v1;billingv1b\x06proto3"
 
 var (
 	file_he_billing_v1_billing_proto_rawDescOnce sync.Once

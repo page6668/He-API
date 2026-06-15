@@ -25,7 +25,8 @@ const loadSQL = `SELECT model_id, effective_at,
 	upstream_price_per_1k_output_tokens::text,
 	markup_percent::text,
 	per_call_price_usd::text,
-	price_per_minute_audio_usd::text
+	price_per_minute_audio_usd::text,
+	price_per_1k_chars_audio_usd::text
 FROM he_api.model_pricing`
 
 // Querier is the minimal pgx surface Load needs. Satisfied by *pgxpool.Pool
@@ -58,11 +59,12 @@ func Load(ctx context.Context, q Querier) (*Snapshot, error) {
 			priceIn, priceOut, markup string
 			perCall                   *string
 			perMinuteAudio            *string
+			perCharsAudio             *string
 		)
-		if err := rows.Scan(&id, &at, &priceIn, &priceOut, &markup, &perCall, &perMinuteAudio); err != nil {
+		if err := rows.Scan(&id, &at, &priceIn, &priceOut, &markup, &perCall, &perMinuteAudio, &perCharsAudio); err != nil {
 			return nil, err
 		}
-		row, perr := parseRow(priceIn, priceOut, markup, perCall, perMinuteAudio)
+		row, perr := parseRow(priceIn, priceOut, markup, perCall, perMinuteAudio, perCharsAudio)
 		if perr != nil {
 			return nil, perr
 		}
@@ -82,7 +84,7 @@ func Load(ctx context.Context, q Querier) (*Snapshot, error) {
 }
 
 // parseRow parses the text-scanned NUMERIC columns into exact Decimals.
-func parseRow(priceIn, priceOut, markup string, perCall, perMinuteAudio *string) (Row, error) {
+func parseRow(priceIn, priceOut, markup string, perCall, perMinuteAudio, perCharsAudio *string) (Row, error) {
 	in, err := decimal.NewFromString(priceIn)
 	if err != nil {
 		return Row{}, err
@@ -110,6 +112,14 @@ func parseRow(priceIn, priceOut, markup string, perCall, perMinuteAudio *string)
 			return Row{}, err
 		}
 		r.PricePerMinuteAudio = &pm
+	}
+	// Story 9.7 — nullable per-1k-chars audio price (NULL for token + ASR models).
+	if perCharsAudio != nil {
+		pc, err := decimal.NewFromString(*perCharsAudio)
+		if err != nil {
+			return Row{}, err
+		}
+		r.PricePerCharsAudio = &pc
 	}
 	return r, nil
 }

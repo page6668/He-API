@@ -79,6 +79,7 @@ type Service struct {
 
 	client        *upstream.Client
 	asrClient     *upstream.ASRClient // Story 9.6 — Volcano ASR (nil → Transcribe fail-fasts)
+	ttsClient     *upstream.TTSClient // Story 9.7 — Volcano TTS (nil → Synthesize fail-fasts)
 	endpointMap   *upstream.EndpointMap
 	normaliser    usage.Normaliser
 	logger        *slog.Logger
@@ -91,6 +92,15 @@ type Service struct {
 // leaving the existing Chat path untouched.
 func (s *Service) WithASRClient(c *upstream.ASRClient) *Service {
 	s.asrClient = c
+	return s
+}
+
+// WithTTSClient wires the Story-9.7 Volcano TTS upstream client. A nil client (a
+// chat/ASR-only deployment that has not set the TTS envs) makes Synthesize
+// fail-fast with CodeUnavailable at request time (the 4.5 BR-1.12 precedent),
+// leaving the existing Chat + Transcribe paths untouched.
+func (s *Service) WithTTSClient(c *upstream.TTSClient) *Service {
+	s.ttsClient = c
 	return s
 }
 

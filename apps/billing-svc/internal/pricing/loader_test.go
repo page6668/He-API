@@ -14,6 +14,7 @@ var loadCols = []string{
 	"upstream_price_per_1k_input_tokens", "upstream_price_per_1k_output_tokens",
 	"markup_percent", "per_call_price_usd",
 	"price_per_minute_audio_usd",
+	"price_per_1k_chars_audio_usd",
 }
 
 // 7.1-UNIT-001 — boot-load resolves the latest-effective_at row per model.
@@ -27,9 +28,9 @@ func TestLoad_LatestEffectiveAtPerModel(t *testing.T) {
 	old := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	newer := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	rows := pgxmock.NewRows(loadCols).
-		AddRow("qwen-max", old, "0.0040", "0.0120", "10.00", (*string)(nil), (*string)(nil)).
-		AddRow("qwen-max", newer, "0.0080", "0.0240", "10.00", (*string)(nil), (*string)(nil)). // latest wins
-		AddRow("deepseek-v3", old, "0.0002", "0.0008", "15.00", (*string)(nil), (*string)(nil))
+		AddRow("qwen-max", old, "0.0040", "0.0120", "10.00", (*string)(nil), (*string)(nil), (*string)(nil)).
+		AddRow("qwen-max", newer, "0.0080", "0.0240", "10.00", (*string)(nil), (*string)(nil), (*string)(nil)). // latest wins
+		AddRow("deepseek-v3", old, "0.0002", "0.0008", "15.00", (*string)(nil), (*string)(nil), (*string)(nil))
 	mock.ExpectQuery("FROM he_api.model_pricing").WillReturnRows(rows)
 
 	snap, err := Load(context.Background(), mock)
@@ -56,7 +57,7 @@ func TestLoad_NullPerCall(t *testing.T) {
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
 	rows := pgxmock.NewRows(loadCols).
-		AddRow("m", time.Now().UTC(), "0.0080", "0.0240", "10.00", (*string)(nil), (*string)(nil))
+		AddRow("m", time.Now().UTC(), "0.0080", "0.0240", "10.00", (*string)(nil), (*string)(nil), (*string)(nil))
 	mock.ExpectQuery("FROM he_api.model_pricing").WillReturnRows(rows)
 
 	snap, err := Load(context.Background(), mock)
@@ -75,11 +76,11 @@ func TestLoad_SnapshotMiss(t *testing.T) {
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
 	rows := pgxmock.NewRows(loadCols).
-		AddRow("known", time.Now().UTC(), "0.0080", "0.0240", "10.00", (*string)(nil), (*string)(nil))
+		AddRow("known", time.Now().UTC(), "0.0080", "0.0240", "10.00", (*string)(nil), (*string)(nil), (*string)(nil))
 	mock.ExpectQuery("FROM he_api.model_pricing").WillReturnRows(rows)
 
 	snap, _ := Load(context.Background(), mock)
-	if _, err := snap.ComputeCost("missing", 100, 100, 0, perToken); err != ErrNoPricing {
+	if _, err := snap.ComputeCost(CostInput{ModelID: "missing", PromptTokens: 100, CompletionTokens: 100, Mode: perToken}); err != ErrNoPricing {
 		t.Fatalf("missing model err = %v, want ErrNoPricing", err)
 	}
 }

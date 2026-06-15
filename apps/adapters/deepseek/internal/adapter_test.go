@@ -323,3 +323,17 @@ func newServiceForTest(t *testing.T, fake *httptest.Server) *Service {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	return NewService(client, logger)
 }
+
+// 9.7-INT-010 — blast-radius proof: a non-Doubao adapter (deepseek) embeds
+// UnimplementedAdapterServiceHandler and therefore returns connect.CodeUnimplemented
+// for the additive Synthesize RPC — it never serves TTS (only doubao-tts resolves
+// to the Doubao service). The additive RPC is non-breaking for the 5 untouched adapters.
+func TestService_Synthesize_Unimplemented_BlastRadius(t *testing.T) {
+	svc := &Service{}
+	_, err := svc.Synthesize(context.Background(), connect.NewRequest(&adapterv1.SynthesizeRequest{
+		Model: "doubao-tts", Input: "hi", Voice: "v",
+	}))
+	if err == nil || connect.CodeOf(err) != connect.CodeUnimplemented {
+		t.Fatalf("err=%v code=%v, want CodeUnimplemented", err, connect.CodeOf(err))
+	}
+}

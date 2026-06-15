@@ -43,6 +43,7 @@ type ModelCapabilities struct {
 	Vision              bool `json:"vision"`
 	JSONMode            bool `json:"json_mode"`
 	Transcription       bool `json:"transcription"` // Story 9.6 — audio-transcription (ASR) capability
+	Speech              bool `json:"speech"`        // Story 9.7 — speech-synthesis (TTS) capability
 	ContextWindowTokens int  `json:"context_window_tokens"`
 	MaxOutputTokens     int  `json:"max_output_tokens"`
 }
@@ -99,6 +100,7 @@ func buildGatewayCatalogue(c modelscatalogue.Catalogue) ([]ModelEntry, map[strin
 			Vision:              e.Capabilities.Vision,
 			JSONMode:            e.Capabilities.JSONMode,
 			Transcription:       e.Capabilities.Transcription,
+			Speech:              e.Capabilities.Speech,
 			ContextWindowTokens: e.Capabilities.ContextWindowTokens,
 			MaxOutputTokens:     e.Capabilities.MaxOutputTokens,
 		}

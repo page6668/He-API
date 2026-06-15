@@ -52,6 +52,24 @@ type Row struct {
 	// (ASR) billing. nil for every token model (the nullable
 	// model_pricing.price_per_minute_audio_usd column); set for doubao-asr.
 	PricePerMinuteAudio *decimal.Decimal
+	// PricePerCharsAudio (Story 9.7) — USD per 1k INPUT CHARACTERS for
+	// PER_CHARACTER (TTS) billing. nil for every token + ASR model (the nullable
+	// model_pricing.price_per_1k_chars_audio_usd column); set for doubao-tts.
+	PricePerCharsAudio *decimal.Decimal
+}
+
+// CostInput is the structured input to ComputeCost (Story 9.7, Q-TTS-BILLING
+// ruling). Replacing the positional signature stops the per-modality parameter
+// churn (9.6 inserted audioDurationSeconds mid-signature; 9.7 would have added a
+// 6th positional). Each billing mode reads only the fields it needs; the others
+// stay zero-valued for non-applicable modes.
+type CostInput struct {
+	ModelID              string
+	PromptTokens         uint32
+	CompletionTokens     uint32
+	AudioDurationSeconds float64 // PER_MINUTE (ASR)
+	CharacterCount       uint32  // PER_CHARACTER (TTS) — gateway rune count
+	Mode                 billingv1.BillingMode
 }
 
 // Snapshot is an immutable model_id → Row view. The zero value (and a nil
@@ -111,14 +129,33 @@ type Result struct {
 //
 // All arithmetic is Decimal — NEVER float64 (M-1). Rounding is half-away-from-
 // zero == HALF-UP for the non-negative money domain (Q-ROUND).
-func (s *Snapshot) ComputeCost(modelID string, promptTokens, completionTokens uint32, audioDurationSeconds float64, mode billingv1.BillingMode) (Result, error) {
-	row, ok := s.Row(modelID)
+func (s *Snapshot) ComputeCost(in CostInput) (Result, error) {
+	row, ok := s.Row(in.ModelID)
 	if !ok {
 		return Result{}, ErrNoPricing
 	}
 
 	outOfRange := row.Markup.LessThan(markupMin) || row.Markup.GreaterThan(markupMax)
 	multiplier := one.Add(row.Markup.Div(hundred))
+
+	// Story 9.7 — PER_CHARACTER (TTS) mode REPLACES per-token: bill per INPUT
+	// character (Q-TTS-BILLING RATIFIED):
+	//
+	//	cost = (character_count/1000) × price_per_1k_chars_audio_usd × (1+markup)
+	//
+	// Fail-CLOSED: a PER_CHARACTER event for a model with NO per-1k-chars price →
+	// ErrNoPricing (the caller DLQs; never a silent zero-cost ledger row —
+	// BR-D-3 / BR-3.4). The char count is the gateway-validated rune count
+	// (len([]rune(input))); the gateway is the sole authority (BR-4.5). All
+	// arithmetic is pure-Decimal (M-1).
+	if in.Mode == billingv1.BillingMode_BILLING_MODE_PER_CHARACTER {
+		if row.PricePerCharsAudio == nil {
+			return Result{}, ErrNoPricing
+		}
+		chars := decimal.NewFromInt(int64(in.CharacterCount))
+		cost := chars.Div(thousand).Mul(*row.PricePerCharsAudio).Mul(multiplier).Round(CostScale)
+		return Result{Cost: cost, MarkupOutOfRange: outOfRange}, nil
+	}
 
 	// Story 9.6 — PER_MINUTE (ASR) mode REPLACES per-token: bill per audio
 	// duration, ceil-to-SECOND (Q-ASR-BILLING RATIFIED):
@@ -130,11 +167,11 @@ func (s *Snapshot) ComputeCost(modelID string, promptTokens, completionTokens ui
 	// BR-D-3). The duration arrives as a proto double; NewFromFloat→Ceil pins it
 	// to an exact integer-second count BEFORE any money arithmetic, so the
 	// per-second math stays pure-Decimal (M-1 — no float64 on the money path).
-	if mode == billingv1.BillingMode_BILLING_MODE_PER_MINUTE {
+	if in.Mode == billingv1.BillingMode_BILLING_MODE_PER_MINUTE {
 		if row.PricePerMinuteAudio == nil {
 			return Result{}, ErrNoPricing
 		}
-		seconds := decimal.NewFromFloat(audioDurationSeconds).Ceil()
+		seconds := decimal.NewFromFloat(in.AudioDurationSeconds).Ceil()
 		cost := seconds.Mul(row.PricePerMinuteAudio.Div(sixty)).Mul(multiplier).Round(CostScale)
 		return Result{Cost: cost, MarkupOutOfRange: outOfRange}, nil
 	}
@@ -142,15 +179,15 @@ func (s *Snapshot) ComputeCost(modelID string, promptTokens, completionTokens ui
 	// Per-call mode REPLACES per-token when enabled for the model (Q-PERCALL).
 	// Unreachable in 7.1 (no row carries PerCallPrice), but wired for forward-
 	// compat (UNIT-017).
-	if mode == billingv1.BillingMode_BILLING_MODE_PER_CALL && row.PerCallPrice != nil {
+	if in.Mode == billingv1.BillingMode_BILLING_MODE_PER_CALL && row.PerCallPrice != nil {
 		return Result{
 			Cost:             row.PerCallPrice.Round(CostScale),
 			MarkupOutOfRange: outOfRange,
 		}, nil
 	}
 
-	prompt := decimal.NewFromInt(int64(promptTokens))
-	completion := decimal.NewFromInt(int64(completionTokens))
+	prompt := decimal.NewFromInt(int64(in.PromptTokens))
+	completion := decimal.NewFromInt(int64(in.CompletionTokens))
 
 	base := prompt.Div(thousand).Mul(row.PriceIn).
 		Add(completion.Div(thousand).Mul(row.PriceOut))

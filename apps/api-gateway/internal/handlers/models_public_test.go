@@ -84,8 +84,8 @@ func Test_PublicModelsHandler_method_and_header_permutations(t *testing.T) {
 				if resp.Object != "list" {
 					t.Errorf("object = %q, want \"list\"", resp.Object)
 				}
-				if len(resp.Data) != 14 {
-					t.Errorf("len(data) = %d, want 14 (Story 9.6 — +doubao-asr)", len(resp.Data))
+				if len(resp.Data) != 15 {
+					t.Errorf("len(data) = %d, want 15 (Story 9.7 — +doubao-tts)", len(resp.Data))
 				}
 				return
 			}
@@ -149,8 +149,8 @@ func Test_PublicModelsHandler_slog_omits_api_key_id(t *testing.T) {
 	if v, ok := gotAttrs["api_key_id"]; ok {
 		t.Errorf("attr api_key_id MUST NOT appear on public-endpoint slog; got %v", v)
 	}
-	if v, _ := gotAttrs["catalogue_size"].(int64); v != 14 {
-		t.Errorf("attr catalogue_size = %v, want 14", gotAttrs["catalogue_size"])
+	if v, _ := gotAttrs["catalogue_size"].(int64); v != 15 {
+		t.Errorf("attr catalogue_size = %v, want 15", gotAttrs["catalogue_size"])
 	}
 }
 

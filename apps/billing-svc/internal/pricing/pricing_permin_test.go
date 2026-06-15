@@ -48,7 +48,7 @@ func TestComputeCost_PerMinute_BoundaryTable(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			res, err := s.ComputeCost("doubao-asr", 0, 0, c.seconds, perMinute)
+			res, err := s.ComputeCost(CostInput{ModelID: "doubao-asr", AudioDurationSeconds: c.seconds, Mode: perMinute})
 			if err != nil {
 				t.Fatalf("err=%v", err)
 			}
@@ -66,11 +66,11 @@ func TestComputeCost_PerMinute_NoPrice_FailClosed(t *testing.T) {
 	tokenSnap := NewSnapshot(map[string]Row{
 		"deepseek-v3": {PriceIn: dec(t, "0.0014"), PriceOut: dec(t, "0.0028"), Markup: dec(t, "10.00")},
 	})
-	if _, err := tokenSnap.ComputeCost("deepseek-v3", 0, 0, 5.0, perMinute); err != ErrNoPricing {
+	if _, err := tokenSnap.ComputeCost(CostInput{ModelID: "deepseek-v3", AudioDurationSeconds: 5.0, Mode: perMinute}); err != ErrNoPricing {
 		t.Fatalf("err=%v, want ErrNoPricing (fail-closed, no silent zero)", err)
 	}
 	// A missing model → ErrNoPricing regardless of mode.
-	if _, err := tokenSnap.ComputeCost("doubao-asr", 0, 0, 5.0, perMinute); err != ErrNoPricing {
+	if _, err := tokenSnap.ComputeCost(CostInput{ModelID: "doubao-asr", AudioDurationSeconds: 5.0, Mode: perMinute}); err != ErrNoPricing {
 		t.Fatalf("missing model err=%v, want ErrNoPricing", err)
 	}
 }
@@ -80,11 +80,11 @@ func TestComputeCost_PerMinute_NoPrice_FailClosed(t *testing.T) {
 func TestComputeCost_DurationIgnoredByTokenModes(t *testing.T) {
 	s := snap(t, "qwen-max", "0.0080", "0.0240", "10.00")
 	// PER_TOKEN with a nonzero duration must equal PER_TOKEN with zero duration.
-	a, err := s.ComputeCost("qwen-max", 1500, 800, 0, perToken)
+	a, err := s.ComputeCost(CostInput{ModelID: "qwen-max", PromptTokens: 1500, CompletionTokens: 800, AudioDurationSeconds: 0, Mode: perToken})
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := s.ComputeCost("qwen-max", 1500, 800, 9999, perToken)
+	b, err := s.ComputeCost(CostInput{ModelID: "qwen-max", PromptTokens: 1500, CompletionTokens: 800, AudioDurationSeconds: 9999, Mode: perToken})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestComputeCost_DurationIgnoredByTokenModes(t *testing.T) {
 // 9.6-UNIT-016 — the canonical story worked example (3.2s @ 0.006/min, 10%).
 func TestComputeCost_PerMinute_StoryExample(t *testing.T) {
 	s := asrSnap(t, "0.006000", "10.00")
-	res, err := s.ComputeCost("doubao-asr", 0, 0, 3.2, perMinute)
+	res, err := s.ComputeCost(CostInput{ModelID: "doubao-asr", AudioDurationSeconds: 3.2, Mode: perMinute})
 	if err != nil {
 		t.Fatal(err)
 	}

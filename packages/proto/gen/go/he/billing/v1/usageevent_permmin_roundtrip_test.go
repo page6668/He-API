@@ -101,8 +101,9 @@ func TestBillingMode_EnumDescriptor(t *testing.T) {
 	if v == nil || string(v.Name()) != "BILLING_MODE_PER_MINUTE" {
 		t.Fatalf("PER_MINUTE=3 missing from enum descriptor")
 	}
-	if ed.Values().Len() != 4 {
-		t.Fatalf("BillingMode value count = %d, want 4", ed.Values().Len())
+	// 9.7 added BILLING_MODE_PER_CHARACTER=4 (additive) → 5 values.
+	if ed.Values().Len() != 5 {
+		t.Fatalf("BillingMode value count = %d, want 5", ed.Values().Len())
 	}
 	if BillingMode_name[3] != "BILLING_MODE_PER_MINUTE" || BillingMode_value["BILLING_MODE_PER_MINUTE"] != 3 {
 		t.Fatalf("BillingMode name/value maps not updated")

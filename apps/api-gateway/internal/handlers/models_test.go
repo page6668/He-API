@@ -82,8 +82,8 @@ func doModelsGet(h *ModelsHandler, ctx context.Context) *httptest.ResponseRecord
 func Test_ModelsCatalogue_BR_1_4_invariants(t *testing.T) {
 	t.Parallel()
 
-	if got := len(modelsCatalogue); got != 14 {
-		t.Fatalf("len(modelsCatalogue) = %d, want 14 (Architect OQ1 + 2 Vision + 1 ASR doubao-asr, Story 9.6)", got)
+	if got := len(modelsCatalogue); got != 15 {
+		t.Fatalf("len(modelsCatalogue) = %d, want 15 (Architect OQ1 + 2 Vision + doubao-asr 9.6 + doubao-tts 9.7)", got)
 	}
 
 	idRe := regexp.MustCompile(`^[a-z0-9][a-z0-9.\-]*$`)
@@ -271,9 +271,9 @@ func Test_ModelsHandler_emits_exactly_one_log_line_per_request(t *testing.T) {
 	if v, _ := gotAttrs["api_key_id"].(string); v != modelsTestAPIKeyID {
 		t.Errorf("attr api_key_id = %v, want %q", gotAttrs["api_key_id"], modelsTestAPIKeyID)
 	}
-	if v, _ := gotAttrs["catalogue_size"].(int64); v != 14 {
+	if v, _ := gotAttrs["catalogue_size"].(int64); v != 15 {
 		// slog.Int stores as int64
-		t.Errorf("attr catalogue_size = %v, want 14", gotAttrs["catalogue_size"])
+		t.Errorf("attr catalogue_size = %v, want 15", gotAttrs["catalogue_size"])
 	}
 }
 
@@ -613,7 +613,7 @@ func Test_ModelsHandler_response_carries_capabilities_field_on_every_entry(t *te
 	if err := json.Unmarshal(rr.Body.Bytes(), &envelope); err != nil {
 		t.Fatalf("unmarshal: %v\nbody=%s", err, rr.Body.String())
 	}
-	if got, want := len(envelope.Data), 14; got != want {
+	if got, want := len(envelope.Data), 15; got != want {
 		t.Fatalf("len(data) = %d, want %d", got, want)
 	}
 	for i, e := range envelope.Data {
@@ -656,6 +656,8 @@ func Test_ModelsHandler_capabilities_match_BR_1_3_verbatim(t *testing.T) {
 		"glm-4v":      {Chat: true, Streaming: true, FunctionCalling: false, Vision: true, JSONMode: false, ContextWindowTokens: 8192, MaxOutputTokens: 4096},
 		// Story 9.6 — the ASR model (Chat:false, Transcription:true; no token window).
 		"doubao-asr": {Chat: false, Streaming: false, FunctionCalling: false, Vision: false, JSONMode: false, Transcription: true, ContextWindowTokens: 0, MaxOutputTokens: 0},
+		// Story 9.7 — the TTS model (Chat:false, Transcription:false, Speech:true; no token window).
+		"doubao-tts": {Chat: false, Streaming: false, FunctionCalling: false, Vision: false, JSONMode: false, Transcription: false, Speech: true, ContextWindowTokens: 0, MaxOutputTokens: 0},
 	}
 
 	h := NewModelsHandler(silentLogger())
@@ -709,7 +711,7 @@ func Test_ModelEntry_JSON_field_order_is_canonical_BR_1_4(t *testing.T) {
 	// id → object → created → owned_by → capabilities (LAST). The capabilities
 	// object's own internal order is also asserted: BR-1.2 (+ Story 9.6
 	// transcription inserted after json_mode).
-	re := regexp.MustCompile(`^\{"id":"qwen-max","object":"model","created":1700000000,"owned_by":"alibaba","capabilities":\{"chat":true,"streaming":true,"function_calling":true,"vision":false,"json_mode":true,"transcription":false,"context_window_tokens":32768,"max_output_tokens":8192\}\}$`)
+	re := regexp.MustCompile(`^\{"id":"qwen-max","object":"model","created":1700000000,"owned_by":"alibaba","capabilities":\{"chat":true,"streaming":true,"function_calling":true,"vision":false,"json_mode":true,"transcription":false,"speech":false,"context_window_tokens":32768,"max_output_tokens":8192\}\}$`)
 	if !re.Match(buf) {
 		t.Errorf("marshalled ModelEntry violates BR-1.4 field order\n  got: %s", buf)
 	}
@@ -774,8 +776,8 @@ func Test_ModelsHandler_emits_models_list_v1_event(t *testing.T) {
 	if v, _ := gotAttrs["api_key_id"].(string); v != modelsTestAPIKeyID {
 		t.Errorf("attr api_key_id = %v, want %q", gotAttrs["api_key_id"], modelsTestAPIKeyID)
 	}
-	if v, _ := gotAttrs["catalogue_size"].(int64); v != 14 {
-		t.Errorf("attr catalogue_size = %v, want 14", gotAttrs["catalogue_size"])
+	if v, _ := gotAttrs["catalogue_size"].(int64); v != 15 {
+		t.Errorf("attr catalogue_size = %v, want 15", gotAttrs["catalogue_size"])
 	}
 }
 

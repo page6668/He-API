@@ -22,8 +22,9 @@ func TestDoubaoASR_CatalogueEntry(t *testing.T) {
 	if !e.Capabilities.Transcription {
 		t.Fatal("doubao-asr must be Transcription:true")
 	}
-	// It is the ONLY non-chat model; every other model is a chat model and is
-	// NOT transcription-capable.
+	// doubao-asr is the ONLY Transcription:true model; every other model is
+	// Transcription:false. (Post-9.7 the non-chat set is {doubao-asr, doubao-tts}
+	// — that broader fence is asserted in doubao_tts_test.go.)
 	for _, m := range DefaultCatalogue.List() {
 		if m.ID == "doubao-asr" {
 			continue
@@ -31,20 +32,21 @@ func TestDoubaoASR_CatalogueEntry(t *testing.T) {
 		if m.Capabilities.Transcription {
 			t.Errorf("model %q unexpectedly Transcription:true", m.ID)
 		}
-		if !m.Capabilities.Chat {
-			t.Errorf("model %q unexpectedly Chat:false (only doubao-asr is non-chat)", m.ID)
-		}
 	}
 }
 
-// 9.6-UNIT-020 — declaration order preserved: doubao-asr is appended LAST so the
+// 9.6-UNIT-020 (updated for 9.7) — declaration order preserved: doubao-asr keeps
+// its index 13 (penultimate) and doubao-tts is appended LAST at index 14, so the
 // existing index ordering (0-12) is unperturbed (BR-1.10 load-bearing order).
 func TestDoubaoASR_AppendedLast(t *testing.T) {
 	list := DefaultCatalogue.List()
-	if got := list[len(list)-1].ID; got != "doubao-asr" {
-		t.Fatalf("last catalogue entry = %q, want doubao-asr (appended last)", got)
+	if len(list) != 15 {
+		t.Fatalf("catalogue size = %d, want 15 (9.7 appended doubao-tts)", len(list))
 	}
-	if len(list) != 14 {
-		t.Fatalf("catalogue size = %d, want 14", len(list))
+	if got := list[13].ID; got != "doubao-asr" {
+		t.Fatalf("index 13 = %q, want doubao-asr (9.6 position preserved)", got)
+	}
+	if got := list[14].ID; got != "doubao-tts" {
+		t.Fatalf("last catalogue entry = %q, want doubao-tts (9.7 appended last)", got)
 	}
 }

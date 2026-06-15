@@ -29,19 +29,20 @@ import (
 type ErrorKind string
 
 const (
-	ErrorKindAuthRevoked              ErrorKind = "auth_revoked"
-	ErrorKindRateLimitThrottle        ErrorKind = "rate_limit_throttle" // BR-4.4 REUSE Story-4.2
-	ErrorKindUpstream5xx              ErrorKind = "upstream_5xx"
-	ErrorKindUpstream4xx              ErrorKind = "upstream_4xx"
-	ErrorKindUpstreamTimeout          ErrorKind = "upstream_timeout"
-	ErrorKindTLS                      ErrorKind = "tls"
-	ErrorKindDNS                      ErrorKind = "dns"
-	ErrorKindConnectionRefused        ErrorKind = "connection_refused"
-	ErrorKindMissingUsage             ErrorKind = "missing_usage"
-	ErrorKindEmptyChoices             ErrorKind = "empty_choices"
-	ErrorKindMalformedChunk           ErrorKind = "malformed_chunk"
-	ErrorKindUsageConstraint          ErrorKind = "usage_constraint_violation"
-	ErrorKindEndpointIDNotConfigured  ErrorKind = "endpoint_id_not_configured" // NEW Story-4.5 BR-4.6
+	ErrorKindAuthRevoked             ErrorKind = "auth_revoked"
+	ErrorKindRateLimitThrottle       ErrorKind = "rate_limit_throttle" // BR-4.4 REUSE Story-4.2
+	ErrorKindUpstream5xx             ErrorKind = "upstream_5xx"
+	ErrorKindUpstream4xx             ErrorKind = "upstream_4xx"
+	ErrorKindUpstreamTimeout         ErrorKind = "upstream_timeout"
+	ErrorKindTLS                     ErrorKind = "tls"
+	ErrorKindDNS                     ErrorKind = "dns"
+	ErrorKindConnectionRefused       ErrorKind = "connection_refused"
+	ErrorKindMissingUsage            ErrorKind = "missing_usage"
+	ErrorKindEmptyChoices            ErrorKind = "empty_choices"
+	ErrorKindMalformedChunk          ErrorKind = "malformed_chunk"
+	ErrorKindUsageConstraint         ErrorKind = "usage_constraint_violation"
+	ErrorKindEndpointIDNotConfigured ErrorKind = "endpoint_id_not_configured" // NEW Story-4.5 BR-4.6
+	ErrorKindOutputTooLarge          ErrorKind = "output_too_large"           // NEW Story-9.7 BR-4.3 (synthesized audio over the cap)
 )
 
 // ClassifyError turns a transport-level or HTTP-level error into an

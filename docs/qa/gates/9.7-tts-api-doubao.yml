@@ -1,0 +1,114 @@
+schema: 1
+story: "9.7"
+story_title: "TTS API + Doubao"
+gate: "PASS"
+status_reason: "Round 2 incremental review. The sole Round-1 CONCERNS item — M-1 (architecture_concern): AC3 BR-3.7's EXACT pre-flight `balance ≥ char_count×price` gate reconciled to the shared `balance>0` billingGate middleware — has been RULED by the Architect (Wright, Round 2, 2026-06-15): option (a) RATIFY the `balance>0` reconciliation as the amended BR-3.7, ZERO code change. The Round-1 'EXACT gate' wording is WITHDRAWN — it contradicted the cost-SoT invariant upheld in the same review (an exact gateway-side estimate forces the gateway to hold pricing → a second cost SoT, forbidden 4.1–4.8; project_cost_source_oq5_usage_ledger). The implementation already satisfies the amended contract — QA independently re-verified in-code: gateway uses the shared billingGate hard-zero `balance ≤ 0 → 402` (identical to chat/embeddings/ASR), holds NO USD pricing, emits only the RAW character_count on the PER_CHARACTER UsageEvent; billing-svc remains the SOLE cost authority; exactly-once usage_ledger + atomic debit unchanged (audio_speech.go:22-28 documents the rationale; billinggate.go:88 LessThanOrEqual(decimal.Zero)). Residual ≤ ~$0.07/request bounded overdraft — non-regressive, identical in kind to every metered endpoint's final in-flight request, and RESTORES consistency with the ratified 9.6 ASR gate. All FOUR non-negotiable gate suites independently re-confirmed GREEN under `go test -race` (PII no-leak INT-028; money one-SoT incl CostInput zero-drift UNIT-018/019 + INT-018 + golden vectors; capability-fence regression all-ids INT-005/006/007; binary-response integrity INT-008). Blast radius proven (deepseek Synthesize→CodeUnimplemented; 5 untouched adapters build+pass). Migration 0017 additive/reversible/non-destructive. L-1 (checkbox hygiene) is non-blocking and delegated to Dev/SM per the ruling. 0 critical / 0 high / 0 medium / 1 low (non-blocking). → PASS, close to Done."
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-15T22:10:00+0800"
+
+review_round: 2
+review_mode_type: incremental
+issues_from_previous_round: 1          # M-1 (medium, architecture_concern)
+issues_resolved: 1                     # M-1 ratified by Architect option (a), zero code change
+improvement_percentage: 100
+
+incremental_context:
+  cached_risk_level: "HIGH"
+  cached_review_mode: "full_testing"
+  cached_project_type: "web_backend"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues:
+    - { checkbox_text: "T1.1–T7.4 (all)", issue_type: "unchecked_but_complete" }   # L-1, non-blocking, delegated to Dev/SM
+
+waiver: { active: false }
+
+architecture_concern: false            # M-1 resolved by Architect Round-2 ruling
+
+top_issues:
+  - id: "L-1"
+    severity: low
+    finding: "Every Task/Subtask checkbox (T1.1–T7.4) is left unchecked `[ ]` despite the work being complete and test-backed (the INVERSE of the dangerous case — work done, boxes not ticked)."
+    evidence: "docs/stories/9.7-tts-api-doubao.md ## Tasks — all `[ ]`; yet the AC Traceability Matrix is fully populated with real file:line anchors and all suites pass."
+    disposition: "Hygiene only — Dev/SM tick the boxes (explicitly delegated by the Architect Round-2 ruling as non-blocking). AC coverage independently verified via code + tests. Does not block PASS/Done."
+
+resolved_issues:
+  - id: "M-1"
+    severity: medium
+    architecture_concern: true
+    finding: "AC3 BR-3.7 ratified an EXACT pre-flight `balance ≥ char_count×price` gate; Dev reconciled it to the shared `balance>0` billingGate middleware because an EXACT gateway-side estimate requires gateway pricing → a second cost SoT, which the ratified cost-SoT invariant forbids."
+    resolution: "Architect (Wright) Round-2 ruling option (a): RATIFY the `balance>0` reconciliation as the amended BR-3.7. ZERO code change. The Round-1 'EXACT gate' wording is WITHDRAWN as internally inconsistent (the invariant outranks the improvement). Binding contract: TTS uses the shared Story-7.1 billingGate hard-zero `balance ≤ 0 → 402`; gateway holds NO pricing + emits raw character_count; billing-svc sole cost authority; exactly-once usage_ledger unchanged. Verified in-code (billinggate.go:88, audio_speech.go:22-28, emitTTSUsage). Residual ≤ ~$0.07 bounded overdraft non-regressive, restores 9.6 ASR-gate consistency. Option (b) (gateway pricing snapshot) rejected for 9.7 scope → optional future platform enhancement."
+    evidence: "story ## Architect Review Results → 'Round 2 Ruling (M-1)'; story status note; QA independent in-code re-verification (audio_speech.go cost-SoT comment + billingGate middleware)."
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 0          # per-module suites; all 9.7-touched packages report `ok` under -race
+    passed_count: 0
+    failed_count: 0
+    skipped_count: 0
+    pass_rate: 100
+    coverage_percentage: 0
+    failed_tests: []
+    integrity_check: "QA Round-2 independently re-ran `go test -race` per module: packages/proto OK, packages/models-catalogue OK, apps/billing-svc/internal/{pricing,ledger} OK (CostInput golden vectors byte-identical — TestComputeCost_GoldenVectors + TestComputeCost_FloatSlipGuard_M1 + PER_CHARACTER boundary table all PASS), apps/api-gateway/internal/handlers OK (audio_speech suite: HappyPath_BinaryResponse, CapabilityGate_FailClosed, NoPIILeak, MimeMismatch, OutputBound, CharCap_Runes, Safety_FlaggedInput_Blocked, BodyCapExceeded all PASS), apps/api-gateway/internal/adapterclient OK, apps/api-gateway/tests + tests/security OK, apps/adapters/doubao OK (internal + upstream tts + cmd/server boot gate), apps/adapters/deepseek OK (blast-radius CodeUnimplemented). NO discrepancy with Dev claim. The ONLY failing package is apps/api-gateway/internal/analyticsquery — 9.1b-* stub tests ('not implemented', TestSeries_*) for a DIFFERENT in-progress story (untracked series_*.go); NOT in 9.7's File List. Unrelated to this review."
+  e2e:
+    executed: true     # in-process httptest full-flow + fake-upstream + proto round-trip
+    passed: true
+    skipped: false
+    skip_reason: "Cross-service CI/staging e2e (T7.1) + live-Volcano TTS contract + `atlas migrate` apply/reverse of 0017 are env-limited locally (atlas/docker unavailable — project_toolchain_env_limits); exercised via in-process httptest + fake-upstream + hand-verified migration."
+    scenarios_tested: 1
+    scenarios_passed: 1
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: "docs/qa/evidence/9.7/"
+  issues: []
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 6
+  security_sensitive: true
+  dev_gate_score: 95
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 1 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "Q-TTS-UPSTREAM live-Volcano TTS contract (/api/v1/tts, operation:query, base64-in-JSON, Authorization: Bearer;{token}) — tested against fake-upstream; live base-URL/account-provisioning confirm is a pre-production ops gate (env-limit deferral, not a code defect)."
+      - "T7.1 cross-service CI/staging e2e + atlas migrate apply/reverse of 0017 — env-limited locally; hand-verified additive; run in CI."
+      - "OPTIONAL future platform enhancement (Architect-captured, NOT a 9.7 requirement): a uniform cost-SoT-safe EXACT pre-flight *hold* across all metered endpoints (would shave the ≤ ~$0.07 worst-case last-request overdraft platform-wide)."
+
+nfr_validation:
+  security: { status: PASS, notes: "PII no-leak CLEAN (INT-028) — input text + synthesized audio bytes never reach any log/slog/span/error/analytics sink (grep-audited; logs carry only model/api_key_id/voice/response_format/character_count/audio_bytes_size). 64 KiB body cap before json.Decode; HARD 4096-rune input cap (gateway-computed, anti-underpay BR-4.5); 20 MiB output bound (adapter + gateway, defence-in-depth); content-safety scans the INPUT text (do-NOT-regress vs 9.6's opaque audio), OUTPUT audio NOT scanned; reject-before-dispatch ordering (validate→capability-gate→safety→resolve→synthesize); no durable audio / no temp files." }
+  performance: { status: PASS, notes: "64 KiB read cap before parse; unary bounded audio body ≤ 20 MiB; no audio transcoding on our tier; TPM axis not incremented (no tokens)." }
+  reliability: { status: PASS, notes: "Both additive protos (adapter Synthesize RPC + billing PER_CHARACTER/character_count) proven non-breaking; 5 untouched adapters + existing Chat/Transcribe round-trips byte-identical; -race clean; PER_CHARACTER fail-closes (ErrNoPricing) on a missing per-1k-chars price — never a silent zero-charge; mime mismatch → 502; empty audio → 502; timeout → 504 zero-billing. Conditional boot gate reuses the 9.6 asrBootGateError shape." }
+  maintainability: { status: PASS, notes: "gofmt + vet clean across touched modules. ComputeCost refactored to a CostInput struct (Architect Q-TTS-BILLING ruling) — stops per-modality positional churn; 9 call sites updated, golden vectors byte-identical. In-code rationale documents the cost-SoT reconciliation (amended BR-3.7)." }
+
+evidence_summary:
+  ac_covered: [1, 2, 3, 4]
+  ac_gaps: []
+  ratified_contracts_implemented: [Q-TTS-WIRE, Q-TTS-TOPOLOGY, Q-TTS-UPSTREAM, Q-TTS-BILLING, Q-TTS-MODELID, Q-TTS-RESPFORMAT, Q-TTS-LIMITS]
+  ratified_contract_deviations: []     # M-1 BR-3.7 reconciliation RATIFIED by Architect Round-2 ruling (amended BR-3.7 = the shared balance>0 gate)
+  amended_contracts:
+    - "BR-3.7 amended (Architect Round-2): the TTS pre-flight gate IS the shared balance>0 billingGate middleware (NOT an exact char×price gate); the Round-1 'EXACT' wording is withdrawn as cost-SoT-inconsistent. Implementation already conforms — zero code change."
+  low_issue_resolutions_verified:
+    - "SynthesizeResponse.character_count DROPPED (Architect Low-1) — proto carries only audio=1, mime_type=2; gateway bills from its own rune count."
+    - "opus Content-Type pinned to audio/ogg (Architect Low-2) — speechFormatMIME map, single value."
+    - "maxSynthesizedAudioBytes = 20 MiB pinned (Architect Low-3) — const, not a placeholder."
+  non_negotiable_gate_items:
+    INT-028_PII_no_leak: "PASS — input text + synthesized audio never logged/spanned/errored/analytics'd; logs are size/signal-only (TestSpeech_NoPIILeak)."
+    money_one_SoT_CostInput_zero_drift: "PASS — UNIT-018/019 + INT-018 golden vectors byte-identical post-CostInput refactor (TestComputeCost_GoldenVectors, TestComputeCost_FloatSlipGuard_M1); PER_CHARACTER fail-closes; exactly-once usage_ledger + atomic debit unchanged (BLIND-CONCURRENCY-001, BLIND-DATA-001/002)."
+    INT-005_006_007_fence_regression_all_ids: "PASS — doubao-tts pinned Speech:true/Chat:false/Transcription:false; Speech gate fail-closed (TestSpeech_CapabilityGate_FailClosed); 9.6 Chat:true/Transcription fences still exclude doubao-tts from chat/ASR (TestChatFence_*)."
+    INT-008_binary_response_integrity: "PASS — Content-Type/Content-Length set before first write; captureWriter passes 200 bodies through unwrapped; mime cross-check → 502 on mismatch (TestSpeech_MimeMismatch); NOT JSON-wrapped (TestSpeech_HappyPath_BinaryResponse)."
+  unrelated_preexisting_failures:
+    - "apps/api-gateway/internal/analyticsquery — 9.1b-* stub tests ('not implemented', TestSeries_*) for a separate in-progress story (untracked series_*.go); NOT in 9.7's File List. Does not block 9.7."
+  env_limit_deferrals:
+    - "T7.1 cross-service CI/staging e2e (atlas/docker unavailable) — in-process httptest + fake-upstream variant covered."
+    - "T7.3 atlas migrate apply/reverse of 0017 — hand-verified additive/reversible; not executed locally."
+    - "Q-TTS-UPSTREAM live-Volcano TTS contract — tested against fake-upstream; live base-URL/account confirm is a pre-production ops gate."

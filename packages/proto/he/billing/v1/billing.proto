@@ -45,6 +45,11 @@ enum BillingMode {
   // ceil(audio_duration_seconds) × price_per_minute_audio_usd/60 × (1+markup).
   // Additive next enum value; existing modes unchanged.
   BILLING_MODE_PER_MINUTE = 3;
+  // Story 9.7 — per-input-character billing (TTS). cost =
+  // (character_count/1000) × price_per_1k_chars_audio_usd × (1+markup).
+  // char count = len([]rune(input)) (Unicode runes, OpenAI parity), computed by
+  // the gateway (the sole authority — BR-4.5). Additive next enum value.
+  BILLING_MODE_PER_CHARACTER = 4;
 }
 
 // UsageEvent is the `usage.recorded` Kafka payload (JSON-serialized on the wire,
@@ -71,6 +76,12 @@ message UsageEvent {
   // for every existing consumer). The billing dimension the per-minute cost
   // formula reads. Additive next tag (1-13 used).
   double audio_duration_seconds = 14;
+  // Story 9.7 — gateway-validated input rune count for TTS (PER_CHARACTER)
+  // events. 0/absent for every non-TTS event (proto3 zero-value → non-breaking).
+  // The billing dimension the per-character cost formula reads; the gateway is
+  // the SOLE authority for this value (computed len([]rune(input)) — BR-4.5).
+  // Additive next tag (1-14 used).
+  uint32 character_count = 15;
 }
 
 // CheckBalanceRequest asks for a user's PG-authoritative balance.

@@ -54,6 +54,12 @@ var DefaultRegistry = Registry{
 		// catalogue, which is exactly why the BR-1.6 Chat:true fence is needed
 		// on /v1/chat/completions. Rides the existing doubao adapter service.
 		{ID: "doubao-asr", Vendor: "bytedance"},
+		// Story 9.7 — the first TTS model. Appended at the END so the existing
+		// index ordering (0-13) is preserved (BR-1.10). It is Chat:false /
+		// Transcription:false / Speech:true — dispatchable ONLY on
+		// /v1/audio/speech (the BR-1.6 fences exclude it from chat + ASR). Rides
+		// the existing doubao adapter service.
+		{ID: "doubao-tts", Vendor: "bytedance"},
 	},
 	Capabilities: map[string]Capabilities{
 		"qwen-max":          {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 32768, MaxOutputTokens: 8192},
@@ -77,6 +83,11 @@ var DefaultRegistry = Registry{
 		// ON /v1/audio/transcriptions). No token window (audio has no token
 		// dimension); not streaming (Whisper transcription is single-shot).
 		"doubao-asr": {Chat: false, Streaming: false, FunctionCalling: false, Vision: false, JSONMode: false, Transcription: true, ContextWindowTokens: 0, MaxOutputTokens: 0},
+		// Story 9.7 — TTS id. Chat:false / Transcription:false (gated off
+		// /v1/chat/completions + /v1/audio/transcriptions by the 9.6 fences),
+		// Speech:true (gates ON /v1/audio/speech). No token window (audio has no
+		// token dimension); not streaming (9.7 returns a single audio body).
+		"doubao-tts": {Chat: false, Streaming: false, FunctionCalling: false, Vision: false, JSONMode: false, Transcription: false, Speech: true, ContextWindowTokens: 0, MaxOutputTokens: 0},
 	},
 }
 
