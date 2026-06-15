@@ -470,6 +470,21 @@ func main() {
 			} else {
 				logger.Warn("usage store does not implement LogsStore — GET /v1/me/usage/logs disabled")
 			}
+
+			// Story 9.1b AC1 — usage trend read endpoint (GET /v1/me/usage/series),
+			// the trend-chart feed. Reuses the SAME usageStore ClickHouse pool (no
+			// second CH path — BR-CH-SERIES-1) via the SeriesStore facet, IDOR-
+			// fenced on user_id=$JWT.sub (BR-CH-SERIES-3) and wrapped by the
+			// identical RequireJWT. The tzResolver gives Q-TZ day-bucketing parity
+			// with /summary. SM default = no cost series (H-1-R), so no PG path here.
+			if seriesStore, ok := usageStore.(analyticsquery.SeriesStore); ok {
+				seriesHandler := analyticsquery.NewSeriesHandler(seriesStore, tzResolver, logger)
+				mux.Handle("GET /v1/me/usage/series",
+					jwtVerifier.RequireJWT(http.HandlerFunc(seriesHandler.HandleSeries)))
+				logger.Info("usage series endpoint wired (GET /v1/me/usage/series; IDOR-fenced trend feed, <=90d, Q-TZ buckets)")
+			} else {
+				logger.Warn("usage store does not implement SeriesStore — GET /v1/me/usage/series disabled")
+			}
 		}
 	} else {
 		logger.Warn("HE_API_CLICKHOUSE_DSN unset — GET /v1/me/usage/summary disabled")

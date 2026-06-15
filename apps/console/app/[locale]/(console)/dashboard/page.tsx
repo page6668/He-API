@@ -3,7 +3,9 @@
  * (front-end-spec §2.1 sitemap). Server Component. SSR-fetches the usage summary
  * via the getUsageSummary() BFF action behind a Suspense boundary (skeleton while
  * pending), then renders <UsageStatCards>. 401 → redirect to /signin (BR-RD-3);
- * envelope error → ErrorBanner + Retry. [The trend chart is DEFERRED to 9.1b.]
+ * envelope error → ErrorBanner + Retry. Below the card band sits the Story 9.1b
+ * <UsageChart> trend chart (client-fetched; its loading/error degrade in place so
+ * a /series outage never takes down the card band — BR-CH-4).
  */
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
@@ -12,6 +14,7 @@ import { getTranslations, unstable_setRequestLocale } from 'next-intl/server';
 
 import { UsageStatCards } from '@/components/business/UsageStatCards';
 import { UsageStatCardsSkeleton } from '@/components/business/UsageStatCardsSkeleton';
+import { UsageChart } from '@/components/business/UsageChart';
 import { getUsageSummary } from './_actions/get-usage-summary';
 
 interface PageProps {
@@ -39,6 +42,7 @@ export default async function DashboardPage({ params: { locale } }: PageProps) {
       <Suspense fallback={<UsageStatCardsSkeleton label={t('loading.label')} />}>
         <DashboardContent locale={locale} />
       </Suspense>
+      <UsageChart locale={locale} />
     </main>
   );
 }

@@ -39,6 +39,44 @@ export const PERIOD_ORDER = ['today', 'month', 'quarter'] as const;
 export type PeriodKey = (typeof PERIOD_ORDER)[number];
 
 /**
+ * Story 9.1b AC1/AC2 — Zod schema mirroring the gateway GET /v1/me/usage/series
+ * response (the <UsageChart> trend feed). One point per (bucket[, key]): key is
+ * null for By Day, the model name for By Model, the status class ("success" /
+ * "error") for By Status. requests/total_tokens come from ClickHouse; cost_usd is
+ * OPTIONAL and ABSENT under the SM default for Q-SERIES-COST — a non-authoritative
+ * request_logs.cost_usd (always 0) is never surfaced; an authoritative cost series
+ * would read usage_ledger (H-1-R). `.safeParse` is the safety net: shape drift →
+ * the chart card degrades to an inline error while the 9.1 stat-cards band stays
+ * live (R2-4 / BR-CH-4 degradation isolation).
+ */
+export const SERIES_GROUP_BY = ['day', 'model', 'status'] as const;
+export type SeriesGroupBy = (typeof SERIES_GROUP_BY)[number];
+
+export const SeriesPointSchema = z.object({
+  bucket: z.string(), // local-day "YYYY-MM-DD" in the user's timezone (Q-TZ)
+  key: z.string().nullable(), // null = By Day; model name / status class otherwise
+  requests: z.number().int(),
+  total_tokens: z.number().int(),
+  cost_usd: z.string().optional(), // string | absent (SM default: absent — H-1-R)
+});
+export type SeriesPoint = z.infer<typeof SeriesPointSchema>;
+
+export const UsageSeriesSchema = z.object({
+  range: z.string(),
+  group_by: z.enum(SERIES_GROUP_BY),
+  series: z.array(SeriesPointSchema),
+});
+export type UsageSeries = z.infer<typeof UsageSeriesSchema>;
+
+/** Default trend window + the 90-day cap the gateway enforces (BR-CH-SERIES). */
+export const SERIES_DEFAULT_RANGE = '30d';
+export const SERIES_MAX_RANGE_DAYS = 90;
+
+/** Status-class keys the By Status grouping emits (mirror the gateway). */
+export const SERIES_STATUS_KEYS = ['success', 'error'] as const;
+export type SeriesStatusKey = (typeof SERIES_STATUS_KEYS)[number];
+
+/**
  * Story 9.2 AC2 — Zod schema mirroring the gateway GET /v1/me/usage/logs page.
  * Each LogEntry carries ONLY the 13 non-PII observability fields the gateway
  * projects (BR-RD-9); client_ip / client_country / user_agent / error_message /
