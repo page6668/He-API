@@ -1,0 +1,44 @@
+{
+  "nav": {
+    "benchmark": "跑分",
+    "home": "He-API"
+  },
+  "page": {
+    "title": "模型跑分 — He-API",
+    "description": "在质量、延迟与价格维度，将 6 家中国领先模型与 GPT-4、Claude、Gemini 对比。数据经人工策展并标注来源，附带方法论。",
+    "heading": "模型跑分",
+    "subheading": "主流模型的质量、延迟与价格对比。"
+  },
+  "metric": {
+    "quality": "质量得分",
+    "cost": "每百万 token 价格",
+    "latency": "延迟 P95",
+    "qualityHint": "越高越好",
+    "costHint": "越低越好",
+    "latencyHint": "越低越好",
+    "select": "选择指标"
+  },
+  "filter": {
+    "task": "任务",
+    "language": "语言",
+    "timeWindow": "时间窗",
+    "all": "全部"
+  },
+  "methodology": {
+    "heading": "方法论",
+    "body": "得分由第三方公开来源与厂商公布数据人工策展而来。He-API 模型价格实时取自公开模型目录。质量与延迟反映所列来源在最后更新日期的数据。",
+    "source": "来源"
+  },
+  "lastUpdated": "最后更新",
+  "disclaimer": "数据来自策展/第三方公开来源，非实时自动跑分。",
+  "openABInPlayground": "在 Playground 中开启 A/B",
+  "table": {
+    "caption": "跨模型与指标的跑分对比。",
+    "model": "模型",
+    "vendor": "厂商"
+  },
+  "error": {
+    "unavailable": "跑分数据暂时不可用，请稍后再试。",
+    "partial": "部分跑分数据不可用，少数模型可能缺失。"
+  }
+}

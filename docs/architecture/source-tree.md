@@ -45,10 +45,10 @@ he-api/                                  (Monorepo, Turborepo)
 │   ├── console/                         Next.js Web 控制台
 │   │   ├── app/                         App Router
 │   │   │   ├── [locale]/
-│   │   │   │   ├── (marketing)/         landing / pricing / models / benchmark
+│   │   │   │   ├── (marketing)/         landing / pricing / models / benchmark (benchmark/ LANDED Story 10.6)
 │   │   │   │   ├── (auth)/              signin / signup / onboarding
 │   │   │   │   ├── (console)/           dashboard / keys / billing / ...
-│   │   │   │   └── playground/
+│   │   │   │   └── playground/          interactive Playground (LANDED Story 10.6 — was reserved)
 │   │   │   └── api/                     Next.js API routes (BFF for console)
 │   │   ├── components/                  React components
 │   │   │   ├── ui/                      shadcn-ui base
@@ -286,6 +286,17 @@ he-api/                                  (Monorepo, Turborepo)
 > - `docs/dev/logs/4.7-dev-log.md` — Dev log per Story-4.6 precedent.
 >
 > 条目添加来源：Story 4.7 Architect Round 1（OQ-4.7-1..10 + m-1/m-2/m-3 advisories），2026-05-20. **Epic-4 DoD line 3 ("能力矩阵公布") CLOSED**; Story 4.8 contract-tests anti-regression remains as the final Epic-4 closure.
+
+> **注**: Story 10.6 — 在线 Playground + 公开 Benchmark 页（OQ-10.6-1..6 已裁定）新增条目：
+> - `apps/api-gateway/internal/handlers/playground_chat.go` — NEW `POST /v1/me/playground/chat` 处理器 + `MeKeysPolicyResolver`（复用 auth-svc `ListApiKeys` RPC 做 ownership IDOR fence；注入 bearer-style context 后委派给既有 ChatCompletionsHandler — 全复用 routing/A·B/dispatch/scope/TPMDeduct/SSE）。`cmd/server/main.go` 挂载（`jwtVerifier.RequireJWT(billingGate(chatCompletions) 包装)`）。
+> - `apps/api-gateway/internal/openaierr/codes.go` — +1 additive code `403_api_key_not_owned`（403）。
+> - `apps/console/app/[locale]/playground/page.tsx` + `components/business/Playground.tsx` — 交互式 Playground（流式/A·B/Export/深链/估算 cost/i18n/RTL）。
+> - `apps/console/app/[locale]/(marketing)/benchmark/page.tsx` + `components/business/BenchmarkChart.tsx` — 公开 SEO 跑分页（Recharts 三指标 + a11y radiogroup/hidden-table/RTL + 过滤 + Methodology/Last-updated/Disclaimer）。
+> - `apps/console/lib/catalogue/pricing.ts` — console-side He-model 定价 SoT（cost 估算 + benchmark He 单价共用；benchmark 种子绝不硬编码 He 价）。
+> - `apps/console/lib/playground/{export-snippets,cost,deep-link,ab,validation,client}.ts` + `lib/benchmark/seed.ts` + `lib/api/benchmark.ts`（Zod safeParse 降级）。
+> - `apps/console/messages/{10 locales}/{playground,benchmark}.json` — NEW i18n namespaces × 10 locales（en + zh-CN translated；其余 8 = en 回落，MT fan-out 后续，沿用 10.1 范式）。`packages/i18n-keys/src/{playground,benchmark}.ts` + `index.ts`（手工生成 — i18n-keys codegen 在 `auth.json` `2fa.*` 处崩溃的 pre-existing baseline，见 [[project_auth_surface_prebroken_head]]）。
+> - `apps/console/__tests__/10.6-playground-benchmark.test.ts`（19 vitest，C-U）+ `e2e/{playground,marketing-benchmark}.spec.ts`（计费调用 `page.route` mock，不烧额度）+ `apps/api-gateway/internal/handlers/playground_chat_test.go`（19 Go，-race GREEN）。
+> 条目添加来源：Story 10.6 Dev（Linus），2026-06-16.
 
 > **注**: Story 4.8 — adapter-fake CI-only binary annotation. Each of the six
 > per-vendor `apps/adapters/{vendor}/cmd/fake-upstream/main.go` binaries is

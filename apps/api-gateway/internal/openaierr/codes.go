@@ -116,6 +116,15 @@ var CodeMetadata = map[string]struct {
 	"404_api_key_not_found":     {404, "invalid_request_error"},
 	"429_rate_limit_key_create": {429, "invalid_request_error"},
 
+	// Story 10.6 — Playground proxy endpoint (POST /v1/me/playground/chat). The
+	// JWT-authed endpoint resolves a body-carried api_key_id to the caller's own
+	// per-key policy, IDOR-fenced on WHERE user_id=$JWT.sub. A foreign / unknown /
+	// revoked api_key_id is rejected 403 (the QA test design 10.6-INT-002 fixes
+	// the contract at 403, distinct from the 5.1 management surface's 404 anti-
+	// enumeration). No existing 403 code names an ownership failure, so this
+	// additive (non-breaking) row is registered here + in rest-api-spec §5.1.2/§5.1.3.
+	"403_api_key_not_owned": {403, "invalid_request_error"},
+
 	// Multi-currency display surface (Story 7.2 — Architect M-1 ruling). The
 	// display-currency selector ?currency= accepts exactly {usd, rmb}; any other
 	// value fails loud (no silent USD fallback — a wrong-currency display is a

@@ -542,6 +542,22 @@ func main() {
 	mux.Handle("POST /v1/chat/completions",
 		bearerAuth.RequireAPIKey(analyticsMiddleware(keyPolicy(rateLimitMW.Wrap(billingGate(chatCompletions))))))
 
+	// Story 10.6 — POST /v1/me/playground/chat (rest-api-spec §5.1.3, additive).
+	// JWT-cookie-authed sibling of /v1/chat/completions for the console Playground
+	// (OQ-10.6-1 (b)). The handler resolves the body-carried api_key_id to the
+	// caller's OWN per-key policy (IDOR-fenced via the auth-svc ListApiKeys RPC —
+	// no new RPC), injects the bearer-style context, and delegates to the SAME
+	// chat pipeline wrapped with the 7.1 billingGate (reuse the pre-flight 402
+	// balance gate; it reads the playground-set BearerUserID, fail-open on miss).
+	// TPMDeduct / scope / A/B / content-safety / SSE all flow through unchanged;
+	// no new per-user billing path. Browser holds NO plaintext key.
+	playgroundChat := handlers.NewPlaygroundChatHandler(
+		billingGate(chatCompletions),
+		handlers.NewMeKeysPolicyResolver(authUpstream),
+		logger,
+	)
+	mux.Handle("POST /v1/me/playground/chat", jwtVerifier.RequireJWT(playgroundChat))
+
 	// Story 7.1 (AC3) — read-only billing endpoints. Mounted behind bearer-auth
 	// (user_id from the validated key). Wired only when a PG DSN is configured;
 	// without it the routes are absent (404) rather than nil-panicking.

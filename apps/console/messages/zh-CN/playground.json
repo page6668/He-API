@@ -1,0 +1,63 @@
+{
+  "nav": {
+    "sidebar": "Playground",
+    "home": "He-API"
+  },
+  "page": {
+    "title": "Playground — He-API",
+    "description": "在浏览器中试用 He-API 聊天模型：选择模型、调整参数、流式查看响应、A/B 对比两个模型，并导出可直接运行的 cURL、Python、TypeScript 和 Go 代码片段。",
+    "heading": "Playground",
+    "subheading": "发起一次实时聊天调用、A/B 对比模型，并导出代码。"
+  },
+  "controls": {
+    "model": "模型",
+    "selectModel": "选择模型",
+    "temperature": "温度",
+    "maxTokens": "最大 token 数",
+    "system": "系统消息",
+    "user": "用户消息",
+    "userPlaceholder": "输入消息……",
+    "send": "发送",
+    "sending": "发送中……",
+    "compareAB": "A/B 对比",
+    "modelA": "模型 A",
+    "modelB": "模型 B",
+    "apiKey": "API 密钥"
+  },
+  "output": {
+    "heading": "输出",
+    "empty": "发起请求后将在此显示响应。",
+    "tokensIn": "输入 token",
+    "tokensOut": "输出 token",
+    "latency": "延迟",
+    "cost": "费用",
+    "estimated": "估算",
+    "estimatedTitle": "由目录定价 × 用量估算得出——并非已计费金额。",
+    "compareHeading": "A/B 对比"
+  },
+  "export": {
+    "heading": "导出为",
+    "curl": "cURL",
+    "python": "Python",
+    "typescript": "TypeScript",
+    "go": "Go",
+    "copy": "复制",
+    "copied": "已复制"
+  },
+  "deepLink": {
+    "prefilled": "已从文档示例预填。",
+    "ignored": "分享链接无法应用，已忽略。"
+  },
+  "errors": {
+    "noKey": "请先创建 API 密钥，才能在 Playground 中发起请求。",
+    "selectKey": "请选择一个你的 API 密钥以归属用量。",
+    "unauthorized": "登录已过期，请重新登录。",
+    "keyForbidden": "该 API 密钥不属于你的账户。",
+    "abStreaming": "A/B 对比不支持流式，已关闭流式。",
+    "modelScope": "所选模型不在该密钥的可用范围内。",
+    "rateLimited": "已达到速率限制，请稍后重试。",
+    "balance": "余额不足，无法发起该请求。",
+    "streamInterrupted": "响应流已中断，你可以重试。",
+    "generic": "出现错误，请重试。"
+  }
+}

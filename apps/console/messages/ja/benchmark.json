@@ -1,0 +1,44 @@
+{
+  "nav": {
+    "benchmark": "Benchmark",
+    "home": "He-API"
+  },
+  "page": {
+    "title": "Model Benchmark — He-API",
+    "description": "Compare 6 leading Chinese models against GPT-4, Claude, and Gemini on quality, latency, and price. Curated, sourced benchmark data with methodology.",
+    "heading": "Model Benchmark",
+    "subheading": "Quality, latency, and price across leading models."
+  },
+  "metric": {
+    "quality": "Quality Score",
+    "cost": "Cost per 1M tokens",
+    "latency": "Latency P95",
+    "qualityHint": "higher is better",
+    "costHint": "lower is better",
+    "latencyHint": "lower is better",
+    "select": "Select metric"
+  },
+  "filter": {
+    "task": "Task",
+    "language": "Language",
+    "timeWindow": "Time window",
+    "all": "All"
+  },
+  "methodology": {
+    "heading": "Methodology",
+    "body": "Scores are curated from third-party public sources and vendor-published figures. He-API model prices are rendered live from the public model catalogue. Quality and latency reflect the cited sources at the last-updated date.",
+    "source": "Source"
+  },
+  "lastUpdated": "Last updated",
+  "disclaimer": "Curated from third-party public sources; not a real-time automated benchmark.",
+  "openABInPlayground": "Open A/B in Playground",
+  "table": {
+    "caption": "Benchmark comparison across models and metrics.",
+    "model": "Model",
+    "vendor": "Vendor"
+  },
+  "error": {
+    "unavailable": "Benchmark data is temporarily unavailable; check back shortly.",
+    "partial": "Some benchmark data is unavailable; a few models may be missing."
+  }
+}

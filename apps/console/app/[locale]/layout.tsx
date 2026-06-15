@@ -35,6 +35,9 @@ export default async function LocaleLayout({ children, params: { locale } }: Loc
           <header className="flex items-center justify-between border-b px-6 py-3">
             <nav className="flex items-center gap-4 text-sm">
               <a href={`/${locale}/`}>Console</a>
+              {/* Story 10.6 — main-nav entry to the interactive Playground (front-end-spec:112). */}
+              <a href={`/${locale}/playground`}>Playground</a>
+              <a href={`/${locale}/benchmark`}>Benchmark</a>
               <a href={`/${locale}/docs`}>Docs</a>
             </nav>
             <LocaleSwitch currentLocale={locale} />

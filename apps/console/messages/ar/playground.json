@@ -1,0 +1,63 @@
+{
+  "nav": {
+    "sidebar": "Playground",
+    "home": "He-API"
+  },
+  "page": {
+    "title": "Playground — He-API",
+    "description": "Try He-API chat models in your browser: pick a model, tune parameters, stream responses, compare two models A/B, and export ready-to-run cURL, Python, TypeScript, and Go snippets.",
+    "heading": "Playground",
+    "subheading": "Run a live chat completion, compare models A/B, and export code."
+  },
+  "controls": {
+    "model": "Model",
+    "selectModel": "Select a model",
+    "temperature": "Temperature",
+    "maxTokens": "Max tokens",
+    "system": "System message",
+    "user": "User message",
+    "userPlaceholder": "Type a message…",
+    "send": "Send",
+    "sending": "Sending…",
+    "compareAB": "Compare A/B",
+    "modelA": "Model A",
+    "modelB": "Model B",
+    "apiKey": "API key"
+  },
+  "output": {
+    "heading": "Output",
+    "empty": "Run a request to see the response here.",
+    "tokensIn": "Tokens in",
+    "tokensOut": "Tokens out",
+    "latency": "Latency",
+    "cost": "Cost",
+    "estimated": "estimated",
+    "estimatedTitle": "Estimated from catalogue pricing × usage — not a billed amount.",
+    "compareHeading": "A/B comparison"
+  },
+  "export": {
+    "heading": "Export as",
+    "curl": "cURL",
+    "python": "Python",
+    "typescript": "TypeScript",
+    "go": "Go",
+    "copy": "Copy",
+    "copied": "Copied"
+  },
+  "deepLink": {
+    "prefilled": "Prefilled from a documentation example.",
+    "ignored": "The shared link could not be applied and was ignored."
+  },
+  "errors": {
+    "noKey": "Create an API key first to run requests in the Playground.",
+    "selectKey": "Select one of your API keys to attribute usage.",
+    "unauthorized": "Your session expired. Please sign in again.",
+    "keyForbidden": "That API key is not available for your account.",
+    "abStreaming": "A/B comparison does not support streaming. Streaming was turned off.",
+    "modelScope": "The selected model is not available for this key.",
+    "rateLimited": "Rate limit reached. Please wait and try again.",
+    "balance": "Insufficient balance to run this request.",
+    "streamInterrupted": "The response stream was interrupted. You can retry.",
+    "generic": "Something went wrong. Please try again."
+  }
+}
