@@ -1,54 +1,54 @@
 {
   "page": {
-    "title": "[en-pending] Model Capability Matrix — He-API",
-    "description": "[en-pending] Compare context window, function calling, and JSON mode support across 11 He-API models.",
-    "heading": "[en-pending] Model Capability Matrix",
-    "subheading": "[en-pending] Compare 11 models across 7 capability dimensions"
+    "title": "Матрица возможностей моделей — He-API",
+    "description": "Сравните размер контекстного окна, вызов функций и поддержку режима JSON для 11 моделей He-API.",
+    "heading": "Матрица возможностей моделей",
+    "subheading": "Сравните 11 моделей по 7 параметрам возможностей"
   },
   "table": {
-    "caption": "[en-pending] Capabilities of the 11 chat models advertised by the He-API gateway.",
+    "caption": "Возможности 11 чат-моделей, предоставляемых шлюзом He-API.",
     "column": {
-      "model": "[en-pending] Model",
-      "vendor": "[en-pending] Vendor",
-      "chat": "[en-pending] Chat",
-      "streaming": "[en-pending] Streaming",
-      "functionCalling": "[en-pending] Function Calling",
-      "vision": "[en-pending] Vision",
-      "jsonMode": "[en-pending] JSON Mode",
-      "contextWindow": "[en-pending] Context Window",
-      "maxOutput": "[en-pending] Max Output"
+      "model": "Модель",
+      "vendor": "Поставщик",
+      "chat": "Чат",
+      "streaming": "Потоковая передача",
+      "functionCalling": "Вызов функций",
+      "vision": "Обработка изображений",
+      "jsonMode": "Режим JSON",
+      "contextWindow": "Контекстное окно",
+      "maxOutput": "Макс. вывод"
     }
   },
   "vendor": {
-    "alibaba": "[en-pending] Alibaba",
-    "deepseek": "[en-pending] DeepSeek",
-    "moonshot": "[en-pending] Moonshot",
-    "zhipu": "[en-pending] Zhipu",
-    "bytedance": "[en-pending] ByteDance",
-    "baidu": "[en-pending] Baidu",
-    "he-api": "[en-pending] He-API"
+    "alibaba": "Alibaba",
+    "deepseek": "DeepSeek",
+    "moonshot": "Moonshot",
+    "zhipu": "Zhipu",
+    "bytedance": "ByteDance",
+    "baidu": "Baidu",
+    "he-api": "He-API"
   },
   "capability": {
-    "chat": "[en-pending] Chat",
-    "streaming": "[en-pending] Streaming",
-    "functionCalling": "[en-pending] Function Calling",
-    "vision": "[en-pending] Vision",
-    "jsonMode": "[en-pending] JSON Mode",
-    "contextWindow": "[en-pending] Context Window (tokens)",
-    "maxOutput": "[en-pending] Max Output (tokens)",
+    "chat": "Чат",
+    "streaming": "Потоковая передача",
+    "functionCalling": "Вызов функций",
+    "vision": "Обработка изображений",
+    "jsonMode": "Режим JSON",
+    "contextWindow": "Контекстное окно (токены)",
+    "maxOutput": "Макс. вывод (токены)",
     "value": {
-      "yes": "[en-pending] Supported",
-      "no": "[en-pending] Not supported"
+      "yes": "Поддерживается",
+      "no": "Не поддерживается"
     }
   },
   "tokensUnit": "{count, number} tokens",
   "error": {
-    "unavailable": "[en-pending] Capability data temporarily unavailable; check back shortly.",
-    "partial": "[en-pending] Capability data partially unavailable; some models may be missing.",
-    "generic": "[en-pending] Something went wrong while loading the capability matrix."
+    "unavailable": "Данные о возможностях временно недоступны; попробуйте позже.",
+    "partial": "Данные о возможностях частично недоступны; некоторые модели могут отсутствовать.",
+    "generic": "Что-то пошло не так при загрузке матрицы возможностей."
   },
   "nav": {
-    "models": "[en-pending] Models",
-    "home": "[en-pending] He-API"
+    "models": "Модели",
+    "home": "He-API"
   }
 }

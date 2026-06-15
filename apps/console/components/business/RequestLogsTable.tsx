@@ -15,6 +15,7 @@
 import { useTranslations } from 'next-intl';
 
 import { type LogEntry, type LogStatusClass, type UsageLogsPage } from '@/lib/api/me-usage';
+import { LtrText } from '@/components/business/LtrText';
 
 export interface RequestLogsTableProps {
   page: UsageLogsPage;
@@ -78,7 +79,7 @@ export function RequestLogsTable({ page, locale, resetHref }: RequestLogsTablePr
     <div className="overflow-x-auto rounded-lg border border-neutral-200">
       <table className="w-full text-sm">
         <caption className="sr-only">{t('table.caption')}</caption>
-        <thead className="border-b border-neutral-200 bg-neutral-50 text-left">
+        <thead className="border-b border-neutral-200 bg-neutral-50 text-start">
           <tr>
             <th scope="col" className="px-3 py-2 font-medium">{t('table.columns.time')}</th>
             <th scope="col" className="px-3 py-2 font-medium">{t('table.columns.model')}</th>
@@ -110,10 +111,12 @@ function LogRow({ row, locale, t }: LogRowProps) {
   const cls = logStatusClass(row.status_code);
   return (
     <tr className="border-b border-neutral-100 last:border-0">
-      <td className="whitespace-nowrap px-3 py-2 tabular-nums" dir="ltr">
+      {/* LTR islands (BR-10.1.8) via the reusable <LtrText> primitive — these
+          bidi-neutral values stay left-to-right even under an ar (RTL) document. */}
+      <LtrText as="td" className="whitespace-nowrap px-3 py-2 tabular-nums">
         {formatTimestamp(row.ts, locale)}
-      </td>
-      <td className="px-3 py-2" dir="ltr">{row.model}</td>
+      </LtrText>
+      <LtrText as="td" className="px-3 py-2">{row.model}</LtrText>
       <td className="px-3 py-2">
         {/* text + icon, NOT colour-only (WCAG 1.4.1) */}
         <span className="inline-flex items-center gap-1" data-status={cls}>
@@ -125,10 +128,10 @@ function LogRow({ row, locale, t }: LogRowProps) {
       <td className="px-3 py-2">
         {row.is_streaming ? t('table.streaming.yes') : t('table.streaming.no')}
       </td>
-      <td className="px-3 py-2 tabular-nums" dir="ltr">{formatNumber(row.total_tokens, locale)}</td>
-      <td className="whitespace-nowrap px-3 py-2 tabular-nums" dir="ltr">
+      <LtrText as="td" className="px-3 py-2 tabular-nums">{formatNumber(row.total_tokens, locale)}</LtrText>
+      <LtrText as="td" className="whitespace-nowrap px-3 py-2 tabular-nums">
         {formatNumber(row.latency_ms_total, locale)} {t('table.latencyUnit')}
-      </td>
+      </LtrText>
       <td className="px-3 py-2">
         <code className="text-xs" dir="ltr" title={row.api_key_id}>{row.api_key_id}</code>
       </td>

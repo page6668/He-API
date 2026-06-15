@@ -9,175 +9,175 @@
   },
   "keys": {
     "empty": {
-      "title": "[en-pending] No API keys yet",
-      "cta": "[en-pending] Create your first API key",
-      "body": "[en-pending] Create your first API key to start calling the He-API."
+      "title": "Noch keine API-Keys",
+      "cta": "Ersten API-Key erstellen",
+      "body": "Erstellen Sie Ihren ersten API-Key, um die He-API zu nutzen."
     },
     "errors": {
       "name": {
-        "missing": "[en-pending] Key name is required.",
-        "too_short": "[en-pending] Key name is too short.",
-        "too_long": "[en-pending] Key name must be at most 100 characters.",
-        "invalid_chars": "[en-pending] Key name contains characters that aren't allowed."
+        "missing": "Key-Name ist erforderlich.",
+        "too_short": "Key-Name ist zu kurz.",
+        "too_long": "Key-Name darf höchstens 100 Zeichen umfassen.",
+        "invalid_chars": "Key-Name enthält unzulässige Zeichen."
       },
-      "generic": "[en-pending] Something went wrong. Please try again.",
-      "plaintext_one_time": "[en-pending] This plaintext is shown ONCE. Store it now — it cannot be retrieved later.",
-      "rate_limited": "[en-pending] Too many key creations. Please wait and try again.",
+      "generic": "Ein Fehler ist aufgetreten. Bitte erneut versuchen.",
+      "plaintext_one_time": "Dieser Klartext wird nur EINMAL angezeigt. Speichern Sie ihn jetzt — er kann später nicht mehr abgerufen werden.",
+      "rate_limited": "Zu viele Key-Erstellungen. Bitte warten und erneut versuchen.",
       "ip": {
-        "invalid_format": "[en-pending] Enter a valid IP address or CIDR range.",
-        "degenerate_cidr": "[en-pending] 0.0.0.0/0 and ::/0 are not allowed.",
-        "zone_id_rejected": "[en-pending] IPv6 zone IDs are not allowed."
+        "invalid_format": "Geben Sie eine gültige IP-Adresse oder einen CIDR-Bereich ein.",
+        "degenerate_cidr": "0.0.0.0/0 und ::/0 sind nicht erlaubt.",
+        "zone_id_rejected": "IPv6-Zonen-IDs sind nicht erlaubt."
       },
       "cap": {
-        "out_of_range": "[en-pending] Monthly cost cap must be between $0.01 and $999,999.99.",
-        "invalid_format": "[en-pending] Enter a valid amount."
+        "out_of_range": "Monatliches Kostenlimit muss zwischen $0,01 und $999.999,99 liegen.",
+        "invalid_format": "Geben Sie einen gültigen Betrag ein."
       }
     },
     "revoke": {
       "confirm": {
-        "title": "[en-pending] Revoke this API key?",
-        "cta": "[en-pending] Revoke"
+        "title": "Diesen API-Key widerrufen?",
+        "cta": "Widerrufen"
       },
-      "success": "[en-pending] API key revoked.",
-      "already_revoked": "[en-pending] This key was already revoked.",
-      "not_found": "[en-pending] API key not found or already removed.",
-      "warning": "[en-pending] This action is permanent. Once revoked, this key cannot be reactivated. Apps using this key will receive 401 errors immediately.",
-      "confirm_label": "[en-pending] Type the key name to confirm: {name}",
-      "confirm_aria": "[en-pending] Type the key name {name} to confirm revoke",
-      "cancel": "[en-pending] Cancel"
+      "success": "API-Key widerrufen.",
+      "already_revoked": "Dieser Key wurde bereits widerrufen.",
+      "not_found": "API-Key nicht gefunden oder bereits entfernt.",
+      "warning": "Diese Aktion ist dauerhaft. Ein widerrufener Key kann nicht reaktiviert werden. Apps, die diesen Key verwenden, erhalten sofort 401-Fehler.",
+      "confirm_label": "Geben Sie den Key-Namen zur Bestätigung ein: {name}",
+      "confirm_aria": "Geben Sie den Key-Namen {name} ein, um den Widerruf zu bestätigen",
+      "cancel": "Abbrechen"
     },
     "edit": {
-      "title": "[en-pending] Edit API key",
+      "title": "API-Key bearbeiten",
       "confirm": {
-        "cta": "[en-pending] Save changes"
+        "cta": "Änderungen speichern"
       },
-      "success": "[en-pending] API key updated.",
+      "success": "API-Key aktualisiert.",
       "errors": {
-        "invalid_cidr": "[en-pending] One or more IP addresses or CIDR ranges are invalid.",
-        "unknown_model": "[en-pending] One or more selected models are not available.",
-        "cap_out_of_range": "[en-pending] Monthly cost cap must be between $0.01 and $999,999.99.",
-        "not_found": "[en-pending] API key not found or already removed.",
-        "account_pending_deletion": "[en-pending] Your account is scheduled for deletion; configuration changes are disabled.",
-        "invalid_request": "[en-pending] Some of the configuration values are invalid.",
-        "generic": "[en-pending] Something went wrong. Please try again."
+        "invalid_cidr": "Eine oder mehrere IP-Adressen oder CIDR-Bereiche sind ungültig.",
+        "unknown_model": "Ein oder mehrere ausgewählte Modelle sind nicht verfügbar.",
+        "cap_out_of_range": "Monatliches Kostenlimit muss zwischen $0,01 und $999.999,99 liegen.",
+        "not_found": "API-Key nicht gefunden oder bereits entfernt.",
+        "account_pending_deletion": "Ihr Konto ist zur Löschung vorgemerkt; Konfigurationsänderungen sind deaktiviert.",
+        "invalid_request": "Einige Konfigurationswerte sind ungültig.",
+        "generic": "Ein Fehler ist aufgetreten. Bitte erneut versuchen."
       }
     },
     "cap": {
       "email": {
         "warning": {
-          "subject": "[en-pending] Your API key is approaching its monthly spend cap",
-          "description": "[en-pending] Notify when usage reaches 80% of the cap"
+          "subject": "Ihr API-Key nähert sich dem monatlichen Ausgabelimit",
+          "description": "Benachrichtigen, wenn die Nutzung 80 % des Limits erreicht"
         },
         "tripped": {
-          "subject": "[en-pending] Your API key has been paused — monthly spend cap reached",
-          "description": "[en-pending] Notify when the cap is reached and the key is paused"
+          "subject": "Ihr API-Key wurde pausiert — monatliches Ausgabelimit erreicht",
+          "description": "Benachrichtigen, wenn das Limit erreicht und der Key pausiert wird"
         }
       },
-      "none": "[en-pending] No cap set",
-      "tripped": "[en-pending] Tripped",
-      "tripped_sr": "[en-pending] API key cap tripped — pausing until next month.",
-      "usage_aria": "[en-pending] {current} of {cap} used"
+      "none": "Kein Limit festgelegt",
+      "tripped": "Ausgelöst",
+      "tripped_sr": "API-Key-Limit ausgelöst — wird bis nächsten Monat pausiert.",
+      "usage_aria": "{current} von {cap} verbraucht"
     },
     "page": {
-      "title": "[en-pending] API Keys",
-      "description": "[en-pending] Manage the API keys you use to authenticate with the He-API.",
-      "new_key": "[en-pending] New key"
+      "title": "API-Keys",
+      "description": "Verwalten Sie die API-Keys zur Authentifizierung mit der He-API.",
+      "new_key": "Neuer Key"
     },
     "nav": {
-      "sidebar": "[en-pending] API Keys"
+      "sidebar": "API-Keys"
     },
     "footer": {
-      "count": "[en-pending] Showing {count} keys"
+      "count": "{count} Keys angezeigt"
     },
     "banner": {
-      "retry": "[en-pending] Retry"
+      "retry": "Erneut versuchen"
     },
     "loading": {
-      "aria": "[en-pending] Loading your API keys…"
+      "aria": "API-Keys werden geladen…"
     },
     "table": {
       "header": {
-        "name": "[en-pending] Name",
-        "prefix": "[en-pending] Prefix",
-        "scope": "[en-pending] Scope",
-        "created": "[en-pending] Created",
-        "last_used": "[en-pending] Last used",
-        "cap": "[en-pending] Monthly cap",
-        "status": "[en-pending] Status",
-        "actions": "[en-pending] Actions"
+        "name": "Name",
+        "prefix": "Präfix",
+        "scope": "Bereich",
+        "created": "Erstellt",
+        "last_used": "Zuletzt verwendet",
+        "cap": "Monatliches Limit",
+        "status": "Status",
+        "actions": "Aktionen"
       }
     },
     "status": {
-      "active": "[en-pending] Active",
-      "revoked": "[en-pending] Revoked"
+      "active": "Aktiv",
+      "revoked": "Widerrufen"
     },
     "last_used": {
-      "never": "[en-pending] Never"
+      "never": "Nie"
     },
     "actions": {
-      "configure": "[en-pending] Configure {name}",
-      "revoke": "[en-pending] Revoke {name}"
+      "configure": "{name} konfigurieren",
+      "revoke": "{name} widerrufen"
     },
     "row": {
-      "aria": "[en-pending] API key {name}"
+      "aria": "API-Key {name}"
     },
     "scope": {
-      "all_models": "[en-pending] All models",
-      "ip_count": "[en-pending] +{count} IPs"
+      "all_models": "Alle Modelle",
+      "ip_count": "+{count} IPs"
     },
     "create": {
-      "title": "[en-pending] Create API key",
-      "name_label": "[en-pending] Key name",
-      "name_placeholder": "[en-pending] e.g. Production API",
-      "submit": "[en-pending] Create key",
-      "cancel": "[en-pending] Cancel",
-      "rate_limited": "[en-pending] Too many key creations. Try again in {seconds} seconds."
+      "title": "API-Key erstellen",
+      "name_label": "Key-Name",
+      "name_placeholder": "z. B. Produktions-API",
+      "submit": "Key erstellen",
+      "cancel": "Abbrechen",
+      "rate_limited": "Zu viele Key-Erstellungen. Erneut versuchen in {seconds} Sekunden."
     },
     "created": {
-      "title": "[en-pending] Save your API key now",
-      "warning": "[en-pending] This is the only time you'll see this key. Copy it and store it securely — you cannot retrieve it later.",
-      "label": "[en-pending] Your API key",
-      "reveal": "[en-pending] Reveal",
-      "hide": "[en-pending] Hide",
-      "copy": "[en-pending] Copy",
-      "copied": "[en-pending] API key copied to clipboard.",
-      "copy_failed": "[en-pending] Copy failed. Select the key text manually to copy.",
-      "saved_cta": "[en-pending] I've saved it",
-      "close_without_saving": "[en-pending] Close without saving",
+      "title": "API-Key jetzt speichern",
+      "warning": "Dies ist die einzige Möglichkeit, diesen Key zu sehen. Kopieren und sichern Sie ihn — er kann später nicht mehr abgerufen werden.",
+      "label": "Ihr API-Key",
+      "reveal": "Anzeigen",
+      "hide": "Ausblenden",
+      "copy": "Kopieren",
+      "copied": "API-Key in die Zwischenablage kopiert.",
+      "copy_failed": "Kopieren fehlgeschlagen. Markieren Sie den Key-Text manuell zum Kopieren.",
+      "saved_cta": "Ich habe ihn gespeichert",
+      "close_without_saving": "Schließen ohne zu speichern",
       "confirm_close": {
-        "title": "[en-pending] You haven't saved the key",
-        "body": "[en-pending] If you close now, the key is gone forever.",
-        "cancel": "[en-pending] Cancel",
-        "confirm": "[en-pending] Close anyway"
+        "title": "Key noch nicht gespeichert",
+        "body": "Wenn Sie jetzt schließen, ist der Key unwiederbringlich verloren.",
+        "cancel": "Abbrechen",
+        "confirm": "Trotzdem schließen"
       }
     },
     "configure": {
       "models": {
-        "heading": "[en-pending] Models scope",
-        "all_toggle": "[en-pending] All models allowed",
-        "select_label": "[en-pending] Allowed models",
-        "unavailable": "[en-pending] Model catalogue unavailable — try again later."
+        "heading": "Modellbereich",
+        "all_toggle": "Alle Modelle erlaubt",
+        "select_label": "Erlaubte Modelle",
+        "unavailable": "Modellkatalog nicht verfügbar — bitte später erneut versuchen."
       },
       "ip": {
-        "heading": "[en-pending] IP whitelist",
-        "empty": "[en-pending] Any IP allowed",
-        "add": "[en-pending] Add another IP",
-        "add_first": "[en-pending] Add IP",
-        "remove": "[en-pending] Remove IP {value}",
-        "row_label": "[en-pending] IP {index}"
+        "heading": "IP-Whitelist",
+        "empty": "Jede IP erlaubt",
+        "add": "Weitere IP hinzufügen",
+        "add_first": "IP hinzufügen",
+        "remove": "IP {value} entfernen",
+        "row_label": "IP {index}"
       },
       "cap": {
-        "heading": "[en-pending] Monthly cost cap",
-        "label": "[en-pending] Monthly cost cap in USD",
-        "no_cap": "[en-pending] No cap",
-        "help": "[en-pending] Leave empty for no cap."
+        "heading": "Monatliches Kostenlimit",
+        "label": "Monatliches Kostenlimit in USD",
+        "no_cap": "Kein Limit",
+        "help": "Leer lassen für kein Limit."
       },
-      "cancel": "[en-pending] Cancel",
+      "cancel": "Abbrechen",
       "discard": {
-        "title": "[en-pending] Discard unsaved changes?",
-        "body": "[en-pending] You have unsaved changes.",
-        "cancel": "[en-pending] Cancel",
-        "confirm": "[en-pending] Discard"
+        "title": "Nicht gespeicherte Änderungen verwerfen?",
+        "body": "Sie haben nicht gespeicherte Änderungen.",
+        "cancel": "Abbrechen",
+        "confirm": "Verwerfen"
       }
     }
   },

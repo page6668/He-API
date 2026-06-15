@@ -1,54 +1,54 @@
 {
   "page": {
-    "title": "[en-pending] Model Capability Matrix — He-API",
-    "description": "[en-pending] Compare context window, function calling, and JSON mode support across 11 He-API models.",
-    "heading": "[en-pending] Model Capability Matrix",
-    "subheading": "[en-pending] Compare 11 models across 7 capability dimensions"
+    "title": "モデル機能マトリックス — He-API",
+    "description": "He-APIの11モデルにおけるコンテキストウィンドウ、ファンクションコーリング、JSONモード対応状況を比較します。",
+    "heading": "モデル機能マトリックス",
+    "subheading": "11モデルを7つの機能軸で比較"
   },
   "table": {
-    "caption": "[en-pending] Capabilities of the 11 chat models advertised by the He-API gateway.",
+    "caption": "He-APIゲートウェイが提供する11のチャットモデルの機能一覧。",
     "column": {
-      "model": "[en-pending] Model",
-      "vendor": "[en-pending] Vendor",
-      "chat": "[en-pending] Chat",
-      "streaming": "[en-pending] Streaming",
-      "functionCalling": "[en-pending] Function Calling",
-      "vision": "[en-pending] Vision",
-      "jsonMode": "[en-pending] JSON Mode",
-      "contextWindow": "[en-pending] Context Window",
-      "maxOutput": "[en-pending] Max Output"
+      "model": "モデル",
+      "vendor": "ベンダー",
+      "chat": "チャット",
+      "streaming": "ストリーミング",
+      "functionCalling": "ファンクションコーリング",
+      "vision": "ビジョン",
+      "jsonMode": "JSONモード",
+      "contextWindow": "コンテキストウィンドウ",
+      "maxOutput": "最大出力"
     }
   },
   "vendor": {
-    "alibaba": "[en-pending] Alibaba",
-    "deepseek": "[en-pending] DeepSeek",
-    "moonshot": "[en-pending] Moonshot",
-    "zhipu": "[en-pending] Zhipu",
-    "bytedance": "[en-pending] ByteDance",
-    "baidu": "[en-pending] Baidu",
-    "he-api": "[en-pending] He-API"
+    "alibaba": "アリババ",
+    "deepseek": "DeepSeek",
+    "moonshot": "Moonshot",
+    "zhipu": "Zhipu",
+    "bytedance": "ByteDance",
+    "baidu": "Baidu",
+    "he-api": "He-API"
   },
   "capability": {
-    "chat": "[en-pending] Chat",
-    "streaming": "[en-pending] Streaming",
-    "functionCalling": "[en-pending] Function Calling",
-    "vision": "[en-pending] Vision",
-    "jsonMode": "[en-pending] JSON Mode",
-    "contextWindow": "[en-pending] Context Window (tokens)",
-    "maxOutput": "[en-pending] Max Output (tokens)",
+    "chat": "チャット",
+    "streaming": "ストリーミング",
+    "functionCalling": "ファンクションコーリング",
+    "vision": "ビジョン",
+    "jsonMode": "JSONモード",
+    "contextWindow": "コンテキストウィンドウ（トークン数）",
+    "maxOutput": "最大出力（トークン数）",
     "value": {
-      "yes": "[en-pending] Supported",
-      "no": "[en-pending] Not supported"
+      "yes": "対応",
+      "no": "非対応"
     }
   },
   "tokensUnit": "{count, number} tokens",
   "error": {
-    "unavailable": "[en-pending] Capability data temporarily unavailable; check back shortly.",
-    "partial": "[en-pending] Capability data partially unavailable; some models may be missing.",
-    "generic": "[en-pending] Something went wrong while loading the capability matrix."
+    "unavailable": "機能データは現在一時的に利用できません。しばらくしてからご確認ください。",
+    "partial": "機能データの一部が利用できません。一部のモデルが表示されない場合があります。",
+    "generic": "機能マトリックスの読み込み中にエラーが発生しました。"
   },
   "nav": {
-    "models": "[en-pending] Models",
-    "home": "[en-pending] He-API"
+    "models": "モデル",
+    "home": "He-API"
   }
 }

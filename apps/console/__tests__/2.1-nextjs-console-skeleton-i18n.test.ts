@@ -317,9 +317,12 @@ describe('AC2: next-intl + 10 locale messages', () => {
     expect(src).toMatch(/export\s+default\s+getRequestConfig/);
   });
 
-  test('2.1-UNIT-051: request.ts references messages/${locale}/common.json dynamic import', () => {
-    const src = read(join(CONSOLE, 'i18n/request.ts'));
-    expect(src).toMatch(/import\(\s*[`'"][^`'"]*messages\/\$\{[^}]+\}\/common\.json/);
+  test('2.1-UNIT-051: per-locale dynamic import (code-split) — Story 10.1 loads all namespaces via i18n/load-messages.ts', () => {
+    // Story 10.1 (OQ-10.1-1) extracted the loader out of request.ts and now loads
+    // EVERY namespace; the `${locale}/${ns}.json` segments stay statically
+    // analyzable so each file is its own chunk (per-locale code split preserved).
+    const src = read(join(CONSOLE, 'i18n/load-messages.ts'));
+    expect(src).toMatch(/import\(\s*[`'"][^`'"]*messages\/\$\{[^}]+\}\/\$\{[^}]+\}\.json/);
   });
 
   test('2.1-UNIT-052: request.ts imports locales/defaultLocale from ./config', () => {

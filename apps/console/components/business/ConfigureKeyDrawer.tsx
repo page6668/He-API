@@ -226,7 +226,7 @@ export function ConfigureKeyDrawer({
             {t('configure.cancel')}
           </Button>
           <Button type="submit" disabled={saveDisabled}>
-            {isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" />}
+            {isPending && <Loader2 className="me-1.5 h-4 w-4 animate-spin" aria-hidden="true" />}
             {t('edit.confirm.cta')}
           </Button>
         </div>

@@ -30,5 +30,28 @@
     "unavailable": "用量数据暂时不可用，请稍后重试。",
     "malformed": "加载大盘时出现问题。",
     "retry": "重试"
+  },
+  "chart": {
+    "title": "用量趋势",
+    "groupLabel": "分组方式",
+    "byDay": "按天",
+    "byModel": "按模型",
+    "byStatus": "按状态",
+    "axis": {
+      "date": "日期",
+      "requests": "请求数"
+    },
+    "status": {
+      "success": "成功",
+      "error": "错误"
+    },
+    "empty": "最近 30 天暂无用量。",
+    "error": "无法加载用量趋势。",
+    "retry": "重试",
+    "loading": "正在加载用量趋势…",
+    "table": {
+      "caption": "用量趋势数据表",
+      "series": "系列"
+    }
   }
 }

@@ -49,12 +49,26 @@ test.describe('AC3+AC4: LocaleSwitch flow + cookie persistence', () => {
     throw new Error('Test not implemented: 2.1-E2E-004');
   });
 
-  test('2.1-E2E-005: chromium × ar — <html dir="rtl"> + RTL visual snapshot mirror vs en baseline', async ({ page, browserName }) => {
-    // Priority: P0 | Why: AC3 RTL + BR-3.6
-    // Input: navigate /ar/
-    // Expected: html dir attribute = "rtl"; visual snapshot diff against /en/ baseline shows logical-property mirror
+  test('2.1-E2E-005 (→10.1-E2E-004): chromium × ar — <html dir="rtl"> + RTL mirror vs en baseline', async ({ page, browserName }) => {
+    // Priority: P0 | Why: AC3 RTL + BR-3.6 / Story 10.1 AC2 (mechanical RTL correctness).
+    // Implemented in Story 10.1 (T3.1): the ar document is RTL and the layout
+    // mirrors via logical properties (physical pl-/pr-/text-left/right migrated →
+    // ps-/pe-/text-start/end, so the same DOM mirrors purely by `dir`).
     test.skip(browserName !== 'chromium', 'visual snapshots run on chromium only');
-    throw new Error('Test not implemented: 2.1-E2E-005');
+
+    // /signin is a public page (no auth/back-end needed) — a stable RTL surface.
+    await page.goto('/ar/signin');
+    const html = page.locator('html');
+    await expect(html).toHaveAttribute('dir', 'rtl');
+    await expect(html).toHaveAttribute('lang', 'ar');
+
+    // The English baseline is LTR (proves dir is locale-driven, not hard-coded).
+    await page.goto('/en/signin');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
+
+    // Visual mirror snapshot (logical-property migration) — chromium baseline.
+    await page.goto('/ar/signin');
+    await expect(page).toHaveScreenshot('ar-signin-rtl.png', { maxDiffPixelRatio: 0.02 });
   });
 
   test('2.1-E2E-006: chromium — stored cookie zh-CN takes precedence over Accept-Language', async ({ page, context, browserName }) => {

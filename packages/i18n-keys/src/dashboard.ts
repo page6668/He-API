@@ -1,7 +1,22 @@
 // @generated — DO NOT EDIT — run `pnpm --filter @he-api/i18n-keys build`
 // Source: apps/console/messages/en/dashboard.json
 export type DashboardKeys
-  = 'empty.cta'
+  = 'chart.axis.date'
+  | 'chart.axis.requests'
+  | 'chart.byDay'
+  | 'chart.byModel'
+  | 'chart.byStatus'
+  | 'chart.empty'
+  | 'chart.error'
+  | 'chart.groupLabel'
+  | 'chart.loading'
+  | 'chart.retry'
+  | 'chart.status.error'
+  | 'chart.status.success'
+  | 'chart.table.caption'
+  | 'chart.table.series'
+  | 'chart.title'
+  | 'empty.cta'
   | 'empty.hint'
   | 'errors.generic'
   | 'errors.malformed'

@@ -76,7 +76,7 @@ export function ResendModal() {
     <div
       role="dialog"
       aria-labelledby="resend-modal-title"
-      className="rounded-md border border-neutral-200 bg-white p-4 text-left shadow-sm"
+      className="rounded-md border border-neutral-200 bg-white p-4 text-start shadow-sm"
     >
       <h2 id="resend-modal-title" className="text-lg font-semibold">
         {t('verifyEmail.resendModalTitle')}

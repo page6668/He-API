@@ -1,106 +1,106 @@
 {
   "page": {
-    "title": "[en-pending] Request Logs",
-    "description": "[en-pending] Your most recent API requests, with filtering and pagination.",
-    "heading": "[en-pending] Request Logs"
+    "title": "سجلات الطلبات",
+    "description": "أحدث طلبات API الخاصة بك، مع التصفية والترقيم.",
+    "heading": "سجلات الطلبات"
   },
   "nav": {
-    "sidebar": "[en-pending] Request Logs"
+    "sidebar": "سجلات الطلبات"
   },
   "table": {
-    "caption": "[en-pending] Recent API requests",
+    "caption": "أحدث طلبات API",
     "columns": {
-      "time": "[en-pending] Time",
-      "model": "[en-pending] Model",
-      "status": "[en-pending] Status",
-      "streaming": "[en-pending] Streaming",
-      "tokens": "[en-pending] Tokens",
-      "latency": "[en-pending] Latency",
-      "apiKey": "[en-pending] API Key",
-      "requestId": "[en-pending] Request ID"
+      "time": "الوقت",
+      "model": "النموذج",
+      "status": "الحالة",
+      "streaming": "البث",
+      "tokens": "الرموز",
+      "latency": "زمن الاستجابة",
+      "apiKey": "مفتاح API",
+      "requestId": "معرّف الطلب"
     },
     "streaming": {
-      "yes": "[en-pending] Yes",
-      "no": "[en-pending] No"
+      "yes": "نعم",
+      "no": "لا"
     },
-    "latencyUnit": "[en-pending] ms"
+    "latencyUnit": "مللي ثانية"
   },
   "status": {
-    "success": "[en-pending] Success",
-    "client_error": "[en-pending] Client error",
-    "server_error": "[en-pending] Server error"
+    "success": "نجاح",
+    "client_error": "خطأ من العميل",
+    "server_error": "خطأ من الخادم"
   },
   "filters": {
-    "legend": "[en-pending] Filter logs",
+    "legend": "تصفية السجلات",
     "model": {
-      "label": "[en-pending] Model",
-      "placeholder": "[en-pending] e.g. qwen-max"
+      "label": "النموذج",
+      "placeholder": "مثال: qwen-max"
     },
     "status": {
-      "label": "[en-pending] Status",
-      "all": "[en-pending] All statuses"
+      "label": "الحالة",
+      "all": "جميع الحالات"
     },
     "streaming": {
-      "label": "[en-pending] Streaming",
-      "all": "[en-pending] All",
-      "yes": "[en-pending] Yes",
-      "no": "[en-pending] No"
+      "label": "البث",
+      "all": "الكل",
+      "yes": "نعم",
+      "no": "لا"
     },
     "start": {
-      "label": "[en-pending] From"
+      "label": "من"
     },
     "end": {
-      "label": "[en-pending] To"
+      "label": "إلى"
     },
     "limit": {
-      "label": "[en-pending] Per page"
+      "label": "لكل صفحة"
     },
-    "apply": "[en-pending] Apply",
-    "reset": "[en-pending] Reset",
+    "apply": "تطبيق",
+    "reset": "إعادة تعيين",
     "errors": {
-      "range": "[en-pending] End time must be after start time."
+      "range": "يجب أن يكون وقت الانتهاء بعد وقت البدء."
     }
   },
   "pagination": {
-    "label": "[en-pending] Pagination",
-    "prev": "[en-pending] Previous",
-    "next": "[en-pending] Next",
-    "page": "[en-pending] Page {page}"
+    "label": "الترقيم",
+    "prev": "السابق",
+    "next": "التالي",
+    "page": "الصفحة {page}"
   },
   "empty": {
-    "title": "[en-pending] No requests match these filters",
-    "reset": "[en-pending] Reset filters"
+    "title": "لا توجد طلبات تطابق هذه الفلاتر",
+    "reset": "إعادة تعيين الفلاتر"
   },
   "loading": {
-    "label": "[en-pending] Loading request logs…"
+    "label": "جارٍ تحميل سجلات الطلبات…"
   },
   "errors": {
-    "generic": "[en-pending] We couldn't load your request logs. Please try again.",
-    "unavailable": "[en-pending] Request logs are temporarily unavailable. Please try again.",
-    "malformed": "[en-pending] Something went wrong loading your request logs.",
-    "retry": "[en-pending] Retry"
+    "generic": "تعذّر تحميل سجلات طلباتك. يرجى المحاولة مرة أخرى.",
+    "unavailable": "سجلات الطلبات غير متاحة مؤقتًا. يرجى المحاولة مرة أخرى.",
+    "malformed": "حدث خطأ أثناء تحميل سجلات طلباتك.",
+    "retry": "إعادة المحاولة"
   },
   "export": {
-    "heading": "[en-pending] Export logs",
-    "description": "[en-pending] Download up to 90 days of your request logs. We'll email you a download link when it's ready.",
+    "heading": "تصدير السجلات",
+    "description": "تنزيل ما يصل إلى 90 يومًا من سجلات طلباتك. سنرسل إليك رابط تنزيل عبر البريد الإلكتروني عند جاهزيته.",
     "format": {
-      "legend": "[en-pending] Format",
-      "json": "[en-pending] JSON",
-      "csv": "[en-pending] CSV"
+      "legend": "الصيغة",
+      "json": "JSON",
+      "csv": "CSV"
     },
-    "submit": "[en-pending] Export logs",
-    "submitting": "[en-pending] Starting export…",
+    "submit": "تصدير السجلات",
+    "submitting": "جارٍ بدء التصدير…",
     "status": {
-      "in_progress": "[en-pending] Export in progress — we'll email you a download link when it's ready."
+      "in_progress": "التصدير قيد التنفيذ — سنرسل إليك رابط تنزيل عبر البريد الإلكتروني عند جاهزيته."
     },
     "banner": {
-      "emailed": "[en-pending] Download link emailed. It expires on {expiry}.",
-      "failed": "[en-pending] Your last export failed. Please try again."
+      "emailed": "تم إرسال رابط التنزيل عبر البريد الإلكتروني. تنتهي صلاحيته في {expiry}.",
+      "failed": "فشل آخر تصدير لك. يرجى المحاولة مرة أخرى."
     },
     "errors": {
-      "rate_limited": "[en-pending] An export is already in progress.",
-      "generic": "[en-pending] Couldn't start the export. Please try again.",
-      "retry": "[en-pending] Retry"
+      "rate_limited": "يوجد تصدير قيد التنفيذ بالفعل.",
+      "generic": "تعذّر بدء التصدير. يرجى المحاولة مرة أخرى.",
+      "retry": "إعادة المحاولة"
     }
   }
 }

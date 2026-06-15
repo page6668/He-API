@@ -1,54 +1,54 @@
 {
   "page": {
-    "title": "[en-pending] Model Capability Matrix — He-API",
-    "description": "[en-pending] Compare context window, function calling, and JSON mode support across 11 He-API models.",
-    "heading": "[en-pending] Model Capability Matrix",
-    "subheading": "[en-pending] Compare 11 models across 7 capability dimensions"
+    "title": "Matriz de capacidades de modelos — He-API",
+    "description": "Compara la ventana de contexto, la llamada a funciones y el soporte de modo JSON en 11 modelos de He-API.",
+    "heading": "Matriz de capacidades de modelos",
+    "subheading": "Compara 11 modelos en 7 dimensiones de capacidad"
   },
   "table": {
-    "caption": "[en-pending] Capabilities of the 11 chat models advertised by the He-API gateway.",
+    "caption": "Capacidades de los 11 modelos de chat anunciados por la puerta de enlace He-API.",
     "column": {
-      "model": "[en-pending] Model",
-      "vendor": "[en-pending] Vendor",
-      "chat": "[en-pending] Chat",
-      "streaming": "[en-pending] Streaming",
-      "functionCalling": "[en-pending] Function Calling",
-      "vision": "[en-pending] Vision",
-      "jsonMode": "[en-pending] JSON Mode",
-      "contextWindow": "[en-pending] Context Window",
-      "maxOutput": "[en-pending] Max Output"
+      "model": "Modelo",
+      "vendor": "Proveedor",
+      "chat": "Chat",
+      "streaming": "Streaming",
+      "functionCalling": "Llamada a funciones",
+      "vision": "Vision",
+      "jsonMode": "Modo JSON",
+      "contextWindow": "Ventana de contexto",
+      "maxOutput": "Salida máxima"
     }
   },
   "vendor": {
-    "alibaba": "[en-pending] Alibaba",
-    "deepseek": "[en-pending] DeepSeek",
-    "moonshot": "[en-pending] Moonshot",
-    "zhipu": "[en-pending] Zhipu",
-    "bytedance": "[en-pending] ByteDance",
-    "baidu": "[en-pending] Baidu",
-    "he-api": "[en-pending] He-API"
+    "alibaba": "Alibaba",
+    "deepseek": "DeepSeek",
+    "moonshot": "Moonshot",
+    "zhipu": "Zhipu",
+    "bytedance": "ByteDance",
+    "baidu": "Baidu",
+    "he-api": "He-API"
   },
   "capability": {
-    "chat": "[en-pending] Chat",
-    "streaming": "[en-pending] Streaming",
-    "functionCalling": "[en-pending] Function Calling",
-    "vision": "[en-pending] Vision",
-    "jsonMode": "[en-pending] JSON Mode",
-    "contextWindow": "[en-pending] Context Window (tokens)",
-    "maxOutput": "[en-pending] Max Output (tokens)",
+    "chat": "Chat",
+    "streaming": "Streaming",
+    "functionCalling": "Llamada a funciones",
+    "vision": "Vision",
+    "jsonMode": "Modo JSON",
+    "contextWindow": "Ventana de contexto (tokens)",
+    "maxOutput": "Salida máxima (tokens)",
     "value": {
-      "yes": "[en-pending] Supported",
-      "no": "[en-pending] Not supported"
+      "yes": "Compatible",
+      "no": "No compatible"
     }
   },
   "tokensUnit": "{count, number} tokens",
   "error": {
-    "unavailable": "[en-pending] Capability data temporarily unavailable; check back shortly.",
-    "partial": "[en-pending] Capability data partially unavailable; some models may be missing.",
-    "generic": "[en-pending] Something went wrong while loading the capability matrix."
+    "unavailable": "Datos de capacidad temporalmente no disponibles; vuelve a intentarlo pronto.",
+    "partial": "Datos de capacidad parcialmente no disponibles; es posible que falten algunos modelos.",
+    "generic": "Algo salió mal al cargar la matriz de capacidades."
   },
   "nav": {
-    "models": "[en-pending] Models",
-    "home": "[en-pending] He-API"
+    "models": "Modelos",
+    "home": "He-API"
   }
 }

@@ -1,34 +1,57 @@
 {
   "page": {
-    "title": "[en-pending] Usage Dashboard",
-    "description": "[en-pending] Your API usage across today, this month, and this quarter.",
-    "heading": "[en-pending] Usage"
+    "title": "사용량 대시보드",
+    "description": "오늘, 이번 달, 이번 분기의 API 사용량을 확인합니다.",
+    "heading": "사용량"
   },
   "nav": {
-    "sidebar": "[en-pending] Dashboard"
+    "sidebar": "대시보드"
   },
   "periods": {
-    "today": "[en-pending] Today",
-    "month": "[en-pending] This Month",
-    "quarter": "[en-pending] This Quarter"
+    "today": "오늘",
+    "month": "이번 달",
+    "quarter": "이번 분기"
   },
   "metrics": {
-    "requests": "[en-pending] Requests",
-    "successRate": "[en-pending] Success Rate",
-    "tokens": "[en-pending] Tokens",
-    "cost": "[en-pending] Spend"
+    "requests": "요청",
+    "successRate": "성공률",
+    "tokens": "토큰",
+    "cost": "지출"
   },
   "empty": {
-    "hint": "[en-pending] Make your first API call to see usage here.",
-    "cta": "[en-pending] Create an API key"
+    "hint": "첫 번째 API 호출을 하면 사용량이 여기에 표시됩니다.",
+    "cta": "API 키 만들기"
   },
   "loading": {
-    "label": "[en-pending] Loading usage…"
+    "label": "사용량을 불러오는 중…"
   },
   "errors": {
-    "generic": "[en-pending] We couldn't load your usage. Please try again.",
-    "unavailable": "[en-pending] Usage data is temporarily unavailable. Please try again.",
-    "malformed": "[en-pending] Something went wrong loading your dashboard.",
-    "retry": "[en-pending] Retry"
+    "generic": "사용량을 불러올 수 없습니다. 다시 시도해 주세요.",
+    "unavailable": "사용량 데이터를 일시적으로 사용할 수 없습니다. 다시 시도해 주세요.",
+    "malformed": "대시보드를 불러오는 중 오류가 발생했습니다.",
+    "retry": "다시 시도"
+  },
+  "chart": {
+    "title": "사용량 추이",
+    "groupLabel": "그룹화 기준",
+    "byDay": "일별",
+    "byModel": "모델별",
+    "byStatus": "상태별",
+    "axis": {
+      "date": "날짜",
+      "requests": "요청 수"
+    },
+    "status": {
+      "success": "성공",
+      "error": "오류"
+    },
+    "empty": "최근 30일 동안 사용량이 없습니다.",
+    "error": "사용량 추이를 불러오지 못했습니다.",
+    "retry": "다시 시도",
+    "loading": "사용량 추이를 불러오는 중…",
+    "table": {
+      "caption": "사용량 추이 데이터 표",
+      "series": "계열"
+    }
   }
 }

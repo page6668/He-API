@@ -9,175 +9,175 @@
   },
   "keys": {
     "empty": {
-      "title": "[en-pending] No API keys yet",
-      "cta": "[en-pending] Create your first API key",
-      "body": "[en-pending] Create your first API key to start calling the He-API."
+      "title": "아직 API 키가 없습니다",
+      "cta": "첫 번째 API 키 만들기",
+      "body": "첫 번째 API 키를 만들어 He-API 호출을 시작하세요."
     },
     "errors": {
       "name": {
-        "missing": "[en-pending] Key name is required.",
-        "too_short": "[en-pending] Key name is too short.",
-        "too_long": "[en-pending] Key name must be at most 100 characters.",
-        "invalid_chars": "[en-pending] Key name contains characters that aren't allowed."
+        "missing": "키 이름은 필수입니다.",
+        "too_short": "키 이름이 너무 짧습니다.",
+        "too_long": "키 이름은 최대 100자여야 합니다.",
+        "invalid_chars": "키 이름에 허용되지 않는 문자가 포함되어 있습니다."
       },
-      "generic": "[en-pending] Something went wrong. Please try again.",
-      "plaintext_one_time": "[en-pending] This plaintext is shown ONCE. Store it now — it cannot be retrieved later.",
-      "rate_limited": "[en-pending] Too many key creations. Please wait and try again.",
+      "generic": "오류가 발생했습니다. 다시 시도해 주세요.",
+      "plaintext_one_time": "이 평문은 한 번만 표시됩니다. 지금 저장하세요 — 나중에 다시 확인할 수 없습니다.",
+      "rate_limited": "키 생성 횟수를 초과했습니다. 잠시 후 다시 시도해 주세요.",
       "ip": {
-        "invalid_format": "[en-pending] Enter a valid IP address or CIDR range.",
-        "degenerate_cidr": "[en-pending] 0.0.0.0/0 and ::/0 are not allowed.",
-        "zone_id_rejected": "[en-pending] IPv6 zone IDs are not allowed."
+        "invalid_format": "유효한 IP 주소 또는 CIDR 범위를 입력하세요.",
+        "degenerate_cidr": "0.0.0.0/0 및 ::/0은 허용되지 않습니다.",
+        "zone_id_rejected": "IPv6 존 ID는 허용되지 않습니다."
       },
       "cap": {
-        "out_of_range": "[en-pending] Monthly cost cap must be between $0.01 and $999,999.99.",
-        "invalid_format": "[en-pending] Enter a valid amount."
+        "out_of_range": "월별 비용 한도는 $0.01에서 $999,999.99 사이여야 합니다.",
+        "invalid_format": "유효한 금액을 입력하세요."
       }
     },
     "revoke": {
       "confirm": {
-        "title": "[en-pending] Revoke this API key?",
-        "cta": "[en-pending] Revoke"
+        "title": "이 API 키를 폐기하시겠습니까?",
+        "cta": "폐기"
       },
-      "success": "[en-pending] API key revoked.",
-      "already_revoked": "[en-pending] This key was already revoked.",
-      "not_found": "[en-pending] API key not found or already removed.",
-      "warning": "[en-pending] This action is permanent. Once revoked, this key cannot be reactivated. Apps using this key will receive 401 errors immediately.",
-      "confirm_label": "[en-pending] Type the key name to confirm: {name}",
-      "confirm_aria": "[en-pending] Type the key name {name} to confirm revoke",
-      "cancel": "[en-pending] Cancel"
+      "success": "API 키가 폐기되었습니다.",
+      "already_revoked": "이 키는 이미 폐기되었습니다.",
+      "not_found": "API 키를 찾을 수 없거나 이미 제거되었습니다.",
+      "warning": "이 작업은 영구적입니다. 폐기된 키는 다시 활성화할 수 없습니다. 이 키를 사용하는 앱은 즉시 401 오류를 받게 됩니다.",
+      "confirm_label": "확인을 위해 키 이름을 입력하세요: {name}",
+      "confirm_aria": "폐기를 확인하기 위해 키 이름 {name}을 입력하세요",
+      "cancel": "취소"
     },
     "edit": {
-      "title": "[en-pending] Edit API key",
+      "title": "API 키 편집",
       "confirm": {
-        "cta": "[en-pending] Save changes"
+        "cta": "변경 사항 저장"
       },
-      "success": "[en-pending] API key updated.",
+      "success": "API 키가 업데이트되었습니다.",
       "errors": {
-        "invalid_cidr": "[en-pending] One or more IP addresses or CIDR ranges are invalid.",
-        "unknown_model": "[en-pending] One or more selected models are not available.",
-        "cap_out_of_range": "[en-pending] Monthly cost cap must be between $0.01 and $999,999.99.",
-        "not_found": "[en-pending] API key not found or already removed.",
-        "account_pending_deletion": "[en-pending] Your account is scheduled for deletion; configuration changes are disabled.",
-        "invalid_request": "[en-pending] Some of the configuration values are invalid.",
-        "generic": "[en-pending] Something went wrong. Please try again."
+        "invalid_cidr": "하나 이상의 IP 주소 또는 CIDR 범위가 유효하지 않습니다.",
+        "unknown_model": "선택한 모델 중 하나 이상이 사용할 수 없습니다.",
+        "cap_out_of_range": "월별 비용 한도는 $0.01에서 $999,999.99 사이여야 합니다.",
+        "not_found": "API 키를 찾을 수 없거나 이미 제거되었습니다.",
+        "account_pending_deletion": "계정이 삭제 예정 상태입니다. 설정 변경이 비활성화되어 있습니다.",
+        "invalid_request": "일부 설정 값이 유효하지 않습니다.",
+        "generic": "오류가 발생했습니다. 다시 시도해 주세요."
       }
     },
     "cap": {
       "email": {
         "warning": {
-          "subject": "[en-pending] Your API key is approaching its monthly spend cap",
-          "description": "[en-pending] Notify when usage reaches 80% of the cap"
+          "subject": "API 키가 월별 지출 한도에 근접하고 있습니다",
+          "description": "사용량이 한도의 80%에 도달하면 알림 발송"
         },
         "tripped": {
-          "subject": "[en-pending] Your API key has been paused — monthly spend cap reached",
-          "description": "[en-pending] Notify when the cap is reached and the key is paused"
+          "subject": "API 키가 일시 중지되었습니다 — 월별 지출 한도 도달",
+          "description": "한도에 도달하여 키가 일시 중지되면 알림 발송"
         }
       },
-      "none": "[en-pending] No cap set",
-      "tripped": "[en-pending] Tripped",
-      "tripped_sr": "[en-pending] API key cap tripped — pausing until next month.",
-      "usage_aria": "[en-pending] {current} of {cap} used"
+      "none": "한도 없음",
+      "tripped": "한도 초과",
+      "tripped_sr": "API 키 한도 초과 — 다음 달까지 일시 중지됩니다.",
+      "usage_aria": "{cap} 중 {current} 사용됨"
     },
     "page": {
-      "title": "[en-pending] API Keys",
-      "description": "[en-pending] Manage the API keys you use to authenticate with the He-API.",
-      "new_key": "[en-pending] New key"
+      "title": "API 키",
+      "description": "He-API 인증에 사용하는 API 키를 관리합니다.",
+      "new_key": "새 키"
     },
     "nav": {
-      "sidebar": "[en-pending] API Keys"
+      "sidebar": "API 키"
     },
     "footer": {
-      "count": "[en-pending] Showing {count} keys"
+      "count": "{count}개의 키 표시 중"
     },
     "banner": {
-      "retry": "[en-pending] Retry"
+      "retry": "다시 시도"
     },
     "loading": {
-      "aria": "[en-pending] Loading your API keys…"
+      "aria": "API 키를 불러오는 중…"
     },
     "table": {
       "header": {
-        "name": "[en-pending] Name",
-        "prefix": "[en-pending] Prefix",
-        "scope": "[en-pending] Scope",
-        "created": "[en-pending] Created",
-        "last_used": "[en-pending] Last used",
-        "cap": "[en-pending] Monthly cap",
-        "status": "[en-pending] Status",
-        "actions": "[en-pending] Actions"
+        "name": "이름",
+        "prefix": "접두사",
+        "scope": "범위",
+        "created": "생성일",
+        "last_used": "마지막 사용",
+        "cap": "월별 한도",
+        "status": "상태",
+        "actions": "작업"
       }
     },
     "status": {
-      "active": "[en-pending] Active",
-      "revoked": "[en-pending] Revoked"
+      "active": "활성",
+      "revoked": "폐기됨"
     },
     "last_used": {
-      "never": "[en-pending] Never"
+      "never": "없음"
     },
     "actions": {
-      "configure": "[en-pending] Configure {name}",
-      "revoke": "[en-pending] Revoke {name}"
+      "configure": "{name} 설정",
+      "revoke": "{name} 폐기"
     },
     "row": {
-      "aria": "[en-pending] API key {name}"
+      "aria": "API 키 {name}"
     },
     "scope": {
-      "all_models": "[en-pending] All models",
-      "ip_count": "[en-pending] +{count} IPs"
+      "all_models": "모든 모델",
+      "ip_count": "+{count}개 IP"
     },
     "create": {
-      "title": "[en-pending] Create API key",
-      "name_label": "[en-pending] Key name",
-      "name_placeholder": "[en-pending] e.g. Production API",
-      "submit": "[en-pending] Create key",
-      "cancel": "[en-pending] Cancel",
-      "rate_limited": "[en-pending] Too many key creations. Try again in {seconds} seconds."
+      "title": "API 키 만들기",
+      "name_label": "키 이름",
+      "name_placeholder": "예: 프로덕션 API",
+      "submit": "키 만들기",
+      "cancel": "취소",
+      "rate_limited": "키 생성 횟수를 초과했습니다. {seconds}초 후에 다시 시도해 주세요."
     },
     "created": {
-      "title": "[en-pending] Save your API key now",
-      "warning": "[en-pending] This is the only time you'll see this key. Copy it and store it securely — you cannot retrieve it later.",
-      "label": "[en-pending] Your API key",
-      "reveal": "[en-pending] Reveal",
-      "hide": "[en-pending] Hide",
-      "copy": "[en-pending] Copy",
-      "copied": "[en-pending] API key copied to clipboard.",
-      "copy_failed": "[en-pending] Copy failed. Select the key text manually to copy.",
-      "saved_cta": "[en-pending] I've saved it",
-      "close_without_saving": "[en-pending] Close without saving",
+      "title": "지금 API 키를 저장하세요",
+      "warning": "이 키는 이번 한 번만 표시됩니다. 복사하여 안전하게 보관하세요 — 나중에 다시 확인할 수 없습니다.",
+      "label": "내 API 키",
+      "reveal": "표시",
+      "hide": "숨기기",
+      "copy": "복사",
+      "copied": "API 키가 클립보드에 복사되었습니다.",
+      "copy_failed": "복사에 실패했습니다. 키 텍스트를 직접 선택하여 복사하세요.",
+      "saved_cta": "저장했습니다",
+      "close_without_saving": "저장하지 않고 닫기",
       "confirm_close": {
-        "title": "[en-pending] You haven't saved the key",
-        "body": "[en-pending] If you close now, the key is gone forever.",
-        "cancel": "[en-pending] Cancel",
-        "confirm": "[en-pending] Close anyway"
+        "title": "키를 저장하지 않으셨습니다",
+        "body": "지금 닫으면 키는 영구적으로 사라집니다.",
+        "cancel": "취소",
+        "confirm": "그래도 닫기"
       }
     },
     "configure": {
       "models": {
-        "heading": "[en-pending] Models scope",
-        "all_toggle": "[en-pending] All models allowed",
-        "select_label": "[en-pending] Allowed models",
-        "unavailable": "[en-pending] Model catalogue unavailable — try again later."
+        "heading": "모델 범위",
+        "all_toggle": "모든 모델 허용",
+        "select_label": "허용된 모델",
+        "unavailable": "모델 카탈로그를 사용할 수 없습니다 — 나중에 다시 시도해 주세요."
       },
       "ip": {
-        "heading": "[en-pending] IP whitelist",
-        "empty": "[en-pending] Any IP allowed",
-        "add": "[en-pending] Add another IP",
-        "add_first": "[en-pending] Add IP",
-        "remove": "[en-pending] Remove IP {value}",
-        "row_label": "[en-pending] IP {index}"
+        "heading": "IP 허용 목록",
+        "empty": "모든 IP 허용",
+        "add": "IP 추가",
+        "add_first": "IP 추가",
+        "remove": "IP {value} 제거",
+        "row_label": "IP {index}"
       },
       "cap": {
-        "heading": "[en-pending] Monthly cost cap",
-        "label": "[en-pending] Monthly cost cap in USD",
-        "no_cap": "[en-pending] No cap",
-        "help": "[en-pending] Leave empty for no cap."
+        "heading": "월별 비용 한도",
+        "label": "월별 비용 한도 (USD)",
+        "no_cap": "한도 없음",
+        "help": "한도를 설정하지 않으려면 비워 두세요."
       },
-      "cancel": "[en-pending] Cancel",
+      "cancel": "취소",
       "discard": {
-        "title": "[en-pending] Discard unsaved changes?",
-        "body": "[en-pending] You have unsaved changes.",
-        "cancel": "[en-pending] Cancel",
-        "confirm": "[en-pending] Discard"
+        "title": "저장되지 않은 변경 사항을 삭제하시겠습니까?",
+        "body": "저장되지 않은 변경 사항이 있습니다.",
+        "cancel": "취소",
+        "confirm": "삭제"
       }
     }
   },

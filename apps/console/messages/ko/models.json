@@ -1,54 +1,54 @@
 {
   "page": {
-    "title": "[en-pending] Model Capability Matrix — He-API",
-    "description": "[en-pending] Compare context window, function calling, and JSON mode support across 11 He-API models.",
-    "heading": "[en-pending] Model Capability Matrix",
-    "subheading": "[en-pending] Compare 11 models across 7 capability dimensions"
+    "title": "모델 기능 매트릭스 — He-API",
+    "description": "11개 He-API 모델의 컨텍스트 윈도우, 함수 호출, JSON 모드 지원을 비교합니다.",
+    "heading": "모델 기능 매트릭스",
+    "subheading": "7가지 기능 차원에서 11개 모델 비교"
   },
   "table": {
-    "caption": "[en-pending] Capabilities of the 11 chat models advertised by the He-API gateway.",
+    "caption": "He-API 게이트웨이에서 제공하는 11개 채팅 모델의 기능 정보.",
     "column": {
-      "model": "[en-pending] Model",
-      "vendor": "[en-pending] Vendor",
-      "chat": "[en-pending] Chat",
-      "streaming": "[en-pending] Streaming",
-      "functionCalling": "[en-pending] Function Calling",
-      "vision": "[en-pending] Vision",
-      "jsonMode": "[en-pending] JSON Mode",
-      "contextWindow": "[en-pending] Context Window",
-      "maxOutput": "[en-pending] Max Output"
+      "model": "모델",
+      "vendor": "벤더",
+      "chat": "채팅",
+      "streaming": "스트리밍",
+      "functionCalling": "함수 호출",
+      "vision": "비전",
+      "jsonMode": "JSON 모드",
+      "contextWindow": "컨텍스트 윈도우",
+      "maxOutput": "최대 출력"
     }
   },
   "vendor": {
-    "alibaba": "[en-pending] Alibaba",
-    "deepseek": "[en-pending] DeepSeek",
-    "moonshot": "[en-pending] Moonshot",
-    "zhipu": "[en-pending] Zhipu",
-    "bytedance": "[en-pending] ByteDance",
-    "baidu": "[en-pending] Baidu",
-    "he-api": "[en-pending] He-API"
+    "alibaba": "Alibaba",
+    "deepseek": "DeepSeek",
+    "moonshot": "Moonshot",
+    "zhipu": "Zhipu",
+    "bytedance": "ByteDance",
+    "baidu": "Baidu",
+    "he-api": "He-API"
   },
   "capability": {
-    "chat": "[en-pending] Chat",
-    "streaming": "[en-pending] Streaming",
-    "functionCalling": "[en-pending] Function Calling",
-    "vision": "[en-pending] Vision",
-    "jsonMode": "[en-pending] JSON Mode",
-    "contextWindow": "[en-pending] Context Window (tokens)",
-    "maxOutput": "[en-pending] Max Output (tokens)",
+    "chat": "채팅",
+    "streaming": "스트리밍",
+    "functionCalling": "함수 호출",
+    "vision": "비전",
+    "jsonMode": "JSON 모드",
+    "contextWindow": "컨텍스트 윈도우 (토큰)",
+    "maxOutput": "최대 출력 (토큰)",
     "value": {
-      "yes": "[en-pending] Supported",
-      "no": "[en-pending] Not supported"
+      "yes": "지원됨",
+      "no": "지원되지 않음"
     }
   },
   "tokensUnit": "{count, number} tokens",
   "error": {
-    "unavailable": "[en-pending] Capability data temporarily unavailable; check back shortly.",
-    "partial": "[en-pending] Capability data partially unavailable; some models may be missing.",
-    "generic": "[en-pending] Something went wrong while loading the capability matrix."
+    "unavailable": "기능 데이터를 일시적으로 사용할 수 없습니다. 잠시 후 다시 확인해 주세요.",
+    "partial": "기능 데이터의 일부를 사용할 수 없습니다. 일부 모델이 누락될 수 있습니다.",
+    "generic": "기능 매트릭스를 불러오는 중 오류가 발생했습니다."
   },
   "nav": {
-    "models": "[en-pending] Models",
-    "home": "[en-pending] He-API"
+    "models": "모델",
+    "home": "He-API"
   }
 }

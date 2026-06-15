@@ -18,3 +18,15 @@
     color: hsl(var(--foreground));
   }
 }
+
+/*
+ * Story 10.1 (BR-10.1.7) — directional-icon mirroring under RTL. Icons that point
+ * along the reading axis (back arrows, submenu/breadcrumb chevrons, expand-toward
+ * arrows) must flip horizontally when the document is RTL (ar). This is OPT-IN via
+ * `.rtl-mirror`, so non-directional icons (logo, status ✓/⚠/✕, the vertical
+ * dropdown caret) are never mistakenly flipped. Vertical-only icons (ChevronDown
+ * carets) are intentionally NOT given this class.
+ */
+[dir='rtl'] .rtl-mirror {
+  transform: scaleX(-1);
+}

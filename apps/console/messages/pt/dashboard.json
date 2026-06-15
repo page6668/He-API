@@ -1,34 +1,57 @@
 {
   "page": {
-    "title": "[en-pending] Usage Dashboard",
-    "description": "[en-pending] Your API usage across today, this month, and this quarter.",
-    "heading": "[en-pending] Usage"
+    "title": "Painel de Uso",
+    "description": "Seu uso da API hoje, neste mês e neste trimestre.",
+    "heading": "Uso"
   },
   "nav": {
-    "sidebar": "[en-pending] Dashboard"
+    "sidebar": "Painel"
   },
   "periods": {
-    "today": "[en-pending] Today",
-    "month": "[en-pending] This Month",
-    "quarter": "[en-pending] This Quarter"
+    "today": "Hoje",
+    "month": "Este Mês",
+    "quarter": "Este Trimestre"
   },
   "metrics": {
-    "requests": "[en-pending] Requests",
-    "successRate": "[en-pending] Success Rate",
-    "tokens": "[en-pending] Tokens",
-    "cost": "[en-pending] Spend"
+    "requests": "Solicitações",
+    "successRate": "Taxa de Sucesso",
+    "tokens": "Tokens",
+    "cost": "Gasto"
   },
   "empty": {
-    "hint": "[en-pending] Make your first API call to see usage here.",
-    "cta": "[en-pending] Create an API key"
+    "hint": "Faça sua primeira chamada API para ver o uso aqui.",
+    "cta": "Criar uma chave API"
   },
   "loading": {
-    "label": "[en-pending] Loading usage…"
+    "label": "Carregando uso…"
   },
   "errors": {
-    "generic": "[en-pending] We couldn't load your usage. Please try again.",
-    "unavailable": "[en-pending] Usage data is temporarily unavailable. Please try again.",
-    "malformed": "[en-pending] Something went wrong loading your dashboard.",
-    "retry": "[en-pending] Retry"
+    "generic": "Não foi possível carregar seu uso. Tente novamente.",
+    "unavailable": "Os dados de uso estão temporariamente indisponíveis. Tente novamente.",
+    "malformed": "Algo deu errado ao carregar seu painel.",
+    "retry": "Tentar novamente"
+  },
+  "chart": {
+    "title": "Tendência de uso",
+    "groupLabel": "Agrupar por",
+    "byDay": "Por dia",
+    "byModel": "Por modelo",
+    "byStatus": "Por status",
+    "axis": {
+      "date": "Data",
+      "requests": "Solicitações"
+    },
+    "status": {
+      "success": "Sucesso",
+      "error": "Erro"
+    },
+    "empty": "Sem uso nos últimos 30 dias.",
+    "error": "Não foi possível carregar a tendência de uso.",
+    "retry": "Tentar novamente",
+    "loading": "Carregando a tendência de uso…",
+    "table": {
+      "caption": "Tabela de dados da tendência de uso",
+      "series": "Série"
+    }
   }
 }

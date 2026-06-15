@@ -9,175 +9,175 @@
   },
   "keys": {
     "empty": {
-      "title": "[en-pending] No API keys yet",
-      "cta": "[en-pending] Create your first API key",
-      "body": "[en-pending] Create your first API key to start calling the He-API."
+      "title": "لا توجد مفاتيح API حتى الآن",
+      "cta": "أنشئ مفتاح API الأول",
+      "body": "أنشئ مفتاح API الأول لبدء استدعاء He-API."
     },
     "errors": {
       "name": {
-        "missing": "[en-pending] Key name is required.",
-        "too_short": "[en-pending] Key name is too short.",
-        "too_long": "[en-pending] Key name must be at most 100 characters.",
-        "invalid_chars": "[en-pending] Key name contains characters that aren't allowed."
+        "missing": "اسم المفتاح مطلوب.",
+        "too_short": "اسم المفتاح قصير جدًا.",
+        "too_long": "يجب ألا يتجاوز اسم المفتاح 100 حرف.",
+        "invalid_chars": "يحتوي اسم المفتاح على أحرف غير مسموح بها."
       },
-      "generic": "[en-pending] Something went wrong. Please try again.",
-      "plaintext_one_time": "[en-pending] This plaintext is shown ONCE. Store it now — it cannot be retrieved later.",
-      "rate_limited": "[en-pending] Too many key creations. Please wait and try again.",
+      "generic": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
+      "plaintext_one_time": "يُعرض هذا النص بصيغته الأصلية مرة واحدة فقط. احفظه الآن — لا يمكن استرجاعه لاحقًا.",
+      "rate_limited": "طلبات إنشاء مفاتيح كثيرة جدًا. يرجى الانتظار والمحاولة مرة أخرى.",
       "ip": {
-        "invalid_format": "[en-pending] Enter a valid IP address or CIDR range.",
-        "degenerate_cidr": "[en-pending] 0.0.0.0/0 and ::/0 are not allowed.",
-        "zone_id_rejected": "[en-pending] IPv6 zone IDs are not allowed."
+        "invalid_format": "أدخل عنوان IP صالحًا أو نطاق CIDR.",
+        "degenerate_cidr": "0.0.0.0/0 و ::/0 غير مسموح بهما.",
+        "zone_id_rejected": "معرّفات منطقة IPv6 غير مسموح بها."
       },
       "cap": {
-        "out_of_range": "[en-pending] Monthly cost cap must be between $0.01 and $999,999.99.",
-        "invalid_format": "[en-pending] Enter a valid amount."
+        "out_of_range": "يجب أن يكون الحد الشهري للتكلفة بين $0.01 و$999,999.99.",
+        "invalid_format": "أدخل مبلغًا صالحًا."
       }
     },
     "revoke": {
       "confirm": {
-        "title": "[en-pending] Revoke this API key?",
-        "cta": "[en-pending] Revoke"
+        "title": "إلغاء هذا المفتاح API؟",
+        "cta": "إلغاء المفتاح"
       },
-      "success": "[en-pending] API key revoked.",
-      "already_revoked": "[en-pending] This key was already revoked.",
-      "not_found": "[en-pending] API key not found or already removed.",
-      "warning": "[en-pending] This action is permanent. Once revoked, this key cannot be reactivated. Apps using this key will receive 401 errors immediately.",
-      "confirm_label": "[en-pending] Type the key name to confirm: {name}",
-      "confirm_aria": "[en-pending] Type the key name {name} to confirm revoke",
-      "cancel": "[en-pending] Cancel"
+      "success": "تم إلغاء مفتاح API.",
+      "already_revoked": "هذا المفتاح ملغى بالفعل.",
+      "not_found": "مفتاح API غير موجود أو تم إزالته مسبقًا.",
+      "warning": "هذا الإجراء دائم. بمجرد الإلغاء، لا يمكن إعادة تفعيل هذا المفتاح. ستتلقى التطبيقات التي تستخدم هذا المفتاح أخطاء 401 فورًا.",
+      "confirm_label": "اكتب اسم المفتاح للتأكيد: {name}",
+      "confirm_aria": "اكتب اسم المفتاح {name} لتأكيد الإلغاء",
+      "cancel": "إلغاء"
     },
     "edit": {
-      "title": "[en-pending] Edit API key",
+      "title": "تعديل مفتاح API",
       "confirm": {
-        "cta": "[en-pending] Save changes"
+        "cta": "حفظ التغييرات"
       },
-      "success": "[en-pending] API key updated.",
+      "success": "تم تحديث مفتاح API.",
       "errors": {
-        "invalid_cidr": "[en-pending] One or more IP addresses or CIDR ranges are invalid.",
-        "unknown_model": "[en-pending] One or more selected models are not available.",
-        "cap_out_of_range": "[en-pending] Monthly cost cap must be between $0.01 and $999,999.99.",
-        "not_found": "[en-pending] API key not found or already removed.",
-        "account_pending_deletion": "[en-pending] Your account is scheduled for deletion; configuration changes are disabled.",
-        "invalid_request": "[en-pending] Some of the configuration values are invalid.",
-        "generic": "[en-pending] Something went wrong. Please try again."
+        "invalid_cidr": "عنوان IP واحد أو أكثر أو نطاقات CIDR غير صالحة.",
+        "unknown_model": "نموذج واحد أو أكثر من النماذج المحددة غير متاح.",
+        "cap_out_of_range": "يجب أن يكون الحد الشهري للتكلفة بين $0.01 و$999,999.99.",
+        "not_found": "مفتاح API غير موجود أو تم إزالته مسبقًا.",
+        "account_pending_deletion": "حسابك مجدول للحذف؛ تغييرات الإعدادات معطّلة.",
+        "invalid_request": "بعض قيم الإعدادات غير صالحة.",
+        "generic": "حدث خطأ ما. يرجى المحاولة مرة أخرى."
       }
     },
     "cap": {
       "email": {
         "warning": {
-          "subject": "[en-pending] Your API key is approaching its monthly spend cap",
-          "description": "[en-pending] Notify when usage reaches 80% of the cap"
+          "subject": "مفتاح API الخاص بك يقترب من حد الإنفاق الشهري",
+          "description": "إشعار عند وصول الاستخدام إلى 80% من الحد"
         },
         "tripped": {
-          "subject": "[en-pending] Your API key has been paused — monthly spend cap reached",
-          "description": "[en-pending] Notify when the cap is reached and the key is paused"
+          "subject": "تم إيقاف مفتاح API مؤقتًا — تم الوصول إلى حد الإنفاق الشهري",
+          "description": "إشعار عند الوصول إلى الحد وإيقاف المفتاح مؤقتًا"
         }
       },
-      "none": "[en-pending] No cap set",
-      "tripped": "[en-pending] Tripped",
-      "tripped_sr": "[en-pending] API key cap tripped — pausing until next month.",
-      "usage_aria": "[en-pending] {current} of {cap} used"
+      "none": "لا يوجد حد محدد",
+      "tripped": "تم تفعيل الحد",
+      "tripped_sr": "تم تفعيل حد مفتاح API — الإيقاف المؤقت حتى الشهر القادم.",
+      "usage_aria": "تم استخدام {current} من أصل {cap}"
     },
     "page": {
-      "title": "[en-pending] API Keys",
-      "description": "[en-pending] Manage the API keys you use to authenticate with the He-API.",
-      "new_key": "[en-pending] New key"
+      "title": "مفاتيح API",
+      "description": "إدارة مفاتيح API المستخدمة للمصادقة مع He-API.",
+      "new_key": "مفتاح جديد"
     },
     "nav": {
-      "sidebar": "[en-pending] API Keys"
+      "sidebar": "مفاتيح API"
     },
     "footer": {
-      "count": "[en-pending] Showing {count} keys"
+      "count": "عرض {count} مفاتيح"
     },
     "banner": {
-      "retry": "[en-pending] Retry"
+      "retry": "إعادة المحاولة"
     },
     "loading": {
-      "aria": "[en-pending] Loading your API keys…"
+      "aria": "جارٍ تحميل مفاتيح API الخاصة بك…"
     },
     "table": {
       "header": {
-        "name": "[en-pending] Name",
-        "prefix": "[en-pending] Prefix",
-        "scope": "[en-pending] Scope",
-        "created": "[en-pending] Created",
-        "last_used": "[en-pending] Last used",
-        "cap": "[en-pending] Monthly cap",
-        "status": "[en-pending] Status",
-        "actions": "[en-pending] Actions"
+        "name": "الاسم",
+        "prefix": "البادئة",
+        "scope": "النطاق",
+        "created": "تاريخ الإنشاء",
+        "last_used": "آخر استخدام",
+        "cap": "الحد الشهري",
+        "status": "الحالة",
+        "actions": "الإجراءات"
       }
     },
     "status": {
-      "active": "[en-pending] Active",
-      "revoked": "[en-pending] Revoked"
+      "active": "نشط",
+      "revoked": "ملغى"
     },
     "last_used": {
-      "never": "[en-pending] Never"
+      "never": "أبدًا"
     },
     "actions": {
-      "configure": "[en-pending] Configure {name}",
-      "revoke": "[en-pending] Revoke {name}"
+      "configure": "إعداد {name}",
+      "revoke": "إلغاء {name}"
     },
     "row": {
-      "aria": "[en-pending] API key {name}"
+      "aria": "مفتاح API {name}"
     },
     "scope": {
-      "all_models": "[en-pending] All models",
-      "ip_count": "[en-pending] +{count} IPs"
+      "all_models": "جميع النماذج",
+      "ip_count": "+{count} عناوين IP"
     },
     "create": {
-      "title": "[en-pending] Create API key",
-      "name_label": "[en-pending] Key name",
-      "name_placeholder": "[en-pending] e.g. Production API",
-      "submit": "[en-pending] Create key",
-      "cancel": "[en-pending] Cancel",
-      "rate_limited": "[en-pending] Too many key creations. Try again in {seconds} seconds."
+      "title": "إنشاء مفتاح API",
+      "name_label": "اسم المفتاح",
+      "name_placeholder": "مثال: Production API",
+      "submit": "إنشاء المفتاح",
+      "cancel": "إلغاء",
+      "rate_limited": "طلبات إنشاء مفاتيح كثيرة جدًا. حاول مرة أخرى بعد {seconds} ثوانٍ."
     },
     "created": {
-      "title": "[en-pending] Save your API key now",
-      "warning": "[en-pending] This is the only time you'll see this key. Copy it and store it securely — you cannot retrieve it later.",
-      "label": "[en-pending] Your API key",
-      "reveal": "[en-pending] Reveal",
-      "hide": "[en-pending] Hide",
-      "copy": "[en-pending] Copy",
-      "copied": "[en-pending] API key copied to clipboard.",
-      "copy_failed": "[en-pending] Copy failed. Select the key text manually to copy.",
-      "saved_cta": "[en-pending] I've saved it",
-      "close_without_saving": "[en-pending] Close without saving",
+      "title": "احفظ مفتاح API الخاص بك الآن",
+      "warning": "هذه المرة الوحيدة التي ستشاهد فيها هذا المفتاح. انسخه واحفظه بأمان — لا يمكن استرجاعه لاحقًا.",
+      "label": "مفتاح API الخاص بك",
+      "reveal": "إظهار",
+      "hide": "إخفاء",
+      "copy": "نسخ",
+      "copied": "تم نسخ مفتاح API إلى الحافظة.",
+      "copy_failed": "فشل النسخ. حدّد نص المفتاح يدويًا للنسخ.",
+      "saved_cta": "لقد حفظته",
+      "close_without_saving": "إغلاق دون حفظ",
       "confirm_close": {
-        "title": "[en-pending] You haven't saved the key",
-        "body": "[en-pending] If you close now, the key is gone forever.",
-        "cancel": "[en-pending] Cancel",
-        "confirm": "[en-pending] Close anyway"
+        "title": "لم تحفظ المفتاح بعد",
+        "body": "إذا أغلقت الآن، سيُفقد المفتاح إلى الأبد.",
+        "cancel": "إلغاء",
+        "confirm": "إغلاق على أي حال"
       }
     },
     "configure": {
       "models": {
-        "heading": "[en-pending] Models scope",
-        "all_toggle": "[en-pending] All models allowed",
-        "select_label": "[en-pending] Allowed models",
-        "unavailable": "[en-pending] Model catalogue unavailable — try again later."
+        "heading": "نطاق النماذج",
+        "all_toggle": "جميع النماذج مسموح بها",
+        "select_label": "النماذج المسموح بها",
+        "unavailable": "قائمة النماذج غير متاحة — حاول مرة أخرى لاحقًا."
       },
       "ip": {
-        "heading": "[en-pending] IP whitelist",
-        "empty": "[en-pending] Any IP allowed",
-        "add": "[en-pending] Add another IP",
-        "add_first": "[en-pending] Add IP",
-        "remove": "[en-pending] Remove IP {value}",
-        "row_label": "[en-pending] IP {index}"
+        "heading": "قائمة IP البيضاء",
+        "empty": "أي عنوان IP مسموح به",
+        "add": "إضافة عنوان IP آخر",
+        "add_first": "إضافة عنوان IP",
+        "remove": "إزالة عنوان IP {value}",
+        "row_label": "عنوان IP {index}"
       },
       "cap": {
-        "heading": "[en-pending] Monthly cost cap",
-        "label": "[en-pending] Monthly cost cap in USD",
-        "no_cap": "[en-pending] No cap",
-        "help": "[en-pending] Leave empty for no cap."
+        "heading": "الحد الشهري للتكلفة",
+        "label": "الحد الشهري للتكلفة بالدولار الأمريكي",
+        "no_cap": "بلا حد",
+        "help": "اتركه فارغًا لعدم تعيين حد."
       },
-      "cancel": "[en-pending] Cancel",
+      "cancel": "إلغاء",
       "discard": {
-        "title": "[en-pending] Discard unsaved changes?",
-        "body": "[en-pending] You have unsaved changes.",
-        "cancel": "[en-pending] Cancel",
-        "confirm": "[en-pending] Discard"
+        "title": "تجاهل التغييرات غير المحفوظة؟",
+        "body": "لديك تغييرات غير محفوظة.",
+        "cancel": "إلغاء",
+        "confirm": "تجاهل"
       }
     }
   },

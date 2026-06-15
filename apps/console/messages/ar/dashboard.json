@@ -1,34 +1,57 @@
 {
   "page": {
-    "title": "[en-pending] Usage Dashboard",
-    "description": "[en-pending] Your API usage across today, this month, and this quarter.",
-    "heading": "[en-pending] Usage"
+    "title": "لوحة تحكم الاستخدام",
+    "description": "استخدام API الخاص بك خلال اليوم وهذا الشهر وهذا الربع.",
+    "heading": "الاستخدام"
   },
   "nav": {
-    "sidebar": "[en-pending] Dashboard"
+    "sidebar": "لوحة التحكم"
   },
   "periods": {
-    "today": "[en-pending] Today",
-    "month": "[en-pending] This Month",
-    "quarter": "[en-pending] This Quarter"
+    "today": "اليوم",
+    "month": "هذا الشهر",
+    "quarter": "هذا الربع"
   },
   "metrics": {
-    "requests": "[en-pending] Requests",
-    "successRate": "[en-pending] Success Rate",
-    "tokens": "[en-pending] Tokens",
-    "cost": "[en-pending] Spend"
+    "requests": "الطلبات",
+    "successRate": "معدل النجاح",
+    "tokens": "الرموز",
+    "cost": "الإنفاق"
   },
   "empty": {
-    "hint": "[en-pending] Make your first API call to see usage here.",
-    "cta": "[en-pending] Create an API key"
+    "hint": "أجرِ أول استدعاء API لرؤية الاستخدام هنا.",
+    "cta": "إنشاء مفتاح API"
   },
   "loading": {
-    "label": "[en-pending] Loading usage…"
+    "label": "جارٍ تحميل بيانات الاستخدام…"
   },
   "errors": {
-    "generic": "[en-pending] We couldn't load your usage. Please try again.",
-    "unavailable": "[en-pending] Usage data is temporarily unavailable. Please try again.",
-    "malformed": "[en-pending] Something went wrong loading your dashboard.",
-    "retry": "[en-pending] Retry"
+    "generic": "تعذّر تحميل بيانات الاستخدام الخاصة بك. يرجى المحاولة مرة أخرى.",
+    "unavailable": "بيانات الاستخدام غير متاحة مؤقتًا. يرجى المحاولة مرة أخرى.",
+    "malformed": "حدث خطأ أثناء تحميل لوحة التحكم الخاصة بك.",
+    "retry": "إعادة المحاولة"
+  },
+  "chart": {
+    "title": "اتجاه الاستخدام",
+    "groupLabel": "تجميع حسب",
+    "byDay": "حسب اليوم",
+    "byModel": "حسب النموذج",
+    "byStatus": "حسب الحالة",
+    "axis": {
+      "date": "التاريخ",
+      "requests": "الطلبات"
+    },
+    "status": {
+      "success": "نجاح",
+      "error": "خطأ"
+    },
+    "empty": "لا يوجد استخدام في آخر 30 يومًا.",
+    "error": "تعذّر تحميل اتجاه الاستخدام.",
+    "retry": "إعادة المحاولة",
+    "loading": "جارٍ تحميل اتجاه الاستخدام…",
+    "table": {
+      "caption": "جدول بيانات اتجاه الاستخدام",
+      "series": "السلسلة"
+    }
   }
 }

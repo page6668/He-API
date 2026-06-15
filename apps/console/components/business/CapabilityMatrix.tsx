@@ -54,26 +54,26 @@ export function CapabilityMatrix({ models }: CapabilityMatrixProps): JSX.Element
     <>
       {/* Desktop matrix table — md: breakpoint inclusive. */}
       <table className="hidden md:table w-full border-collapse text-sm">
-        <caption className="text-left text-slate-600 mb-2">
+        <caption className="text-start text-slate-600 mb-2">
           {t("table.caption")}
         </caption>
         <thead>
           <tr className="border-b">
-            <th scope="col" className="text-left p-2">{t("table.column.model")}</th>
-            <th scope="col" className="text-left p-2">{t("table.column.vendor")}</th>
+            <th scope="col" className="text-start p-2">{t("table.column.model")}</th>
+            <th scope="col" className="text-start p-2">{t("table.column.vendor")}</th>
             <th scope="col" className="p-2">{t("table.column.chat")}</th>
             <th scope="col" className="p-2">{t("table.column.streaming")}</th>
             <th scope="col" className="p-2">{t("table.column.functionCalling")}</th>
             <th scope="col" className="p-2">{t("table.column.vision")}</th>
             <th scope="col" className="p-2">{t("table.column.jsonMode")}</th>
-            <th scope="col" className="p-2 text-right">{t("table.column.contextWindow")}</th>
-            <th scope="col" className="p-2 text-right">{t("table.column.maxOutput")}</th>
+            <th scope="col" className="p-2 text-end">{t("table.column.contextWindow")}</th>
+            <th scope="col" className="p-2 text-end">{t("table.column.maxOutput")}</th>
           </tr>
         </thead>
         <tbody>
           {models.map((m) => (
             <tr key={m.id} className="border-b">
-              <th scope="row" className="text-left p-2 font-mono">{m.id}</th>
+              <th scope="row" className="text-start p-2 font-mono">{m.id}</th>
               <td className="p-2">{t(`vendor.${vendorKey(m.owned_by)}` as never)}</td>
               <td className="p-2 text-center">
                 <CapabilityBadge present={m.capabilities.chat} label={m.capabilities.chat ? yesLabel : noLabel} />
@@ -90,10 +90,10 @@ export function CapabilityMatrix({ models }: CapabilityMatrixProps): JSX.Element
               <td className="p-2 text-center">
                 <CapabilityBadge present={m.capabilities.json_mode} label={m.capabilities.json_mode ? yesLabel : noLabel} />
               </td>
-              <td className="p-2 text-right tabular-nums">
+              <td className="p-2 text-end tabular-nums">
                 {numberFormat.format(m.capabilities.context_window_tokens)}
               </td>
-              <td className="p-2 text-right tabular-nums">
+              <td className="p-2 text-end tabular-nums">
                 {numberFormat.format(m.capabilities.max_output_tokens)}
               </td>
             </tr>

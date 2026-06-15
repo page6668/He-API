@@ -1,54 +1,54 @@
 {
   "page": {
-    "title": "[en-pending] Model Capability Matrix — He-API",
-    "description": "[en-pending] Compare context window, function calling, and JSON mode support across 11 He-API models.",
-    "heading": "[en-pending] Model Capability Matrix",
-    "subheading": "[en-pending] Compare 11 models across 7 capability dimensions"
+    "title": "مصفوفة قدرات النماذج — He-API",
+    "description": "قارن نافذة السياق ودعم استدعاء الوظائف ووضع JSON عبر 11 نموذجًا من نماذج He-API.",
+    "heading": "مصفوفة قدرات النماذج",
+    "subheading": "قارن 11 نموذجًا عبر 7 أبعاد للقدرات"
   },
   "table": {
-    "caption": "[en-pending] Capabilities of the 11 chat models advertised by the He-API gateway.",
+    "caption": "قدرات 11 نموذج دردشة يوفرها بوابة He-API.",
     "column": {
-      "model": "[en-pending] Model",
-      "vendor": "[en-pending] Vendor",
-      "chat": "[en-pending] Chat",
-      "streaming": "[en-pending] Streaming",
-      "functionCalling": "[en-pending] Function Calling",
-      "vision": "[en-pending] Vision",
-      "jsonMode": "[en-pending] JSON Mode",
-      "contextWindow": "[en-pending] Context Window",
-      "maxOutput": "[en-pending] Max Output"
+      "model": "النموذج",
+      "vendor": "المورّد",
+      "chat": "الدردشة",
+      "streaming": "البث",
+      "functionCalling": "استدعاء الوظائف",
+      "vision": "الرؤية",
+      "jsonMode": "وضع JSON",
+      "contextWindow": "نافذة السياق",
+      "maxOutput": "الحد الأقصى للإخراج"
     }
   },
   "vendor": {
-    "alibaba": "[en-pending] Alibaba",
-    "deepseek": "[en-pending] DeepSeek",
-    "moonshot": "[en-pending] Moonshot",
-    "zhipu": "[en-pending] Zhipu",
-    "bytedance": "[en-pending] ByteDance",
-    "baidu": "[en-pending] Baidu",
-    "he-api": "[en-pending] He-API"
+    "alibaba": "Alibaba",
+    "deepseek": "DeepSeek",
+    "moonshot": "Moonshot",
+    "zhipu": "Zhipu",
+    "bytedance": "ByteDance",
+    "baidu": "Baidu",
+    "he-api": "He-API"
   },
   "capability": {
-    "chat": "[en-pending] Chat",
-    "streaming": "[en-pending] Streaming",
-    "functionCalling": "[en-pending] Function Calling",
-    "vision": "[en-pending] Vision",
-    "jsonMode": "[en-pending] JSON Mode",
-    "contextWindow": "[en-pending] Context Window (tokens)",
-    "maxOutput": "[en-pending] Max Output (tokens)",
+    "chat": "الدردشة",
+    "streaming": "البث",
+    "functionCalling": "استدعاء الوظائف",
+    "vision": "الرؤية",
+    "jsonMode": "وضع JSON",
+    "contextWindow": "نافذة السياق (رموز)",
+    "maxOutput": "الحد الأقصى للإخراج (رموز)",
     "value": {
-      "yes": "[en-pending] Supported",
-      "no": "[en-pending] Not supported"
+      "yes": "مدعوم",
+      "no": "غير مدعوم"
     }
   },
   "tokensUnit": "{count, number} tokens",
   "error": {
-    "unavailable": "[en-pending] Capability data temporarily unavailable; check back shortly.",
-    "partial": "[en-pending] Capability data partially unavailable; some models may be missing.",
-    "generic": "[en-pending] Something went wrong while loading the capability matrix."
+    "unavailable": "بيانات القدرات غير متاحة مؤقتًا؛ تحقق مرة أخرى قريبًا.",
+    "partial": "بيانات القدرات غير متاحة جزئيًا؛ قد تكون بعض النماذج مفقودة.",
+    "generic": "حدث خطأ أثناء تحميل مصفوفة القدرات."
   },
   "nav": {
-    "models": "[en-pending] Models",
-    "home": "[en-pending] He-API"
+    "models": "النماذج",
+    "home": "He-API"
   }
 }

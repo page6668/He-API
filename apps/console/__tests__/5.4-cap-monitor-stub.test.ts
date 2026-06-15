@@ -50,10 +50,12 @@ describe('Story 5.4 — account.keys.cap.email.* i18n wiring', () => {
     }
   });
 
-  it('the 8 deferred locales carry the [en-pending] marker (Story-2.1 m-1 cascade)', () => {
+  it('the 8 deferred locales are fully translated (no [en-pending] marker — Story 10.1 BR-10.1.2)', () => {
     for (const locale of ['ja', 'ko', 'es', 'fr', 'de', 'pt', 'ru', 'ar']) {
       const email = loadAccount(locale).keys.cap.email;
-      expect(email.warning.subject).toContain('[en-pending]');
+      for (const [kind, field] of CAP_LEAVES) {
+        expect(email[kind][field]).not.toContain('[en-pending]');
+      }
     }
   });
 });

@@ -1,0 +1,120 @@
+schema: 1
+story: "10.1"
+story_title: "控制台 10 种语言翻译落地"
+gate: "PASS"
+status_reason: "Round 2: the sole Round-1 blocker (QA-10.1-H1, stale cross-story 5.4-cap-monitor-stub assertion) is RESOLVED — assertion inverted to assert full translation per BR-10.1.2; console suite now GREEN within 10.1 scope (345 pass; 1 remaining failure = pre-existing auth-surface baseline, excluded). AC1/AC2 mechanically verified (check-i18n-keys 6×10 PASS; en-pending zeroed; RTL class-audit 0). 1 LOW = launch-gate deferral (OQ-10.1-3), not a 10.1 blocker."
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-15T20:25:00Z"
+
+review_round: 2
+review_mode_type: incremental
+issues_from_previous_round: 1
+issues_resolved: 1
+improvement_percentage: 100
+
+incremental_context:
+  cached_risk_level: "MEDIUM"
+  cached_review_mode: "automated_plus_spot_check"
+  cached_project_type: "web_frontend"
+  failed_acs: []          # no AC failed in either round — both verified at ratified scope
+  failed_e2e_scenarios: []
+  missing_blind_spots:
+    - { id: "10.1-BLIND-BOUNDARY-003", category: BOUNDARY, description: "ar number/ID/timestamp LTR — E2E-delegated (todo), env-gated → launch gate" }
+    - { id: "10.1-BLIND-FLOW-001", category: FLOW, description: "rapid locale switch no-stale — E2E-delegated (todo), env-gated → launch gate" }
+    - { id: "10.1-BLIND-FLOW-002", category: FLOW, description: "en→ar→en dir toggle — E2E-delegated (todo), env-gated → launch gate" }
+  checkbox_issues:
+    - { checkbox_text: "T3.5 RTL 人工检查清单", issue_type: "documented_deferral_to_launch_OQ-10.1-3" }
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+top_issues: []   # all Round-1 issues resolved or accepted-deferral; see resolved_issues
+
+resolved_issues:
+  - id: "QA-10.1-H1"
+    severity: high
+    finding: "5.4-cap-monitor-stub.test.ts asserted the 8 deferred locales STILL carried '[en-pending]' (stale Story-2.1 intermediate-state assertion); 10.1 (BR-10.1.2) zeroed all placeholders → suite RED."
+    resolution: "Dev inverted the third `it(...)` (lines 53-58) to assert the 8 deferred locales are fully translated (`.not.toContain('[en-pending]')`) — exactly the suggested action. Verified at source + by independent run."
+    verification: "npx vitest run __tests__/5.4-cap-monitor-stub.test.ts → 3 passed. Full console suite → 345 pass / 1 fail (fail = excluded pre-existing auth baseline)."
+    refs: ["apps/console/__tests__/5.4-cap-monitor-stub.test.ts:53-60"]
+
+accepted_deferrals:
+  - id: "QA-10.1-L1"
+    severity: low
+    finding: "T3.5 (RTL 人工检查清单) unchecked."
+    rationale: "Explicitly deferred to Epic-10 launch native-review per ratified OQ-10.1-3 (10.1 AC2 gate = mechanical only). No action for 10.1."
+
+test_results:
+  automated:
+    executed: true
+    passed: true                # within 10.1 scope (sole failure = excluded pre-existing baseline)
+    total: 383
+    passed_count: 345
+    failed_count: 1
+    skipped_count: 34
+    todo_count: 3
+    pass_rate: 99.7
+    coverage_percentage: 0
+    excluded_baseline_failures:
+      - name: "AuthKeys union exposes every en auth key"
+        file: "apps/console/__tests__/2.2-email-signup-password-login-email-verification.test.ts:296"
+        error: "AuthKeys union missing verifyEmail.* — PRE-EXISTING BASELINE: packages/i18n-keys/src/auth.ts stale because gen-i18n-keys crashes on auth.json '2fa.section_title'. Auth namespace untouched by 10.1 (git status confirms; memory auth-surface-prebroken-head). EXCLUDED."
+    story_suite:
+      file: "apps/console/__tests__/10.1-language-translation-rollout.test.ts"
+      passed: 17
+      todo: 3
+      result: GREEN
+    cross_story_fix:
+      file: "apps/console/__tests__/5.4-cap-monitor-stub.test.ts"
+      passed: 3
+      result: GREEN
+    script_gates:
+      check_i18n_keys: "PASS (6 ns × 10 locales, exit 0)"
+      en_pending_grep: "EMPTY (BR-10.1.2)"
+      codegen_drift_10_1_scope: "NONE (account/logs/models/dashboard match en SoT)"
+  e2e:
+    executed: false
+    passed: false
+    skipped: true
+    skip_reason: "MEDIUM-risk spot-check; Playwright visual RTL E2E needs dev-server+chromium (env-heavy). P0 10.1-E2E-004 (2.1-E2E-005 unskip) is code-verified present & correct (html dir=rtl + lang=ar + en-LTR baseline + visual mirror snapshot). AC2-mechanical independently green via UNIT-008/009 + INT-005. Execution → Epic-10 launch gate."
+    scenarios_tested: 0
+    scenarios_passed: 0
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: "inline (Round 2 incremental review)"
+  issues: []
+
+risk_assessment:
+  risk_level: MEDIUM
+  review_mode: automated_plus_spot_check
+  complexity_count: 2
+  security_sensitive: false
+  dev_gate_score: 96
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 1 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "Execute P0 10.1-E2E-004 + E2E-delegated blind spots (BOUNDARY-003, FLOW-001/002) in a Playwright-capable env before Epic-10 launch."
+      - "ar native-review (OQ-10.1-3) + T3.5 manual RTL pass = Epic-10 launch sign-off gate, not a 10.1 blocker."
+      - "Resolve the auth-surface baseline (gen-i18n-keys crash on auth.json '2fa.section_title') in its own story — orthogonal to 10.1."
+
+nfr_validation:
+  security: { status: PASS, notes: "Pure front-end i18n; no new attack surface. isLocale 404 guard preserved (BLIND-BOUNDARY-001)." }
+  performance: { status: PASS, notes: "Per-locale code-split via statically-analyzable ${locale}/${ns} dynamic import (OQ-10.1-1); 250KB budget held by design. size-limit (INT-004) not executed (needs build) — design-verified." }
+  reliability: { status: PASS, notes: "loadMessages has no swallowing catch; missing ns surfaces (BLIND-ERROR-001 green)." }
+  maintainability: { status: PASS, notes: "namespaces.ts single SoT tied to en dir by INT-002 — kills re-miss bug class." }
+
+history:
+  - at: "2026-06-15T20:10:00Z"
+    gate: CONCERNS
+    note: "Round 1 — AC1/AC2 mechanism verified; 1 HIGH (10.1-caused stale 5.4 test → suite RED), 1 LOW (T3.5 deferral). 2.2 auth failure excluded as pre-existing baseline."
+  - at: "2026-06-15T20:25:00Z"
+    gate: PASS
+    note: "Round 2 (incremental) — QA-10.1-H1 RESOLVED (5.4 assertion inverted; independently verified: 5.4 3-pass, full suite 345 pass / 1 excluded baseline). check-i18n-keys 6×10 PASS; en-pending EMPTY. 0 critical/high/medium; 1 LOW accepted-deferral. Review → Done."

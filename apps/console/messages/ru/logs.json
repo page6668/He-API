@@ -1,106 +1,106 @@
 {
   "page": {
-    "title": "[en-pending] Request Logs",
-    "description": "[en-pending] Your most recent API requests, with filtering and pagination.",
-    "heading": "[en-pending] Request Logs"
+    "title": "Журнал запросов",
+    "description": "Ваши последние API-запросы с фильтрацией и постраничной навигацией.",
+    "heading": "Журнал запросов"
   },
   "nav": {
-    "sidebar": "[en-pending] Request Logs"
+    "sidebar": "Журнал запросов"
   },
   "table": {
-    "caption": "[en-pending] Recent API requests",
+    "caption": "Последние API-запросы",
     "columns": {
-      "time": "[en-pending] Time",
-      "model": "[en-pending] Model",
-      "status": "[en-pending] Status",
-      "streaming": "[en-pending] Streaming",
-      "tokens": "[en-pending] Tokens",
-      "latency": "[en-pending] Latency",
-      "apiKey": "[en-pending] API Key",
-      "requestId": "[en-pending] Request ID"
+      "time": "Время",
+      "model": "Модель",
+      "status": "Статус",
+      "streaming": "Потоковая передача",
+      "tokens": "Токены",
+      "latency": "Задержка",
+      "apiKey": "API-ключ",
+      "requestId": "ID запроса"
     },
     "streaming": {
-      "yes": "[en-pending] Yes",
-      "no": "[en-pending] No"
+      "yes": "Да",
+      "no": "Нет"
     },
-    "latencyUnit": "[en-pending] ms"
+    "latencyUnit": "мс"
   },
   "status": {
-    "success": "[en-pending] Success",
-    "client_error": "[en-pending] Client error",
-    "server_error": "[en-pending] Server error"
+    "success": "Успех",
+    "client_error": "Ошибка клиента",
+    "server_error": "Ошибка сервера"
   },
   "filters": {
-    "legend": "[en-pending] Filter logs",
+    "legend": "Фильтровать журналы",
     "model": {
-      "label": "[en-pending] Model",
-      "placeholder": "[en-pending] e.g. qwen-max"
+      "label": "Модель",
+      "placeholder": "Например: qwen-max"
     },
     "status": {
-      "label": "[en-pending] Status",
-      "all": "[en-pending] All statuses"
+      "label": "Статус",
+      "all": "Все статусы"
     },
     "streaming": {
-      "label": "[en-pending] Streaming",
-      "all": "[en-pending] All",
-      "yes": "[en-pending] Yes",
-      "no": "[en-pending] No"
+      "label": "Потоковая передача",
+      "all": "Все",
+      "yes": "Да",
+      "no": "Нет"
     },
     "start": {
-      "label": "[en-pending] From"
+      "label": "С"
     },
     "end": {
-      "label": "[en-pending] To"
+      "label": "По"
     },
     "limit": {
-      "label": "[en-pending] Per page"
+      "label": "На странице"
     },
-    "apply": "[en-pending] Apply",
-    "reset": "[en-pending] Reset",
+    "apply": "Применить",
+    "reset": "Сбросить",
     "errors": {
-      "range": "[en-pending] End time must be after start time."
+      "range": "Время окончания должно быть позже времени начала."
     }
   },
   "pagination": {
-    "label": "[en-pending] Pagination",
-    "prev": "[en-pending] Previous",
-    "next": "[en-pending] Next",
-    "page": "[en-pending] Page {page}"
+    "label": "Постраничная навигация",
+    "prev": "Назад",
+    "next": "Вперёд",
+    "page": "Страница {page}"
   },
   "empty": {
-    "title": "[en-pending] No requests match these filters",
-    "reset": "[en-pending] Reset filters"
+    "title": "Нет запросов, соответствующих фильтрам",
+    "reset": "Сбросить фильтры"
   },
   "loading": {
-    "label": "[en-pending] Loading request logs…"
+    "label": "Загрузка журнала запросов…"
   },
   "errors": {
-    "generic": "[en-pending] We couldn't load your request logs. Please try again.",
-    "unavailable": "[en-pending] Request logs are temporarily unavailable. Please try again.",
-    "malformed": "[en-pending] Something went wrong loading your request logs.",
-    "retry": "[en-pending] Retry"
+    "generic": "Не удалось загрузить журнал запросов. Пожалуйста, попробуйте ещё раз.",
+    "unavailable": "Журнал запросов временно недоступен. Пожалуйста, попробуйте ещё раз.",
+    "malformed": "Что-то пошло не так при загрузке журнала запросов.",
+    "retry": "Повторить"
   },
   "export": {
-    "heading": "[en-pending] Export logs",
-    "description": "[en-pending] Download up to 90 days of your request logs. We'll email you a download link when it's ready.",
+    "heading": "Экспорт журналов",
+    "description": "Скачайте до 90 дней вашего журнала запросов. Мы пришлём вам ссылку для скачивания по электронной почте, когда файл будет готов.",
     "format": {
-      "legend": "[en-pending] Format",
-      "json": "[en-pending] JSON",
-      "csv": "[en-pending] CSV"
+      "legend": "Формат",
+      "json": "JSON",
+      "csv": "CSV"
     },
-    "submit": "[en-pending] Export logs",
-    "submitting": "[en-pending] Starting export…",
+    "submit": "Экспортировать журналы",
+    "submitting": "Запускаем экспорт…",
     "status": {
-      "in_progress": "[en-pending] Export in progress — we'll email you a download link when it's ready."
+      "in_progress": "Экспорт в процессе — мы пришлём ссылку для скачивания по электронной почте, когда он будет готов."
     },
     "banner": {
-      "emailed": "[en-pending] Download link emailed. It expires on {expiry}.",
-      "failed": "[en-pending] Your last export failed. Please try again."
+      "emailed": "Ссылка для скачивания отправлена на почту. Срок действия истекает {expiry}.",
+      "failed": "Последний экспорт завершился неудачно. Пожалуйста, попробуйте ещё раз."
     },
     "errors": {
-      "rate_limited": "[en-pending] An export is already in progress.",
-      "generic": "[en-pending] Couldn't start the export. Please try again.",
-      "retry": "[en-pending] Retry"
+      "rate_limited": "Экспорт уже выполняется.",
+      "generic": "Не удалось запустить экспорт. Пожалуйста, попробуйте ещё раз.",
+      "retry": "Повторить"
     }
   }
 }

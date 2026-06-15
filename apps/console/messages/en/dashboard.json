@@ -30,5 +30,28 @@
     "unavailable": "Usage data is temporarily unavailable. Please try again.",
     "malformed": "Something went wrong loading your dashboard.",
     "retry": "Retry"
+  },
+  "chart": {
+    "title": "Usage Trend",
+    "groupLabel": "Group by",
+    "byDay": "By Day",
+    "byModel": "By Model",
+    "byStatus": "By Status",
+    "axis": {
+      "date": "Date",
+      "requests": "Requests"
+    },
+    "status": {
+      "success": "Success",
+      "error": "Error"
+    },
+    "empty": "No usage in the last 30 days.",
+    "error": "Couldn't load the usage trend.",
+    "retry": "Retry",
+    "loading": "Loading usage trend…",
+    "table": {
+      "caption": "Usage trend data table",
+      "series": "Series"
+    }
   }
 }

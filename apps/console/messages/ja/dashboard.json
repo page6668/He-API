@@ -1,34 +1,57 @@
 {
   "page": {
-    "title": "[en-pending] Usage Dashboard",
-    "description": "[en-pending] Your API usage across today, this month, and this quarter.",
-    "heading": "[en-pending] Usage"
+    "title": "利用状況ダッシュボード",
+    "description": "本日、今月、今四半期のAPI利用状況。",
+    "heading": "利用状況"
   },
   "nav": {
-    "sidebar": "[en-pending] Dashboard"
+    "sidebar": "ダッシュボード"
   },
   "periods": {
-    "today": "[en-pending] Today",
-    "month": "[en-pending] This Month",
-    "quarter": "[en-pending] This Quarter"
+    "today": "本日",
+    "month": "今月",
+    "quarter": "今四半期"
   },
   "metrics": {
-    "requests": "[en-pending] Requests",
-    "successRate": "[en-pending] Success Rate",
-    "tokens": "[en-pending] Tokens",
-    "cost": "[en-pending] Spend"
+    "requests": "リクエスト数",
+    "successRate": "成功率",
+    "tokens": "トークン",
+    "cost": "利用金額"
   },
   "empty": {
-    "hint": "[en-pending] Make your first API call to see usage here.",
-    "cta": "[en-pending] Create an API key"
+    "hint": "最初のAPIコールを実行すると、ここに利用状況が表示されます。",
+    "cta": "APIキーを作成する"
   },
   "loading": {
-    "label": "[en-pending] Loading usage…"
+    "label": "利用状況を読み込んでいます…"
   },
   "errors": {
-    "generic": "[en-pending] We couldn't load your usage. Please try again.",
-    "unavailable": "[en-pending] Usage data is temporarily unavailable. Please try again.",
-    "malformed": "[en-pending] Something went wrong loading your dashboard.",
-    "retry": "[en-pending] Retry"
+    "generic": "利用状況を読み込めませんでした。もう一度お試しください。",
+    "unavailable": "利用状況データは現在一時的に利用できません。もう一度お試しください。",
+    "malformed": "ダッシュボードの読み込み中にエラーが発生しました。",
+    "retry": "再試行"
+  },
+  "chart": {
+    "title": "使用状況の推移",
+    "groupLabel": "グループ化",
+    "byDay": "日別",
+    "byModel": "モデル別",
+    "byStatus": "ステータス別",
+    "axis": {
+      "date": "日付",
+      "requests": "リクエスト数"
+    },
+    "status": {
+      "success": "成功",
+      "error": "エラー"
+    },
+    "empty": "過去 30 日間の使用状況はありません。",
+    "error": "使用状況の推移を読み込めませんでした。",
+    "retry": "再試行",
+    "loading": "使用状況の推移を読み込んでいます…",
+    "table": {
+      "caption": "使用状況推移データ表",
+      "series": "系列"
+    }
   }
 }

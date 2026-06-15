@@ -117,7 +117,7 @@ export function ExportDataDialog({ currentExport }: ExportDataDialogProps) {
             {t('export.dialog.title')}
           </h2>
           <p className="mt-2 text-sm text-neutral-700">{t('export.dialog.body_intro')}</p>
-          <ul className="mt-3 list-disc space-y-1 pl-6 text-sm">
+          <ul className="mt-3 list-disc space-y-1 ps-6 text-sm">
             <li>{t('export.dialog.categories.users')}</li>
             <li>{t('export.dialog.categories.api_keys')}</li>
             <li>{t('export.dialog.categories.request_logs')}</li>

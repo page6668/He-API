@@ -113,7 +113,7 @@ export function RevokeKeyDialog({ keyEntry, onClose, notify, onMutated, triggerR
           {t('revoke.cancel')}
         </Button>
         <Button type="button" variant="destructive" onClick={onRevoke} disabled={revokeDisabled}>
-          {isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" />}
+          {isPending && <Loader2 className="me-1.5 h-4 w-4 animate-spin" aria-hidden="true" />}
           {t('revoke.confirm.cta')}
         </Button>
       </div>

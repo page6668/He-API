@@ -1,34 +1,57 @@
 {
   "page": {
-    "title": "[en-pending] Usage Dashboard",
-    "description": "[en-pending] Your API usage across today, this month, and this quarter.",
-    "heading": "[en-pending] Usage"
+    "title": "Панель использования",
+    "description": "Использование API за сегодня, текущий месяц и текущий квартал.",
+    "heading": "Использование"
   },
   "nav": {
-    "sidebar": "[en-pending] Dashboard"
+    "sidebar": "Панель управления"
   },
   "periods": {
-    "today": "[en-pending] Today",
-    "month": "[en-pending] This Month",
-    "quarter": "[en-pending] This Quarter"
+    "today": "Сегодня",
+    "month": "Этот месяц",
+    "quarter": "Этот квартал"
   },
   "metrics": {
-    "requests": "[en-pending] Requests",
-    "successRate": "[en-pending] Success Rate",
-    "tokens": "[en-pending] Tokens",
-    "cost": "[en-pending] Spend"
+    "requests": "Запросы",
+    "successRate": "Процент успеха",
+    "tokens": "Токены",
+    "cost": "Расходы"
   },
   "empty": {
-    "hint": "[en-pending] Make your first API call to see usage here.",
-    "cta": "[en-pending] Create an API key"
+    "hint": "Сделайте первый API-запрос, чтобы увидеть статистику использования.",
+    "cta": "Создать API-ключ"
   },
   "loading": {
-    "label": "[en-pending] Loading usage…"
+    "label": "Загрузка статистики использования…"
   },
   "errors": {
-    "generic": "[en-pending] We couldn't load your usage. Please try again.",
-    "unavailable": "[en-pending] Usage data is temporarily unavailable. Please try again.",
-    "malformed": "[en-pending] Something went wrong loading your dashboard.",
-    "retry": "[en-pending] Retry"
+    "generic": "Не удалось загрузить статистику использования. Пожалуйста, попробуйте ещё раз.",
+    "unavailable": "Данные об использовании временно недоступны. Пожалуйста, попробуйте ещё раз.",
+    "malformed": "Что-то пошло не так при загрузке панели управления.",
+    "retry": "Повторить"
+  },
+  "chart": {
+    "title": "Динамика использования",
+    "groupLabel": "Группировать по",
+    "byDay": "По дням",
+    "byModel": "По модели",
+    "byStatus": "По статусу",
+    "axis": {
+      "date": "Дата",
+      "requests": "Запросы"
+    },
+    "status": {
+      "success": "Успех",
+      "error": "Ошибка"
+    },
+    "empty": "Нет использования за последние 30 дней.",
+    "error": "Не удалось загрузить динамику использования.",
+    "retry": "Повторить",
+    "loading": "Загрузка динамики использования…",
+    "table": {
+      "caption": "Таблица данных динамики использования",
+      "series": "Ряд"
+    }
   }
 }

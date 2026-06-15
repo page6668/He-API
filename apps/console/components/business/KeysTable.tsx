@@ -36,7 +36,7 @@ export function KeysTable({ keys, locale, onConfigure, onRevoke }: KeysTableProp
   const t = useTranslations('account.keys');
 
   const headers = (
-    <tr className="border-b text-left text-xs font-medium uppercase tracking-wide text-neutral-500">
+    <tr className="border-b text-start text-xs font-medium uppercase tracking-wide text-neutral-500">
       <th className="px-3 py-2">{t('table.header.name')}</th>
       <th className="px-3 py-2">{t('table.header.prefix')}</th>
       <th className="px-3 py-2">{t('table.header.scope')}</th>
@@ -44,7 +44,7 @@ export function KeysTable({ keys, locale, onConfigure, onRevoke }: KeysTableProp
       <th className="px-3 py-2">{t('table.header.last_used')}</th>
       <th className="px-3 py-2">{t('table.header.cap')}</th>
       <th className="px-3 py-2">{t('table.header.status')}</th>
-      <th className="px-3 py-2 text-right">{t('table.header.actions')}</th>
+      <th className="px-3 py-2 text-end">{t('table.header.actions')}</th>
     </tr>
   );
 
@@ -92,7 +92,7 @@ export function KeysTable({ keys, locale, onConfigure, onRevoke }: KeysTableProp
                     </span>
                   )}
                 </td>
-                <td className="px-3 py-2 text-right">
+                <td className="px-3 py-2 text-end">
                   {!revoked && (
                     <div className="inline-flex gap-1">
                       <button

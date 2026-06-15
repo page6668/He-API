@@ -53,7 +53,7 @@ export function KeysPanel({ keys, locale, availableModels }: KeysPanelProps) {
     <div className="space-y-4">
       <div className="flex items-center justify-end">
         <Button ref={newKeyRef} onClick={() => setOpen({ kind: 'create' })}>
-          <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+          <Plus className="me-1.5 h-4 w-4" aria-hidden="true" />
           {t('page.new_key')}
         </Button>
       </div>

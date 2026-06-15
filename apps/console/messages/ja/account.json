@@ -9,175 +9,175 @@
   },
   "keys": {
     "empty": {
-      "title": "[en-pending] No API keys yet",
-      "cta": "[en-pending] Create your first API key",
-      "body": "[en-pending] Create your first API key to start calling the He-API."
+      "title": "APIキーがありません",
+      "cta": "最初のAPIキーを作成する",
+      "body": "最初のAPIキーを作成して、He-APIの呼び出しを開始しましょう。"
     },
     "errors": {
       "name": {
-        "missing": "[en-pending] Key name is required.",
-        "too_short": "[en-pending] Key name is too short.",
-        "too_long": "[en-pending] Key name must be at most 100 characters.",
-        "invalid_chars": "[en-pending] Key name contains characters that aren't allowed."
+        "missing": "キー名は必須です。",
+        "too_short": "キー名が短すぎます。",
+        "too_long": "キー名は100文字以内にしてください。",
+        "invalid_chars": "キー名に使用できない文字が含まれています。"
       },
-      "generic": "[en-pending] Something went wrong. Please try again.",
-      "plaintext_one_time": "[en-pending] This plaintext is shown ONCE. Store it now — it cannot be retrieved later.",
-      "rate_limited": "[en-pending] Too many key creations. Please wait and try again.",
+      "generic": "エラーが発生しました。もう一度お試しください。",
+      "plaintext_one_time": "この平文は一度だけ表示されます。今すぐ保存してください。後から取得することはできません。",
+      "rate_limited": "キーの作成が多すぎます。しばらく待ってから再試行してください。",
       "ip": {
-        "invalid_format": "[en-pending] Enter a valid IP address or CIDR range.",
-        "degenerate_cidr": "[en-pending] 0.0.0.0/0 and ::/0 are not allowed.",
-        "zone_id_rejected": "[en-pending] IPv6 zone IDs are not allowed."
+        "invalid_format": "有効なIPアドレスまたはCIDR範囲を入力してください。",
+        "degenerate_cidr": "0.0.0.0/0 および ::/0 は使用できません。",
+        "zone_id_rejected": "IPv6ゾーンIDは使用できません。"
       },
       "cap": {
-        "out_of_range": "[en-pending] Monthly cost cap must be between $0.01 and $999,999.99.",
-        "invalid_format": "[en-pending] Enter a valid amount."
+        "out_of_range": "月次コスト上限は $0.01 から $999,999.99 の範囲で設定してください。",
+        "invalid_format": "有効な金額を入力してください。"
       }
     },
     "revoke": {
       "confirm": {
-        "title": "[en-pending] Revoke this API key?",
-        "cta": "[en-pending] Revoke"
+        "title": "このAPIキーを失効させますか？",
+        "cta": "失効させる"
       },
-      "success": "[en-pending] API key revoked.",
-      "already_revoked": "[en-pending] This key was already revoked.",
-      "not_found": "[en-pending] API key not found or already removed.",
-      "warning": "[en-pending] This action is permanent. Once revoked, this key cannot be reactivated. Apps using this key will receive 401 errors immediately.",
-      "confirm_label": "[en-pending] Type the key name to confirm: {name}",
-      "confirm_aria": "[en-pending] Type the key name {name} to confirm revoke",
-      "cancel": "[en-pending] Cancel"
+      "success": "APIキーを失効させました。",
+      "already_revoked": "このキーはすでに失効しています。",
+      "not_found": "APIキーが見つからないか、すでに削除されています。",
+      "warning": "この操作は元に戻せません。失効したキーは再有効化できません。このキーを使用しているアプリはすぐに 401 エラーを受け取ります。",
+      "confirm_label": "確認のためキー名を入力してください: {name}",
+      "confirm_aria": "失効を確認するためキー名 {name} を入力してください",
+      "cancel": "キャンセル"
     },
     "edit": {
-      "title": "[en-pending] Edit API key",
+      "title": "APIキーを編集",
       "confirm": {
-        "cta": "[en-pending] Save changes"
+        "cta": "変更を保存"
       },
-      "success": "[en-pending] API key updated.",
+      "success": "APIキーを更新しました。",
       "errors": {
-        "invalid_cidr": "[en-pending] One or more IP addresses or CIDR ranges are invalid.",
-        "unknown_model": "[en-pending] One or more selected models are not available.",
-        "cap_out_of_range": "[en-pending] Monthly cost cap must be between $0.01 and $999,999.99.",
-        "not_found": "[en-pending] API key not found or already removed.",
-        "account_pending_deletion": "[en-pending] Your account is scheduled for deletion; configuration changes are disabled.",
-        "invalid_request": "[en-pending] Some of the configuration values are invalid.",
-        "generic": "[en-pending] Something went wrong. Please try again."
+        "invalid_cidr": "1つ以上のIPアドレスまたはCIDR範囲が無効です。",
+        "unknown_model": "選択されたモデルの1つ以上が利用できません。",
+        "cap_out_of_range": "月次コスト上限は $0.01 から $999,999.99 の範囲で設定してください。",
+        "not_found": "APIキーが見つからないか、すでに削除されています。",
+        "account_pending_deletion": "アカウントは削除予定のため、設定の変更はできません。",
+        "invalid_request": "一部の設定値が無効です。",
+        "generic": "エラーが発生しました。もう一度お試しください。"
       }
     },
     "cap": {
       "email": {
         "warning": {
-          "subject": "[en-pending] Your API key is approaching its monthly spend cap",
-          "description": "[en-pending] Notify when usage reaches 80% of the cap"
+          "subject": "APIキーの月次利用上限に近づいています",
+          "description": "利用量が上限の80%に達したときに通知する"
         },
         "tripped": {
-          "subject": "[en-pending] Your API key has been paused — monthly spend cap reached",
-          "description": "[en-pending] Notify when the cap is reached and the key is paused"
+          "subject": "APIキーが一時停止されました — 月次利用上限に達しました",
+          "description": "上限に達してキーが一時停止されたときに通知する"
         }
       },
-      "none": "[en-pending] No cap set",
-      "tripped": "[en-pending] Tripped",
-      "tripped_sr": "[en-pending] API key cap tripped — pausing until next month.",
-      "usage_aria": "[en-pending] {current} of {cap} used"
+      "none": "上限なし",
+      "tripped": "上限到達",
+      "tripped_sr": "APIキーの上限に達しました — 翌月まで一時停止中です。",
+      "usage_aria": "{cap} 中 {current} 使用済み"
     },
     "page": {
-      "title": "[en-pending] API Keys",
-      "description": "[en-pending] Manage the API keys you use to authenticate with the He-API.",
-      "new_key": "[en-pending] New key"
+      "title": "APIキー",
+      "description": "He-API との認証に使用するAPIキーを管理します。",
+      "new_key": "新しいキー"
     },
     "nav": {
-      "sidebar": "[en-pending] API Keys"
+      "sidebar": "APIキー"
     },
     "footer": {
-      "count": "[en-pending] Showing {count} keys"
+      "count": "{count} 件のキーを表示中"
     },
     "banner": {
-      "retry": "[en-pending] Retry"
+      "retry": "再試行"
     },
     "loading": {
-      "aria": "[en-pending] Loading your API keys…"
+      "aria": "APIキーを読み込んでいます…"
     },
     "table": {
       "header": {
-        "name": "[en-pending] Name",
-        "prefix": "[en-pending] Prefix",
-        "scope": "[en-pending] Scope",
-        "created": "[en-pending] Created",
-        "last_used": "[en-pending] Last used",
-        "cap": "[en-pending] Monthly cap",
-        "status": "[en-pending] Status",
-        "actions": "[en-pending] Actions"
+        "name": "名前",
+        "prefix": "プレフィックス",
+        "scope": "スコープ",
+        "created": "作成日",
+        "last_used": "最終使用日",
+        "cap": "月次上限",
+        "status": "ステータス",
+        "actions": "操作"
       }
     },
     "status": {
-      "active": "[en-pending] Active",
-      "revoked": "[en-pending] Revoked"
+      "active": "有効",
+      "revoked": "失効済み"
     },
     "last_used": {
-      "never": "[en-pending] Never"
+      "never": "未使用"
     },
     "actions": {
-      "configure": "[en-pending] Configure {name}",
-      "revoke": "[en-pending] Revoke {name}"
+      "configure": "{name} を設定する",
+      "revoke": "{name} を失効させる"
     },
     "row": {
-      "aria": "[en-pending] API key {name}"
+      "aria": "APIキー {name}"
     },
     "scope": {
-      "all_models": "[en-pending] All models",
-      "ip_count": "[en-pending] +{count} IPs"
+      "all_models": "すべてのモデル",
+      "ip_count": "+{count} 件のIP"
     },
     "create": {
-      "title": "[en-pending] Create API key",
-      "name_label": "[en-pending] Key name",
-      "name_placeholder": "[en-pending] e.g. Production API",
-      "submit": "[en-pending] Create key",
-      "cancel": "[en-pending] Cancel",
-      "rate_limited": "[en-pending] Too many key creations. Try again in {seconds} seconds."
+      "title": "APIキーを作成",
+      "name_label": "キー名",
+      "name_placeholder": "例: Production API",
+      "submit": "キーを作成",
+      "cancel": "キャンセル",
+      "rate_limited": "キーの作成が多すぎます。{seconds} 秒後に再試行してください。"
     },
     "created": {
-      "title": "[en-pending] Save your API key now",
-      "warning": "[en-pending] This is the only time you'll see this key. Copy it and store it securely — you cannot retrieve it later.",
-      "label": "[en-pending] Your API key",
-      "reveal": "[en-pending] Reveal",
-      "hide": "[en-pending] Hide",
-      "copy": "[en-pending] Copy",
-      "copied": "[en-pending] API key copied to clipboard.",
-      "copy_failed": "[en-pending] Copy failed. Select the key text manually to copy.",
-      "saved_cta": "[en-pending] I've saved it",
-      "close_without_saving": "[en-pending] Close without saving",
+      "title": "今すぐAPIキーを保存してください",
+      "warning": "このキーが表示されるのはこれが最後です。コピーして安全に保存してください。後から取得することはできません。",
+      "label": "あなたのAPIキー",
+      "reveal": "表示する",
+      "hide": "隠す",
+      "copy": "コピー",
+      "copied": "APIキーをクリップボードにコピーしました。",
+      "copy_failed": "コピーに失敗しました。キーのテキストを手動で選択してコピーしてください。",
+      "saved_cta": "保存しました",
+      "close_without_saving": "保存せずに閉じる",
       "confirm_close": {
-        "title": "[en-pending] You haven't saved the key",
-        "body": "[en-pending] If you close now, the key is gone forever.",
-        "cancel": "[en-pending] Cancel",
-        "confirm": "[en-pending] Close anyway"
+        "title": "キーを保存していません",
+        "body": "今閉じると、このキーは永久に失われます。",
+        "cancel": "キャンセル",
+        "confirm": "それでも閉じる"
       }
     },
     "configure": {
       "models": {
-        "heading": "[en-pending] Models scope",
-        "all_toggle": "[en-pending] All models allowed",
-        "select_label": "[en-pending] Allowed models",
-        "unavailable": "[en-pending] Model catalogue unavailable — try again later."
+        "heading": "モデルのスコープ",
+        "all_toggle": "すべてのモデルを許可",
+        "select_label": "許可するモデル",
+        "unavailable": "モデルカタログが利用できません。後でもう一度お試しください。"
       },
       "ip": {
-        "heading": "[en-pending] IP whitelist",
-        "empty": "[en-pending] Any IP allowed",
-        "add": "[en-pending] Add another IP",
-        "add_first": "[en-pending] Add IP",
-        "remove": "[en-pending] Remove IP {value}",
-        "row_label": "[en-pending] IP {index}"
+        "heading": "IPホワイトリスト",
+        "empty": "すべてのIPを許可",
+        "add": "別のIPを追加",
+        "add_first": "IPを追加",
+        "remove": "IP {value} を削除",
+        "row_label": "IP {index}"
       },
       "cap": {
-        "heading": "[en-pending] Monthly cost cap",
-        "label": "[en-pending] Monthly cost cap in USD",
-        "no_cap": "[en-pending] No cap",
-        "help": "[en-pending] Leave empty for no cap."
+        "heading": "月次コスト上限",
+        "label": "月次コスト上限（USD）",
+        "no_cap": "上限なし",
+        "help": "上限を設定しない場合は空欄にしてください。"
       },
-      "cancel": "[en-pending] Cancel",
+      "cancel": "キャンセル",
       "discard": {
-        "title": "[en-pending] Discard unsaved changes?",
-        "body": "[en-pending] You have unsaved changes.",
-        "cancel": "[en-pending] Cancel",
-        "confirm": "[en-pending] Discard"
+        "title": "未保存の変更を破棄しますか？",
+        "body": "未保存の変更があります。",
+        "cancel": "キャンセル",
+        "confirm": "破棄する"
       }
     }
   },

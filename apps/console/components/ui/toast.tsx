@@ -41,7 +41,7 @@ export function Toast({ variant = 'info', onDismiss, durationMs = 4000, children
       role={variant === 'error' ? 'alert' : 'status'}
       aria-live={variant === 'error' ? 'assertive' : 'polite'}
       className={cn(
-        'fixed bottom-4 right-4 z-[60] max-w-sm rounded border px-4 py-3 text-sm shadow-lg',
+        'fixed bottom-4 end-4 z-[60] max-w-sm rounded border px-4 py-3 text-sm shadow-lg',
         VARIANT_STYLES[variant],
       )}
     >

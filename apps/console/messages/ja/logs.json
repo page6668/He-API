@@ -1,106 +1,106 @@
 {
   "page": {
-    "title": "[en-pending] Request Logs",
-    "description": "[en-pending] Your most recent API requests, with filtering and pagination.",
-    "heading": "[en-pending] Request Logs"
+    "title": "リクエストログ",
+    "description": "フィルタリングとページネーションを使った最新のAPIリクエスト一覧。",
+    "heading": "リクエストログ"
   },
   "nav": {
-    "sidebar": "[en-pending] Request Logs"
+    "sidebar": "リクエストログ"
   },
   "table": {
-    "caption": "[en-pending] Recent API requests",
+    "caption": "最近のAPIリクエスト",
     "columns": {
-      "time": "[en-pending] Time",
-      "model": "[en-pending] Model",
-      "status": "[en-pending] Status",
-      "streaming": "[en-pending] Streaming",
-      "tokens": "[en-pending] Tokens",
-      "latency": "[en-pending] Latency",
-      "apiKey": "[en-pending] API Key",
-      "requestId": "[en-pending] Request ID"
+      "time": "時刻",
+      "model": "モデル",
+      "status": "ステータス",
+      "streaming": "ストリーミング",
+      "tokens": "トークン",
+      "latency": "レイテンシ",
+      "apiKey": "APIキー",
+      "requestId": "リクエストID"
     },
     "streaming": {
-      "yes": "[en-pending] Yes",
-      "no": "[en-pending] No"
+      "yes": "あり",
+      "no": "なし"
     },
-    "latencyUnit": "[en-pending] ms"
+    "latencyUnit": "ms"
   },
   "status": {
-    "success": "[en-pending] Success",
-    "client_error": "[en-pending] Client error",
-    "server_error": "[en-pending] Server error"
+    "success": "成功",
+    "client_error": "クライアントエラー",
+    "server_error": "サーバーエラー"
   },
   "filters": {
-    "legend": "[en-pending] Filter logs",
+    "legend": "ログを絞り込む",
     "model": {
-      "label": "[en-pending] Model",
-      "placeholder": "[en-pending] e.g. qwen-max"
+      "label": "モデル",
+      "placeholder": "例: qwen-max"
     },
     "status": {
-      "label": "[en-pending] Status",
-      "all": "[en-pending] All statuses"
+      "label": "ステータス",
+      "all": "すべてのステータス"
     },
     "streaming": {
-      "label": "[en-pending] Streaming",
-      "all": "[en-pending] All",
-      "yes": "[en-pending] Yes",
-      "no": "[en-pending] No"
+      "label": "ストリーミング",
+      "all": "すべて",
+      "yes": "あり",
+      "no": "なし"
     },
     "start": {
-      "label": "[en-pending] From"
+      "label": "開始日時"
     },
     "end": {
-      "label": "[en-pending] To"
+      "label": "終了日時"
     },
     "limit": {
-      "label": "[en-pending] Per page"
+      "label": "1ページあたりの件数"
     },
-    "apply": "[en-pending] Apply",
-    "reset": "[en-pending] Reset",
+    "apply": "適用",
+    "reset": "リセット",
     "errors": {
-      "range": "[en-pending] End time must be after start time."
+      "range": "終了日時は開始日時より後にしてください。"
     }
   },
   "pagination": {
-    "label": "[en-pending] Pagination",
-    "prev": "[en-pending] Previous",
-    "next": "[en-pending] Next",
-    "page": "[en-pending] Page {page}"
+    "label": "ページネーション",
+    "prev": "前へ",
+    "next": "次へ",
+    "page": "{page} ページ目"
   },
   "empty": {
-    "title": "[en-pending] No requests match these filters",
-    "reset": "[en-pending] Reset filters"
+    "title": "条件に一致するリクエストがありません",
+    "reset": "フィルターをリセット"
   },
   "loading": {
-    "label": "[en-pending] Loading request logs…"
+    "label": "リクエストログを読み込んでいます…"
   },
   "errors": {
-    "generic": "[en-pending] We couldn't load your request logs. Please try again.",
-    "unavailable": "[en-pending] Request logs are temporarily unavailable. Please try again.",
-    "malformed": "[en-pending] Something went wrong loading your request logs.",
-    "retry": "[en-pending] Retry"
+    "generic": "リクエストログを読み込めませんでした。もう一度お試しください。",
+    "unavailable": "リクエストログは現在一時的に利用できません。もう一度お試しください。",
+    "malformed": "リクエストログの読み込み中にエラーが発生しました。",
+    "retry": "再試行"
   },
   "export": {
-    "heading": "[en-pending] Export logs",
-    "description": "[en-pending] Download up to 90 days of your request logs. We'll email you a download link when it's ready.",
+    "heading": "ログをエクスポート",
+    "description": "最大90日分のリクエストログをダウンロードできます。準備ができ次第、ダウンロードリンクをメールでお送りします。",
     "format": {
-      "legend": "[en-pending] Format",
-      "json": "[en-pending] JSON",
-      "csv": "[en-pending] CSV"
+      "legend": "フォーマット",
+      "json": "JSON",
+      "csv": "CSV"
     },
-    "submit": "[en-pending] Export logs",
-    "submitting": "[en-pending] Starting export…",
+    "submit": "ログをエクスポート",
+    "submitting": "エクスポートを開始しています…",
     "status": {
-      "in_progress": "[en-pending] Export in progress — we'll email you a download link when it's ready."
+      "in_progress": "エクスポート中です — 準備ができ次第、ダウンロードリンクをメールでお送りします。"
     },
     "banner": {
-      "emailed": "[en-pending] Download link emailed. It expires on {expiry}.",
-      "failed": "[en-pending] Your last export failed. Please try again."
+      "emailed": "ダウンロードリンクをメールで送信しました。リンクの有効期限は {expiry} です。",
+      "failed": "前回のエクスポートに失敗しました。もう一度お試しください。"
     },
     "errors": {
-      "rate_limited": "[en-pending] An export is already in progress.",
-      "generic": "[en-pending] Couldn't start the export. Please try again.",
-      "retry": "[en-pending] Retry"
+      "rate_limited": "エクスポートはすでに進行中です。",
+      "generic": "エクスポートを開始できませんでした。もう一度お試しください。",
+      "retry": "再試行"
     }
   }
 }

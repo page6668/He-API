@@ -20,7 +20,7 @@ export function KeysTableSkeleton({ label, rows = 3 }: KeysTableSkeletonProps) {
           <div className="h-4 w-32 animate-pulse rounded bg-neutral-200" />
           <div className="h-4 w-24 animate-pulse rounded bg-neutral-200" />
           <div className="h-4 w-20 animate-pulse rounded bg-neutral-200" />
-          <div className="ml-auto h-4 w-16 animate-pulse rounded bg-neutral-200" />
+          <div className="ms-auto h-4 w-16 animate-pulse rounded bg-neutral-200" />
         </div>
       ))}
     </div>

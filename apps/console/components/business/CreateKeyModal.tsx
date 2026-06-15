@@ -123,7 +123,7 @@ export function CreateKeyModal({ locale, onClose, triggerRef }: CreateKeyModalPr
             {t('create.cancel')}
           </Button>
           <Button type="submit" disabled={disabled}>
-            {isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" />}
+            {isPending && <Loader2 className="me-1.5 h-4 w-4 animate-spin" aria-hidden="true" />}
             {t('create.submit')}
           </Button>
         </div>
