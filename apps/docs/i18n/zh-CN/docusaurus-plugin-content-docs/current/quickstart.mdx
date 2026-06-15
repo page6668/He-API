@@ -1,0 +1,133 @@
+---
+id: quickstart
+title: 快速开始
+description: 5 分钟内完成第一个 chat.completions 调用。
+sidebar_position: 2
+he_provenance: human
+---
+
+# 快速开始
+
+**5 分钟内**从零跑通第一个模型响应。你将完成注册、创建 API 密钥，并用所选 SDK 发起一次
+`chat.completions` 调用。
+
+## 1. 注册并创建 API 密钥
+
+1. 前往 **[console.he-api.com](https://console.he-api.com)** 注册。
+2. 打开 **API Keys**，点击 **Create key**。
+3. 复制密钥——形如 `he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx`。该密钥仅展示一次，请妥善保存。
+
+把密钥存入环境变量，避免泄漏到源码中：
+
+```bash
+export HE_API_KEY="he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+
+:::note Base URL 与凭据
+网关 base URL 为 `https://api.he-api.com/v1`。He-API 使用 **`HE_API_KEY`** 环境变量进行鉴权
+（官方 SDK **不会**读取 `OPENAI_API_KEY`）。
+:::
+
+## 2. 安装 SDK
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<Tabs groupId="sdk">
+  <TabItem value="python" label="Python">
+
+```bash
+pip install he-api
+```
+
+  </TabItem>
+  <TabItem value="typescript" label="TypeScript">
+
+```bash
+npm install @he-api/sdk
+```
+
+  </TabItem>
+  <TabItem value="go" label="Go">
+
+```bash
+go get github.com/he-api/sdk-go
+```
+
+> **预备版** —— Go SDK（Story 10.4）尚未发布。模块路径与客户端接口面将在发布前与 10.4 对齐核对。
+> 详见 [SDK → Go](/sdk/go)。
+
+  </TabItem>
+</Tabs>
+
+## 3. 发起第一个调用
+
+<Tabs groupId="sdk">
+  <TabItem value="python" label="Python">
+
+```python
+from he_api import Client
+
+client = Client()  # reads base_url + HE_API_KEY from the environment
+
+resp = client.chat.completions.create(
+    model="qwen-max",
+    messages=[{"role": "user", "content": "Say hello in one sentence."}],
+)
+print(resp.choices[0].message.content)
+```
+
+  </TabItem>
+  <TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { Client } from "@he-api/sdk";
+
+const client = new Client(); // baseURL + HE_API_KEY from the environment
+
+const resp = await client.chat.completions.create({
+  model: "qwen-max",
+  messages: [{ role: "user", content: "Say hello in one sentence." }],
+});
+console.log(resp.choices[0].message.content);
+```
+
+  </TabItem>
+  <TabItem value="go" label="Go">
+
+```go
+// Provisional pending Story 10.4 release.
+client := heapi.NewClient() // baseURL + HE_API_KEY from the environment
+
+resp, err := client.Chat.Completions.New(ctx, heapi.ChatCompletionParams{
+    Model:    "qwen-max",
+    Messages: []heapi.Message{{Role: "user", Content: "Say hello in one sentence."}},
+})
+```
+
+  </TabItem>
+</Tabs>
+
+至此，你已完成第一次经网关的鉴权调用。
+
+## 从 OpenAI 迁移 {#migrating-from-openai}
+He-API 兼容 OpenAI，因此迁移现有应用只需**改动 `base_url`，调用点零代码改动**。使用官方
+OpenAI SDK 时，设置 base URL 与密钥即可：
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.he-api.com/v1",   # the only change
+    api_key="he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+)
+# every client.chat.completions / client.embeddings call now flows through He-API
+```
+
+若希望默认接入网关（base URL + `HE_API_KEY`）并直接获得网关特性（路由策略、A/B 对比），
+推荐使用 [He-API SDK](/sdk)。
+
+## 后续步骤
+
+- **[API 参考](/api-reference)** —— 完整的端点、错误码与响应头细节。
+- **[实例手册](/cookbook)** —— 流式、嵌入检索、音频、路由 / A-B、用量查询。

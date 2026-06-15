@@ -1,0 +1,35 @@
+---
+id: go
+title: Go SDK
+description: sdk-go — drop-in OpenAI replacement for Go (provisional, pending release).
+he_provenance: human
+---
+
+# Go SDK
+
+:::warning Provisional — pending release
+The Go SDK is **Story 10.4**, which is *Approved but not yet Done*. The install command and
+client surface below are the story's assumptions and are **reconciled against 10.4 before
+publication** (Architect High Issue, Story 10.5 T5.2). Treat them as provisional.
+:::
+
+```bash
+go get github.com/he-api/sdk-go
+```
+
+```go
+// Provisional pending Story 10.4 release.
+client := heapi.NewClient() // baseURL=https://api.he-api.com/v1, reads HE_API_KEY
+
+resp, err := client.Chat.Completions.New(ctx, heapi.ChatCompletionParams{
+    Model:    "qwen-max",
+    Messages: []heapi.Message{{Role: "user", Content: "Hello"}},
+})
+
+client.Embeddings.New(ctx, /* ... */)
+client.Models.List(ctx)
+```
+
+- **Module path:** `github.com/he-api/sdk-go` (to be confirmed against 10.4).
+- **Constructor:** `heapi.NewClient(...)` (functional options).
+- **Credentials:** reads `HE_API_KEY`.

@@ -1,0 +1,35 @@
+---
+id: python
+title: Python SDK
+description: he-api — drop-in OpenAI replacement for Python.
+he_provenance: human
+---
+
+# Python SDK
+
+The `he-api` package is a drop-in OpenAI replacement. It subclasses the official `openai`
+client, so the full `chat.completions` / `embeddings` / `models` surface is available.
+
+```bash
+pip install he-api
+```
+
+```python
+from he_api import Client
+
+client = Client()  # base_url=https://api.he-api.com/v1, reads HE_API_KEY
+
+resp = client.chat.completions.create(
+    model="qwen-max",
+    messages=[{"role": "user", "content": "Hello"}],
+)
+print(resp.choices[0].message.content)
+
+# Embeddings and models work the same way
+client.embeddings.create(model="text-embedding-v3", input="hello")
+client.models.list()
+```
+
+- **Distribution name:** `he-api` (import name `he_api`).
+- **Credentials:** reads `HE_API_KEY` (not `OPENAI_API_KEY`).
+- **Async:** `AsyncClient` mirrors the sync surface.

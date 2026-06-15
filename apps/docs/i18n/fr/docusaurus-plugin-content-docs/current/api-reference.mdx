@@ -1,0 +1,200 @@
+---
+id: api-reference
+title: Référence de l'API
+description: La surface /v1/* compatible OpenAI — points de terminaison, codes d'erreur, en-têtes de réponse.
+sidebar_position: 3
+he_provenance: mt
+he_source: rest-api-spec.md §5.1
+---
+
+# Référence de l'API
+
+He-API expose une surface HTTP **compatible OpenAI** sous `/v1/*`. L'URL de base est
+`https://api.he-api.com/v1`. Authentifiez-vous avec un jeton bearer :
+
+```
+Authorization: Bearer he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+:::info Source de vérité
+Cette page est transcrite à partir de `docs/architecture/rest-api-spec.md` **§5.1** (le contrat
+canonique). La passerelle est *compatible* OpenAI avec quelques ajouts spécifiques à He, signalés en ligne.
+:::
+
+## Points de terminaison
+
+| Méthode | Chemin | Objet |
+|--------|------|---------|
+| `POST` | `/v1/chat/completions` | Complétions de chat (non-streaming et streaming SSE). |
+| `POST` | `/v1/embeddings` | Embeddings de texte. |
+| `POST` | `/v1/audio/transcriptions` | Reconnaissance vocale (compatible Whisper). |
+| `POST` | `/v1/audio/speech` | Synthèse vocale (TTS). |
+| `GET`  | `/v1/models` | Liste des modèles + matrice de capacités. |
+| `GET`  | `/v1/usage` | Usage du mois en cours (`?currency=usd|rmb`). |
+| `GET`  | `/v1/balance` | Solde du compte (`?currency=usd|rmb`). |
+
+---
+
+## POST /v1/chat/completions
+
+Crée une complétion de chat. Les corps de requête et de réponse correspondent au format OpenAI.
+
+```
+POST /v1/chat/completions
+Authorization: Bearer he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Content-Type: application/json
+Accept: application/json   (or text/event-stream for SSE)
+
+Optional headers:
+  X-He-Routing-Strategy: quality | cost | latency
+  X-He-AB-Models: qwen-max,deepseek-v3   # A/B dual-leg compare (non-streaming only)
+  Accept-Language: en                    # locale for error messages
+```
+
+**Corps de la requête** (identique à OpenAI) :
+
+```json
+{
+  "model": "qwen-max",
+  "messages": [{ "role": "user", "content": "Hello" }],
+  "stream": false,
+  "temperature": 0.7,
+  "max_tokens": 2048,
+  "tools": [],
+  "tool_choice": "auto",
+  "response_format": { "type": "json_object" }
+}
+```
+
+`model` peut être un id de modèle concret (`qwen-max`, `deepseek-v3`, …) ou un alias de routeur
+(`he-router-cost`, `he-router-quality`, …).
+
+**Réponse** (succès, non-streaming) :
+
+```json
+{
+  "id": "chatcmpl-xxx",
+  "object": "chat.completion",
+  "created": 1715000000,
+  "model": "qwen-max",
+  "choices": [],
+  "usage": { "prompt_tokens": 100, "completion_tokens": 200, "total_tokens": 300 }
+}
+```
+
+### Streaming (SSE)
+
+Lorsque le corps de la requête définit `"stream": true`, la réponse est `text/event-stream`. Chaque
+événement est `data: <single-line JSON>\n\n` ; le flux se termine par la sentinelle d'itérateur OpenAI
+`data: [DONE]` :
+
+```text
+Content-Type: text/event-stream; charset=utf-8
+Cache-Control: no-cache, no-transform
+
+data: {"id":"chatcmpl-...","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-...","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hello "},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-...","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: [DONE]
+```
+
+`object` est le littéral `chat.completion.chunk` ; `delta` porte `{"role":"assistant"}` sur
+le premier chunk, `{"content":"..."}` sur les chunks de contenu, et `{}` sur le chunk terminal ;
+`finish_reason` est `null` jusqu'au chunk terminal, puis `"stop"`.
+
+### Comparaison A/B (X-He-AB-Models) {#ab-compare-x-he-ab-models}
+L'envoi de `X-He-AB-Models: modelA,modelB` (exactement deux ids concrets distincts, **non-streaming
+uniquement**) répartit les deux modèles en parallèle et retourne les deux sorties dans une seule
+`chat.completion`. Le tableau `choices[]` correspond aux choix de la branche A suivis de ceux de la branche B, ré-indexés
+`0,1,…`, chacun portant un champ additif `x_he_model` nommant sa branche source ; `usage` est la
+somme des tokens des branches réussies.
+
+:::caution X-He-Selected-Model sur le chemin A/B
+Sur le chemin A/B, l'en-tête de réponse `X-He-AB-Models` renvoie les ids servis, et
+**`X-He-Selected-Model` is NOT set**. Si exactement une branche échoue, la réponse est toujours `200`
+avec un choix marqueur de branche échouée (`finish_reason: "he_upstream_error"`) ; seules les branches réussies
+sont facturées. Si les deux branches échouent, une seule enveloppe d'erreur terminale est retournée (504 si une branche
+a expiré, sinon 502).
+:::
+
+---
+
+## POST /v1/embeddings
+
+Crée des embeddings de texte. Requête et réponse compatibles OpenAI.
+
+```json
+{ "model": "text-embedding-v3", "input": "The quick brown fox" }
+```
+
+## POST /v1/audio/transcriptions
+
+Reconnaissance vocale (compatible Whisper). `multipart/form-data` avec un `file` audio et un `model`.
+
+## POST /v1/audio/speech
+
+Synthèse vocale. Retourne de l'audio binaire pour les `model`, `input` et `voice` donnés.
+
+## GET /v1/models
+
+Retourne la liste des modèles plus une matrice de capacités par modèle. Un miroir public et non authentifié
+est disponible sur `/public/models` (forme identique au octet près).
+
+## GET /v1/usage et GET /v1/balance
+
+Interroge l'usage du mois en cours et le solde actuel. Les deux acceptent `?currency=usd|rmb` (par défaut
+`usd` ; toute autre valeur → `400_unsupported_currency`). La conversion de devise est **uniquement à des fins d'affichage** —
+le registre de facturation est toujours en USD.
+
+---
+
+## En-têtes de réponse
+
+Chaque réponse de complétion de chat porte ces en-têtes :
+
+| En-tête | Signification |
+|--------|---------|
+| `X-He-Request-Id` | Id de corrélation de la requête (`req_xxxxxxxxxxxx`) — citez-le pour le support. |
+| `X-He-Selected-Model` | Le modèle réellement routé. **Non défini sur le chemin A/B** (voir ci-dessus). |
+| `X-He-Cost-Usd` | Coût de cette requête en USD. |
+
+---
+
+## Codes d'erreur
+
+Chaque réponse d'erreur porte l'enveloppe canonique à 5 champs :
+
+```json
+{
+  "error": {
+    "code": "402_quota_exhausted",
+    "message": "Insufficient quota.",
+    "type": "invalid_request_error",
+    "param": null,
+    "he_request_id": "req_xxxxxxxxxxxx"
+  }
+}
+```
+
+`type` est `invalid_request_error` pour les codes 4xx et `server_error` pour les codes 5xx.
+
+| HTTP | `error.code` | Signification |
+|------|--------------|---------|
+| 400 | `400_invalid_request` | Paramètres mal formés. |
+| 400 | `400_content_filter` | A déclenché le filtre de sécurité du contenu. |
+| 400 | `400_unsupported_currency` | `?currency=` pas dans `{usd, rmb}`. |
+| 401 | `401_invalid_api_key` | Clé invalide ou révoquée. |
+| 402 | `402_balance_insufficient` | Solde du compte trop bas. |
+| 402 | `402_quota_exhausted` | Plafond de dépenses mensuel atteint. |
+| 403 | `403_ip_not_whitelisted` | IP de l'appelant absente de la liste d'autorisation de la clé. |
+| 403 | `403_model_not_in_scope` | Clé non autorisée pour le modèle demandé. |
+| 413 | `413_payload_too_large` | Le corps de la requête dépasse la limite de 1 MiB. |
+| 429 | `429_rate_limit_qps` | Limite de requêtes par seconde dépassée. |
+| 429 | `429_rate_limit_rpm` | Limite de requêtes par minute dépassée. |
+| 429 | `429_rate_limit_tpm` | Limite de tokens en amont par minute dépassée. |
+| 500 | `500_internal_error` | Erreur serveur inattendue. |
+| 502 | `502_upstream_unavailable` | Modèle en amont indisponible (après les tentatives de basculement). |
+| 504 | `504_upstream_timeout` | Modèle en amont expiré (après les tentatives de basculement). |

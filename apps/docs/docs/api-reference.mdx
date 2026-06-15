@@ -1,0 +1,200 @@
+---
+id: api-reference
+title: API Reference
+description: The OpenAI-compatible /v1/* surface — endpoints, error codes, response headers.
+sidebar_position: 3
+he_provenance: human
+he_source: rest-api-spec.md §5.1
+---
+
+# API Reference
+
+He-API exposes an **OpenAI-compatible** HTTP surface under `/v1/*`. The base URL is
+`https://api.he-api.com/v1`. Authenticate with a bearer token:
+
+```
+Authorization: Bearer he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+:::info Source of truth
+This page is transcribed from `docs/architecture/rest-api-spec.md` **§5.1** (the canonical
+contract). The gateway is OpenAI-*compatible* with a few He-specific additions, noted inline.
+:::
+
+## Endpoints
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/v1/chat/completions` | Chat completions (non-streaming and SSE streaming). |
+| `POST` | `/v1/embeddings` | Text embeddings. |
+| `POST` | `/v1/audio/transcriptions` | Speech-to-text (Whisper-compatible). |
+| `POST` | `/v1/audio/speech` | Text-to-speech (TTS). |
+| `GET`  | `/v1/models` | List models + capability matrix. |
+| `GET`  | `/v1/usage` | This month's usage (`?currency=usd|rmb`). |
+| `GET`  | `/v1/balance` | Account balance (`?currency=usd|rmb`). |
+
+---
+
+## POST /v1/chat/completions
+
+Create a chat completion. The request and response bodies match the OpenAI format.
+
+```
+POST /v1/chat/completions
+Authorization: Bearer he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Content-Type: application/json
+Accept: application/json   (or text/event-stream for SSE)
+
+Optional headers:
+  X-He-Routing-Strategy: quality | cost | latency
+  X-He-AB-Models: qwen-max,deepseek-v3   # A/B dual-leg compare (non-streaming only)
+  Accept-Language: en                    # locale for error messages
+```
+
+**Request body** (same as OpenAI):
+
+```json
+{
+  "model": "qwen-max",
+  "messages": [{ "role": "user", "content": "Hello" }],
+  "stream": false,
+  "temperature": 0.7,
+  "max_tokens": 2048,
+  "tools": [],
+  "tool_choice": "auto",
+  "response_format": { "type": "json_object" }
+}
+```
+
+`model` may be a concrete model id (`qwen-max`, `deepseek-v3`, …) or a router alias
+(`he-router-cost`, `he-router-quality`, …).
+
+**Response** (success, non-streaming):
+
+```json
+{
+  "id": "chatcmpl-xxx",
+  "object": "chat.completion",
+  "created": 1715000000,
+  "model": "qwen-max",
+  "choices": [],
+  "usage": { "prompt_tokens": 100, "completion_tokens": 200, "total_tokens": 300 }
+}
+```
+
+### Streaming (SSE)
+
+When the request body sets `"stream": true`, the response is `text/event-stream`. Each
+event is `data: <single-line JSON>\n\n`; the stream terminates with the OpenAI iterator
+sentinel `data: [DONE]`:
+
+```text
+Content-Type: text/event-stream; charset=utf-8
+Cache-Control: no-cache, no-transform
+
+data: {"id":"chatcmpl-...","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-...","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hello "},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-...","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: [DONE]
+```
+
+`object` is the literal `chat.completion.chunk`; `delta` carries `{"role":"assistant"}` on
+the first chunk, `{"content":"..."}` on content chunks, and `{}` on the terminal chunk;
+`finish_reason` is `null` until the terminal chunk, then `"stop"`.
+
+### A/B compare (X-He-AB-Models) {#ab-compare-x-he-ab-models}
+Sending `X-He-AB-Models: modelA,modelB` (exactly two distinct concrete ids, **non-streaming
+only**) dispatches both models in parallel and returns both outputs in one
+`chat.completion`. The `choices[]` array is leg A's choices followed by leg B's, re-indexed
+`0,1,…`, each carrying an additive `x_he_model` field naming its source leg; `usage` is the
+summed tokens of the successful legs.
+
+:::caution X-He-Selected-Model on the A/B path
+On the A/B path the response header `X-He-AB-Models` echoes the served ids, and
+**`X-He-Selected-Model` is NOT set**. If exactly one leg fails, the response is still `200`
+with a failed-leg marker choice (`finish_reason: "he_upstream_error"`); only successful legs
+are billed. If both legs fail, a single terminal error envelope is returned (504 if any leg
+timed out, else 502).
+:::
+
+---
+
+## POST /v1/embeddings
+
+Create text embeddings. OpenAI-compatible request and response.
+
+```json
+{ "model": "text-embedding-v3", "input": "The quick brown fox" }
+```
+
+## POST /v1/audio/transcriptions
+
+Speech-to-text (Whisper-compatible). `multipart/form-data` with an audio `file` and a `model`.
+
+## POST /v1/audio/speech
+
+Text-to-speech. Returns binary audio for the given `model`, `input` and `voice`.
+
+## GET /v1/models
+
+Returns the model list plus a per-model capability matrix. A public, unauthenticated
+mirror is available at `/public/models` (byte-identical shape).
+
+## GET /v1/usage & GET /v1/balance
+
+Query this month's usage and current balance. Both accept `?currency=usd|rmb` (default
+`usd`; any other value → `400_unsupported_currency`). Currency conversion is **display-only** —
+the billing ledger is always in USD.
+
+---
+
+## Response headers
+
+Every chat completion response carries these headers:
+
+| Header | Meaning |
+|--------|---------|
+| `X-He-Request-Id` | Request correlation id (`req_xxxxxxxxxxxx`) — quote it for support. |
+| `X-He-Selected-Model` | The model actually routed to. **Not set on the A/B path** (see above). |
+| `X-He-Cost-Usd` | Cost of this request in USD. |
+
+---
+
+## Error codes
+
+Every error response carries the canonical 5-field envelope:
+
+```json
+{
+  "error": {
+    "code": "402_quota_exhausted",
+    "message": "Insufficient quota.",
+    "type": "invalid_request_error",
+    "param": null,
+    "he_request_id": "req_xxxxxxxxxxxx"
+  }
+}
+```
+
+`type` is `invalid_request_error` for 4xx codes and `server_error` for 5xx codes.
+
+| HTTP | `error.code` | Meaning |
+|------|--------------|---------|
+| 400 | `400_invalid_request` | Malformed parameters. |
+| 400 | `400_content_filter` | Tripped the content-safety filter. |
+| 400 | `400_unsupported_currency` | `?currency=` not in `{usd, rmb}`. |
+| 401 | `401_invalid_api_key` | Key invalid or revoked. |
+| 402 | `402_balance_insufficient` | Account balance too low. |
+| 402 | `402_quota_exhausted` | Monthly spend cap reached. |
+| 403 | `403_ip_not_whitelisted` | Caller IP not in the key's allow-list. |
+| 403 | `403_model_not_in_scope` | Key not authorized for the requested model. |
+| 413 | `413_payload_too_large` | Request body exceeds the 1 MiB limit. |
+| 429 | `429_rate_limit_qps` | Per-second request limit exceeded. |
+| 429 | `429_rate_limit_rpm` | Per-minute request limit exceeded. |
+| 429 | `429_rate_limit_tpm` | Per-minute upstream-token limit exceeded. |
+| 500 | `500_internal_error` | Unexpected server error. |
+| 502 | `502_upstream_unavailable` | Upstream model unavailable (after failover retries). |
+| 504 | `504_upstream_timeout` | Upstream model timed out (after failover retries). |

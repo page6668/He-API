@@ -1,0 +1,129 @@
+---
+id: cookbook
+title: Livre de recettes
+description: Recettes orientées tâches, à copier-coller — streaming, embeddings, audio, routage, usage.
+sidebar_position: 4
+he_provenance: mt
+---
+
+# Livre de recettes
+
+Recettes à copier-coller pour les tâches courantes. Chaque extrait suppose que `HE_API_KEY` est défini et utilise les
+[SDK He-API](/sdk). Tous les blocs de code sont statiques et copiables.
+
+## Streaming d'une complétion de chat
+
+Itérez sur les tokens à mesure qu'ils arrivent (`stream: true`).
+
+```typescript
+import { Client } from "@he-api/sdk";
+
+const client = new Client();
+const stream = await client.chat.completions.create({
+  model: "qwen-max",
+  messages: [{ role: "user", content: "Write a haiku about the sea." }],
+  stream: true,
+  stream_options: { include_usage: true },
+});
+
+for await (const chunk of stream) {
+  process.stdout.write(chunk.choices[0]?.delta?.content ?? "");
+}
+```
+
+```python
+from he_api import Client
+
+client = Client()
+stream = client.chat.completions.create(
+    model="qwen-max",
+    messages=[{"role": "user", "content": "Write a haiku about the sea."}],
+    stream=True,
+)
+for chunk in stream:
+    print(chunk.choices[0].delta.content or "", end="")
+```
+
+## Recherche par embeddings
+
+Encodez des documents et une requête, puis classez par similarité cosinus.
+
+```python
+from he_api import Client
+
+client = Client()
+docs = ["Cats are independent.", "Dogs are loyal.", "Birds can fly."]
+doc_vectors = client.embeddings.create(model="text-embedding-v3", input=docs).data
+query = client.embeddings.create(model="text-embedding-v3", input="Which pet is loyal?").data[0]
+
+def cosine(a, b):
+    dot = sum(x * y for x, y in zip(a, b))
+    return dot  # vectors are L2-normalized
+
+ranked = sorted(doc_vectors, key=lambda d: cosine(d.embedding, query.embedding), reverse=True)
+print(docs[ranked[0].index])
+```
+
+## Audio (transcription et synthèse vocale)
+
+Transcrivez un fichier audio (compatible Whisper) et synthétisez de la parole.
+
+```python
+from he_api import Client
+
+client = Client()
+
+# Speech-to-text
+with open("meeting.mp3", "rb") as f:
+    text = client.audio.transcriptions.create(model="whisper-1", file=f)
+print(text.text)
+
+# Text-to-speech (binary audio response)
+audio = client.audio.speech.create(model="tts-1", voice="alloy", input="Hello from He-API.")
+audio.stream_to_file("hello.mp3")
+```
+
+## Stratégie de routage et comparaison A/B
+
+Choisissez une stratégie de routage avec l'en-tête `X-He-Routing-Strategy`, ou comparez deux modèles en
+un seul appel avec `X-He-AB-Models` (non-streaming uniquement).
+
+```python
+from he_api import Client
+
+client = Client()
+
+# Route by strategy — let the gateway choose the model.
+resp = client.chat.completions.create(
+    model="he-router-quality",
+    messages=[{"role": "user", "content": "Summarize the plot of Hamlet."}],
+    extra_headers={"X-He-Routing-Strategy": "quality"},
+)
+
+# A/B compare two concrete models in one request.
+ab = client.chat.completions.create(
+    model="qwen-max",
+    messages=[{"role": "user", "content": "Summarize the plot of Hamlet."}],
+    extra_headers={"X-He-AB-Models": "qwen-max,deepseek-v3"},
+)
+for choice in ab.choices:
+    print(choice.x_he_model, "→", choice.message.content[:60])
+```
+
+:::note
+Sur le chemin A/B, `X-He-Selected-Model` n'est pas défini ; lisez plutôt `X-He-AB-Models` dans les en-têtes
+de réponse et le champ `x_he_model` par choix. Voir la
+[Référence de l'API](/api-reference#ab-compare-x-he-ab-models).
+:::
+
+## Interroger l'usage et le solde
+
+```bash
+curl -H "Authorization: Bearer $HE_API_KEY" \
+  "https://api.he-api.com/v1/usage?currency=usd"
+
+curl -H "Authorization: Bearer $HE_API_KEY" \
+  "https://api.he-api.com/v1/balance?currency=usd"
+```
+
+Chaque réponse de chat rapporte également son propre coût en ligne via l'en-tête de réponse `X-He-Cost-Usd`.

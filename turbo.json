@@ -54,6 +54,18 @@
     "@he-api/i18n-keys#build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", "src/common.ts", "src/index.ts"]
+    },
+    "@he-api/docs#build": {
+      "dependsOn": ["^build"],
+      "outputs": ["build/**", ".docusaurus/**"]
+    },
+    "@he-api/docs#lint": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@he-api/docs#test:e2e": {
+      "dependsOn": ["@he-api/docs#build"],
+      "outputs": ["playwright-report/**"]
     }
   }
 }

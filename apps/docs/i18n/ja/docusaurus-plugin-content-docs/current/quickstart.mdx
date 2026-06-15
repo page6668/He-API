@@ -1,0 +1,133 @@
+---
+id: quickstart
+title: クイックスタート
+description: 最初の chat.completions 呼び出しを 5 分以内で行う。
+sidebar_position: 2
+he_provenance: mt
+---
+
+# クイックスタート
+
+ゼロから最初のモデルレスポンスまでを **5 分以内** で。登録し、
+API キーを作成し、お好みの SDK で `chat.completions` 呼び出しを行います。
+
+## 1. 登録 & API キーの作成
+
+1. **[console.he-api.com](https://console.he-api.com)** でサインアップします。
+2. **API Keys** を開き、**Create key** をクリックします。
+3. キーをコピーします — `he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx` のような形式です。再度表示することはできません。
+
+キーをソース管理に残さないよう、環境変数に保存します：
+
+```bash
+export HE_API_KEY="he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+
+:::note ベース URL & 資格情報
+ゲートウェイのベース URL は `https://api.he-api.com/v1` です。He-API は
+**`HE_API_KEY`** 環境変数で認証します（公式 SDK は `OPENAI_API_KEY` を読み**ません**）。
+:::
+
+## 2. SDK のインストール
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<Tabs groupId="sdk">
+  <TabItem value="python" label="Python">
+
+```bash
+pip install he-api
+```
+
+  </TabItem>
+  <TabItem value="typescript" label="TypeScript">
+
+```bash
+npm install @he-api/sdk
+```
+
+  </TabItem>
+  <TabItem value="go" label="Go">
+
+```bash
+go get github.com/he-api/sdk-go
+```
+
+> **暫定** — Go SDK（Story 10.4）はまだリリースされていません。モジュールパスと
+> クライアントサーフェスは公開前に 10.4 と整合されます。[SDK → Go](/sdk/go) を参照してください。
+
+  </TabItem>
+</Tabs>
+
+## 3. 最初の呼び出しを行う
+
+<Tabs groupId="sdk">
+  <TabItem value="python" label="Python">
+
+```python
+from he_api import Client
+
+client = Client()  # reads base_url + HE_API_KEY from the environment
+
+resp = client.chat.completions.create(
+    model="qwen-max",
+    messages=[{"role": "user", "content": "Say hello in one sentence."}],
+)
+print(resp.choices[0].message.content)
+```
+
+  </TabItem>
+  <TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { Client } from "@he-api/sdk";
+
+const client = new Client(); // baseURL + HE_API_KEY from the environment
+
+const resp = await client.chat.completions.create({
+  model: "qwen-max",
+  messages: [{ role: "user", content: "Say hello in one sentence." }],
+});
+console.log(resp.choices[0].message.content);
+```
+
+  </TabItem>
+  <TabItem value="go" label="Go">
+
+```go
+// Provisional pending Story 10.4 release.
+client := heapi.NewClient() // baseURL + HE_API_KEY from the environment
+
+resp, err := client.Chat.Completions.New(ctx, heapi.ChatCompletionParams{
+    Model:    "qwen-max",
+    Messages: []heapi.Message{{Role: "user", Content: "Say hello in one sentence."}},
+})
+```
+
+  </TabItem>
+</Tabs>
+
+これで完了です — ゲートウェイ経由で最初の認証済み呼び出しを行いました。
+
+## OpenAI からの移行 {#migrating-from-openai}
+He-API は OpenAI 互換なので、既存アプリの移行は呼び出し箇所への**コード変更ゼロの `base_url`
+変更**です。公式 OpenAI SDK では、ベース URL とキーを設定します：
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.he-api.com/v1",   # the only change
+    api_key="he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+)
+# every client.chat.completions / client.embeddings call now flows through He-API
+```
+
+ゲートウェイのデフォルト（ベース URL + `HE_API_KEY`）や
+ゲートウェイ固有の機能（ルーティング戦略、A/B 比較）を組み込んで使いたい場合は、[He-API SDK](/sdk) をお勧めします。
+
+## 次のステップ
+
+- **[API リファレンス](/api-reference)** — 完全なエンドポイント、エラーコード、レスポンスヘッダーの詳細。
+- **[クックブック](/cookbook)** — ストリーミング、埋め込み検索、音声、ルーティング / A-B、使用量クエリ。

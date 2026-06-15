@@ -1,0 +1,129 @@
+---
+id: cookbook
+title: 쿡북
+description: 작업 지향적이고 복사-붙여넣기 가능한 레시피 — 스트리밍, 임베딩, 오디오, 라우팅, 사용량.
+sidebar_position: 4
+he_provenance: mt
+---
+
+# 쿡북
+
+일반적인 작업을 위한 복사-붙여넣기 레시피. 모든 스니펫은 `HE_API_KEY`가 설정되어 있다고 가정하며
+[He-API SDK](/sdk)를 사용합니다. 모든 코드 블록은 정적이며 복사 가능합니다.
+
+## 채팅 완성 스트리밍
+
+토큰이 도착하는 대로 반복합니다(`stream: true`).
+
+```typescript
+import { Client } from "@he-api/sdk";
+
+const client = new Client();
+const stream = await client.chat.completions.create({
+  model: "qwen-max",
+  messages: [{ role: "user", content: "Write a haiku about the sea." }],
+  stream: true,
+  stream_options: { include_usage: true },
+});
+
+for await (const chunk of stream) {
+  process.stdout.write(chunk.choices[0]?.delta?.content ?? "");
+}
+```
+
+```python
+from he_api import Client
+
+client = Client()
+stream = client.chat.completions.create(
+    model="qwen-max",
+    messages=[{"role": "user", "content": "Write a haiku about the sea."}],
+    stream=True,
+)
+for chunk in stream:
+    print(chunk.choices[0].delta.content or "", end="")
+```
+
+## 임베딩 검색
+
+문서와 쿼리를 임베딩한 다음 코사인 유사도로 순위를 매깁니다.
+
+```python
+from he_api import Client
+
+client = Client()
+docs = ["Cats are independent.", "Dogs are loyal.", "Birds can fly."]
+doc_vectors = client.embeddings.create(model="text-embedding-v3", input=docs).data
+query = client.embeddings.create(model="text-embedding-v3", input="Which pet is loyal?").data[0]
+
+def cosine(a, b):
+    dot = sum(x * y for x, y in zip(a, b))
+    return dot  # vectors are L2-normalized
+
+ranked = sorted(doc_vectors, key=lambda d: cosine(d.embedding, query.embedding), reverse=True)
+print(docs[ranked[0].index])
+```
+
+## 오디오 (전사 및 음성)
+
+오디오 파일을 전사하고(Whisper 호환) 음성을 합성합니다.
+
+```python
+from he_api import Client
+
+client = Client()
+
+# Speech-to-text
+with open("meeting.mp3", "rb") as f:
+    text = client.audio.transcriptions.create(model="whisper-1", file=f)
+print(text.text)
+
+# Text-to-speech (binary audio response)
+audio = client.audio.speech.create(model="tts-1", voice="alloy", input="Hello from He-API.")
+audio.stream_to_file("hello.mp3")
+```
+
+## 라우팅 전략 & A/B 비교
+
+`X-He-Routing-Strategy` 헤더로 라우팅 전략을 선택하거나, `X-He-AB-Models`로 한 번의
+호출에서 두 모델을 비교하세요(비스트리밍 전용).
+
+```python
+from he_api import Client
+
+client = Client()
+
+# Route by strategy — let the gateway choose the model.
+resp = client.chat.completions.create(
+    model="he-router-quality",
+    messages=[{"role": "user", "content": "Summarize the plot of Hamlet."}],
+    extra_headers={"X-He-Routing-Strategy": "quality"},
+)
+
+# A/B compare two concrete models in one request.
+ab = client.chat.completions.create(
+    model="qwen-max",
+    messages=[{"role": "user", "content": "Summarize the plot of Hamlet."}],
+    extra_headers={"X-He-AB-Models": "qwen-max,deepseek-v3"},
+)
+for choice in ab.choices:
+    print(choice.x_he_model, "→", choice.message.content[:60])
+```
+
+:::note
+A/B 경로에서는 `X-He-Selected-Model`이 설정되지 않습니다. 대신 응답 헤더에서 `X-He-AB-Models`를
+읽고 choice별 `x_he_model` 필드를 사용하세요. 
+[API 레퍼런스](/api-reference#ab-compare-x-he-ab-models)를 참조하세요.
+:::
+
+## 사용량 & 잔액 쿼리
+
+```bash
+curl -H "Authorization: Bearer $HE_API_KEY" \
+  "https://api.he-api.com/v1/usage?currency=usd"
+
+curl -H "Authorization: Bearer $HE_API_KEY" \
+  "https://api.he-api.com/v1/balance?currency=usd"
+```
+
+각 채팅 응답은 `X-He-Cost-Usd` 응답 헤더를 통해 자체 비용도 인라인으로 보고합니다.

@@ -1,0 +1,59 @@
+/**
+ * He-API docs theme (Story 10.5).
+ *
+ * RTL / LTR-island (BR-10.5.10, E2E-008, BLIND-BOUNDARY-001): under the Arabic
+ * (dir="rtl") layout, prose mirrors but code blocks, inline code, API paths, SDK
+ * package names and shell commands MUST stay left-to-right and must not be visually
+ * reordered. We force LTR + left alignment on every code surface, and provide a
+ * `.he-ltr` utility (with `unicode-bidi: isolate`) for inline LTR tokens embedded in
+ * Arabic sentences so the surrounding Arabic is not reordered by the bidi algorithm.
+ */
+
+:root {
+  --ifm-color-primary: #2e7d6b;
+  --ifm-color-primary-dark: #29705f;
+  --ifm-color-primary-darker: #266a5a;
+  --ifm-color-primary-darkest: #1f574a;
+  --ifm-color-primary-light: #338877;
+  --ifm-color-primary-lighter: #368e7c;
+  --ifm-color-primary-lightest: #3da189;
+  --ifm-code-font-size: 95%;
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #4db6a0;
+  --ifm-color-primary-dark: #3da189;
+  --ifm-color-primary-darker: #399881;
+  --ifm-color-primary-darkest: #2f7d6b;
+  --ifm-color-primary-light: #5dc0ad;
+  --ifm-color-primary-lighter: #67c4b3;
+  --ifm-color-primary-lightest: #84d0c2;
+}
+
+/* --- RTL LTR-island enforcement (Arabic) ---
+ *
+ * Docusaurus runs rtlcss on the RTL (ar) build, which by default FLIPS `direction: ltr`
+ * → `rtl` and `text-align: left` → `right`. That would defeat the LTR islands. The
+ * `/*rtl:ignore* /` directives below tell rtlcss to emit these rules verbatim so code
+ * surfaces and inline LTR tokens stay left-to-right even under dir="rtl". */
+
+/*rtl:begin:ignore*/
+/* All code surfaces stay LTR + left-aligned even inside an RTL document. */
+html[dir='rtl'] code,
+html[dir='rtl'] pre,
+html[dir='rtl'] pre code,
+html[dir='rtl'] .prism-code,
+html[dir='rtl'] kbd {
+  direction: ltr;
+  text-align: left;
+  unicode-bidi: isolate;
+}
+
+/* Inline LTR island for tokens embedded in Arabic prose (package names, base_url,
+ * chat.completions, etc.). `isolate` prevents the bidi algorithm from reordering the
+ * surrounding Arabic text. Usage in MDX: <span className="he-ltr">pip install he-api</span> */
+.he-ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+/*rtl:end:ignore*/

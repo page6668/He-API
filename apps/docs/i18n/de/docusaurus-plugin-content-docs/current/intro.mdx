@@ -1,0 +1,39 @@
+---
+id: intro
+title: He-API-Dokumentation
+description: OpenAI-kompatibles LLM-Gateway — Drop-in-Austausch der base_url, ein Schlüssel, viele Modelle.
+slug: /
+sidebar_position: 1
+he_provenance: mt
+---
+
+# He-API
+
+**He-API** ist ein OpenAI-kompatibles LLM-Gateway. Richten Sie Ihren bestehenden OpenAI-Code auf
+He-API aus, indem Sie nur eine Sache ändern — die `base_url` — und erreichen Sie viele Upstream-Modelle
+über einen einzigen API-Schlüssel, mit Routing, Nutzungsmessung und Abrechnung, die für Sie erledigt werden.
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.he-api.com/v1",   # the only change
+    api_key="he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+)
+```
+
+## Wo Sie beginnen
+
+- **[Schnellstart](/quickstart)** — bringen Sie einen ersten `chat.completions`-Aufruf in unter 5 Minuten zum Laufen.
+- **[API-Referenz](/api-reference)** — die OpenAI-kompatible `/v1/*`-Oberfläche: Endpunkte, Fehlercodes, Antwort-Header.
+- **[Kochbuch](/cookbook)** — aufgabenorientierte Copy-and-paste-Rezepte: Streaming, Embeddings-Retrieval, Audio, Routing / A-B, Nutzung.
+- **[SDKs](/sdk)** — offizielle Drop-in-SDKs für Python, TypeScript und Go.
+
+## Was Sie erhalten
+
+- **Drop-in-Kompatibilität.** Die Endpunkte `/v1/chat/completions`, `/v1/embeddings`, `/v1/audio/*`
+  und `/v1/models` entsprechen dem OpenAI-Wire-Format, sodass bestehende SDKs und Tools unverändert funktionieren.
+- **Ein Schlüssel, viele Modelle.** Rufen Sie konkrete Modelle auf (`qwen-max`, `deepseek-v3`, …) oder
+  lassen Sie eine Routing-Strategie für Sie auswählen (`he-router-quality`, `he-router-cost`).
+- **Integrierte Messung & Abrechnung.** Jede Antwort trägt `X-He-Request-Id`,
+  `X-He-Selected-Model` und `X-He-Cost-Usd`, sodass Sie Ausgaben nachverfolgen und zuordnen können.

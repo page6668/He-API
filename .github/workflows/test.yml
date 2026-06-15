@@ -597,3 +597,53 @@ jobs:
           path: /tmp/sdk-python-report.xml
           if-no-files-found: ignore
           retention-days: 7
+
+  # Story 10.5 — docs site (@he-api/docs, Docusaurus 3.x). The CI关口 for a static,
+  # presentation-only site is: (1) `build` — Docusaurus `onBrokenLinks/onBrokenAnchors:
+  # 'throw'` IS the dead-link gate (AC1, INT-001/002), and it renders all 10 locales;
+  # (2) `lint` — the structural-completeness gate (BLOCK on a hard-missing en section /
+  # locale-set ≠ 10; WARN on MT-unproofed → 10.7) + the API-Reference↔rest-api-spec §5.1
+  # anti-drift gate (AC2/AC1, INT-004/005/006/012/015); (3) Playwright e2e — home/sections
+  # reachable, ar RTL + LTR-island, language switch, en fallback (AC1/AC2 E2E). Mirrors the
+  # console-e2e paradigm; root `unit-ts` does not cover docs (no vitest).
+  docs-build-e2e:
+    name: docs / build-e2e
+    runs-on: ubuntu-22.04
+    needs: [unit-ts]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: apps/docs
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build docs (10 locales + dead-link/anchor gate)
+        run: pnpm --filter @he-api/docs build
+
+      - name: Lint (completeness gate + API-Reference anti-drift gate)
+        run: pnpm --filter @he-api/docs lint
+
+      - name: Run Playwright e2e
+        working-directory: apps/docs
+        env:
+          CI: '1'
+        run: pnpm exec playwright test
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-playwright-report
+          path: apps/docs/playwright-report
+          if-no-files-found: ignore
+          retention-days: 7

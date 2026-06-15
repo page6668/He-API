@@ -1,0 +1,39 @@
+---
+id: intro
+title: توثيق He-API
+description: بوابة نماذج لغوية متوافقة مع OpenAI — غيّر base_url فقط لتبدأ، ومفتاح واحد لعدة نماذج.
+slug: /
+sidebar_position: 1
+he_provenance: mt
+---
+
+# He-API
+
+<span className="he-ltr">He-API</span> هي بوابة نماذج لغوية متوافقة مع OpenAI. وجّه شيفرة
+OpenAI الحالية إلى <span className="he-ltr">He-API</span> بتغيير شيء واحد فقط — وهو `base_url` —
+وستصل إلى عدة نماذج عبر مفتاح واجهة برمجة واحد، مع تكفّل البوابة بالتوجيه وقياس الاستهلاك والفوترة.
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.he-api.com/v1",   # the only change
+    api_key="he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+)
+```
+
+## من أين تبدأ
+
+- **[البدء السريع](/quickstart)** — شغّل أول استدعاء `chat.completions` في أقل من 5 دقائق.
+- **[مرجع الواجهة](/api-reference)** — سطح `/v1/*` المتوافق مع OpenAI: المسارات ورموز الأخطاء وترويسات الاستجابة.
+- **[دليل الوصفات](/cookbook)** — وصفات عملية جاهزة للنسخ: البث، استرجاع التضمينات، الصوت، التوجيه / A-B، الاستهلاك.
+- **[حِزم SDK](/sdk)** — حِزم SDK رسمية بديلة لـ OpenAI للغات Python و TypeScript و Go.
+
+## ماذا تحصل عليه
+
+- **توافق فوري (Drop-in).** تتبع مسارات `/v1/chat/completions` و `/v1/embeddings` و
+  `/v1/audio/*` و `/v1/models` صيغة OpenAI، فتعمل حِزم SDK والأدوات الحالية دون تغيير.
+- **مفتاح واحد، نماذج متعددة.** استدعِ نماذج محددة (`qwen-max` و `deepseek-v3` …) أو اترك
+  إستراتيجية التوجيه تختار لك (`he-router-quality` و `he-router-cost`).
+- **قياس وفوترة مدمجان.** تحمل كل استجابة الترويسات `X-He-Request-Id` و `X-He-Selected-Model`
+  و `X-He-Cost-Usd` لتتبّع الإنفاق ومحاسبته.

@@ -1,0 +1,39 @@
+---
+id: intro
+title: He-API ドキュメント
+description: OpenAI 互換の LLM ゲートウェイ — base_url を差し替えるだけ、1 つのキーで多数のモデルへ。
+slug: /
+sidebar_position: 1
+he_provenance: mt
+---
+
+# He-API
+
+**He-API** は OpenAI 互換の LLM ゲートウェイです。既存の OpenAI コードを
+He-API に向けるには、たった 1 つ — `base_url` — を変更するだけ。単一の API キーで多数の上流モデルへ
+到達でき、ルーティング、使用量の計測、課金はすべて自動で処理されます。
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.he-api.com/v1",   # the only change
+    api_key="he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+)
+```
+
+## どこから始めるか
+
+- **[クイックスタート](/quickstart)** — 最初の `chat.completions` 呼び出しを 5 分以内で動かす。
+- **[API リファレンス](/api-reference)** — OpenAI 互換の `/v1/*` サーフェス：エンドポイント、エラーコード、レスポンスヘッダー。
+- **[クックブック](/cookbook)** — タスク指向のコピー＆ペーストレシピ：ストリーミング、埋め込み検索、音声、ルーティング / A-B、使用量。
+- **[SDK](/sdk)** — Python、TypeScript、Go 向けの公式ドロップイン SDK。
+
+## 何が得られるか
+
+- **ドロップイン互換。** `/v1/chat/completions`、`/v1/embeddings`、`/v1/audio/*`、
+  `/v1/models` の各エンドポイントは OpenAI のワイヤーフォーマットに一致するため、既存の SDK やツールはそのまま動作します。
+- **1 つのキー、多数のモデル。** 具体的なモデル（`qwen-max`、`deepseek-v3`、…）を呼ぶか、
+  ルーティング戦略に選ばせます（`he-router-quality`、`he-router-cost`）。
+- **組み込みの計測 & 課金。** すべてのレスポンスは `X-He-Request-Id`、
+  `X-He-Selected-Model`、`X-He-Cost-Usd` を持つので、支出の追跡と計上ができます。

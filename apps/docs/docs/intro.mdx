@@ -1,0 +1,39 @@
+---
+id: intro
+title: He-API Documentation
+description: OpenAI-compatible LLM gateway — drop-in base_url swap, one key, many models.
+slug: /
+sidebar_position: 1
+he_provenance: human
+---
+
+# He-API
+
+**He-API** is an OpenAI-compatible LLM gateway. Point your existing OpenAI code at
+He-API by changing one thing — the `base_url` — and reach many upstream models
+through a single API key, with routing, usage metering and billing handled for you.
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.he-api.com/v1",   # the only change
+    api_key="he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+)
+```
+
+## Where to start
+
+- **[Quickstart](/quickstart)** — get a first `chat.completions` call working in under 5 minutes.
+- **[API Reference](/api-reference)** — the OpenAI-compatible `/v1/*` surface: endpoints, error codes, response headers.
+- **[Cookbook](/cookbook)** — task-oriented, copy-paste recipes: streaming, embeddings retrieval, audio, routing / A-B, usage.
+- **[SDKs](/sdk)** — official drop-in SDKs for Python, TypeScript and Go.
+
+## What you get
+
+- **Drop-in compatibility.** The `/v1/chat/completions`, `/v1/embeddings`, `/v1/audio/*`
+  and `/v1/models` endpoints match the OpenAI wire format, so existing SDKs and tools work unchanged.
+- **One key, many models.** Call concrete models (`qwen-max`, `deepseek-v3`, …) or
+  let a routing strategy pick for you (`he-router-quality`, `he-router-cost`).
+- **Built-in metering & billing.** Every response carries `X-He-Request-Id`,
+  `X-He-Selected-Model` and `X-He-Cost-Usd` so you can trace and account for spend.

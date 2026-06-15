@@ -1,0 +1,42 @@
+---
+id: typescript
+title: TypeScript SDK
+description: "@he-api/sdk — drop-in OpenAI replacement for TypeScript/JavaScript."
+he_provenance: human
+---
+
+# TypeScript SDK
+
+`@he-api/sdk` is a pure-ESM, drop-in OpenAI replacement. `Client` extends the official
+`openai` client, so the full surface — including streaming — is available.
+
+```bash
+npm install @he-api/sdk
+```
+
+```typescript
+import { Client } from "@he-api/sdk";
+
+const client = new Client(); // baseURL=https://api.he-api.com/v1, reads HE_API_KEY
+
+const resp = await client.chat.completions.create({
+  model: "qwen-max",
+  messages: [{ role: "user", content: "Hello" }],
+});
+console.log(resp.choices[0].message.content);
+
+// Streaming
+const stream = await client.chat.completions.create({
+  model: "qwen-max",
+  messages: [{ role: "user", content: "Hello" }],
+  stream: true,
+  stream_options: { include_usage: true },
+});
+for await (const chunk of stream) {
+  process.stdout.write(chunk.choices[0]?.delta?.content ?? "");
+}
+```
+
+- **Package name:** `@he-api/sdk` (pure ESM).
+- **Base class:** `Client extends OpenAI` (openai-node `^4`).
+- **Credentials:** reads `HE_API_KEY`.

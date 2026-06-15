@@ -1,0 +1,200 @@
+---
+id: api-reference
+title: API 레퍼런스
+description: OpenAI 호환 /v1/* 표면 — 엔드포인트, 오류 코드, 응답 헤더.
+sidebar_position: 3
+he_provenance: mt
+he_source: rest-api-spec.md §5.1
+---
+
+# API 레퍼런스
+
+He-API는 `/v1/*` 아래에 **OpenAI 호환** HTTP 표면을 노출합니다. 기본 URL은
+`https://api.he-api.com/v1`입니다. 베어러 토큰으로 인증하세요:
+
+```
+Authorization: Bearer he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+:::info Source of truth
+이 페이지는 `docs/architecture/rest-api-spec.md` **§5.1**(정식 계약)에서 전사되었습니다.
+게이트웨이는 OpenAI-*호환*이며, 인라인으로 표시된 몇 가지 He 전용 추가 사항이 있습니다.
+:::
+
+## 엔드포인트
+
+| Method | Path | 용도 |
+|--------|------|---------|
+| `POST` | `/v1/chat/completions` | 채팅 완성(비스트리밍 및 SSE 스트리밍). |
+| `POST` | `/v1/embeddings` | 텍스트 임베딩. |
+| `POST` | `/v1/audio/transcriptions` | 음성-텍스트 변환(Whisper 호환). |
+| `POST` | `/v1/audio/speech` | 텍스트-음성 변환(TTS). |
+| `GET`  | `/v1/models` | 모델 목록 + 기능 매트릭스. |
+| `GET`  | `/v1/usage` | 이번 달 사용량(`?currency=usd|rmb`). |
+| `GET`  | `/v1/balance` | 계정 잔액(`?currency=usd|rmb`). |
+
+---
+
+## POST /v1/chat/completions
+
+채팅 완성을 생성합니다. 요청 및 응답 본문은 OpenAI 포맷과 일치합니다.
+
+```
+POST /v1/chat/completions
+Authorization: Bearer he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Content-Type: application/json
+Accept: application/json   (or text/event-stream for SSE)
+
+Optional headers:
+  X-He-Routing-Strategy: quality | cost | latency
+  X-He-AB-Models: qwen-max,deepseek-v3   # A/B dual-leg compare (non-streaming only)
+  Accept-Language: en                    # locale for error messages
+```
+
+**요청 본문**(OpenAI와 동일):
+
+```json
+{
+  "model": "qwen-max",
+  "messages": [{ "role": "user", "content": "Hello" }],
+  "stream": false,
+  "temperature": 0.7,
+  "max_tokens": 2048,
+  "tools": [],
+  "tool_choice": "auto",
+  "response_format": { "type": "json_object" }
+}
+```
+
+`model`은 구체적인 모델 id(`qwen-max`, `deepseek-v3`, …) 또는 라우터 별칭
+(`he-router-cost`, `he-router-quality`, …)일 수 있습니다.
+
+**응답**(성공, 비스트리밍):
+
+```json
+{
+  "id": "chatcmpl-xxx",
+  "object": "chat.completion",
+  "created": 1715000000,
+  "model": "qwen-max",
+  "choices": [],
+  "usage": { "prompt_tokens": 100, "completion_tokens": 200, "total_tokens": 300 }
+}
+```
+
+### 스트리밍 (SSE)
+
+요청 본문이 `"stream": true`로 설정되면 응답은 `text/event-stream`입니다. 각
+이벤트는 `data: <single-line JSON>\n\n`이며, 스트림은 OpenAI 반복자
+센티넬 `data: [DONE]`로 종료됩니다:
+
+```text
+Content-Type: text/event-stream; charset=utf-8
+Cache-Control: no-cache, no-transform
+
+data: {"id":"chatcmpl-...","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-...","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hello "},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-...","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: [DONE]
+```
+
+`object`는 리터럴 `chat.completion.chunk`입니다. `delta`는 첫 청크에
+`{"role":"assistant"}`를, 콘텐츠 청크에 `{"content":"..."}`를, 종료 청크에 `{}`를 전달합니다.
+`finish_reason`은 종료 청크 전까지 `null`이며, 그 후 `"stop"`이 됩니다.
+
+### A/B 비교 (X-He-AB-Models) {#ab-compare-x-he-ab-models}
+`X-He-AB-Models: modelA,modelB`(정확히 두 개의 서로 다른 구체적 id, **비스트리밍
+전용**)를 보내면 두 모델을 병렬로 디스패치하고 두 출력을 하나의
+`chat.completion`으로 반환합니다. `choices[]` 배열은 레그 A의 choices 다음에 레그 B의 것이 오며,
+`0,1,…`으로 재인덱싱되고, 각각 소스 레그를 명명하는 추가 `x_he_model` 필드를 전달합니다. `usage`는
+성공한 레그의 토큰 합계입니다.
+
+:::caution X-He-Selected-Model on the A/B path
+A/B 경로에서는 응답 헤더 `X-He-AB-Models`가 제공된 id를 반향하며,
+**X-He-Selected-Model is NOT set**. 정확히 한 레그가 실패하면 응답은 여전히 `200`이며
+실패 레그 마커 choice(`finish_reason: "he_upstream_error"`)가 포함됩니다. 성공한 레그만
+청구됩니다. 두 레그가 모두 실패하면 단일 종료 오류 봉투가 반환됩니다(레그 중 하나라도 타임아웃되면 504,
+그렇지 않으면 502).
+:::
+
+---
+
+## POST /v1/embeddings
+
+텍스트 임베딩을 생성합니다. OpenAI 호환 요청 및 응답.
+
+```json
+{ "model": "text-embedding-v3", "input": "The quick brown fox" }
+```
+
+## POST /v1/audio/transcriptions
+
+음성-텍스트 변환(Whisper 호환). 오디오 `file`과 `model`을 포함한 `multipart/form-data`.
+
+## POST /v1/audio/speech
+
+텍스트-음성 변환. 주어진 `model`, `input`, `voice`에 대해 바이너리 오디오를 반환합니다.
+
+## GET /v1/models
+
+모델 목록과 모델별 기능 매트릭스를 반환합니다. 공개되고 인증이 필요 없는
+미러가 `/public/models`에서 제공됩니다(바이트 단위로 동일한 형태).
+
+## GET /v1/usage & GET /v1/balance
+
+이번 달 사용량과 현재 잔액을 조회합니다. 둘 다 `?currency=usd|rmb`를 허용합니다(기본값
+`usd`. 다른 값 → `400_unsupported_currency`). 통화 변환은 **표시 전용**입니다 —
+청구 원장은 항상 USD입니다.
+
+---
+
+## 응답 헤더
+
+모든 채팅 완성 응답에는 다음 헤더가 포함됩니다:
+
+| Header | 의미 |
+|--------|---------|
+| `X-He-Request-Id` | 요청 상관 id(`req_xxxxxxxxxxxx`) — 지원 요청 시 인용하세요. |
+| `X-He-Selected-Model` | 실제로 라우팅된 모델. **A/B 경로에서는 설정되지 않음**(위 참조). |
+| `X-He-Cost-Usd` | 이 요청의 USD 비용. |
+
+---
+
+## 오류 코드
+
+모든 오류 응답에는 정식 5필드 봉투가 포함됩니다:
+
+```json
+{
+  "error": {
+    "code": "402_quota_exhausted",
+    "message": "Insufficient quota.",
+    "type": "invalid_request_error",
+    "param": null,
+    "he_request_id": "req_xxxxxxxxxxxx"
+  }
+}
+```
+
+`type`은 4xx 코드의 경우 `invalid_request_error`, 5xx 코드의 경우 `server_error`입니다.
+
+| HTTP | `error.code` | 의미 |
+|------|--------------|---------|
+| 400 | `400_invalid_request` | 잘못된 형식의 매개변수. |
+| 400 | `400_content_filter` | 콘텐츠 안전 필터에 걸림. |
+| 400 | `400_unsupported_currency` | `?currency=`가 `{usd, rmb}`에 없음. |
+| 401 | `401_invalid_api_key` | 키가 유효하지 않거나 취소됨. |
+| 402 | `402_balance_insufficient` | 계정 잔액이 너무 낮음. |
+| 402 | `402_quota_exhausted` | 월간 지출 한도에 도달함. |
+| 403 | `403_ip_not_whitelisted` | 호출자 IP가 키의 허용 목록에 없음. |
+| 403 | `403_model_not_in_scope` | 키가 요청된 모델에 대해 권한이 없음. |
+| 413 | `413_payload_too_large` | 요청 본문이 1 MiB 한도를 초과함. |
+| 429 | `429_rate_limit_qps` | 초당 요청 한도 초과. |
+| 429 | `429_rate_limit_rpm` | 분당 요청 한도 초과. |
+| 429 | `429_rate_limit_tpm` | 분당 업스트림 토큰 한도 초과. |
+| 500 | `500_internal_error` | 예기치 않은 서버 오류. |
+| 502 | `502_upstream_unavailable` | 업스트림 모델 사용 불가(페일오버 재시도 후). |
+| 504 | `504_upstream_timeout` | 업스트림 모델 타임아웃(페일오버 재시도 후). |

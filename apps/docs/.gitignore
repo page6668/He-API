@@ -1,0 +1,13 @@
+# Docusaurus build + cache (build/ is also covered by the root .gitignore)
+/build
+/build-blind-error-001
+.docusaurus
+.cache-loader
+
+# Playwright
+/playwright-report
+/test-results
+
+# Misc
+.DS_Store
+*.tsbuildinfo

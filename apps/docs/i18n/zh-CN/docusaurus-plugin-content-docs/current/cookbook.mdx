@@ -1,0 +1,129 @@
+---
+id: cookbook
+title: 实例手册
+description: 任务式、可复制的示例——流式、嵌入、音频、路由、用量。
+sidebar_position: 4
+he_provenance: human
+---
+
+# 实例手册
+
+常见任务的可复制示例。每段代码均假设已设置 `HE_API_KEY`，并使用 [He-API SDK](/sdk)。所有代码块
+均为静态、可复制。
+
+## 流式对话补全
+
+逐 token 接收输出（`stream: true`）。
+
+```typescript
+import { Client } from "@he-api/sdk";
+
+const client = new Client();
+const stream = await client.chat.completions.create({
+  model: "qwen-max",
+  messages: [{ role: "user", content: "Write a haiku about the sea." }],
+  stream: true,
+  stream_options: { include_usage: true },
+});
+
+for await (const chunk of stream) {
+  process.stdout.write(chunk.choices[0]?.delta?.content ?? "");
+}
+```
+
+```python
+from he_api import Client
+
+client = Client()
+stream = client.chat.completions.create(
+    model="qwen-max",
+    messages=[{"role": "user", "content": "Write a haiku about the sea."}],
+    stream=True,
+)
+for chunk in stream:
+    print(chunk.choices[0].delta.content or "", end="")
+```
+
+## 嵌入检索
+
+对文档与查询做嵌入，再按余弦相似度排序。
+
+```python
+from he_api import Client
+
+client = Client()
+docs = ["Cats are independent.", "Dogs are loyal.", "Birds can fly."]
+doc_vectors = client.embeddings.create(model="text-embedding-v3", input=docs).data
+query = client.embeddings.create(model="text-embedding-v3", input="Which pet is loyal?").data[0]
+
+def cosine(a, b):
+    dot = sum(x * y for x, y in zip(a, b))
+    return dot  # vectors are L2-normalized
+
+ranked = sorted(doc_vectors, key=lambda d: cosine(d.embedding, query.embedding), reverse=True)
+print(docs[ranked[0].index])
+```
+
+## 音频（转写与合成）
+
+转写音频文件（Whisper 兼容），并合成语音。
+
+```python
+from he_api import Client
+
+client = Client()
+
+# Speech-to-text
+with open("meeting.mp3", "rb") as f:
+    text = client.audio.transcriptions.create(model="whisper-1", file=f)
+print(text.text)
+
+# Text-to-speech (binary audio response)
+audio = client.audio.speech.create(model="tts-1", voice="alloy", input="Hello from He-API.")
+audio.stream_to_file("hello.mp3")
+```
+
+## 路由策略与 A/B 对比
+
+用 `X-He-Routing-Strategy` 头选择路由策略，或用 `X-He-AB-Models` 在一次调用中对比两个模型
+（仅非流式）。
+
+```python
+from he_api import Client
+
+client = Client()
+
+# Route by strategy — let the gateway choose the model.
+resp = client.chat.completions.create(
+    model="he-router-quality",
+    messages=[{"role": "user", "content": "Summarize the plot of Hamlet."}],
+    extra_headers={"X-He-Routing-Strategy": "quality"},
+)
+
+# A/B compare two concrete models in one request.
+ab = client.chat.completions.create(
+    model="qwen-max",
+    messages=[{"role": "user", "content": "Summarize the plot of Hamlet."}],
+    extra_headers={"X-He-AB-Models": "qwen-max,deepseek-v3"},
+)
+for choice in ab.choices:
+    print(choice.x_he_model, "→", choice.message.content[:60])
+```
+
+:::note
+在 A/B 路径上，`X-He-Selected-Model` 不设置；请改读响应头中的 `X-He-AB-Models` 以及每个 choice 的
+`x_he_model` 字段。详见
+[API 参考](/api-reference#ab-compare-x-he-ab-models)。
+:::
+
+## 查询用量与余额
+
+```bash
+curl -H "Authorization: Bearer $HE_API_KEY" \
+  "https://api.he-api.com/v1/usage?currency=usd"
+
+curl -H "Authorization: Bearer $HE_API_KEY" \
+  "https://api.he-api.com/v1/balance?currency=usd"
+```
+
+每个对话响应也会通过 `X-He-Cost-Usd` 响应头内联报告自身的消费。

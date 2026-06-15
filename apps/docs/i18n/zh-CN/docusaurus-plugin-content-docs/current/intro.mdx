@@ -1,0 +1,38 @@
+---
+id: intro
+title: He-API 文档
+description: 兼容 OpenAI 的大模型网关——只改 base_url 即可接入，一把密钥调用多种模型。
+slug: /
+sidebar_position: 1
+he_provenance: human
+---
+
+# He-API
+
+**He-API** 是一个兼容 OpenAI 的大模型网关。只需改动一处——`base_url`——即可让现有的
+OpenAI 代码接入 He-API，用一把 API 密钥调用多种上游模型，路由、用量计量与计费均由网关代为处理。
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.he-api.com/v1",   # the only change
+    api_key="he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+)
+```
+
+## 从哪里开始
+
+- **[快速开始](/quickstart)** —— 5 分钟内跑通第一个 `chat.completions` 调用。
+- **[API 参考](/api-reference)** —— 兼容 OpenAI 的 `/v1/*` 接口面：端点、错误码、响应头。
+- **[实例手册](/cookbook)** —— 任务式、可复制的示例：流式、嵌入检索、音频、路由 / A-B、用量查询。
+- **[SDK](/sdk)** —— Python、TypeScript、Go 官方 drop-in SDK。
+
+## 你能得到什么
+
+- **Drop-in 兼容。** `/v1/chat/completions`、`/v1/embeddings`、`/v1/audio/*` 与 `/v1/models`
+  端点遵循 OpenAI 报文格式，现有 SDK 与工具无需改动即可使用。
+- **一把密钥，多种模型。** 既可调用具体模型（`qwen-max`、`deepseek-v3` 等），也可交由路由策略
+  自动选择（`he-router-quality`、`he-router-cost`）。
+- **内建计量与计费。** 每个响应都带有 `X-He-Request-Id`、`X-He-Selected-Model` 和
+  `X-He-Cost-Usd`，便于追溯与对账。

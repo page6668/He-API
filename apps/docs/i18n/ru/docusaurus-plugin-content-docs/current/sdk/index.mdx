@@ -1,0 +1,33 @@
+---
+id: index
+title: SDK
+description: Официальные drop-in SDK-замены OpenAI для Python, TypeScript и Go.
+sidebar_position: 5
+he_provenance: mt
+---
+
+# SDK
+
+He-API поставляет официальные drop-in SDK-замены OpenAI. Каждый по умолчанию использует базовый URL
+шлюза и читает переменную окружения **`HE_API_KEY`**.
+
+| Язык | Установка | Статус |
+|----------|---------|--------|
+| [Python](/sdk/python) | `pip install he-api` | Выпущен |
+| [TypeScript](/sdk/typescript) | `npm install @he-api/sdk` | Выпущен |
+| [Go](/sdk/go) | `go get github.com/he-api/sdk-go` | Предварительно (ожидает выпуска) |
+
+```bash
+# Python
+pip install he-api
+
+# TypeScript
+npm install @he-api/sdk
+
+# Go (provisional — pending Story 10.4 release)
+go get github.com/he-api/sdk-go
+```
+
+Предпочитайте SDK сырой замене `base_url`, когда хотите, чтобы значения по умолчанию шлюза и
+специфичные для шлюза функции (стратегии маршрутизации, A/B-сравнение) были подключены. Если вы предпочитаете оставить
+стандартный SDK OpenAI, см. [Миграция с OpenAI](/quickstart#migrating-from-openai).

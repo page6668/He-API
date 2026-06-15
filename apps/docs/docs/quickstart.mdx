@@ -1,0 +1,133 @@
+---
+id: quickstart
+title: Quickstart
+description: Make your first chat.completions call in under 5 minutes.
+sidebar_position: 2
+he_provenance: human
+---
+
+# Quickstart
+
+Get from zero to your first model response in **under 5 minutes**. You will register,
+create an API key, and make a `chat.completions` call with the SDK of your choice.
+
+## 1. Register & create an API key
+
+1. Sign up at **[console.he-api.com](https://console.he-api.com)**.
+2. Open **API Keys** and click **Create key**.
+3. Copy the key — it looks like `he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx`. You will not be able to see it again.
+
+Store the key in an environment variable so it never lands in source control:
+
+```bash
+export HE_API_KEY="he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+
+:::note Base URL & credentials
+The gateway base URL is `https://api.he-api.com/v1`. He-API authenticates with the
+**`HE_API_KEY`** environment variable (the official SDKs do **not** read `OPENAI_API_KEY`).
+:::
+
+## 2. Install an SDK
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<Tabs groupId="sdk">
+  <TabItem value="python" label="Python">
+
+```bash
+pip install he-api
+```
+
+  </TabItem>
+  <TabItem value="typescript" label="TypeScript">
+
+```bash
+npm install @he-api/sdk
+```
+
+  </TabItem>
+  <TabItem value="go" label="Go">
+
+```bash
+go get github.com/he-api/sdk-go
+```
+
+> **Provisional** — the Go SDK (Story 10.4) is not yet released. The module path and
+> client surface are reconciled against 10.4 before publication. See [SDKs → Go](/sdk/go).
+
+  </TabItem>
+</Tabs>
+
+## 3. Make your first call
+
+<Tabs groupId="sdk">
+  <TabItem value="python" label="Python">
+
+```python
+from he_api import Client
+
+client = Client()  # reads base_url + HE_API_KEY from the environment
+
+resp = client.chat.completions.create(
+    model="qwen-max",
+    messages=[{"role": "user", "content": "Say hello in one sentence."}],
+)
+print(resp.choices[0].message.content)
+```
+
+  </TabItem>
+  <TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { Client } from "@he-api/sdk";
+
+const client = new Client(); // baseURL + HE_API_KEY from the environment
+
+const resp = await client.chat.completions.create({
+  model: "qwen-max",
+  messages: [{ role: "user", content: "Say hello in one sentence." }],
+});
+console.log(resp.choices[0].message.content);
+```
+
+  </TabItem>
+  <TabItem value="go" label="Go">
+
+```go
+// Provisional pending Story 10.4 release.
+client := heapi.NewClient() // baseURL + HE_API_KEY from the environment
+
+resp, err := client.Chat.Completions.New(ctx, heapi.ChatCompletionParams{
+    Model:    "qwen-max",
+    Messages: []heapi.Message{{Role: "user", Content: "Say hello in one sentence."}},
+})
+```
+
+  </TabItem>
+</Tabs>
+
+That's it — you have made your first authenticated call through the gateway.
+
+## Migrating from OpenAI {#migrating-from-openai}
+He-API is OpenAI-compatible, so migrating an existing app is a **`base_url` change with
+zero code changes** to your call sites. With the official OpenAI SDK, set the base URL and key:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.he-api.com/v1",   # the only change
+    api_key="he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+)
+# every client.chat.completions / client.embeddings call now flows through He-API
+```
+
+Prefer the [He-API SDKs](/sdk) when you want the gateway defaults (base URL + `HE_API_KEY`)
+and gateway-specific features (routing strategies, A/B compare) wired in for you.
+
+## Next steps
+
+- **[API Reference](/api-reference)** — full endpoint, error-code and response-header details.
+- **[Cookbook](/cookbook)** — streaming, embeddings retrieval, audio, routing / A-B, usage queries.

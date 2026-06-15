@@ -1,0 +1,133 @@
+---
+id: quickstart
+title: البدء السريع
+description: نفّذ أول استدعاء chat.completions في أقل من 5 دقائق.
+sidebar_position: 2
+he_provenance: mt
+---
+
+# البدء السريع
+
+انتقل من الصفر إلى أول استجابة من نموذج في **أقل من 5 دقائق**. ستسجّل حسابًا، وتنشئ مفتاح واجهة،
+وتنفّذ استدعاء `chat.completions` باستخدام الحزمة التي تختارها.
+
+## 1. سجّل وأنشئ مفتاح واجهة
+
+1. سجّل في **[console.he-api.com](https://console.he-api.com)**.
+2. افتح **API Keys** ثم انقر **Create key**.
+3. انسخ المفتاح — يبدو هكذا `he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx`. لن تتمكن من رؤيته مرة أخرى.
+
+خزّن المفتاح في متغيّر بيئة حتى لا يظهر أبدًا في الشيفرة المصدرية:
+
+```bash
+export HE_API_KEY="he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+
+:::note عنوان القاعدة وبيانات الاعتماد
+عنوان قاعدة البوابة هو `https://api.he-api.com/v1`. تُصادِق He-API باستخدام متغيّر البيئة
+**`HE_API_KEY`** (حِزم SDK الرسمية **لا** تقرأ `OPENAI_API_KEY`).
+:::
+
+## 2. ثبّت حزمة SDK
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<Tabs groupId="sdk">
+  <TabItem value="python" label="Python">
+
+```bash
+pip install he-api
+```
+
+  </TabItem>
+  <TabItem value="typescript" label="TypeScript">
+
+```bash
+npm install @he-api/sdk
+```
+
+  </TabItem>
+  <TabItem value="go" label="Go">
+
+```bash
+go get github.com/he-api/sdk-go
+```
+
+> **مبدئي** — حزمة Go (Story 10.4) لم تُصدَر بعد. يُطابَق مسار الوحدة وسطح العميل مع 10.4 قبل
+> النشر. راجع [SDK → Go](/sdk/go).
+
+  </TabItem>
+</Tabs>
+
+## 3. نفّذ أول استدعاء
+
+<Tabs groupId="sdk">
+  <TabItem value="python" label="Python">
+
+```python
+from he_api import Client
+
+client = Client()  # reads base_url + HE_API_KEY from the environment
+
+resp = client.chat.completions.create(
+    model="qwen-max",
+    messages=[{"role": "user", "content": "Say hello in one sentence."}],
+)
+print(resp.choices[0].message.content)
+```
+
+  </TabItem>
+  <TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { Client } from "@he-api/sdk";
+
+const client = new Client(); // baseURL + HE_API_KEY from the environment
+
+const resp = await client.chat.completions.create({
+  model: "qwen-max",
+  messages: [{ role: "user", content: "Say hello in one sentence." }],
+});
+console.log(resp.choices[0].message.content);
+```
+
+  </TabItem>
+  <TabItem value="go" label="Go">
+
+```go
+// Provisional pending Story 10.4 release.
+client := heapi.NewClient() // baseURL + HE_API_KEY from the environment
+
+resp, err := client.Chat.Completions.New(ctx, heapi.ChatCompletionParams{
+    Model:    "qwen-max",
+    Messages: []heapi.Message{{Role: "user", Content: "Say hello in one sentence."}},
+})
+```
+
+  </TabItem>
+</Tabs>
+
+بهذا تكون قد نفّذت أول استدعاء مُصادَق عبر البوابة.
+
+## الانتقال من OpenAI {#migrating-from-openai}
+He-API متوافقة مع OpenAI، لذا فإن نقل تطبيق قائم هو **تغيير في `base_url` دون أي تعديل في الشيفرة**
+عند مواضع الاستدعاء. مع حزمة OpenAI الرسمية، اضبط عنوان القاعدة والمفتاح:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.he-api.com/v1",   # the only change
+    api_key="he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+)
+# every client.chat.completions / client.embeddings call now flows through He-API
+```
+
+فضّل [حِزم He-API SDK](/sdk) عندما تريد إعدادات البوابة الافتراضية (عنوان القاعدة + `HE_API_KEY`)
+وميزات البوابة (إستراتيجيات التوجيه، مقارنة A/B) جاهزة لك.
+
+## الخطوات التالية
+
+- **[مرجع الواجهة](/api-reference)** — تفاصيل كاملة عن المسارات ورموز الأخطاء وترويسات الاستجابة.
+- **[دليل الوصفات](/cookbook)** — البث، استرجاع التضمينات، الصوت، التوجيه / A-B، استعلامات الاستهلاك.

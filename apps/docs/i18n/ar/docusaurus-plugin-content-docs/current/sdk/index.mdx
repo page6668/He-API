@@ -1,0 +1,33 @@
+---
+id: index
+title: حِزم SDK
+description: حِزم SDK رسمية بديلة لـ OpenAI للغات Python و TypeScript و Go.
+sidebar_position: 5
+he_provenance: mt
+---
+
+# حِزم SDK
+
+تقدّم He-API حِزم SDK رسمية بديلة لـ OpenAI (drop-in). تتبنّى كل حزمة عنوان قاعدة البوابة افتراضيًا
+وتقرأ متغيّر البيئة **`HE_API_KEY`**.
+
+| اللغة | التثبيت | الحالة |
+|----------|---------|--------|
+| [Python](/sdk/python) | `pip install he-api` | مُصدَرة |
+| [TypeScript](/sdk/typescript) | `npm install @he-api/sdk` | مُصدَرة |
+| [Go](/sdk/go) | `go get github.com/he-api/sdk-go` | مبدئية (قيد الإصدار) |
+
+```bash
+# Python
+pip install he-api
+
+# TypeScript
+npm install @he-api/sdk
+
+# Go (provisional — pending Story 10.4 release)
+go get github.com/he-api/sdk-go
+```
+
+فضّل حِزم SDK على استبدال `base_url` المجرّد عندما تريد إعدادات البوابة الافتراضية وميزاتها
+(إستراتيجيات التوجيه، مقارنة A/B) جاهزة لك. وإن كنت تفضّل الإبقاء على حزمة OpenAI الأصلية، راجع
+[الانتقال من OpenAI](/quickstart#migrating-from-openai).

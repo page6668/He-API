@@ -1,0 +1,200 @@
+---
+id: api-reference
+title: API リファレンス
+description: OpenAI 互換の /v1/* サーフェス — エンドポイント、エラーコード、レスポンスヘッダー。
+sidebar_position: 3
+he_provenance: mt
+he_source: rest-api-spec.md §5.1
+---
+
+# API リファレンス
+
+He-API は `/v1/*` 配下に **OpenAI 互換** の HTTP サーフェスを公開します。ベース URL は
+`https://api.he-api.com/v1` です。ベアラートークンで認証します：
+
+```
+Authorization: Bearer he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+:::info 信頼できる情報源
+このページは `docs/architecture/rest-api-spec.md` **§5.1**（正規の
+契約）から転記されています。ゲートウェイは OpenAI *互換* であり、いくつかの He 固有の追加事項をインラインで記載しています。
+:::
+
+## エンドポイント
+
+| メソッド | パス | 目的 |
+|--------|------|---------|
+| `POST` | `/v1/chat/completions` | チャット補完（非ストリーミングおよび SSE ストリーミング）。 |
+| `POST` | `/v1/embeddings` | テキスト埋め込み。 |
+| `POST` | `/v1/audio/transcriptions` | 音声テキスト変換（Whisper 互換）。 |
+| `POST` | `/v1/audio/speech` | テキスト音声変換（TTS）。 |
+| `GET`  | `/v1/models` | モデル一覧 + 機能マトリクス。 |
+| `GET`  | `/v1/usage` | 今月の使用量（`?currency=usd|rmb`）。 |
+| `GET`  | `/v1/balance` | アカウント残高（`?currency=usd|rmb`）。 |
+
+---
+
+## POST /v1/chat/completions
+
+チャット補完を作成します。リクエストとレスポンスのボディは OpenAI フォーマットに一致します。
+
+```
+POST /v1/chat/completions
+Authorization: Bearer he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Content-Type: application/json
+Accept: application/json   (or text/event-stream for SSE)
+
+Optional headers:
+  X-He-Routing-Strategy: quality | cost | latency
+  X-He-AB-Models: qwen-max,deepseek-v3   # A/B dual-leg compare (non-streaming only)
+  Accept-Language: en                    # locale for error messages
+```
+
+**リクエストボディ**（OpenAI と同じ）：
+
+```json
+{
+  "model": "qwen-max",
+  "messages": [{ "role": "user", "content": "Hello" }],
+  "stream": false,
+  "temperature": 0.7,
+  "max_tokens": 2048,
+  "tools": [],
+  "tool_choice": "auto",
+  "response_format": { "type": "json_object" }
+}
+```
+
+`model` は具体的なモデル id（`qwen-max`、`deepseek-v3`、…）またはルーターエイリアス
+（`he-router-cost`、`he-router-quality`、…）のいずれかです。
+
+**レスポンス**（成功、非ストリーミング）：
+
+```json
+{
+  "id": "chatcmpl-xxx",
+  "object": "chat.completion",
+  "created": 1715000000,
+  "model": "qwen-max",
+  "choices": [],
+  "usage": { "prompt_tokens": 100, "completion_tokens": 200, "total_tokens": 300 }
+}
+```
+
+### ストリーミング（SSE）
+
+リクエストボディが `"stream": true` を設定すると、レスポンスは `text/event-stream` になります。各
+イベントは `data: <single-line JSON>\n\n` であり、ストリームは OpenAI のイテレータ
+センチネル `data: [DONE]` で終了します：
+
+```text
+Content-Type: text/event-stream; charset=utf-8
+Cache-Control: no-cache, no-transform
+
+data: {"id":"chatcmpl-...","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-...","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hello "},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-...","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: [DONE]
+```
+
+`object` はリテラル `chat.completion.chunk` です。`delta` は最初のチャンクで
+`{"role":"assistant"}`、コンテンツチャンクで `{"content":"..."}`、終端チャンクで `{}` を運びます。
+`finish_reason` は終端チャンクまで `null` で、その後 `"stop"` になります。
+
+### A/B 比較（X-He-AB-Models） {#ab-compare-x-he-ab-models}
+`X-He-AB-Models: modelA,modelB`（正確に 2 つの異なる具体的 id、**非ストリーミング
+のみ**）を送ると、両モデルを並列でディスパッチし、両方の出力を 1 つの
+`chat.completion` で返します。`choices[]` 配列はレグ A の choices に続いてレグ B のものが並び、
+`0,1,…` と再インデックスされ、それぞれがソースレグを示す追加の `x_he_model` フィールドを持ちます。`usage` は
+成功したレグの合計トークンです。
+
+:::caution A/B パスでの X-He-Selected-Model
+A/B パスでは、レスポンスヘッダー `X-He-AB-Models` が提供された id をエコーし、
+**`X-He-Selected-Model` is NOT set**。正確に 1 つのレグが失敗した場合でも、レスポンスは依然として `200`
+で、失敗レグのマーカー choice（`finish_reason: "he_upstream_error"`）を含みます。成功したレグ
+のみが課金されます。両方のレグが失敗した場合は、単一の終端エラーエンベロープが返されます（いずれかのレグが
+タイムアウトした場合は 504、それ以外は 502）。
+:::
+
+---
+
+## POST /v1/embeddings
+
+テキスト埋め込みを作成します。OpenAI 互換のリクエストとレスポンス。
+
+```json
+{ "model": "text-embedding-v3", "input": "The quick brown fox" }
+```
+
+## POST /v1/audio/transcriptions
+
+音声テキスト変換（Whisper 互換）。音声 `file` と `model` を含む `multipart/form-data`。
+
+## POST /v1/audio/speech
+
+テキスト音声変換。指定された `model`、`input`、`voice` に対してバイナリ音声を返します。
+
+## GET /v1/models
+
+モデル一覧とモデルごとの機能マトリクスを返します。公開された認証不要の
+ミラーが `/public/models` で利用できます（バイト単位で同一の形状）。
+
+## GET /v1/usage & GET /v1/balance
+
+今月の使用量と現在の残高をクエリします。どちらも `?currency=usd|rmb` を受け付けます（デフォルトは
+`usd`。それ以外の値 → `400_unsupported_currency`）。通貨換算は**表示のみ**で、
+課金台帳は常に USD です。
+
+---
+
+## レスポンスヘッダー
+
+すべてのチャット補完レスポンスは以下のヘッダーを持ちます：
+
+| ヘッダー | 意味 |
+|--------|---------|
+| `X-He-Request-Id` | リクエスト相関 id（`req_xxxxxxxxxxxx`）— サポートでは必ず引用してください。 |
+| `X-He-Selected-Model` | 実際にルーティングされたモデル。**A/B パスでは設定されません**（上記参照）。 |
+| `X-He-Cost-Usd` | このリクエストの USD でのコスト。 |
+
+---
+
+## エラーコード
+
+すべてのエラーレスポンスは正規の 5 フィールドエンベロープを持ちます：
+
+```json
+{
+  "error": {
+    "code": "402_quota_exhausted",
+    "message": "Insufficient quota.",
+    "type": "invalid_request_error",
+    "param": null,
+    "he_request_id": "req_xxxxxxxxxxxx"
+  }
+}
+```
+
+`type` は 4xx コードでは `invalid_request_error`、5xx コードでは `server_error` です。
+
+| HTTP | `error.code` | 意味 |
+|------|--------------|---------|
+| 400 | `400_invalid_request` | パラメータの形式不正。 |
+| 400 | `400_content_filter` | コンテンツ安全フィルターに抵触。 |
+| 400 | `400_unsupported_currency` | `?currency=` が `{usd, rmb}` に含まれない。 |
+| 401 | `401_invalid_api_key` | キーが無効または失効。 |
+| 402 | `402_balance_insufficient` | アカウント残高が低すぎる。 |
+| 402 | `402_quota_exhausted` | 月間支出上限に到達。 |
+| 403 | `403_ip_not_whitelisted` | 呼び出し元 IP がキーの許可リストにない。 |
+| 403 | `403_model_not_in_scope` | キーが要求されたモデルに対して認可されていない。 |
+| 413 | `413_payload_too_large` | リクエストボディが 1 MiB の上限を超過。 |
+| 429 | `429_rate_limit_qps` | 秒あたりのリクエスト上限を超過。 |
+| 429 | `429_rate_limit_rpm` | 分あたりのリクエスト上限を超過。 |
+| 429 | `429_rate_limit_tpm` | 分あたりの上流トークン上限を超過。 |
+| 500 | `500_internal_error` | 予期しないサーバーエラー。 |
+| 502 | `502_upstream_unavailable` | 上流モデルが利用不可（フェイルオーバー再試行後）。 |
+| 504 | `504_upstream_timeout` | 上流モデルがタイムアウト（フェイルオーバー再試行後）。 |

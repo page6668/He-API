@@ -1,0 +1,95 @@
+schema: 1
+story: "10.5"
+story_title: "文档站（Quickstart + API Reference + Cookbook，10 种语言）"
+gate: "PASS"
+status_reason: >
+  All CI 关口 GREEN under independent re-execution: build (10 locales) + link/anchor
+  gate (onBrokenLinks/Anchors=throw) + completeness gate (4×10, BLOCK/WARN) + anti-drift
+  gate (7 endpoints / 14 error codes / 3 headers + A/B + SSE) + typecheck, and Playwright
+  35 pass / 1 gated-skip (INT-007 Go-content, correctly skip-gated until 10.4 Done; 0
+  "Test not implemented" residue). AC1 + AC2 both VERIFIED (100% coverage, 0 critical / 0
+  high). Architect High Issue honoured (Go content shipped provisional + INT-007 skip).
+  Pure presentation layer — no gateway/proto/DB/SDK change.
+reviewer: "Turing (Test Engineer & Quality Architect)"
+updated: "2026-06-16T01:30:00Z"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "MEDIUM"
+  cached_review_mode: "full_testing"
+  cached_project_type: "web_frontend"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+top_issues: []
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 36
+    passed_count: 35
+    failed_count: 0
+    skipped_count: 1   # INT-007 Go-SDK content, skip-gated until Story 10.4 = Done (Architect High Issue)
+    pass_rate: 100     # of executed (35/35); 1 intentional gated-skip
+    coverage_percentage: 100   # AC1+AC2 fully traced
+    failed_tests: []
+  e2e:
+    executed: true
+    passed: true
+    skipped: false
+    skip_reason: ""
+    scenarios_tested: 35
+    scenarios_passed: 35
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: ""   # no issues found — no evidence dir needed
+  issues: []
+
+risk_assessment:
+  risk_level: MEDIUM
+  review_mode: full_testing
+  complexity_count: 2
+  security_sensitive: false
+  dev_gate_score: 97
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 0 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "Go-SDK content (Quickstart Go tab + /sdk/go) ships PROVISIONAL pending Story 10.4 = Done; reconcile module path (github.com/he-api/sdk-go) + client surface (heapi.NewClient) and un-skip INT-007 when 10.4 lands. Architect High Issue, fix-forward (non-blocking)."
+      - "Full prose proofreading of the 7 MT locales (ja/ko/es/fr/de/pt/ru) deferred to Story 10.7 上线检查表 per OQ-10.5-4; completeness gate emits non-blocking WARNING tracking them."
+      - "Production docs.he-api.com DNS cutover + monitoring → Story 10.7 (OQ-10.5-2); this story ships buildable + staging-accessible static-export, satisfying AC1 可访问."
+
+evidence_summary:
+  tests_reviewed: 36
+  trace:
+    ac_covered: [1, 2]
+    ac_gaps: []
+
+nfr_validation:
+  security: { status: PASS, notes: "Public docs, no auth/PII; static SSG; no new attack surface." }
+  performance: { status: PASS, notes: "Static SSG export, CDN-cacheable (not no-store); build 10 locales SUCCESS." }
+  reliability: { status: PASS, notes: "Link/anchor + completeness + anti-drift gates bite (negative tests confirm); en-fallback wired." }
+  maintainability: { status: PASS, notes: "Anti-drift gate reads real rest-api-spec.md §5.1 SoT; no contract duplication." }
+
+history:
+  - at: "2026-06-16T01:30:00Z"
+    gate: PASS
+    note: "Round 1 — independent build+gates+Playwright all GREEN (35/1 gated-skip); AC1+AC2 100% verified; 0 critical/high."

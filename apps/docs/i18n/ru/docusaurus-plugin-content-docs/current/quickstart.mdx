@@ -1,0 +1,133 @@
+---
+id: quickstart
+title: Быстрый старт
+description: Сделайте свой первый вызов chat.completions менее чем за 5 минут.
+sidebar_position: 2
+he_provenance: mt
+---
+
+# Быстрый старт
+
+Пройдите путь от нуля до своего первого ответа модели **менее чем за 5 минут**. Вы зарегистрируетесь,
+создадите API-ключ и сделаете вызов `chat.completions` с помощью SDK по вашему выбору.
+
+## 1. Регистрация и создание API-ключа
+
+1. Зарегистрируйтесь на **[console.he-api.com](https://console.he-api.com)**.
+2. Откройте **API Keys** и нажмите **Create key**.
+3. Скопируйте ключ — он выглядит как `he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx`. Вы больше не сможете его увидеть.
+
+Сохраните ключ в переменной окружения, чтобы он никогда не попал в систему контроля версий:
+
+```bash
+export HE_API_KEY="he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+
+:::note Базовый URL и учётные данные
+Базовый URL шлюза — `https://api.he-api.com/v1`. He-API аутентифицируется с помощью
+переменной окружения **`HE_API_KEY`** (официальные SDK **не** читают `OPENAI_API_KEY`).
+:::
+
+## 2. Установка SDK
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<Tabs groupId="sdk">
+  <TabItem value="python" label="Python">
+
+```bash
+pip install he-api
+```
+
+  </TabItem>
+  <TabItem value="typescript" label="TypeScript">
+
+```bash
+npm install @he-api/sdk
+```
+
+  </TabItem>
+  <TabItem value="go" label="Go">
+
+```bash
+go get github.com/he-api/sdk-go
+```
+
+> **Предварительно** — Go SDK (Story 10.4) ещё не выпущен. Путь модуля и
+> поверхность клиента согласовываются с 10.4 перед публикацией. См. [SDK → Go](/sdk/go).
+
+  </TabItem>
+</Tabs>
+
+## 3. Сделайте свой первый вызов
+
+<Tabs groupId="sdk">
+  <TabItem value="python" label="Python">
+
+```python
+from he_api import Client
+
+client = Client()  # reads base_url + HE_API_KEY from the environment
+
+resp = client.chat.completions.create(
+    model="qwen-max",
+    messages=[{"role": "user", "content": "Say hello in one sentence."}],
+)
+print(resp.choices[0].message.content)
+```
+
+  </TabItem>
+  <TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { Client } from "@he-api/sdk";
+
+const client = new Client(); // baseURL + HE_API_KEY from the environment
+
+const resp = await client.chat.completions.create({
+  model: "qwen-max",
+  messages: [{ role: "user", content: "Say hello in one sentence." }],
+});
+console.log(resp.choices[0].message.content);
+```
+
+  </TabItem>
+  <TabItem value="go" label="Go">
+
+```go
+// Provisional pending Story 10.4 release.
+client := heapi.NewClient() // baseURL + HE_API_KEY from the environment
+
+resp, err := client.Chat.Completions.New(ctx, heapi.ChatCompletionParams{
+    Model:    "qwen-max",
+    Messages: []heapi.Message{{Role: "user", Content: "Say hello in one sentence."}},
+})
+```
+
+  </TabItem>
+</Tabs>
+
+Вот и всё — вы сделали свой первый аутентифицированный вызов через шлюз.
+
+## Миграция с OpenAI {#migrating-from-openai}
+He-API совместим с OpenAI, поэтому миграция существующего приложения — это **изменение `base_url` с
+нулевыми изменениями кода** в местах вызовов. С официальным SDK OpenAI задайте базовый URL и ключ:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.he-api.com/v1",   # the only change
+    api_key="he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+)
+# every client.chat.completions / client.embeddings call now flows through He-API
+```
+
+Предпочитайте [SDK He-API](/sdk), когда хотите, чтобы значения по умолчанию шлюза (базовый URL + `HE_API_KEY`)
+и специфичные для шлюза функции (стратегии маршрутизации, A/B-сравнение) были подключены за вас.
+
+## Дальнейшие шаги
+
+- **[Справочник API](/api-reference)** — полные сведения о конечных точках, кодах ошибок и заголовках ответов.
+- **[Сборник рецептов](/cookbook)** — потоковая передача, поиск через эмбеддинги, аудио, маршрутизация / A-B, запросы использования.

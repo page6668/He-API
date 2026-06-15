@@ -58,7 +58,14 @@ he-api/                                  (Monorepo, Turborepo)
 │   │   ├── public/
 │   │   ├── package.json
 │   │   └── next.config.mjs
-│   └── docs/                            Mintlify 或 Docusaurus
+│   └── docs/                            文档站 (@he-api/docs, Docusaurus 3.x) — 已落地 (Story 10.5；原"预留 Mintlify 或 Docusaurus")
+│       ├── docs/                        en 权威源 MDX (intro/quickstart/api-reference/cookbook/sdk/*)
+│       ├── i18n/{locale}/...            9 个非默认 locale 内容树 (zh-CN human · ar proofed · 7 langs MT-seeded)
+│       ├── src/css/custom.css           主题 + RTL LTR-island (rtl:ignore)
+│       ├── scripts/                     check-docs-completeness.ts · check-api-ref-drift.ts (CI gates)
+│       ├── e2e/                         Playwright (36 scenarios, 1 gated-skip)
+│       ├── docusaurus.config.ts · sidebars.ts · playwright.config.ts
+│       └── package.json                 (@he-api/docs, private:true — 不发布)
 ├── packages/
 │   ├── proto/                           protobuf definitions (用 Buf 管理)
 │   │   ├── he/<domain>/v1/<service>.proto    (Buf module 主路径, domain-based versioning)

@@ -1,0 +1,133 @@
+---
+id: quickstart
+title: Schnellstart
+description: Führen Sie Ihren ersten chat.completions-Aufruf in unter 5 Minuten durch.
+sidebar_position: 2
+he_provenance: mt
+---
+
+# Schnellstart
+
+Kommen Sie von null zu Ihrer ersten Modellantwort in **unter 5 Minuten**. Sie registrieren sich,
+erstellen einen API-Schlüssel und führen einen `chat.completions`-Aufruf mit dem SDK Ihrer Wahl durch.
+
+## 1. Registrieren & einen API-Schlüssel erstellen
+
+1. Melden Sie sich an unter **[console.he-api.com](https://console.he-api.com)**.
+2. Öffnen Sie **API Keys** und klicken Sie auf **Create key**.
+3. Kopieren Sie den Schlüssel — er sieht aus wie `he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx`. Sie werden ihn nicht erneut sehen können.
+
+Speichern Sie den Schlüssel in einer Umgebungsvariablen, damit er niemals in die Versionskontrolle gelangt:
+
+```bash
+export HE_API_KEY="he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+
+:::note Basis-URL & Anmeldedaten
+Die Gateway-Basis-URL ist `https://api.he-api.com/v1`. He-API authentifiziert sich mit der
+Umgebungsvariablen **`HE_API_KEY`** (die offiziellen SDKs lesen **nicht** `OPENAI_API_KEY`).
+:::
+
+## 2. Ein SDK installieren
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<Tabs groupId="sdk">
+  <TabItem value="python" label="Python">
+
+```bash
+pip install he-api
+```
+
+  </TabItem>
+  <TabItem value="typescript" label="TypeScript">
+
+```bash
+npm install @he-api/sdk
+```
+
+  </TabItem>
+  <TabItem value="go" label="Go">
+
+```bash
+go get github.com/he-api/sdk-go
+```
+
+> **Vorläufig** — das Go-SDK (Story 10.4) ist noch nicht veröffentlicht. Der Modulpfad und
+> die Client-Oberfläche werden vor der Veröffentlichung gegen 10.4 abgeglichen. Siehe [SDKs → Go](/sdk/go).
+
+  </TabItem>
+</Tabs>
+
+## 3. Ihren ersten Aufruf durchführen
+
+<Tabs groupId="sdk">
+  <TabItem value="python" label="Python">
+
+```python
+from he_api import Client
+
+client = Client()  # reads base_url + HE_API_KEY from the environment
+
+resp = client.chat.completions.create(
+    model="qwen-max",
+    messages=[{"role": "user", "content": "Say hello in one sentence."}],
+)
+print(resp.choices[0].message.content)
+```
+
+  </TabItem>
+  <TabItem value="typescript" label="TypeScript">
+
+```typescript
+import { Client } from "@he-api/sdk";
+
+const client = new Client(); // baseURL + HE_API_KEY from the environment
+
+const resp = await client.chat.completions.create({
+  model: "qwen-max",
+  messages: [{ role: "user", content: "Say hello in one sentence." }],
+});
+console.log(resp.choices[0].message.content);
+```
+
+  </TabItem>
+  <TabItem value="go" label="Go">
+
+```go
+// Provisional pending Story 10.4 release.
+client := heapi.NewClient() // baseURL + HE_API_KEY from the environment
+
+resp, err := client.Chat.Completions.New(ctx, heapi.ChatCompletionParams{
+    Model:    "qwen-max",
+    Messages: []heapi.Message{{Role: "user", Content: "Say hello in one sentence."}},
+})
+```
+
+  </TabItem>
+</Tabs>
+
+Das war's — Sie haben Ihren ersten authentifizierten Aufruf über das Gateway durchgeführt.
+
+## Migration von OpenAI {#migrating-from-openai}
+He-API ist OpenAI-kompatibel, sodass die Migration einer bestehenden Anwendung eine **`base_url`-Änderung mit
+null Codeänderungen** an Ihren Aufrufstellen ist. Setzen Sie mit dem offiziellen OpenAI-SDK die Basis-URL und den Schlüssel:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.he-api.com/v1",   # the only change
+    api_key="he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+)
+# every client.chat.completions / client.embeddings call now flows through He-API
+```
+
+Bevorzugen Sie die [He-API-SDKs](/sdk), wenn Sie die Gateway-Standardwerte (Basis-URL + `HE_API_KEY`)
+und gateway-spezifische Funktionen (Routing-Strategien, A/B-Vergleich) für Sie verdrahtet haben möchten.
+
+## Nächste Schritte
+
+- **[API-Referenz](/api-reference)** — vollständige Details zu Endpunkten, Fehlercodes und Antwort-Headern.
+- **[Kochbuch](/cookbook)** — Streaming, Embeddings-Retrieval, Audio, Routing / A-B, Nutzungsabfragen.

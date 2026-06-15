@@ -1,0 +1,39 @@
+---
+id: intro
+title: Documentación de He-API
+description: Pasarela de LLM compatible con OpenAI — cambio directo de base_url, una clave, muchos modelos.
+slug: /
+sidebar_position: 1
+he_provenance: mt
+---
+
+# He-API
+
+**He-API** es una pasarela de LLM compatible con OpenAI. Apunta tu código existente de OpenAI a
+He-API cambiando una sola cosa — el `base_url` — y alcanza muchos modelos upstream
+a través de una única clave de API, con el enrutamiento, la medición de uso y la facturación gestionados por ti.
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.he-api.com/v1",   # the only change
+    api_key="he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+)
+```
+
+## Por dónde empezar
+
+- **[Inicio rápido](/quickstart)** — pon en marcha una primera llamada a `chat.completions` en menos de 5 minutos.
+- **[Referencia de la API](/api-reference)** — la superficie `/v1/*` compatible con OpenAI: endpoints, códigos de error, cabeceras de respuesta.
+- **[Recetario](/cookbook)** — recetas orientadas a tareas, listas para copiar y pegar: streaming, recuperación con embeddings, audio, enrutamiento / A-B, uso.
+- **[SDKs](/sdk)** — SDKs oficiales de reemplazo directo para Python, TypeScript y Go.
+
+## Qué obtienes
+
+- **Compatibilidad directa.** Los endpoints `/v1/chat/completions`, `/v1/embeddings`, `/v1/audio/*`
+  y `/v1/models` coinciden con el formato de cable de OpenAI, por lo que los SDKs y herramientas existentes funcionan sin cambios.
+- **Una clave, muchos modelos.** Llama a modelos concretos (`qwen-max`, `deepseek-v3`, …) o
+  deja que una estrategia de enrutamiento elija por ti (`he-router-quality`, `he-router-cost`).
+- **Medición y facturación integradas.** Cada respuesta lleva `X-He-Request-Id`,
+  `X-He-Selected-Model` y `X-He-Cost-Usd` para que puedas rastrear y contabilizar el gasto.

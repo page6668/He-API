@@ -1,0 +1,33 @@
+---
+id: index
+title: SDKs
+description: SDKs oficiales de reemplazo directo de OpenAI para Python, TypeScript y Go.
+sidebar_position: 5
+he_provenance: mt
+---
+
+# SDKs
+
+He-API ofrece SDKs oficiales de reemplazo directo de OpenAI. Cada uno toma por defecto la URL base
+de la pasarela y lee la variable de entorno **`HE_API_KEY`**.
+
+| Lenguaje | Instalación | Estado |
+|----------|-------------|--------|
+| [Python](/sdk/python) | `pip install he-api` | Publicado |
+| [TypeScript](/sdk/typescript) | `npm install @he-api/sdk` | Publicado |
+| [Go](/sdk/go) | `go get github.com/he-api/sdk-go` | Provisional (pendiente de publicación) |
+
+```bash
+# Python
+pip install he-api
+
+# TypeScript
+npm install @he-api/sdk
+
+# Go (provisional — pending Story 10.4 release)
+go get github.com/he-api/sdk-go
+```
+
+Prefiere los SDKs frente a un simple cambio de `base_url` cuando quieras los valores predeterminados de la pasarela y
+las funciones específicas de la pasarela (estrategias de enrutamiento, comparación A/B) ya conectadas. Si prefieres mantener
+el SDK estándar de OpenAI, consulta [Migrar desde OpenAI](/quickstart#migrating-from-openai).

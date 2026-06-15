@@ -1,0 +1,33 @@
+---
+id: index
+title: SDK
+description: Python、TypeScript、Go 向けの公式ドロップイン OpenAI 置き換え SDK。
+sidebar_position: 5
+he_provenance: mt
+---
+
+# SDK
+
+He-API は公式のドロップイン OpenAI 置き換え SDK を提供します。各 SDK はゲートウェイのベース
+URL をデフォルトとし、**`HE_API_KEY`** 環境変数を読み取ります。
+
+| 言語 | インストール | ステータス |
+|----------|---------|--------|
+| [Python](/sdk/python) | `pip install he-api` | リリース済み |
+| [TypeScript](/sdk/typescript) | `npm install @he-api/sdk` | リリース済み |
+| [Go](/sdk/go) | `go get github.com/he-api/sdk-go` | 暫定（リリース待ち） |
+
+```bash
+# Python
+pip install he-api
+
+# TypeScript
+npm install @he-api/sdk
+
+# Go (provisional — pending Story 10.4 release)
+go get github.com/he-api/sdk-go
+```
+
+ゲートウェイのデフォルトやゲートウェイ固有の機能（ルーティング戦略、A/B 比較）を組み込んで
+使いたい場合は、素の `base_url` 差し替えよりも SDK をお勧めします。標準の OpenAI SDK を
+そのまま使いたい場合は、[OpenAI からの移行](/quickstart#migrating-from-openai) を参照してください。

@@ -1,0 +1,33 @@
+---
+id: index
+title: SDK
+description: 面向 Python、TypeScript 与 Go 的官方 drop-in OpenAI 替代 SDK。
+sidebar_position: 5
+he_provenance: human
+---
+
+# SDK
+
+He-API 提供官方的、drop-in OpenAI 替代 SDK。每个 SDK 默认接入网关 base URL，并读取 **`HE_API_KEY`**
+环境变量。
+
+| 语言 | 安装 | 状态 |
+|----------|---------|--------|
+| [Python](/sdk/python) | `pip install he-api` | 已发布 |
+| [TypeScript](/sdk/typescript) | `npm install @he-api/sdk` | 已发布 |
+| [Go](/sdk/go) | `go get github.com/he-api/sdk-go` | 预备版（待发布） |
+
+```bash
+# Python
+pip install he-api
+
+# TypeScript
+npm install @he-api/sdk
+
+# Go (provisional — pending Story 10.4 release)
+go get github.com/he-api/sdk-go
+```
+
+当你希望默认接入网关并直接获得网关特性（路由策略、A/B 对比）时，推荐使用 SDK 而非裸的
+`base_url` 替换。若你更倾向于沿用原生 OpenAI SDK，请参阅
+[从 OpenAI 迁移](/quickstart#migrating-from-openai)。

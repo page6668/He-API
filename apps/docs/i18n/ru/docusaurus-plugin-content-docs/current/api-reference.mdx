@@ -1,0 +1,200 @@
+---
+id: api-reference
+title: Справочник API
+description: OpenAI-совместимая поверхность /v1/* — конечные точки, коды ошибок, заголовки ответов.
+sidebar_position: 3
+he_provenance: mt
+he_source: rest-api-spec.md §5.1
+---
+
+# Справочник API
+
+He-API предоставляет **OpenAI-совместимую** HTTP-поверхность под `/v1/*`. Базовый URL —
+`https://api.he-api.com/v1`. Аутентифицируйтесь с помощью bearer-токена:
+
+```
+Authorization: Bearer he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+:::info Источник истины
+Эта страница переписана из `docs/architecture/rest-api-spec.md` **§5.1** (канонический
+контракт). Шлюз является OpenAI-*совместимым* с несколькими специфичными для He дополнениями, отмеченными по тексту.
+:::
+
+## Конечные точки
+
+| Метод | Путь | Назначение |
+|--------|------|---------|
+| `POST` | `/v1/chat/completions` | Завершения чата (без потоковой передачи и потоковая SSE). |
+| `POST` | `/v1/embeddings` | Текстовые эмбеддинги. |
+| `POST` | `/v1/audio/transcriptions` | Речь в текст (Whisper-совместимый). |
+| `POST` | `/v1/audio/speech` | Текст в речь (TTS). |
+| `GET`  | `/v1/models` | Список моделей + матрица возможностей. |
+| `GET`  | `/v1/usage` | Использование за текущий месяц (`?currency=usd|rmb`). |
+| `GET`  | `/v1/balance` | Баланс счёта (`?currency=usd|rmb`). |
+
+---
+
+## POST /v1/chat/completions
+
+Создать завершение чата. Тела запроса и ответа соответствуют формату OpenAI.
+
+```
+POST /v1/chat/completions
+Authorization: Bearer he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Content-Type: application/json
+Accept: application/json   (or text/event-stream for SSE)
+
+Optional headers:
+  X-He-Routing-Strategy: quality | cost | latency
+  X-He-AB-Models: qwen-max,deepseek-v3   # A/B dual-leg compare (non-streaming only)
+  Accept-Language: en                    # locale for error messages
+```
+
+**Тело запроса** (так же, как у OpenAI):
+
+```json
+{
+  "model": "qwen-max",
+  "messages": [{ "role": "user", "content": "Hello" }],
+  "stream": false,
+  "temperature": 0.7,
+  "max_tokens": 2048,
+  "tools": [],
+  "tool_choice": "auto",
+  "response_format": { "type": "json_object" }
+}
+```
+
+`model` может быть конкретным идентификатором модели (`qwen-max`, `deepseek-v3`, …) или псевдонимом маршрутизатора
+(`he-router-cost`, `he-router-quality`, …).
+
+**Ответ** (успех, без потоковой передачи):
+
+```json
+{
+  "id": "chatcmpl-xxx",
+  "object": "chat.completion",
+  "created": 1715000000,
+  "model": "qwen-max",
+  "choices": [],
+  "usage": { "prompt_tokens": 100, "completion_tokens": 200, "total_tokens": 300 }
+}
+```
+
+### Потоковая передача (SSE)
+
+Когда тело запроса устанавливает `"stream": true`, ответ имеет тип `text/event-stream`. Каждое
+событие — это `data: <single-line JSON>\n\n`; поток завершается итераторным
+маркером OpenAI `data: [DONE]`:
+
+```text
+Content-Type: text/event-stream; charset=utf-8
+Cache-Control: no-cache, no-transform
+
+data: {"id":"chatcmpl-...","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-...","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hello "},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-...","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: [DONE]
+```
+
+`object` — это литерал `chat.completion.chunk`; `delta` несёт `{"role":"assistant"}` в
+первом чанке, `{"content":"..."}` в чанках содержимого и `{}` в завершающем чанке;
+`finish_reason` равен `null` до завершающего чанка, затем `"stop"`.
+
+### A/B-сравнение (X-He-AB-Models) {#ab-compare-x-he-ab-models}
+Отправка `X-He-AB-Models: modelA,modelB` (ровно два различных конкретных идентификатора, **только без
+потоковой передачи**) диспетчеризует обе модели параллельно и возвращает оба вывода в одном
+`chat.completion`. Массив `choices[]` — это выборы плеча A, за которыми следуют выборы плеча B, переиндексированные
+`0,1,…`, каждый несёт дополнительное поле `x_he_model`, называющее своё исходное плечо; `usage` — это
+суммарные токены успешных плеч.
+
+:::caution X-He-Selected-Model на пути A/B
+На пути A/B заголовок ответа `X-He-AB-Models` отражает обслуженные идентификаторы, а
+**`X-He-Selected-Model` is NOT set**. Если ровно одно плечо сбоит, ответ всё равно `200`
+с маркерным выбором сбойного плеча (`finish_reason: "he_upstream_error"`); биллингу подлежат только успешные плечи.
+Если оба плеча сбоят, возвращается единый завершающий конверт ошибки (504, если любое плечо
+истекло по тайм-ауту, иначе 502).
+:::
+
+---
+
+## POST /v1/embeddings
+
+Создать текстовые эмбеддинги. OpenAI-совместимые запрос и ответ.
+
+```json
+{ "model": "text-embedding-v3", "input": "The quick brown fox" }
+```
+
+## POST /v1/audio/transcriptions
+
+Речь в текст (Whisper-совместимый). `multipart/form-data` с аудио `file` и `model`.
+
+## POST /v1/audio/speech
+
+Текст в речь. Возвращает бинарное аудио для заданных `model`, `input` и `voice`.
+
+## GET /v1/models
+
+Возвращает список моделей плюс матрицу возможностей для каждой модели. Публичное, неаутентифицированное
+зеркало доступно по адресу `/public/models` (побайтово идентичная форма).
+
+## GET /v1/usage и GET /v1/balance
+
+Запрос использования за текущий месяц и текущего баланса. Оба принимают `?currency=usd|rmb` (по умолчанию
+`usd`; любое другое значение → `400_unsupported_currency`). Конвертация валют **только для отображения** —
+учётная книга биллинга всегда в USD.
+
+---
+
+## Заголовки ответов
+
+Каждый ответ завершения чата несёт следующие заголовки:
+
+| Заголовок | Значение |
+|--------|---------|
+| `X-He-Request-Id` | Идентификатор корреляции запроса (`req_xxxxxxxxxxxx`) — указывайте его для поддержки. |
+| `X-He-Selected-Model` | Модель, на которую фактически выполнена маршрутизация. **Not set on the A/B path** (см. выше). |
+| `X-He-Cost-Usd` | Стоимость этого запроса в USD. |
+
+---
+
+## Коды ошибок
+
+Каждый ответ об ошибке несёт канонический конверт из 5 полей:
+
+```json
+{
+  "error": {
+    "code": "402_quota_exhausted",
+    "message": "Insufficient quota.",
+    "type": "invalid_request_error",
+    "param": null,
+    "he_request_id": "req_xxxxxxxxxxxx"
+  }
+}
+```
+
+`type` равен `invalid_request_error` для кодов 4xx и `server_error` для кодов 5xx.
+
+| HTTP | `error.code` | Значение |
+|------|--------------|---------|
+| 400 | `400_invalid_request` | Некорректные параметры. |
+| 400 | `400_content_filter` | Сработал фильтр безопасности контента. |
+| 400 | `400_unsupported_currency` | `?currency=` не входит в `{usd, rmb}`. |
+| 401 | `401_invalid_api_key` | Ключ недействителен или отозван. |
+| 402 | `402_balance_insufficient` | Слишком низкий баланс счёта. |
+| 402 | `402_quota_exhausted` | Достигнут месячный лимит расходов. |
+| 403 | `403_ip_not_whitelisted` | IP вызывающей стороны не в списке разрешённых для ключа. |
+| 403 | `403_model_not_in_scope` | Ключ не авторизован для запрошенной модели. |
+| 413 | `413_payload_too_large` | Тело запроса превышает лимит 1 MiB. |
+| 429 | `429_rate_limit_qps` | Превышен лимит запросов в секунду. |
+| 429 | `429_rate_limit_rpm` | Превышен лимит запросов в минуту. |
+| 429 | `429_rate_limit_tpm` | Превышен лимит вышестоящих токенов в минуту. |
+| 500 | `500_internal_error` | Непредвиденная ошибка сервера. |
+| 502 | `502_upstream_unavailable` | Вышестоящая модель недоступна (после повторов отказоустойчивости). |
+| 504 | `504_upstream_timeout` | Вышестоящая модель истекла по тайм-ауту (после повторов отказоустойчивости). |

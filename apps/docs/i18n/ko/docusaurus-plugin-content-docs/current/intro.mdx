@@ -1,0 +1,39 @@
+---
+id: intro
+title: He-API 문서
+description: OpenAI 호환 LLM 게이트웨이 — base_url만 교체하는 드롭인 방식, 키 하나로 여러 모델.
+slug: /
+sidebar_position: 1
+he_provenance: mt
+---
+
+# He-API
+
+**He-API**는 OpenAI 호환 LLM 게이트웨이입니다. 기존 OpenAI 코드에서 단 한 가지,
+`base_url`만 변경하여 He-API를 가리키게 하면, 단일 API 키로 여러 업스트림 모델에
+접근할 수 있으며 라우팅, 사용량 측정, 청구는 자동으로 처리됩니다.
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.he-api.com/v1",   # the only change
+    api_key="he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+)
+```
+
+## 어디서 시작할까요
+
+- **[빠른 시작](/quickstart)** — 5분 이내에 첫 `chat.completions` 호출을 작동시키세요.
+- **[API 레퍼런스](/api-reference)** — OpenAI 호환 `/v1/*` 표면: 엔드포인트, 오류 코드, 응답 헤더.
+- **[쿡북](/cookbook)** — 작업 지향적이고 복사-붙여넣기 가능한 레시피: 스트리밍, 임베딩 검색, 오디오, 라우팅 / A-B, 사용량.
+- **[SDK](/sdk)** — Python, TypeScript, Go용 공식 드롭인 SDK.
+
+## 무엇을 얻나요
+
+- **드롭인 호환성.** `/v1/chat/completions`, `/v1/embeddings`, `/v1/audio/*`,
+  `/v1/models` 엔드포인트는 OpenAI 와이어 포맷과 일치하므로 기존 SDK와 도구가 변경 없이 작동합니다.
+- **키 하나, 여러 모델.** 구체적인 모델(`qwen-max`, `deepseek-v3`, …)을 호출하거나
+  라우팅 전략이 대신 선택하도록 맡길 수 있습니다(`he-router-quality`, `he-router-cost`).
+- **내장 측정 및 청구.** 모든 응답에는 `X-He-Request-Id`,
+  `X-He-Selected-Model`, `X-He-Cost-Usd`가 포함되어 지출을 추적하고 정산할 수 있습니다.

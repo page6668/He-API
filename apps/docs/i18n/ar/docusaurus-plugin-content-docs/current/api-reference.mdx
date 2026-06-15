@@ -1,0 +1,196 @@
+---
+id: api-reference
+title: مرجع الواجهة
+description: سطح /v1/* المتوافق مع OpenAI — المسارات ورموز الأخطاء وترويسات الاستجابة.
+sidebar_position: 3
+he_provenance: mt
+he_source: rest-api-spec.md §5.1
+---
+
+# مرجع الواجهة
+
+تكشف He-API سطح HTTP **متوافقًا مع OpenAI** تحت `/v1/*`. عنوان القاعدة هو
+`https://api.he-api.com/v1`. صادِق باستخدام رمز bearer:
+
+```
+Authorization: Bearer he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+:::info مصدر الحقيقة
+هذه الصفحة منسوخة من `docs/architecture/rest-api-spec.md` **§5.1** (العقد المرجعي). البوابة متوافقة
+مع OpenAI مع بعض الإضافات الخاصة بـ He، مُشار إليها داخل النص.
+:::
+
+## المسارات
+
+| الطريقة | المسار | الغرض |
+|--------|------|---------|
+| `POST` | `/v1/chat/completions` | إكمال المحادثة (غير متدفّق ومتدفّق SSE). |
+| `POST` | `/v1/embeddings` | تضمينات نصية. |
+| `POST` | `/v1/audio/transcriptions` | تحويل الكلام إلى نص (متوافق مع Whisper). |
+| `POST` | `/v1/audio/speech` | تحويل النص إلى كلام (TTS). |
+| `GET`  | `/v1/models` | قائمة النماذج + مصفوفة القدرات. |
+| `GET`  | `/v1/usage` | استهلاك هذا الشهر (`?currency=usd|rmb`). |
+| `GET`  | `/v1/balance` | رصيد الحساب (`?currency=usd|rmb`). |
+
+---
+
+## POST /v1/chat/completions
+
+أنشئ إكمال محادثة. يطابق جسم الطلب والاستجابة صيغة OpenAI.
+
+```
+POST /v1/chat/completions
+Authorization: Bearer he-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Content-Type: application/json
+Accept: application/json   (or text/event-stream for SSE)
+
+Optional headers:
+  X-He-Routing-Strategy: quality | cost | latency
+  X-He-AB-Models: qwen-max,deepseek-v3   # A/B dual-leg compare (non-streaming only)
+  Accept-Language: en                    # locale for error messages
+```
+
+**جسم الطلب** (مطابق لـ OpenAI):
+
+```json
+{
+  "model": "qwen-max",
+  "messages": [{ "role": "user", "content": "Hello" }],
+  "stream": false,
+  "temperature": 0.7,
+  "max_tokens": 2048,
+  "tools": [],
+  "tool_choice": "auto",
+  "response_format": { "type": "json_object" }
+}
+```
+
+يمكن أن يكون `model` معرّف نموذج محدّدًا (`qwen-max` و `deepseek-v3` …) أو اسمًا بديلًا للموجّه
+(`he-router-cost` و `he-router-quality` …).
+
+**الاستجابة** (نجاح، غير متدفّق):
+
+```json
+{
+  "id": "chatcmpl-xxx",
+  "object": "chat.completion",
+  "created": 1715000000,
+  "model": "qwen-max",
+  "choices": [],
+  "usage": { "prompt_tokens": 100, "completion_tokens": 200, "total_tokens": 300 }
+}
+```
+
+### البث (SSE)
+
+عندما يضبط جسم الطلب `"stream": true`، تكون الاستجابة `text/event-stream`. كل حدث هو
+`data: <single-line JSON>\n\n`؛ ينتهي البث بعلامة مُكرِّر OpenAI `data: [DONE]`:
+
+```text
+Content-Type: text/event-stream; charset=utf-8
+Cache-Control: no-cache, no-transform
+
+data: {"id":"chatcmpl-...","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-...","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hello "},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-...","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: [DONE]
+```
+
+`object` هو القيمة الحرفية `chat.completion.chunk`؛ يحمل `delta` القيمة `{"role":"assistant"}` في
+أول مقطع، و`{"content":"..."}` في مقاطع المحتوى، و`{}` في المقطع النهائي؛ ويكون `finish_reason`
+بقيمة `null` حتى المقطع النهائي ثم `"stop"`.
+
+### مقارنة A/B (X-He-AB-Models) {#ab-compare-x-he-ab-models}
+إرسال `X-He-AB-Models: modelA,modelB` (معرّفان محدّدان متمايزان تمامًا، **غير متدفّق فقط**) يُرسل
+النموذجين بالتوازي ويعيد كلا الناتجين في `chat.completion` واحد. مصفوفة `choices[]` هي اختيارات
+المسار A تتبعها اختيارات المسار B، مُعاد ترقيمها `0,1,…`، ويحمل كل اختيار حقلًا إضافيًا `x_he_model`
+يحدّد مساره المصدر؛ و`usage` هو مجموع الرموز للمسارات الناجحة.
+
+:::caution X-He-Selected-Model على مسار A/B
+على مسار A/B، تعكس ترويسة الاستجابة `X-He-AB-Models` المعرّفات المُقدَّمة، و
+**`X-He-Selected-Model` is NOT set**. إذا فشل مسار واحد بالضبط، تبقى الاستجابة `200` مع اختيار
+علامة لمسار فاشل (`finish_reason: "he_upstream_error"`)؛ وتُفوتَر المسارات الناجحة فقط. إذا فشل
+المساران معًا، يُعاد غلاف خطأ نهائي واحد (504 إذا انتهت مهلة أي مسار، وإلا 502).
+:::
+
+---
+
+## POST /v1/embeddings
+
+أنشئ تضمينات نصية. الطلب والاستجابة متوافقان مع OpenAI.
+
+```json
+{ "model": "text-embedding-v3", "input": "The quick brown fox" }
+```
+
+## POST /v1/audio/transcriptions
+
+تحويل الكلام إلى نص (متوافق مع Whisper). `multipart/form-data` مع ملف `file` صوتي و`model`.
+
+## POST /v1/audio/speech
+
+تحويل النص إلى كلام. يعيد صوتًا ثنائيًا للقيم `model` و`input` و`voice`.
+
+## GET /v1/models
+
+تعيد قائمة النماذج مع مصفوفة قدرات لكل نموذج. تتوفّر نسخة عامة دون مصادقة على `/public/models`
+(بنفس الشكل بايتًا ببايت).
+
+## GET /v1/usage و GET /v1/balance
+
+استعلم عن استهلاك هذا الشهر والرصيد الحالي. يقبل كلاهما `?currency=usd|rmb` (الافتراضي `usd`؛ أي
+قيمة أخرى → `400_unsupported_currency`). تحويل العملة **للعرض فقط** — دفتر الفوترة دائمًا بالدولار.
+
+---
+
+## ترويسات الاستجابة
+
+تحمل كل استجابة إكمال محادثة هذه الترويسات:
+
+| الترويسة | المعنى |
+|--------|---------|
+| `X-He-Request-Id` | معرّف ربط الطلب (`req_xxxxxxxxxxxx`) — اذكره للدعم. |
+| `X-He-Selected-Model` | النموذج الذي وُجّه إليه فعليًا. **غير مضبوط على مسار A/B** (انظر أعلاه). |
+| `X-He-Cost-Usd` | تكلفة هذا الطلب بالدولار. |
+
+---
+
+## رموز الأخطاء
+
+تحمل كل استجابة خطأ الغلاف المرجعي ذا الحقول الخمسة:
+
+```json
+{
+  "error": {
+    "code": "402_quota_exhausted",
+    "message": "Insufficient quota.",
+    "type": "invalid_request_error",
+    "param": null,
+    "he_request_id": "req_xxxxxxxxxxxx"
+  }
+}
+```
+
+تكون `type` بقيمة `invalid_request_error` لرموز 4xx و`server_error` لرموز 5xx.
+
+| HTTP | `error.code` | المعنى |
+|------|--------------|---------|
+| 400 | `400_invalid_request` | معاملات غير صحيحة. |
+| 400 | `400_content_filter` | تجاوز مرشّح أمان المحتوى. |
+| 400 | `400_unsupported_currency` | `?currency=` ليست ضمن `{usd, rmb}`. |
+| 401 | `401_invalid_api_key` | المفتاح غير صالح أو مُلغى. |
+| 402 | `402_balance_insufficient` | الرصيد منخفض جدًا. |
+| 402 | `402_quota_exhausted` | بلوغ سقف الإنفاق الشهري. |
+| 403 | `403_ip_not_whitelisted` | عنوان IP للمتصل ليس في قائمة سماح المفتاح. |
+| 403 | `403_model_not_in_scope` | المفتاح غير مخوّل للنموذج المطلوب. |
+| 413 | `413_payload_too_large` | جسم الطلب يتجاوز حد 1 ميبي بايت. |
+| 429 | `429_rate_limit_qps` | تجاوز حد الطلبات في الثانية. |
+| 429 | `429_rate_limit_rpm` | تجاوز حد الطلبات في الدقيقة. |
+| 429 | `429_rate_limit_tpm` | تجاوز حد رموز المنبع في الدقيقة. |
+| 500 | `500_internal_error` | خطأ غير متوقّع في الخادم. |
+| 502 | `502_upstream_unavailable` | النموذج المنبع غير متاح (بعد إعادات الـ failover). |
+| 504 | `504_upstream_timeout` | انتهت مهلة النموذج المنبع (بعد إعادات الـ failover). |
