@@ -73,9 +73,11 @@ he-api/                                  (Monorepo, Turborepo)
 │   │   ├── tests/
 │   │   ├── pyproject.toml
 │   │   └── README.md
-│   ├── sdk-typescript/                  TS SDK (npm: @he-api/sdk)
-│   │   ├── src/
-│   │   ├── tests/
+│   ├── sdk-typescript/                  TS SDK (npm: @he-api/sdk) — LANDED Story 10.3; repo's first PUBLISHABLE npm pkg (non-private). Client extends OpenAI (openai-node ^4), pure ESM, drop-in.
+│   │   ├── src/                         index.ts (re-exports openai + Client) + client.ts (Client extends OpenAI)
+│   │   ├── tests/                       vitest hermetic mock-fetch (40 scenarios) + _helpers.ts
+│   │   ├── README.md
+│   │   ├── tsconfig.json
 │   │   └── package.json
 │   ├── sdk-go/                          Go SDK
 │   ├── shared-types/                    TS shared types (前端 ↔ console)

@@ -1,0 +1,108 @@
+schema: 1
+story: "10.3"
+story_title: "TypeScript SDK (@he-api/sdk, drop-in OpenAI)"
+gate: PASS
+status_reason: "Repo's first publishable npm package delivered as a thin Client extends OpenAI subclass. Independent run: 39/40 tests pass + 1 correctly live-gated skip; build/lint/pack green; 100% AC coverage; 8/8 blind spots; 0 issues at any severity."
+reviewer: "Turing (QA)"
+updated: "2026-06-15"
+
+review_round: 1
+risk_level: LOW
+review_mode: automated_only
+project_type:
+  type: library
+  subtype: typescript-npm
+
+# --- Risk rationale ---
+# security_sensitive=false, complexity 2/7, pure-consumer library (no UI / no API
+# changes / no backend/proto/DB), dev gate score 98, high test coverage.
+# → LOW → automated_only; E2E skipped (the single designed E2E is itself live-gated).
+
+waiver: { active: false }
+
+top_issues: []  # none
+
+test_results:
+  verification_method: independent_execution
+  test_command: "npx vitest run"
+  exit_code: 0
+  passed: true
+  total: 40
+  passed_count: 39
+  skipped_count: 1   # 10.3-E2E-001 live drop-in, gated on HE_API_TEST_GATEWAY_URL (skip-if-unset)
+  failed_count: 0
+  pass_rate: 100      # of non-skipped
+  execution_time_seconds: 1.3
+  build: { command: "tsc -p tsconfig.json", exit_code: 0, emits_dts: true }
+  lint:  { command: "tsc -p tsconfig.json --noEmit", exit_code: 0 }
+  pack:  { command: "npm pack --dry-run", contents: ["dist/", "README.md", "package.json"], leaks_src_or_tests: false }
+  integrity_check:
+    dev_evidence_found: true
+    dev_claimed: "39 pass + 1 live-gated skip; build/lint/pack green"
+    discrepancy: false   # QA independent run matches Dev claim exactly
+
+task_checkbox_verification:
+  completion_rate: 100   # all T0–T5 boxes checked
+  consistency_rate: 100  # all checked boxes map to File List deliverables
+  unchecked_critical: 0
+  mismatches: 0
+
+ac_coverage:
+  verification_method: traceability_verification
+  coverage_rate: 100
+  passed: true
+  blocking_issues_count: 0
+  placeholder_scan: { placeholder_detected: 0, aspects_unchanged: 0, clean_entries: 2 }
+  details:
+    - { ac_id: AC1, status: VERIFIED, note: "publishable typed npm pkg: package.json (non-private, publishConfig.access public, version 0.1.0, exports types+import, files:[dist], engines>=18 w/ documented rationale), tsc build emits .d.ts, pack hygiene clean. Tests UNIT-001..006, INT-001..003, DOC-001." }
+    - { ac_id: AC2, status: VERIFIED, note: "drop-in: Client extends OpenAI; DEFAULT_BASE_URL single const + ctor>env>default precedence; HE_API_KEY isolation (OPENAI_API_KEY not read, empty→missing throw); openai type/error re-export (instanceof holds); routing/AB header passthrough; .withResponse() raw He headers; OQ5 cost-absent tolerant; balance()/usage() thin get-wrappers. Tests UNIT-010..014, INT-010..016/020..025/030..032, E2E-001(live-gated)." }
+
+blind_spot_verification:
+  total_scenarios: 8
+  covered: 8
+  coverage_rate: 100
+  by_category: { BOUNDARY: 3, ERROR: 3, CONCURRENCY: 1, RESOURCE: 1 }
+  missing_scenarios: []
+
+e2e:
+  executed: false
+  skipped: true
+  skip_reason: "automated_only (LOW risk); the one designed E2E (10.3-E2E-001) is live-gated on HE_API_TEST_GATEWAY_URL and skip-if-unset by design."
+
+regression:
+  executed: false
+  reason: "LOW risk + automated_only; no persisted cross-story E2E specs for a standalone npm package."
+
+evidence:
+  collected: false
+  reason: "no issues found at any severity"
+
+# --- Ratified-decision conformance spot-check (all PASS) ---
+ratified_conformance:
+  R-OQ-1_subclass_caret_pin_drift_guard: PASS   # Client extends OpenAI; openai ^4.104.0; UNIT-003 fail-loud drift guard real
+  R-OQ-2_artifact_only: PASS                     # version 0.1.0, publishConfig.access public, non-private, npm pack artifact (not published)
+  R-OQ-3_pure_esm_bare_tsc: PASS                 # type:module, exports types+import only (NO require), bare tsc build
+  R-OQ-4_cutline_export_Client: PASS             # default baseURL/key + chat/embeddings/models inherited; routing/AB/balance/usage; audio/vision smoke; export Client (no AsyncClient)
+  R-OQ-5_node_first_no_browser_mockfetch: PASS   # UNIT-014 asserts dangerouslyAllowBrowser not enabled; hermetic mock-fetch, no real gateway
+  R-OQ-6_node18_tsc_lint: PASS                   # engines.node>=18 w/ documented LOW-2 rationale; lint=tsc --noEmit
+  LOW-1_readme_esm_only: PASS                    # DOC-001 asserts README ESM-only + deferred-dual note
+  LOW-2_engines_rationale_recorded: PASS         # package.json "//engines" comment + tech-stack row
+  OQ5_cost_usd_non_authoritative: PASS           # INT-023 absence-tolerant; SDK never bills from X-He-Cost-Usd
+
+quality_score: 98
+expires: "2026-06-29"
+
+recommendations:
+  immediate: []
+  future:
+    - action: "PO: confirm @he-api npm-org ownership/reservation + OIDC trusted-publishing before the 10.7 publish (R-OQ-2 follow-up; not a Dev blocker)."
+    - action: "openai-node v5/v6 uplift is a future drift-guard-gated story (npm latest is 6.x; ^4 retained for drop-in-oracle parity with gateway Python openai==1.40.*) — documented in tech-stack §2.3."
+
+incremental_context:
+  cached_risk_level: LOW
+  cached_review_mode: automated_only
+  cached_project_type: library
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []

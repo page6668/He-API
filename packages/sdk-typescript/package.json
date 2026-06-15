@@ -1,0 +1,46 @@
+{
+  "name": "@he-api/sdk",
+  "version": "0.1.0",
+  "description": "He-API TypeScript SDK — drop-in OpenAI-compatible client (wraps openai-node).",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/he-api/he-api.git",
+    "directory": "packages/sdk-typescript"
+  },
+  "homepage": "https://he-api.com",
+  "bugs": {
+    "url": "https://github.com/he-api/he-api/issues"
+  },
+  "keywords": ["he-api", "openai", "llm", "sdk", "drop-in"],
+  "//engines": "node >=18 is intentionally looser than the console's >=20.11 (R-OQ-10.3-6 / LOW-2): this is an externally-consumed SDK whose pure-passthrough client uses no Node-20-only API, so we maximize drop-in reach. Do NOT reflexively bump to 20.11.",
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "openai": "^4.104.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.13",
+    "typescript": "^5.4.5",
+    "vitest": "^2.1.9"
+  }
+}
