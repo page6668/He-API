@@ -1,0 +1,178 @@
+schema: 1
+story: "10.8"
+story_title: "Beta 公测开关 + 限额免费试用配置"
+gate: PASS
+status_reason: "Epic-10 / whole-project finale, built to the ratified (b) contract (Architect Round 1, OQ-10.8-1=(b)) — ZERO backend money code. AC1 is verification of existing 7.8 behavior (default-to-free Free $5 monthly entitlement + BetaOn Sandbox gate) fenced by a static no-money-path guard; AC2 is a net-new env-driven console BetaBadge + beta i18n namespace (10 locales) + docs announcementBar + go-live GA drop-badge step. 100% AC coverage, 0 critical / 0 high / 0 medium / 0 low. All 20 designed scenarios independently re-executed GREEN (5 AC1 Go scenarios + REUSE 7.8 fail-safe + 7/7 boundary-guard self-test + live guard + 11/11 console vitest incl. 3 blind-spot + 10x10 i18n gate + go-live verifier). 10.1 namespace-parity regression intact. Zero application-layer new resources (migration stays 0017; balances money SoT untouched)."
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-16T06:50:00Z"
+
+review_round: 1
+risk_level: LOW         # post-collapse complexity 2/8 + security_sensitive=false + no API/DB change + display-only UI + verify-existing-behavior
+review_mode: automated_plus_spot_check
+
+waiver:
+  active: false
+
+top_issues: []   # 0 critical, 0 high, 0 medium, 0 low
+
+# ---------------------------------------------------------------------------
+# Independent test execution (QA re-ran with -count=1 / no cache, did not rely on Dev evidence)
+# ---------------------------------------------------------------------------
+test_results:
+  project_type: fullstack            # Go monorepo (api-gateway/plan-catalogue) + Next.js console + docs + CI shell gates
+  automated:
+    ac1_go_catalogue_invariant:
+      command: "go test -count=1 -run Test_UNIT_001_10_8 ./packages/plan-catalogue/..."
+      scenarios: ["10.8-UNIT-001 Free MonthlyIncludedCreditUSD==MonthlyQuotaUSD==\"5.00\" invariant"]
+      result: PASS
+    ac1_go_entitlement:
+      command: "go test -count=1 -run 'Test_(UNIT_002|INT_001|INT_002|INT_004)_10_8' ./apps/api-gateway/internal/entitlement/..."
+      total: 4
+      passed: 4
+      failed: 0
+      scenarios: ["UNIT-002 default-to-free no-grant", "INT-001 new-verified+beta ON→Free$5+Sandbox", "INT-002 beta OFF→GA", "INT-004 zero-money-write pure-read"]
+      result: PASS
+    ac1_go_failsafe_reuse:
+      command: "go test -count=1 -run 'UNIT_028|UNIT_029' ./apps/api-gateway/internal/featureflag/..."
+      total: 3
+      passed: 3
+      failed: 0
+      result: PASS    # REUSE 7.8 UNIT-028/028b/029 fail-safe-OFF (cold-infra→OFF / running-loses-redis→last-known)
+    ac1_boundary_guard_selftest:
+      command: "bash scripts/ci/verify-no-money-path-10.8.test.sh"
+      total: 7
+      passed: 7
+      failed: 0
+      result: PASS    # incl. positive-rejection fixtures: GrantTrialCredit/trial_grants/0018/balances-top-up/SetBetaMode all rejected; test-only mention does not false-fail
+    ac1_boundary_guard_live:
+      command: "bash scripts/ci/verify-no-money-path-10.8.sh"
+      exit_code: 0
+      result: PASS    # live changeset: no GrantTrialCredit / no trial_grants / no migration 0018+ / no trial-signup balances top-up / no beta_mode write helper / no feature_flags SQL UPDATE (Q-ADMIN-BETA)
+    ac2_console_vitest:
+      command: "npx vitest run __tests__/10.8-beta-mode-toggle.test.tsx"
+      total: 11
+      passed: 11
+      failed: 0
+      result: PASS    # UNIT-010/011/012, INT-010/011/012/013, E2E-001 + 3 blind-spot (BOUNDARY/FLOW/ERROR)
+    ac2_i18n_completeness_gate:
+      command: "tsx scripts/check-i18n-keys.ts"
+      result: PASS    # 10 namespaces × 10 locales; new 'beta' namespace complete, no en-fallback gaps
+    ac2_go_live_verifier:
+      command: "bash scripts/ci/verify-go-live-checklist.sh"
+      exit_code: 0
+      result: PASS
+    regression_10_1_namespace_parity:
+      command: "npx vitest run __tests__/10.1-language-translation-rollout.test.ts"
+      total: 20
+      passed: 17       # + 3 todo (pre-existing); new 'beta' namespace did NOT break parity
+      failed: 0
+      result: PASS
+    integrity_check:
+      dev_claimed: "Go 3 pkgs PASS + 11/11 console vitest + i18n 10x10 + guard 7/7 + go-live verifier + 10.1 parity intact"
+      qa_independent: "All re-executed GREEN with -count=1 / fresh vitest; identical results"
+      discrepancy: false
+  e2e:
+    executed: false
+    skipped: true
+    skip_reason: "AC2 deliverable is a display-only env-driven badge with no user-journey surface (no flag read, no write, no navigation behavior). Its ON/OFF/unset/RTL-locale rendering is exhaustively covered by the 11 vitest cases (render ON, render null OFF, unset→null no-crash). AC1 is verify-existing-behavior over Go services — no running-app journey. No automatable E2E surface beyond what unit/integration already cover (E2E-001 smoke is the single designed E2E and runs in vitest)."
+  toolchain_note: "Local env has no docker/atlas/buf (per project_toolchain_env_limits) — irrelevant here: (b) introduces no new migration/proto. i18n gate run via apps/console/node_modules/.bin/tsx (no global tsx)."
+
+# ---------------------------------------------------------------------------
+# AC coverage (semantic verification against ratified (b) contract)
+# ---------------------------------------------------------------------------
+ac_coverage:
+  coverage_rate: 100
+  passed: true
+  details:
+    - ac_id: AC1
+      title: "Beta 模式下新验证用户经 default-to-free 享 Free $5 月度权益 + Beta Sandbox gate (无 grant、无后端 money 代码)"
+      status: VERIFIED
+      evidence:
+        - "registry.go:48-50 Free tier MonthlyIncludedCreditUSD=\"5.00\" AND MonthlyQuotaUSD=\"5.00\" — asserted by 10.8-UNIT-001 (revenue-promise invariant; the '$5 试用额度' IS this existing entitlement)"
+        - "default-to-free: no-subscription-row user resolves Free entitlement with NO grant action — UNIT-002 (entitlement.Resolve cache-miss→Free)"
+        - "composition: new-verified × beta_mode ON → Free $5 + Sandbox gate engaged (INT-001); beta OFF (default) → GA path, not Sandbox (INT-002) — reuses featureflag.Reader.BetaOn (3-tier fallback + fail-safe-OFF, REUSE 7.8 UNIT-028/029)"
+        - "zero-money-write: pure-read path asserts NO balances write / NO credit accumulation (INT-004)"
+        - "(b)-boundary fence: static guard rejects GrantTrialCredit/trial_grants/migration 0018+/trial-signup balances top-up + any He-API beta_mode write surface (UNIT-005/INT-004/UNIT-012); 7/7 self-test incl. positive-rejection fixtures + live guard exit 0"
+        - "balances money SoT untouched; no new table/RPC/migration (latest migration stays 0017); Structured Dev Agent Record confirms empty database-changes/api-endpoints/shared-models"
+    - ac_id: AC2
+      title: "Beta 模式消费 + 对外「Beta」标识 (关闭 Epic-10 DoD「Beta 公测开关已配置」)"
+      status: VERIFIED
+      evidence:
+        - "BetaBadge.tsx: 'use client', useTranslations('beta'), isBetaMode() false → returns null (GA face); display-only, no flag read/write (Q-ADMIN-BETA) — UNIT-010/011"
+        - "lib/beta/mode.ts: parseBetaFlag lenient truthy-set mirrors gateway parseBool; unset/empty/unknown → false (fail-safe-OFF) — BLIND-BOUNDARY-001"
+        - "anti-orphan mount: layout.tsx:20 imports + :59 mounts <BetaBadge /> in authed (console) shell — INT-011 (not an orphan component)"
+        - "i18n: new 'beta' namespace in namespaces.ts SoT + i18n-keys/src/beta.ts + index.ts export; messages/{10}/beta.json all present with real per-locale translations (ar RTL تجريبي / zh-CN 公测), no en copy-paste — INT-010, 10x10 gate PASS"
+        - "docs announcementBar (docusaurus.config.ts:89-91) marks the docs site Beta, with GA-removal note — INT-013"
+        - "go-live-checklist.md:56 explicit [PO-gated] GA step: after Unleash flips beta_mode=false, rebuild/redeploy console with NEXT_PUBLIC_BETA_MODE unset to drop the env-driven badge + remove docs announcementBar — INT-012 / BR-10.8.11 (env-driven badge does not auto-hide; this is the documented mitigation)"
+        - "no He-API beta_mode write surface introduced (UNIT-012, guarded live)"
+
+# ---------------------------------------------------------------------------
+# Blind-spot coverage (from 20-scenario Standard test design, 3 blind-spot)
+# ---------------------------------------------------------------------------
+blind_spot_verification:
+  total_scenarios: 3
+  covered: 3
+  coverage_rate: 100
+  notes:
+    - "BLIND-BOUNDARY-001 beta env unset/empty → OFF, no crash — covered (parse + render assertions)"
+    - "BLIND-FLOW-001 runtime GA flip does NOT auto-hide env badge → go-live checklist drop-badge step is the documented mitigation — covered (asserts coupling + mitigation presence)"
+    - "BLIND-ERROR-001 missing locale key fails i18n gate (key-set equality, NOT silent en fallback) — covered (INT-010 + check-i18n-keys gate)"
+
+# ---------------------------------------------------------------------------
+# Architectural fences held (ratified (b) contract + 7.8 boundaries)
+# ---------------------------------------------------------------------------
+fences_held:
+  - "OQ-10.8-1=(b): no new money SoT / no new credit path / no balances top-up / no GrantTrialCredit RPC / no trial_grants table / no migration 0018 — statically guarded + tested. '$5' = existing Free-tier monthly entitlement."
+  - "Q-ADMIN-BETA (7.8 OQ-4): no He-API beta_mode write surface; READ-ONLY reuse of featureflag.Reader.BetaOn. Flip stays Unleash-operated. Guard rejects SetBetaMode helper + feature_flags SQL UPDATE."
+  - "OQ-10.8-5: zero preplacement — no subscription-row / no balances-row preprovisioning (default-to-free resolves; Beta-period deduction skipped per §9.2)."
+  - "balances money SoT (0008) untouched — zero writes from this story."
+
+# ---------------------------------------------------------------------------
+# PO-gated item — non-blocking product-semantic confirmation (does NOT gate Done)
+# ---------------------------------------------------------------------------
+po_gated_open:
+  - item: "OQ-10.8-1 product-semantic confirmation: PO to affirm 'Free $5 credit' = recurring Free-tier monthly entitlement (this implementation), NOT a GA-persisting spendable balance."
+    blocking_done: false
+    rationale: "The (b) implementation is the boundary-respecting default with ZERO money code / ZERO balances writes — it cannot breach the gate's concern by construction. The gate only ever gated Dev start (already passed). If PO affirmatively wants the (a) spendable-balance semantic, that is a SEPARATE FUTURE STORY that must first overturn 7.8:246 — see story Appendix: Parked (a) Money-Path. Surfaced here as the single residual project-closeout product confirmation."
+
+pre_existing_baselines_excluded:
+  note: "Repo-wide pre-existing failures (2.2 auth-surface, i18n-keys 2fa codegen crash) read files NOT in this diff and are unrelated to 10.8. The beta i18n-keys src was hand-authored per the documented codegen-crash workaround. Ref project_auth_surface_prebroken_head."
+
+quality_score: 99
+expires: "2026-06-30T00:00:00Z"
+
+evidence:
+  tests_reviewed: 26    # 5 AC1 Go + 3 fail-safe reuse + 7 guard self-test + 11 console vitest (designed scenarios; +live guard/i18n/go-live/regression gates)
+  risk_coverage: "All P0 surfaces independently verified: Free $5 catalogue invariant, default-to-free no-grant, beta-gate composition (ON/OFF), zero-money-write, (b)-boundary static guard (self-test + live), i18n completeness, anti-orphan mount, go-live GA drop-badge step."
+  files_collected: 0    # no defects → no evidence artifacts needed
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: "(b) introduces zero money code → no revenue/abuse surface (money-grant/exactly-once/anti-abuse evaporated under ratified (b)). Beta gate fail-safe-OFF preserved (REUSE 7.8). No He-API beta_mode write surface (Q-ADMIN-BETA) — statically guarded. Display-only badge reads no PII, writes no flag."
+  reliability:
+    status: PASS
+    notes: "Beta gate three-tier fallback + fail-safe-OFF (cold-infra→OFF) unchanged. Badge fail-safe-OFF on unset/empty/unknown env (no crash). i18n completeness gate prevents missing-locale runtime gaps."
+  maintainability:
+    status: PASS
+    notes: "KISS env-driven badge (no client flag-read path); env-driven coupling explicitly documented + mitigated by traceable go-live step. i18n namespace in SoT + completeness gate. Static (b)-boundary guard locks the architectural invariant in CI."
+  performance:
+    status: N/A
+    notes: "No hot-path / latency surface added (verify-existing Go behavior + a static display-only client component + docs/config/CI)."
+
+recommendations:
+  immediate: []
+  future:
+    - action: "PO product-semantic confirmation of OQ-10.8-1=(b) (non-blocking; project-closeout item). If product wants (a) GA-persisting spendable balance → separate future story that first overturns 7.8:246."
+      refs: ["docs/stories/10.8-beta-mode-toggle-trial-credit-config.md (Appendix: Parked (a) Money-Path)"]
+    - action: "At GA: execute the go-live-checklist drop-badge step (rebuild/redeploy console with NEXT_PUBLIC_BETA_MODE unset + remove docs announcementBar) — env-driven badge does not auto-hide on the Unleash flip."
+      refs: ["docs/runbooks/go-live-checklist.md:56", "apps/console/components/business/BetaBadge.tsx"]
+
+incremental_context:
+  cached_risk_level: LOW
+  cached_review_mode: automated_plus_spot_check
+  cached_project_type: fullstack
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []

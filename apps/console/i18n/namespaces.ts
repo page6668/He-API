@@ -9,6 +9,6 @@
  * are the de-facto SoT), and the test ties this array to that directory — so there
  * is no third, drift-prone hand-maintained list.
  */
-export const NAMESPACES = ['account', 'auth', 'benchmark', 'common', 'dashboard', 'logs', 'models', 'playground', 'support'] as const;
+export const NAMESPACES = ['account', 'auth', 'benchmark', 'beta', 'common', 'dashboard', 'logs', 'models', 'playground', 'support'] as const;
 
 export type Namespace = (typeof NAMESPACES)[number];

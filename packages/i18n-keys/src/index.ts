@@ -2,6 +2,7 @@
 export * from './account';
 export * from './auth';
 export * from './benchmark';
+export * from './beta';
 export * from './common';
 export * from './dashboard';
 export * from './logs';

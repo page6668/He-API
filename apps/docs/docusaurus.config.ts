@@ -83,6 +83,14 @@ const config: Config = {
       defaultMode: 'dark',
       respectPrefersColorScheme: true,
     },
+    // Story 10.8 AC2 (§9.2) — outward "Beta" marking on the docs site during the
+    // Beta period, coordinated with the console BetaBadge. Removed at GA together
+    // with the console badge (go-live-checklist "drop Beta badge" step, BR-10.8.11).
+    announcementBar: {
+      id: 'beta',
+      content: 'He-API is in public <strong>Beta</strong> — APIs and limits may change.',
+      isCloseable: false,
+    },
     navbar: {
       title: 'He-API',
       items: [

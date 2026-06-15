@@ -24,6 +24,8 @@
 - Stripe / PayPal 通道隐藏，仅 USDC / Alipay+ / WeChat 小额开放
 - 文档与控制台明显标注 "Beta"
 
+> **Story 10.8 落地说明（一致性注记）**：Beta 期「限额免费试用 $5」**就是**既有 Free 档月度权益（`MonthlyIncludedCreditUSD:"5.00"` + `MonthlyQuotaUSD:"5.00"`，Story 7.8），对新验证（`VerifyEmail` 已验真人）且无 subscription 行的用户经 **default-to-free** 自动解析 —— **无新增 money SoT / 无 balances top-up / 无 credit grant**（与「余额扣减跳过(Free credit only)」一致：Beta 期用量本免费，$5 是月度配额/权益上限，无 balances 扣减发生）。「Beta」对外标识由 console `BetaBadge`（authed 壳，env-driven）+ 文档站 announcementBar 落地；GA 翻 `beta_mode=false` 后须 rebuild/redeploy 摘除（env-driven 不自动隐，见 `docs/runbooks/go-live-checklist.md` drop-badge 步）。Beta 开关翻动仍由 Unleash 操作（He-API 只读，Q-ADMIN-BETA）。
+
 ## 9.3 内容安全合规
 
 ```

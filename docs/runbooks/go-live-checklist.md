@@ -52,6 +52,8 @@
 - [ ] **[manual]** Docs site live (docs.he-api.com) + production DNS cutover done. [Source: Story 10.5; apps/docs]
 - [ ] **[verifier]** Console 10-locale i18n complete (en/zh-CN/ja/ko/es/fr/de/pt/ru/ar). [Source: Story 10.1; apps/console/messages/*]
 - [ ] **[verifier]** Customer support (Intercom) wired on the authed console face. [Source: Story 10.7 AC2; apps/console/components/business/IntercomMessenger.tsx]
+- [ ] **[manual]** Beta marking present during Beta — console BetaBadge (authed shell) + docs-site Beta announcementBar visible. [Source: Story 10.8 AC2 / §9.2; apps/console/components/business/BetaBadge.tsx; apps/docs/docusaurus.config.ts]
+- [ ] **[manual][PO-gated]** GA: after Unleash flips `beta_mode=false`, **rebuild/redeploy the console** with `NEXT_PUBLIC_BETA_MODE` unset to **drop the env-driven Beta badge**, and remove the docs-site Beta announcementBar. The env-driven badge does NOT auto-hide on the runtime flag flip — this rebuild/redeploy step is the documented mitigation. [Source: Story 10.8 BR-10.8.9 / BR-10.8.11 / OQ-10.8-6; apps/console/components/business/BetaBadge.tsx]
 
 ## 6. SDK 首发 (SDK first-release) —承接 R-OQ-10.2-2 / 10.3 / 10.4
 

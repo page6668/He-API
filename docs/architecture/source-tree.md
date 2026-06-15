@@ -305,6 +305,15 @@ he-api/                                  (Monorepo, Turborepo)
 > - **测试**: `apps/console/__tests__/10.7-intercom.test.ts`（29 vitest）+ `components/business/IntercomMessenger.test.tsx`（6 vitest）+ `packages/shared-types/__tests__/10.7-{alerting,launch}.test.ts`（29 vitest）+ 两个 bash 金标门/harness。NO gateway/proto/DB/migration/envelope 改动（L-005 fence）。
 > 条目添加来源：Story 10.7 Dev（Linus），2026-06-16.
 
+> **注**: Story 10.8 — Beta 公测开关 + 限额免费试用配置（Epic-10 / 全项目收尾；ratified OQ-10.8-1=(b)，**无后端 money 代码**）新增条目：
+> - **AC1 (验证既有 7.8 行为，无新后端代码)**: `packages/plan-catalogue/catalogue_test.go` — EXTEND（`10.8-UNIT-001` Free 档 `MonthlyIncludedCreditUSD`+`MonthlyQuotaUSD`=="5.00" 不变式）；`apps/api-gateway/internal/entitlement/beta_trial_1008_test.go` — NEW（`UNIT-002` default-to-free 无 grant / `INT-001` 新验证+beta ON→Free $5+Sandbox gate / `INT-002` beta OFF→GA / `INT-004` 零 money-write 纯读路径，复用 `entitlement.Resolve`+`Compose`+`featureflag.Reader`）。Beta gate fail-safe REUSE 7.8 `featureflag/betamode_test.go` UNIT-028/029。**无** billing/auth money 代码、**无** migration、**无** proto 改动。
+> - **AC1 边界守卫**: `scripts/ci/verify-no-money-path-10.8.sh`(+`.test.sh`) — NEW 静态门（断言源码无 `GrantTrialCredit`/`trial_grants`/migration 0018/trial-触发 balances top-up，且无 He-API `beta_mode` 写面 Q-ADMIN-BETA）。
+> - **AC2 (console + docs)**: `apps/console/lib/beta/mode.ts` — NEW（`isBetaMode()`/`parseBetaFlag()` 读 `NEXT_PUBLIC_BETA_MODE`，unset/empty→OFF fail-safe）；`apps/console/components/business/BetaBadge.tsx` — NEW（'use client'，`useTranslations('beta')`，OFF→null，display-only 无写面）；`app/[locale]/(console)/layout.tsx` — EDIT（authed 壳挂载 `<BetaBadge>`）；`messages/{10 locales}/beta.json` — NEW i18n namespace（10 语齐全，无 en 缺键）+ `i18n/namespaces.ts` EDIT（'beta' 入 SoT）+ `packages/i18n-keys/src/beta.ts`（手工生成，codegen crash 绕过）+ `index.ts` EDIT；`apps/docs/docusaurus.config.ts` — EDIT（Beta `announcementBar`，§9.2 对外标识）。
+> - **AC2 (go-live)**: `docs/runbooks/go-live-checklist.md` — EDIT（§5 新增 Beta 标识在场项 + **GA rebuild/redeploy drop Beta badge** 步，BR-10.8.11 env-driven 不自动隐之缓解）。
+> - **测试**: `apps/console/__tests__/10.8-beta-mode-toggle.test.tsx`（11 vitest：UNIT-010/011 渲染、INT-010 i18n 完整性、INT-011 anti-orphan 挂载、INT-012 go-live drop-badge、UNIT-012 无写面、E2E-001 smoke、INT-013 docs marking、3 blind-spot）。
+> - **文档同步**: `9-合规架构 §9.2`（default-to-free Free $5 × Beta-credit-only 一致性注记）。**无** `data-models §4.1`/`rest-api-spec §5.2` 改动（(b) 下无新表/新 RPC）。
+> 条目添加来源：Story 10.8 Dev（Linus），2026-06-16.
+
 > **注**: Story 4.8 — adapter-fake CI-only binary annotation. Each of the six
 > per-vendor `apps/adapters/{vendor}/cmd/fake-upstream/main.go` binaries is
 > a TEST-ONLY HTTP server that replaces the real vendor upstream in the

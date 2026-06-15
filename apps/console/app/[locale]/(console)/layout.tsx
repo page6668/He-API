@@ -17,6 +17,7 @@ import { defaultLocale, isLocale } from '@/i18n/config';
 import { ACCESS_COOKIE } from '@/lib/auth/cookies';
 import { ConsoleSidebarNav } from '@/components/ConsoleSidebarNav';
 import { IntercomMessenger } from '@/components/business/IntercomMessenger';
+import { BetaBadge } from '@/components/business/BetaBadge';
 
 interface ConsoleLayoutProps {
   children: ReactNode;
@@ -52,6 +53,11 @@ export default async function ConsoleLayout({
     <div className="mx-auto flex max-w-5xl gap-6 px-6 py-8">
       <IntercomMessenger appId={intercomAppId} locale={resolvedLocale} countryCode={countryCode} />
       <aside className="w-48 shrink-0" aria-label={t('settings.sidebar.label')}>
+        {/* Story 10.8 AC2 (§9.2) — outward "Beta" marking on the authed console
+            shell; env-driven, renders null on the GA face (BR-10.8.9). */}
+        <div className="mb-4">
+          <BetaBadge />
+        </div>
         <ConsoleSidebarNav
           items={[
             { href: `/${resolvedLocale}/dashboard`, label: tDashboard('nav.sidebar') },

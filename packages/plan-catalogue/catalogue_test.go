@@ -218,6 +218,29 @@ func Test_UNIT_007_unknown_plan_lookup_typed_error(t *testing.T) {
 	}
 }
 
+// 10.8-UNIT-001 (P0) — Story 10.8 AC1 revenue-promise invariant. The "$5 试用额度"
+// of Story 10.8 (ratified OQ-10.8-1 = (b)) IS the EXISTING Free-tier monthly
+// entitlement, not a new credit grant. Both money fields that jointly anchor the
+// "$5" semantics must read "5.00": MonthlyIncludedCreditUSD (front-end-spec
+// "Get Started — Free $5 credit") AND MonthlyQuotaUSD (Architect Round 1 Low —
+// the Free quota is also $5, removing any ambiguity). A silent drift here would
+// break the Beta-launch product promise without any compile error, so it is
+// guarded as a P0 pure-config assertion.
+func Test_UNIT_001_10_8_free_five_dollar_entitlement_invariant(t *testing.T) {
+	free, ok := DefaultCatalogue.Find(PlanFree)
+	if !ok {
+		t.Fatal("Free tier missing from the default catalogue")
+	}
+	if free.Entitlement.MonthlyIncludedCreditUSD != "5.00" {
+		t.Errorf("Free MonthlyIncludedCreditUSD = %q, want \"5.00\" (10.8 $5 trial anchor)",
+			free.Entitlement.MonthlyIncludedCreditUSD)
+	}
+	if free.Entitlement.MonthlyQuotaUSD != "5.00" {
+		t.Errorf("Free MonthlyQuotaUSD = %q, want \"5.00\" (10.8 $5 anchor, Architect Round 1 Low)",
+			free.Entitlement.MonthlyQuotaUSD)
+	}
+}
+
 // List() returns a defensive copy — mutating it must not affect the shared
 // catalogue or other readers.
 func Test_List_returns_defensive_copy(t *testing.T) {
