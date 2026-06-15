@@ -22,4 +22,5 @@ use (
 	./packages/plan-catalogue
 	./packages/proto
 	./packages/safety-lexicon
+	./packages/sdk-go
 )

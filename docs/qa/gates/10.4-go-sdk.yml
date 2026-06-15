@@ -1,0 +1,93 @@
+schema: 1
+story: "10.4"
+story_title: "Go SDK"
+gate: "PASS"
+status_reason: "Pure-consumer Go SDK (github.com/he-api/sdk-go) builds/vets/tests GREEN with go test -race; 53 designed scenarios implemented verbatim (49 pass / 4 env-skip / 0 fail), both ACs VERIFIED, all ratified decisions (R-OQ-10.4-1..6) honored. No critical/high/medium issues."
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-16T00:00:00Z"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "LOW"
+  cached_review_mode: "automated_only"
+  cached_project_type: "library"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+top_issues: []
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 53
+    passed_count: 49
+    failed_count: 0
+    skipped_count: 4
+    pass_rate: 100
+    coverage_percentage: 0
+    failed_tests: []
+    skip_detail:
+      - name: "Test_AC1_INT_002_GoTestRaceGreen"
+        reason: "self-referential — enforced by the unit-go `go test -race ./packages/sdk-go/...` lane"
+      - name: "Test_AC1_INT_007_GofumptClean"
+        reason: "gofumpt not in local PATH — enforced by lint.yml gofumpt scope (./packages/sdk-go verified wired)"
+      - name: "Test_AC1_INT_008_GolangciLintClean"
+        reason: "golangci-lint not in local PATH — enforced by lint.yml golangci args (./packages/sdk-go/... verified wired)"
+      - name: "Test_AC2_E2E_001_LiveDropInEquivalence"
+        reason: "HE_API_TEST_GATEWAY_URL unset — live arm skip-if-unset (R-OQ-10.4-3)"
+  e2e:
+    executed: false
+    passed: true
+    skipped: true
+    skip_reason: "Library (no UI/server); review mode automated_only. Live drop-in arm is gated on HE_API_TEST_GATEWAY_URL (deferred publish boundary per R-OQ-10.4-2)."
+    scenarios_tested: 0
+    scenarios_passed: 0
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: ""
+  issues: []
+
+risk_assessment:
+  risk_level: LOW
+  review_mode: automated_only
+  complexity_count: 2
+  security_sensitive: false
+  dev_gate_score: 99
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 1 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "LOW (informational): gofumpt/golangci-lint absent in local toolchain → 2 lint-gated tests self-skip locally; CI lint.yml scope confirmed extended to ./packages/sdk-go (golangci args + gofumpt). No action required."
+
+evidence_extended:
+  tests_reviewed: 53
+  trace:
+    ac_covered: [1, 2]
+    ac_gaps: []
+  verification:
+    - "go build ./... + go vet ./... → exit 0"
+    - "go test -race ./... → ok 3.094s (49 PASS / 4 SKIP / 0 FAIL)"
+    - "GOWORK=off go build ./... → standalone resolve OK (no monorepo replace/private GOPROXY)"
+    - "go.mod: module github.com/he-api/sdk-go (no /vN), go 1.22, require openai-go/v3 v3.39.0 (R-OQ-10.4-1/-2/-6)"
+    - "client.go: NewClient returns upstream openai.Client; always overrides baseURL+key so OPENAI_* env cannot leak (UNIT-012 real fail-loud assertion)"
+    - "version.go: pin-drift band [v3.39.0, v4.0.0); UNIT-014 rejects downgrade + major bump"
+    - "extensions.go: Balance/Usage package-level fns via client.Get escape hatch; SDK does not re-validate currency (gateway is sole validator)"
+    - "CI: test.yml unit-go enumerates ./packages/sdk-go/... -race; lint.yml golangci+gofumpt scope extended (R-OQ-10.4-5)"

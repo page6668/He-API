@@ -78,6 +78,15 @@ jobs:
         run: |
           go test ./packages/safety-lexicon/... -count=1 -race
 
+      # Story 10.4 — he-api Go SDK (github.com/he-api/sdk-go), the repo's first
+      # go-get-able external module. go.work does NOT auto-enumerate packages/*
+      # (same as safety-lexicon above), so the module's hermetic drop-in suite
+      # MUST be listed explicitly or it becomes unverified dead code. -race covers
+      # the shared-client concurrency invariant (10.4-BLIND-CONCURRENCY-001).
+      - name: Run go test (sdk-go — Story 10.4 Go SDK)
+        run: |
+          go test ./packages/sdk-go/... -count=1 -race
+
       - name: Coverage summary
         if: always()
         run: |

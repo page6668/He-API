@@ -86,7 +86,14 @@ he-api/                                  (Monorepo, Turborepo)
 │   │   ├── README.md
 │   │   ├── tsconfig.json
 │   │   └── package.json
-│   ├── sdk-go/                          Go SDK
+│   ├── sdk-go/                          Go SDK (go get: github.com/he-api/sdk-go) — LANDED Story 10.4; repo's first go-get-able external module (own go.mod, NOT a monorepo sub-path). NewClient wraps + returns the upstream openai.Client (openai-go/v3), drop-in identity; hermetic stub-RoundTripper tests; go 1.22 floor.
+│   │   ├── client.go                    NewClient(opts...) openai.Client + DEFAULT_BASE_URL + HE_API_KEY/HE_API_BASE_URL resolution
+│   │   ├── extensions.go                Balance/Usage package-level fns (client.Get escape-hatch) + HeRequestID error helper
+│   │   ├── version.go                   openai-go/v3 pin band + installed-version reader (pin-drift guard)
+│   │   ├── *_test.go                    hermetic stub-transport + SSE httptest suite (53 scenarios) + Go shape-assertion helpers (≈ _protocol_invariants.py)
+│   │   ├── go.mod                       module github.com/he-api/sdk-go (no /vN); require openai-go/v3
+│   │   ├── LICENSE                      Apache-2.0
+│   │   └── README.md                    pkg.go.dev quickstart
 │   ├── shared-types/                    TS shared types (前端 ↔ console)
 │   ├── i18n-keys/                       共享 i18n key 定义（避免拼写错误）
 │   └── eslint-config/
