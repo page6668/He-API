@@ -19,6 +19,8 @@
 // duplication for organisational clarity.
 package upstream
 
+import "encoding/json"
+
 // RawUsage is the upstream JSON shape. Zhipu v4 OpenAI-compat emits
 // OpenAI-aligned field names (prompt_tokens / completion_tokens /
 // total_tokens); the Normaliser implementation in
@@ -29,17 +31,28 @@ type RawUsage struct {
 	TotalTokens      int `json:"total_tokens"`
 }
 
-// ChatMessage is one of the request `messages` entries.
+// ChatMessage is one of the upstream RESPONSE `choices[].message` entries —
+// content is always a plain string from the vendor.
 type ChatMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
+}
+
+// RequestMessage is one OUTBOUND request `messages` entry. Story 9.5 (BR-2.3):
+// Content is json.RawMessage so it carries EITHER a plain string (legacy text,
+// byte-identical) OR a multipart array [{type,text},{type,image_url,…}] for a
+// Vision request (forwarded via the proto ChatMessage.content_parts_json tag 3).
+// Request-only so the shared response-decode ChatMessage stays a plain string.
+type RequestMessage struct {
+	Role    string          `json:"role"`
+	Content json.RawMessage `json:"content"`
 }
 
 // ChatRequestJSON is the JSON body sent to Zhipu v4 API upstream.
 // Identity-mapped from the Connect-RPC ChatRequest per OQ-4.4-3.
 type ChatRequestJSON struct {
 	Model          string             `json:"model"`
-	Messages       []ChatMessage      `json:"messages"`
+	Messages       []RequestMessage   `json:"messages"`
 	Stream         bool               `json:"stream,omitempty"`
 	Temperature    *float64           `json:"temperature,omitempty"`
 	MaxTokens      *int32             `json:"max_tokens,omitempty"`

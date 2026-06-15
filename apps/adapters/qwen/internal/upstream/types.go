@@ -17,6 +17,8 @@
 // code duplication for organisational clarity.
 package upstream
 
+import "encoding/json"
+
 // RawUsage is the upstream JSON shape. Qwen compat-mode emits OpenAI-
 // aligned field names (prompt_tokens / completion_tokens / total_tokens);
 // IF a future Qwen-native endpoint is added, the Normaliser implementation
@@ -28,17 +30,29 @@ type RawUsage struct {
 	TotalTokens      int `json:"total_tokens"`
 }
 
-// ChatMessage is one of the request `messages` entries.
+// ChatMessage is one of the upstream RESPONSE `messages`/`choices[].message`
+// entries — content is always a plain string from the vendor.
 type ChatMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
+}
+
+// RequestMessage is one OUTBOUND request `messages` entry. Story 9.5 (BR-2.3):
+// Content is json.RawMessage so it carries EITHER a plain string (legacy text,
+// byte-identical) OR a multipart array [{type,text},{type,image_url,…}] for a
+// Vision request — the gateway forwards the validated parts JSON via the proto
+// ChatMessage.content_parts_json (tag 3). It is request-only so the shared
+// response-decode ChatMessage (above) stays a plain string (zero regression).
+type RequestMessage struct {
+	Role    string          `json:"role"`
+	Content json.RawMessage `json:"content"`
 }
 
 // ChatRequestJSON is the JSON body sent to DashScope compat-mode upstream.
 // Identity-mapped from the Connect-RPC ChatRequest per OQ-4.2-1.
 type ChatRequestJSON struct {
 	Model          string             `json:"model"`
-	Messages       []ChatMessage      `json:"messages"`
+	Messages       []RequestMessage   `json:"messages"`
 	Stream         bool               `json:"stream,omitempty"`
 	Temperature    *float64           `json:"temperature,omitempty"`
 	MaxTokens      *int32             `json:"max_tokens,omitempty"`

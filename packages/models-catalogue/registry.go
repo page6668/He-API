@@ -42,6 +42,12 @@ var DefaultRegistry = Registry{
 		{ID: "he-router-cost", Vendor: "he-api"},
 		{ID: "he-router-quality", Vendor: "he-api"},
 		{ID: "he-router-latency", Vendor: "he-api"},
+		// Story 9.5 — the first Vision models. Appended at the END so the
+		// existing index-based ordering (positions 0-10) is preserved (BR-1.10
+		// declaration-order is load-bearing). They ride the existing qwen / glm
+		// adapter services (BR-2.4 multi-model-id) and advertise vision:true.
+		{ID: "qwen-vl-max", Vendor: "alibaba"},
+		{ID: "glm-4v", Vendor: "zhipu"},
 	},
 	Capabilities: map[string]Capabilities{
 		"qwen-max":          {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 32768, MaxOutputTokens: 8192},
@@ -55,6 +61,11 @@ var DefaultRegistry = Registry{
 		"he-router-cost":    {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 131072, MaxOutputTokens: 8192},
 		"he-router-quality": {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 131072, MaxOutputTokens: 8192},
 		"he-router-latency": {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 131072, MaxOutputTokens: 8192},
+		// Story 9.5 — Vision:true is the new capability. FunctionCalling/JSONMode
+		// left false (this story adds image INPUT only; it does not claim tool/JSON
+		// support for the VL ids). Streaming:true (BR-2.7 — output is text deltas).
+		"qwen-vl-max": {Chat: true, Streaming: true, FunctionCalling: false, Vision: true, JSONMode: false, ContextWindowTokens: 32768, MaxOutputTokens: 8192},
+		"glm-4v":      {Chat: true, Streaming: true, FunctionCalling: false, Vision: true, JSONMode: false, ContextWindowTokens: 8192, MaxOutputTokens: 4096},
 	},
 }
 

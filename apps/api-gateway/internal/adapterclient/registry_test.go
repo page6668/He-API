@@ -782,3 +782,39 @@ func TestRegistry_AllFourVendorsCoRegistered_NoCrossVendorShadowing(t *testing.T
 		t.Fatalf("cross-vendor handles must be DISTINCT; got hDS=%p hQwen=%p hKimi8k=%p hGLM=%p", hDS, hQwen, hKimi8k, hGLM)
 	}
 }
+
+// 9.5-UNIT-022 — the Vision ids ride the EXISTING services (BR-2.4): qwen now
+// hosts N=3 (qwen-max/qwen-plus/qwen-vl-max) and glm N=2 (glm-4/glm-4v), each
+// vendor's ids sharing ONE ClientHandle via M2 endpoint-dedup.
+func TestRegistry_VisionIds_ShareVendorHandle_M2(t *testing.T) {
+	t.Setenv("DEEPSEEK_ADAPTER_ENDPOINT", "")
+	t.Setenv("QWEN_ADAPTER_ENDPOINT", "https://adapter-qwen.test:8080")
+	t.Setenv("KIMI_ADAPTER_ENDPOINT", "")
+	t.Setenv("GLM_ADAPTER_ENDPOINT", "https://adapter-glm.test:8080")
+	t.Setenv("DOUBAO_ADAPTER_ENDPOINT", "")
+	t.Setenv("ERNIE_ADAPTER_ENDPOINT", "")
+	reg := LoadFromEnv()
+
+	hMax, _ := reg.Resolve(QwenMaxModelID)
+	hPlus, _ := reg.Resolve(QwenPlusModelID)
+	hVL, okVL := reg.Resolve(QwenVLMaxModelID)
+	if !okVL {
+		t.Fatalf("qwen-vl-max must resolve via the qwen service")
+	}
+	if hMax != hPlus || hPlus != hVL {
+		t.Fatalf("qwen N=3 must share ONE handle (M2): hMax=%p hPlus=%p hVL=%p", hMax, hPlus, hVL)
+	}
+
+	hGLM, _ := reg.Resolve(GLMModelID)
+	hGLMV, okGLMV := reg.Resolve(GLM4VModelID)
+	if !okGLMV {
+		t.Fatalf("glm-4v must resolve via the glm service")
+	}
+	if hGLM != hGLMV {
+		t.Fatalf("glm N=2 must share ONE handle (M2): hGLM=%p hGLMV=%p", hGLM, hGLMV)
+	}
+	// Cross-vendor handles stay distinct.
+	if hVL == hGLMV {
+		t.Fatalf("qwen-vl-max and glm-4v must live behind DISTINCT vendor handles")
+	}
+}

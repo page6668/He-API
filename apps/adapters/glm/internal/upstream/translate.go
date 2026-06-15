@@ -62,9 +62,22 @@ func translateRequest(ctx context.Context, baseURL, apiKey string, req *adapterv
 // BR-1.10: req.Model is forwarded VERBATIM (the single adapter-glm
 // service routes `glm-4` by upstream's `model` body field).
 func buildRequestBody(req *adapterv1.ChatRequest) ([]byte, error) {
-	messages := make([]ChatMessage, len(req.Messages))
+	messages := make([]RequestMessage, len(req.Messages))
 	for i, m := range req.Messages {
-		messages[i] = ChatMessage{Role: m.Role, Content: m.Content}
+		// Story 9.5 BR-2.3 — a multipart message carries content_parts_json (a
+		// JSON parts array); emit it VERBATIM as the vendor `content` (Zhipu v4
+		// compat-mode accepts the OpenAI [{type,text},{type,image_url,…}] shape
+		// near-identity). A string message → marshal the string so `content` is
+		// the byte-identical legacy JSON. Exactly one is set per message.
+		if len(m.ContentPartsJson) > 0 {
+			messages[i] = RequestMessage{Role: m.Role, Content: json.RawMessage(m.ContentPartsJson)}
+		} else {
+			c, err := json.Marshal(m.Content)
+			if err != nil {
+				return nil, fmt.Errorf("marshal message content: %w", err)
+			}
+			messages[i] = RequestMessage{Role: m.Role, Content: c}
+		}
 	}
 	body := ChatRequestJSON{
 		Model:    req.Model,

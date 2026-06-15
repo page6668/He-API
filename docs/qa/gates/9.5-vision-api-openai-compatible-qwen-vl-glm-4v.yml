@@ -1,0 +1,92 @@
+schema: 1
+story: "9.5"
+story_title: "Vision API（兼容 OpenAI）+ Qwen-VL/GLM-4V"
+gate: "PASS"
+status_reason: "All 9 affected Go modules GREEN under `go test -race` (5 touched + 4 untouched adapters confirm the additive proto is non-breaking). 3/3 ACs semantically verified against code; M-1/M-2/M-3 each fixed and tested; SSRF reject matrix, two-stage body cap, vision fail-closed gate, and PII no-leak (grep-audited) all hold; text-path back-compat byte-identical."
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-15T10:42:55+0800"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "HIGH"
+  cached_review_mode: "full_testing"
+  cached_project_type: "web_backend"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+# Zero blocking issues. One non-blocking observation recorded for transparency.
+top_issues:
+  - id: "OBS-001"
+    severity: low
+    finding: "9.5-INT-006 (streaming vision, P1) has no dedicated test. The code path is verified correct — the streaming dispatch (chat_completions_stream.go:229) reuses the same buildAdapterRequest that sets content_parts_json — so vision streaming carries multipart through identically to non-streaming. Behavioural risk ~nil."
+    suggested_action: "Optional: add a stream:true vision httptest asserting text deltas + content_parts_json on the wire. Not required for this gate."
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 0          # full per-module suites; exact count not tallied — all packages report `ok`
+    passed_count: 0
+    failed_count: 0
+    skipped_count: 0
+    pass_rate: 100
+    coverage_percentage: 0
+    failed_tests: []
+  e2e:
+    executed: true     # E2E class = in-process httptest full-flow (containerized E2E is CI-only per toolchain limits)
+    passed: true
+    skipped: false
+    skip_reason: ""
+    scenarios_tested: 9
+    scenarios_passed: 9
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: "docs/qa/evidence/9.5/"
+  issues: []
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 5
+  security_sensitive: true
+  dev_gate_score: 95
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 1 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "Streaming-vision path lacks a dedicated test (OBS-001) — code path verified, monitor on next vision change."
+
+nfr_validation:
+  security: { status: PASS, notes: "SSRF pass-through posture (no server-side fetch — grep confirms no image-fetch client/seam) + defense-in-depth scheme/host/mime reject (validateImageURL/validateDataURI); fail-closed vision gate (pre-dispatch); reject-before-dispatch ordering; PII no-leak (no image URL/bytes/parts in any slog or span sink — audited)." }
+  performance: { status: PASS, notes: "Two-stage body cap (8 MiB reader / 1 MiB post-parse non-vision) bounds memory; per-image 4 MiB decoded + ≤8 images bound payload; no image processing on our tier." }
+  reliability: { status: PASS, notes: "Additive proto (ChatMessage tag 3) non-breaking — 4 untouched adapters build+pass; -race clean; no go.mod/otel drift." }
+  maintainability: { status: PASS, notes: "gofmt/vet clean; D-1 request-only RequestMessage decouples request widening from the shared response decode; well-commented BR anchors." }
+
+evidence_summary:
+  ac_covered: [1, 2, 3]
+  ac_gaps: []
+  m_fixes_verified:
+    M-1: "proto bytes content_parts_json = 3 on ChatMessage (NOT ChatRequest tag 11); rawDesc \\x18\\x03(\\f) + getter + round-trip + non-breaking-decode tests GREEN"
+    M-2: "validateChatRequest accepts (Content!='' OR len(Parts)>0); positive + empty-msg-reject tests GREEN"
+    M-3: "two-stage cap: 8 MiB reader (stage1) + post-parse non-vision >1 MiB → 413 (stage2); non-vision 2MiB→400, vision 2MiB→ok, >8MiB→reader 400 all GREEN"
+  ratified_contracts_implemented: [Q-CONTENT-WIRE, Q-IMG-SSRF, Q-IMG-LIMITS, Q-VL-TOPOLOGY, Q-VL-ENDPOINT, Q-IMG-TOKENS]
+  independent_execution:
+    modules_green: [packages/proto, apps/api-gateway, apps/adapters/qwen, apps/adapters/glm, packages/models-catalogue, apps/adapters/deepseek, apps/adapters/kimi, apps/adapters/doubao, apps/adapters/ernie]
+    integrity_check: "Dev claimed GREEN — QA independently re-ran (-count=1, no cache) and confirms GREEN. No discrepancy."

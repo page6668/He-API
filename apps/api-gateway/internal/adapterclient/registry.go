@@ -51,6 +51,16 @@ const (
 	QwenAdapterEndpointEnv = "QWEN_ADAPTER_ENDPOINT"
 )
 
+// Story 9.5 — Vision model ids. BR-2.4 multi-model-id-per-service: the VL ids
+// ride the EXISTING qwen / glm services (no new endpoints). qwen-vl-max →
+// QWEN_ADAPTER_ENDPOINT (qwen now N=3: qwen-max/qwen-plus/qwen-vl-max share one
+// ClientHandle via M2 endpoint-dedup); glm-4v → GLM_ADAPTER_ENDPOINT (glm now
+// N=2: glm-4/glm-4v share one handle).
+const (
+	QwenVLMaxModelID = "qwen-vl-max"
+	GLM4VModelID     = "glm-4v"
+)
+
 // Story 4.3 — Kimi (Moonshot AI) adapter constants.
 //
 // BR-1.10 multi-model-id-per-service dispatch extended to N=3: ALL THREE
@@ -226,14 +236,17 @@ func LoadFromEnv() *Registry {
 	qwenEndpoint := os.Getenv(QwenAdapterEndpointEnv)
 	kimiEndpoint := os.Getenv(KimiAdapterEndpointEnv)
 	doubaoEndpoint := os.Getenv(DoubaoAdapterEndpointEnv)
+	glmEndpoint := os.Getenv(GLMAdapterEndpointEnv)
 	return NewRegistry(map[string]string{
 		DeepSeekModelID:   os.Getenv(DeepSeekEndpointEnv),
 		QwenMaxModelID:    qwenEndpoint,
 		QwenPlusModelID:   qwenEndpoint,
+		QwenVLMaxModelID:  qwenEndpoint, // Story 9.5 — VL rides the qwen service (N=3, shared handle)
 		KimiV18kModelID:   kimiEndpoint,
 		KimiV132kModelID:  kimiEndpoint,
 		KimiV1128kModelID: kimiEndpoint,
-		GLMModelID:        os.Getenv(GLMAdapterEndpointEnv),
+		GLMModelID:        glmEndpoint,
+		GLM4VModelID:      glmEndpoint, // Story 9.5 — VL rides the glm service (N=2, shared handle)
 		DoubaoProModelID:  doubaoEndpoint,
 		DoubaoLiteModelID: doubaoEndpoint,
 		ErnieModelID:      os.Getenv(ErnieAdapterEndpointEnv),

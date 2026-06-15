@@ -52,9 +52,10 @@ const (
 	serviceVersion = "0.0.1"
 )
 
-// defaultBoundModelIDs is the BR-1.10 default model-id list — both
-// qwen-max and qwen-plus dispatch to this single service.
-var defaultBoundModelIDs = []string{"qwen-max", "qwen-plus"}
+// defaultBoundModelIDs is the BR-1.10 default model-id list — qwen-max,
+// qwen-plus AND (Story 9.5) the Vision model qwen-vl-max all dispatch to this
+// single service (N=3, multi-model-id-per-service).
+var defaultBoundModelIDs = []string{"qwen-max", "qwen-plus", "qwen-vl-max"}
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))

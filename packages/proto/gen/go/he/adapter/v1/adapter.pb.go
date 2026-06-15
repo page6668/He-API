@@ -161,11 +161,12 @@ func (x *ChatRequest) GetStreamIncludeUsage() bool {
 }
 
 type ChatMessage struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Role          string                 `protobuf:"bytes,1,opt,name=role,proto3" json:"role,omitempty"` // "system" | "user" | "assistant" | "tool"
-	Content       string                 `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Role             string                 `protobuf:"bytes,1,opt,name=role,proto3" json:"role,omitempty"` // "system" | "user" | "assistant" | "tool"
+	Content          string                 `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`
+	ContentPartsJson []byte                 `protobuf:"bytes,3,opt,name=content_parts_json,json=contentPartsJson,proto3" json:"content_parts_json,omitempty"` // Story 9.5 — additive per-message multipart passthrough (JSON OpenAI content parts array); empty for string content
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *ChatMessage) Reset() {
@@ -210,6 +211,13 @@ func (x *ChatMessage) GetContent() string {
 		return x.Content
 	}
 	return ""
+}
+
+func (x *ChatMessage) GetContentPartsJson() []byte {
+	if x != nil {
+		return x.ContentPartsJson
+	}
+	return nil
 }
 
 // ChatChunk is the unit emitted on the Connect-RPC server-stream. Non-
@@ -505,10 +513,11 @@ const file_he_adapter_v1_adapter_proto_rawDesc = "" +
 	"\x14stream_include_usage\x18\n" +
 	" \x01(\bR\x12streamIncludeUsageB\x0e\n" +
 	"\f_temperatureB\r\n" +
-	"\v_max_tokens\";\n" +
+	"\v_max_tokens\"i\n" +
 	"\vChatMessage\x12\x12\n" +
 	"\x04role\x18\x01 \x01(\tR\x04role\x12\x18\n" +
-	"\acontent\x18\x02 \x01(\tR\acontent\"\x8b\x02\n" +
+	"\acontent\x18\x02 \x01(\tR\acontent\x12,\n" +
+	"\x12content_parts_json\x18\x03 \x01(\fR\x10contentPartsJson\"\x8b\x02\n" +
 	"\tChatChunk\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06object\x18\x02 \x01(\tR\x06object\x12\x18\n" +

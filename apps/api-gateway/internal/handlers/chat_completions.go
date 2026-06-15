@@ -24,12 +24,18 @@ package handlers
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -56,11 +62,54 @@ import (
 // removes a second-order Pydantic-strict-mode parsing failure mode).
 const MockContent = "Hello from He-API mock. Real upstream lands in Story 4.x."
 
-// maxChatBodyBytes is the BR-1.2 cap (1 MiB). Accommodates ~250k tokens of
-// system+user prompt while preventing a single oversized payload from
-// monopolising gateway memory. Larger limits (~8 MiB for vision payloads)
-// are deferred to Epic 9 when multimodal content lands.
+// maxChatBodyBytes is the BR-1.2 cap (1 MiB) for the NON-vision (text) path.
+// Accommodates ~250k tokens of system+user prompt while preventing a single
+// oversized payload from monopolising gateway memory. Story 9.5 (BR-3.8, M-3):
+// this is now enforced POST-parse for non-vision requests (the HTTP read cap is
+// raised to maxVisionBodyBytes unconditionally because vision-ness is unknown
+// before the body is read).
 const maxChatBodyBytes int64 = 1 << 20
+
+// Story 9.5 (AC3, RATIFIED Q-IMG-LIMITS) — Vision image-input limits.
+//
+//	maxVisionBodyBytes  — the HTTP read cap for /v1/chat/completions (8 MiB).
+//	                      Stage 1 of the two-stage body cap (BR-3.8): applied
+//	                      UNCONDITIONALLY since vision-ness is only knowable
+//	                      after the JSON parse. A non-vision body over
+//	                      maxChatBodyBytes is then rejected post-parse (stage 2).
+//	maxImagesPerRequest — max image_url parts across all messages (8).
+//	maxImageBytes       — max DECODED base64 size per inline image (4 MiB).
+const (
+	maxVisionBodyBytes  int64 = 1 << 23 // 8 MiB
+	maxImagesPerRequest       = 8
+	maxImageBytes             = 1 << 22 // 4 MiB, decoded base64, per image
+)
+
+// Content-part type discriminators (OpenAI Vision multipart shape).
+const (
+	partTypeText     = "text"
+	partTypeImageURL = "image_url"
+)
+
+// msgImageURLScheme is the canonical AC3 reject message for a scheme/host/mime
+// violation on an image_url. It NEVER echoes the URL or image bytes (BR-3.5 PII).
+const msgImageURLScheme = "Field 'image_url.url' must be an https URL or a data:image/…;base64 URI."
+
+// validDetailValues is the BR-1.2 image_url.detail enum (default "auto").
+var validDetailValues = map[string]struct{}{"auto": {}, "low": {}, "high": {}}
+
+// allowedImageMIME is the BR-3.4 base64 data: URI mime allow-list.
+var allowedImageMIME = map[string]struct{}{
+	"image/png":  {},
+	"image/jpeg": {},
+	"image/webp": {},
+	"image/gif":  {},
+}
+
+// errContentShape marks a messages[].content that is neither a JSON string nor a
+// JSON array of parts (BR-1.1). Surfaced by ChatMessage.UnmarshalJSON; the
+// handler maps it to the canonical 400 without leaking the offending value.
+var errContentShape = errors.New("messages[].content must be a string or an array of content parts")
 
 // messagesMaxLen is the BR-1.4 (AC1 Data Validation) cap on messages length.
 const messagesMaxLen = 256
@@ -93,11 +142,218 @@ type ChatRequest struct {
 	ResponseFormat json.RawMessage `json:"response_format,omitempty"`
 }
 
-// ChatMessage matches the OpenAI message shape — string content only in
-// this Story; multipart content arrays land in Epic 9 (multimodal).
+// ChatMessage matches the OpenAI message shape. Story 9.5 (AC1) extends the
+// `content` field from string-only to EITHER a JSON string (legacy, byte-
+// identical — Content set, Parts nil) OR a JSON array of content parts
+// (multipart/Vision — Parts set, Content ""). The two are mutually exclusive
+// per message; a custom UnmarshalJSON branches on the JSON token. Parts is
+// json:"-" so it never affects RESPONSE marshalling (the assistant message the
+// gateway emits is always built in Go with a string Content — byte-identical).
 type ChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role    string        `json:"role"`
+	Content string        `json:"content"`
+	Parts   []ContentPart `json:"-"`
+}
+
+// ContentPart is one element of a multipart `content` array (BR-1.2): a text
+// part `{type:"text",text}` or an image part `{type:"image_url",image_url:{url,detail}}`.
+type ContentPart struct {
+	Type     string    `json:"type"`
+	Text     string    `json:"text,omitempty"`
+	ImageURL *ImageURL `json:"image_url,omitempty"`
+}
+
+// ImageURL is the `image_url` object of an image content part. `url` is an
+// https URL OR a data:image/…;base64 URI; `detail` ∈ {auto,low,high} (default
+// auto), validated then forwarded verbatim to the vendor (BR-3.7).
+type ImageURL struct {
+	URL    string `json:"url"`
+	Detail string `json:"detail,omitempty"`
+}
+
+// UnmarshalJSON implements the BR-1.1 dual-shape `content` decode. It branches
+// on the first non-space JSON token of `content`: a string → Content (legacy,
+// byte-identical), an array → Parts. A bare object / number / bool → errContentShape.
+// Only role + content are read (matches the pre-9.5 struct surface; other
+// OpenAI message fields remain ignored).
+func (m *ChatMessage) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Role    string          `json:"role"`
+		Content json.RawMessage `json:"content"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	m.Role = raw.Role
+	m.Content = ""
+	m.Parts = nil
+
+	trimmed := bytesTrimSpace(raw.Content)
+	if len(trimmed) == 0 || string(trimmed) == "null" {
+		// Absent/null content — leave both empty; validateChatRequest (BR-1.7)
+		// rejects a message with neither content nor parts.
+		return nil
+	}
+	switch trimmed[0] {
+	case '"': // JSON string → legacy path (byte-identical)
+		return json.Unmarshal(trimmed, &m.Content)
+	case '[': // JSON array → multipart parts
+		return json.Unmarshal(trimmed, &m.Parts)
+	default: // object / number / bool → not a valid content shape
+		return errContentShape
+	}
+}
+
+// safetyText returns the text segments of a message for the Story-8.2 content
+// scanner (BR-1.5). A string message yields its single string (byte-identical
+// to the pre-9.5 scan); a multipart message yields each text part's text.
+// image_url parts are NEVER returned (outside the 8.1 text-lexicon scope).
+func (m *ChatMessage) safetyText() []string {
+	if m.Parts == nil {
+		return []string{m.Content}
+	}
+	out := make([]string, 0, len(m.Parts))
+	for i := range m.Parts {
+		if m.Parts[i].Type == partTypeText {
+			out = append(out, m.Parts[i].Text)
+		}
+	}
+	return out
+}
+
+// bytesTrimSpace trims leading/trailing JSON whitespace without importing bytes
+// just for one call site.
+func bytesTrimSpace(b []byte) []byte {
+	start, end := 0, len(b)
+	for start < end {
+		switch b[start] {
+		case ' ', '\t', '\n', '\r':
+			start++
+			continue
+		}
+		break
+	}
+	for end > start {
+		switch b[end-1] {
+		case ' ', '\t', '\n', '\r':
+			end--
+			continue
+		}
+		break
+	}
+	return b[start:end]
+}
+
+// requestHasImage reports whether ANY message carries an image_url part — the
+// signal that gates the Vision-capability check (BR-1.3) and the two-stage body
+// cap (BR-3.8).
+func requestHasImage(req *ChatRequest) bool {
+	for i := range req.Messages {
+		for j := range req.Messages[i].Parts {
+			if req.Messages[i].Parts[j].Type == partTypeImageURL {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// validateVisionParts validates the multipart structure (BR-1.2) and the AC3
+// image limits (scheme/host/count/size/mime — BR-3.2/3.3/3.4) of every
+// multipart message. Pure, no I/O, NO outbound fetch (BR-3.1 pass-through). It
+// returns the canonical §5.1.2 reject tuple on the first violation; messages
+// reference the part PATH only, never the URL/bytes (BR-3.5 PII). String-only
+// messages are skipped (Parts nil).
+func validateVisionParts(req *ChatRequest) (status int, code, msg string, ok bool) {
+	imageCount := 0
+	for i := range req.Messages {
+		parts := req.Messages[i].Parts
+		for j := range parts {
+			p := &parts[j]
+			switch p.Type {
+			case partTypeText:
+				if p.Text == "" {
+					return http.StatusBadRequest, "400_invalid_request",
+						fmt.Sprintf("Field 'messages[%d].content[%d].text' is required for a text part.", i, j), false
+				}
+			case partTypeImageURL:
+				if p.ImageURL == nil || p.ImageURL.URL == "" {
+					return http.StatusBadRequest, "400_invalid_request",
+						fmt.Sprintf("Field 'messages[%d].content[%d].image_url.url' is required and must be an https URL or a data:image/…;base64 URI.", i, j), false
+				}
+				if p.ImageURL.Detail != "" {
+					if _, okD := validDetailValues[p.ImageURL.Detail]; !okD {
+						return http.StatusBadRequest, "400_invalid_request",
+							fmt.Sprintf("Field 'messages[%d].content[%d].image_url.detail' must be one of: auto, low, high.", i, j), false
+					}
+				}
+				if em, okU := validateImageURL(p.ImageURL.URL); !okU {
+					return http.StatusBadRequest, "400_invalid_request", em, false
+				}
+				imageCount++
+			default:
+				return http.StatusBadRequest, "400_invalid_request",
+					fmt.Sprintf("Unsupported content part type '%s'. Supported: text, image_url.", p.Type), false
+			}
+		}
+	}
+	if imageCount > maxImagesPerRequest {
+		return http.StatusBadRequest, "400_invalid_request",
+			fmt.Sprintf("Too many images in request (max %d).", maxImagesPerRequest), false
+	}
+	return 0, "", "", true
+}
+
+// validateImageURL enforces BR-3.2/3.4: an image_url is EITHER an https URL
+// whose host is not a private/loopback/link-local IP literal, OR a
+// data:image/{png,jpeg,webp,gif};base64,<payload> URI whose decoded size is
+// ≤ maxImageBytes. The gateway NEVER fetches the URL (BR-3.1) — this is a
+// pure-string, defense-in-depth check. Returns (errMessage, ok); the message
+// never contains the URL or image bytes (BR-3.5 PII).
+func validateImageURL(rawURL string) (string, bool) {
+	if strings.HasPrefix(rawURL, "data:") {
+		return validateDataURI(rawURL)
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Scheme != "https" {
+		return msgImageURLScheme, false
+	}
+	if ip := net.ParseIP(u.Hostname()); ip != nil {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+			return "Field 'image_url.url' host is not allowed.", false
+		}
+	}
+	return "", true
+}
+
+// validateDataURI enforces the BR-3.4 base64 data-URI rules: mime ∈
+// {png,jpeg,webp,gif}, `;base64` encoding, decoded size ≤ maxImageBytes.
+func validateDataURI(rawURL string) (string, bool) {
+	rest := rawURL[len("data:"):]
+	comma := strings.IndexByte(rest, ',')
+	if comma < 0 {
+		return msgImageURLScheme, false
+	}
+	meta, payload := rest[:comma], rest[comma+1:]
+	if !strings.HasSuffix(meta, ";base64") {
+		return msgImageURLScheme, false
+	}
+	mime := strings.TrimSuffix(meta, ";base64")
+	if _, okM := allowedImageMIME[mime]; !okM {
+		return fmt.Sprintf("Unsupported image type '%s'.", mime), false
+	}
+	decoded, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil {
+		if d2, e2 := base64.RawStdEncoding.DecodeString(strings.TrimRight(payload, "=")); e2 == nil {
+			decoded = d2
+		} else {
+			return msgImageURLScheme, false
+		}
+	}
+	if len(decoded) > maxImageBytes {
+		return "Image exceeds the maximum size (max 4 MiB).", false
+	}
+	return "", true
 }
 
 // ChatResponse mirrors rest-api-spec.md §5.1.1 success body. Field order
@@ -465,22 +721,55 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	ctx = withResolvedStrictness(ctx, strictness)
 	r = r.WithContext(ctx)
 
-	// BR-1.2 — MaxBytesReader bounds body reads at 1 MiB. The json decoder
-	// surfaces MaxBytesReader truncation as *http.MaxBytesError (Go 1.19+);
-	// match it explicitly to return 413 instead of the generic 400.
-	r.Body = http.MaxBytesReader(w, r.Body, maxChatBodyBytes)
-	var req ChatRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	// Story 9.5 BR-3.8 (M-3) — two-stage body cap. STAGE 1: the HTTP read cap is
+	// raised to maxVisionBodyBytes (8 MiB) UNCONDITIONALLY, because whether the
+	// request is a vision request is only knowable AFTER the JSON parse (the
+	// reader precedes the parse). A non-vision body over the 1 MiB text cap is
+	// rejected post-parse in STAGE 2 below, preserving the byte-identical text
+	// size contract. A body over 8 MiB is rejected here at the reader.
+	r.Body = http.MaxBytesReader(w, r.Body, maxVisionBodyBytes)
+	rawBody, err := io.ReadAll(r.Body)
+	if err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
 			_ = openaierr.Write(w, ctx, http.StatusRequestEntityTooLarge,
 				"413_payload_too_large",
-				"Request body exceeds 1 MiB.", nil)
+				"Request body exceeds the maximum size for vision requests.", nil)
 			return
 		}
 		_ = openaierr.Write(w, ctx, http.StatusBadRequest,
 			"400_invalid_request",
 			"Request body is not valid JSON.", nil)
+		return
+	}
+	var req ChatRequest
+	if err := json.Unmarshal(rawBody, &req); err != nil {
+		// BR-1.1 — a non-string/non-array `content` surfaces as errContentShape
+		// from ChatMessage.UnmarshalJSON; map it to the canonical 400 without
+		// echoing the offending value.
+		if errors.Is(err, errContentShape) {
+			_ = openaierr.Write(w, ctx, http.StatusBadRequest,
+				"400_invalid_request",
+				"Field 'messages[].content' must be a string or an array of content parts.", nil)
+			return
+		}
+		_ = openaierr.Write(w, ctx, http.StatusBadRequest,
+			"400_invalid_request",
+			"Request body is not valid JSON.", nil)
+		return
+	}
+
+	// Story 9.5 — detect vision-ness once (any image_url part) for the two-stage
+	// cap (BR-3.8) and the Vision-capability gate (BR-1.3).
+	hasImage := requestHasImage(&req)
+
+	// STAGE 2 (BR-3.8) — a NON-vision body over the 1 MiB text cap is rejected
+	// with the byte-identical pre-9.5 413 (the >1 MiB text path fails exactly as
+	// before). A vision request keeps the raised 8 MiB cap.
+	if !hasImage && int64(len(rawBody)) > maxChatBodyBytes {
+		_ = openaierr.Write(w, ctx, http.StatusRequestEntityTooLarge,
+			"413_payload_too_large",
+			"Request body exceeds 1 MiB.", nil)
 		return
 	}
 
@@ -490,6 +779,27 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	// REMOVED; stream=true is now a dispatch decision, not a validation
 	// failure.
 	if status, code, msg, valid := validateChatRequest(&req); !valid {
+		_ = openaierr.Write(w, ctx, status, code, msg, nil)
+		return
+	}
+
+	// Story 9.5 BR-1.3 — Vision-capability gate (fail-closed, pre-dispatch). If
+	// ANY message carries an image_url part, the requested model MUST be
+	// vision-capable (Story-4.7 capabilitiesByModelID). A non-vision model + image
+	// → 400 BEFORE parts-detail validation / safety / routing / dispatch (zero
+	// upstream call, zero usage/billing — mirrors the 8.2 reject-before-dispatch
+	// ordering). The model id (≤100 chars, validated) is not PII.
+	if hasImage && !capabilitiesByModelID[req.Model].Vision {
+		_ = openaierr.Write(w, ctx, http.StatusBadRequest, "400_invalid_request",
+			fmt.Sprintf("Model '%s' does not support image input.", req.Model), nil)
+		return
+	}
+
+	// Story 9.5 BR-1.2 / AC3 — multipart structure + image-input limits
+	// (scheme/host/count/size/mime). Runs AFTER structural validation and BEFORE
+	// content-safety / routing / any upstream call (BR-3.6 reject ordering). The
+	// gateway NEVER fetches the URL (BR-3.1) — this is pure-string validation.
+	if status, code, msg, valid := validateVisionParts(&req); !valid {
 		_ = openaierr.Write(w, ctx, status, code, msg, nil)
 		return
 	}
@@ -512,11 +822,17 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		// ScanTextMin(_, SeverityLow) == the pre-8.4 block-all (byte-identical).
 		min := contentsafety.MinSeverity(strictness)
 		for i := range req.Messages {
-			if match, hit := h.safetyScanner.ScanTextMin(req.Messages[i].Content, min); hit {
-				h.recordSafetyBlock(ctx, match, strictness)
-				_ = openaierr.Write(w, ctx, http.StatusBadRequest, "400_content_filter",
-					"Request was blocked by the content safety filter.", nil)
-				return
+			// Story 9.5 BR-1.5 — scan the TEXT segments only: a string message is
+			// its single string (byte-identical to pre-9.5); a multipart message
+			// is each text part's text. image_url parts are NOT scanned (outside
+			// the 8.1 text-lexicon scope).
+			for _, seg := range req.Messages[i].safetyText() {
+				if match, hit := h.safetyScanner.ScanTextMin(seg, min); hit {
+					h.recordSafetyBlock(ctx, match, strictness)
+					_ = openaierr.Write(w, ctx, http.StatusBadRequest, "400_content_filter",
+						"Request was blocked by the content safety filter.", nil)
+					return
+				}
 			}
 		}
 	}
@@ -998,10 +1314,19 @@ func (h *ChatCompletionsHandler) logFailoverServed(ctx context.Context, requeste
 func buildAdapterRequest(req *ChatRequest, model, heRequestID string) *adapterv1.ChatRequest {
 	messages := make([]*adapterv1.ChatMessage, len(req.Messages))
 	for i := range req.Messages {
-		messages[i] = &adapterv1.ChatMessage{
-			Role:    req.Messages[i].Role,
-			Content: req.Messages[i].Content,
+		cm := &adapterv1.ChatMessage{Role: req.Messages[i].Role}
+		// Story 9.5 BR-2.2 — set EXACTLY ONE of content / content_parts_json per
+		// message. A multipart message → marshal the validated parts to JSON on
+		// content_parts_json (proto tag 3), content left "". A string message →
+		// content set, content_parts_json nil (byte-identical to the pre-9.5 wire).
+		if req.Messages[i].Parts != nil {
+			if partsJSON, err := json.Marshal(req.Messages[i].Parts); err == nil {
+				cm.ContentPartsJson = partsJSON
+			}
+		} else {
+			cm.Content = req.Messages[i].Content
 		}
+		messages[i] = cm
 	}
 	adapterReq := &adapterv1.ChatRequest{
 		Model:       model, // Story 6.2 — the ROUTED model (== req.Model on passthrough)
@@ -1188,10 +1513,15 @@ func validateChatRequest(req *ChatRequest) (int, string, string, bool) {
 	}
 	for i := range req.Messages {
 		m := &req.Messages[i]
-		if _, ok := validRoles[m.Role]; !ok || m.Content == "" {
+		// Story 9.5 BR-1.7 (M-2) — a message is valid when its role is valid AND
+		// it carries EITHER a non-empty string content OR ≥1 content part. The
+		// unamended `m.Content == ""` guard would 400 every multipart (Vision)
+		// message (which has Content=="" + Parts!=nil); the legacy empty-string
+		// rejection is preserved for pure-string messages.
+		if _, ok := validRoles[m.Role]; !ok || (m.Content == "" && len(m.Parts) == 0) {
 			return http.StatusBadRequest,
 				"400_invalid_request",
-				"Field 'messages' must be a non-empty array (max 256 entries) with each entry having role + string content.",
+				"Field 'messages' must be a non-empty array (max 256 entries) with each entry having role + string or multipart content.",
 				false
 		}
 	}

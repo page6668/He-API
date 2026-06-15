@@ -46,6 +46,16 @@ message ChatRequest {
 message ChatMessage {
   string role = 1;     // "system" | "user" | "assistant" | "tool"
   string content = 2;
+  // Story 9.5 (Q-CONTENT-WIRE, amended) — ADDITIVE per-MESSAGE multipart
+  // passthrough. JSON-encoded OpenAI `content` parts array
+  // ([{type:"text",text},{type:"image_url",image_url:{url,detail}}]) for a
+  // Vision request; empty for a string-content message (the 6 text-only
+  // Epic-4 adapters ignore it → non-breaking). Mirrors the M3 `bytes ..._json`
+  // passthrough PATTERN — note its tools_json/tool_choice_json/response_format_json
+  // (=6/7/8) instances live on ChatRequest; THIS one is per-message, so it
+  // lives on ChatMessage at its next free tag = 3. Mutually exclusive with
+  // `content` per message (gateway sets exactly one).
+  bytes content_parts_json = 3;
 }
 
 // ChatChunk is the unit emitted on the Connect-RPC server-stream. Non-

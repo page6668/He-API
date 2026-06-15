@@ -82,8 +82,8 @@ func doModelsGet(h *ModelsHandler, ctx context.Context) *httptest.ResponseRecord
 func Test_ModelsCatalogue_BR_1_4_invariants(t *testing.T) {
 	t.Parallel()
 
-	if got := len(modelsCatalogue); got != 11 {
-		t.Fatalf("len(modelsCatalogue) = %d, want 11 (Architect OQ1)", got)
+	if got := len(modelsCatalogue); got != 13 {
+		t.Fatalf("len(modelsCatalogue) = %d, want 13 (Architect OQ1 + 2 Vision models, Story 9.5)", got)
 	}
 
 	idRe := regexp.MustCompile(`^[a-z0-9][a-z0-9.\-]*$`)
@@ -96,6 +96,7 @@ func Test_ModelsCatalogue_BR_1_4_invariants(t *testing.T) {
 		"qwen-max", "qwen-plus", "deepseek-v3", "moonshot-v1-128k",
 		"glm-4", "doubao-pro", "doubao-lite", "ernie-4.0",
 		"he-router-cost", "he-router-quality", "he-router-latency",
+		"qwen-vl-max", "glm-4v", // Story 9.5 — appended (preserves indices 0-10)
 	}
 	for i, want := range wantIDs {
 		got := modelsCatalogue[i]
@@ -270,9 +271,9 @@ func Test_ModelsHandler_emits_exactly_one_log_line_per_request(t *testing.T) {
 	if v, _ := gotAttrs["api_key_id"].(string); v != modelsTestAPIKeyID {
 		t.Errorf("attr api_key_id = %v, want %q", gotAttrs["api_key_id"], modelsTestAPIKeyID)
 	}
-	if v, _ := gotAttrs["catalogue_size"].(int64); v != 11 {
+	if v, _ := gotAttrs["catalogue_size"].(int64); v != 13 {
 		// slog.Int stores as int64
-		t.Errorf("attr catalogue_size = %v, want 11", gotAttrs["catalogue_size"])
+		t.Errorf("attr catalogue_size = %v, want 13", gotAttrs["catalogue_size"])
 	}
 }
 
@@ -612,7 +613,7 @@ func Test_ModelsHandler_response_carries_capabilities_field_on_every_entry(t *te
 	if err := json.Unmarshal(rr.Body.Bytes(), &envelope); err != nil {
 		t.Fatalf("unmarshal: %v\nbody=%s", err, rr.Body.String())
 	}
-	if got, want := len(envelope.Data), 11; got != want {
+	if got, want := len(envelope.Data), 13; got != want {
 		t.Fatalf("len(data) = %d, want %d", got, want)
 	}
 	for i, e := range envelope.Data {
@@ -649,6 +650,10 @@ func Test_ModelsHandler_capabilities_match_BR_1_3_verbatim(t *testing.T) {
 		"he-router-cost":    {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 131072, MaxOutputTokens: 8192},
 		"he-router-quality": {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 131072, MaxOutputTokens: 8192},
 		"he-router-latency": {Chat: true, Streaming: true, FunctionCalling: true, Vision: false, JSONMode: true, ContextWindowTokens: 131072, MaxOutputTokens: 8192},
+		// Story 9.5 — the 2 Vision models (Vision:true). Values mirror
+		// packages/models-catalogue/registry.go verbatim.
+		"qwen-vl-max": {Chat: true, Streaming: true, FunctionCalling: false, Vision: true, JSONMode: false, ContextWindowTokens: 32768, MaxOutputTokens: 8192},
+		"glm-4v":      {Chat: true, Streaming: true, FunctionCalling: false, Vision: true, JSONMode: false, ContextWindowTokens: 8192, MaxOutputTokens: 4096},
 	}
 
 	h := NewModelsHandler(silentLogger())
@@ -766,8 +771,8 @@ func Test_ModelsHandler_emits_models_list_v1_event(t *testing.T) {
 	if v, _ := gotAttrs["api_key_id"].(string); v != modelsTestAPIKeyID {
 		t.Errorf("attr api_key_id = %v, want %q", gotAttrs["api_key_id"], modelsTestAPIKeyID)
 	}
-	if v, _ := gotAttrs["catalogue_size"].(int64); v != 11 {
-		t.Errorf("attr catalogue_size = %v, want 11", gotAttrs["catalogue_size"])
+	if v, _ := gotAttrs["catalogue_size"].(int64); v != 13 {
+		t.Errorf("attr catalogue_size = %v, want 13", gotAttrs["catalogue_size"])
 	}
 }
 

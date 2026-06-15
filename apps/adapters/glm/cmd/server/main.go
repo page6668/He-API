@@ -53,11 +53,10 @@ const (
 	serviceVersion = "0.0.1"
 )
 
-// defaultBoundModelIDs is the BR-1.10 default model-id list — Story 4.4
-// is the FIRST Epic-4 adapter to host a SINGLE model id (N=1 degenerate
-// case of the Story-4.2/4.3 multi-model-id pattern). Future GLM sizes
-// would extend this slice without code changes.
-var defaultBoundModelIDs = []string{"glm-4"}
+// defaultBoundModelIDs is the BR-1.10 default model-id list. Story 9.5 adds the
+// Vision model glm-4v, so this service now hosts N=2 (glm-4 + glm-4v) — the
+// multi-model-id pattern of Story 4.2/4.3, restored from the 4.4 N=1 degenerate.
+var defaultBoundModelIDs = []string{"glm-4", "glm-4v"}
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
