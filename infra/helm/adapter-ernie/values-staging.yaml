@@ -1,0 +1,8 @@
+# adapter-ernie staging overrides (Story 1.7 B3/B4). Unified ${ACR_REGISTRY}
+# deploy-time token (T0.3); image.tag SHA-bumped by deploy-staging (BR4.1; never
+# `latest`). Other knobs inherit from values.yaml (he-api-adapters namespace,
+# replicaCount, supportedModels, externalSecret).
+image:
+  repository: ${ACR_REGISTRY}/he-api/adapter-ernie
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent

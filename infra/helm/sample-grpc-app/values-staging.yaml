@@ -1,10 +1,11 @@
-# sample-grpc-app staging overrides (scaffolded by scripts/scaffold-svc.sh, Story 1.5).
-# Note: ${ACR_REGISTRY} below is a deploy-time substitution honoured by
-# scripts/observability/install.sh (Story 1.4 m-4 pattern); the scaffold tool
-# uses `envsubst 'sample-grpc-app sample Sample'` so unknown placeholders survive.
+# sample-grpc-app staging overrides (scaffolded by scripts/scaffold-svc.sh, Story 1.5;
+# B4 standardised by Story 1.7). `${ACR_REGISTRY}` is the unified deploy-time
+# substitution token (T0.3) — the old double-dollar scaffold variant is gone
+# (1.7-UNIT-031 no split). tag is the chart appVersion (semver), NOT `latest`
+# (BR4.1 immutable-tag grep gate applies to every values*.yaml, 1.7-UNIT-030).
 image:
-  repository: $$ACR_REGISTRY/he-api/sample-grpc-app
-  tag: latest
+  repository: ${ACR_REGISTRY}/he-api/sample-grpc-app
+  tag: "0.0.1"
   pullPolicy: IfNotPresent
 
 replicaCount: 1

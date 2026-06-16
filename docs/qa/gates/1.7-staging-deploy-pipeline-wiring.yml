@@ -1,0 +1,119 @@
+schema: 1
+story: "1.7"
+story_title: "staging 部署管线接通（GitOps 端到端）"
+gate: "PASS"
+status_reason: >-
+  All 8 ACs verified (100% coverage) with independent static GitOps checks; 70/70 automated
+  tests pass independently; tri-count single-source invariant (T8.1: build matrix ⊆ ArgoCD
+  Application ⊆ values-staging SHA-bump, all derived from infra/argocd/applications/*.yaml)
+  closes; security-sensitive surfaces (5 payment secrets via secretRef, no plaintext; ArgoCD
+  creds from secrets/vars; TLS via cert-manager) all clean. One LOW doc gap only.
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-16T20:05:00Z"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "HIGH"
+  cached_review_mode: "full_testing"
+  cached_project_type: "library"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+top_issues:
+  - id: "DOC-001"
+    severity: low
+    finding: >-
+      Story File List omits `.github/workflows/infra-lint.yml` (modified by T9.1 to add
+      helm-lint + template|kubeconform coverage for the 12 service charts that the deploy
+      pipeline now consumes). The deliverable is correct and necessary; only the File List
+      documentation is incomplete.
+    suggested_action: >-
+      Add `.github/workflows/infra-lint.yml` to the story's File List → Modified section
+      (housekeeping; non-blocking).
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 70
+    passed_count: 70
+    failed_count: 0
+    skipped_count: 0
+    pass_rate: 100
+    coverage_percentage: 100
+    failed_tests: []
+  e2e:
+    executed: false
+    passed: true
+    skipped: true
+    skip_reason: "Static GitOps story — no runtime environment; verification is static (helm/argocd/grep/Dockerfile/cross-AC). E2E replaced by static link verification."
+    scenarios_tested: 0
+    scenarios_passed: 0
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: ""
+  issues: []
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 8
+  security_sensitive: true
+  dev_gate_score: 95
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 1 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "PRE-EXISTING (flagged, not in 1.7 scope): 5 apps/<svc>-context Dockerfiles carry go.mod replace dirs outside their build context → real `docker build` will fail until migrated to repo-root context. Static wiring + counts are correct; recommend a separate Dockerfile-hardening story before real cluster deploy (runbook PART A)."
+
+ac_verification:
+  total: 8
+  fully_verified: 8
+  coverage_rate: 100
+  details:
+    - ac: AC1 (B1 — real argocd sync)
+      status: VERIFIED
+      evidence: "deploy-staging.yml trigger-argocd-sync: real `argocd app sync`+`app wait --health --sync --timeout`; creds from secrets.ARGOCD_AUTH_TOKEN+vars.ARGOCD_ENDPOINT only (BR1.2); --grpc-web; token via env not CLI; rc accumulator + `exit $rc` fails job on any unhealthy app (BR1.3); HAS_ARGOCD!=true fallback skip retained; placeholder string 0 hits (BR1.1)."
+    - ac: AC2 (B2 — build matrix 17)
+      status: VERIFIED
+      evidence: "17 non-sample matrix objects == 17 deployable Dockerfiles (find apps -name Dockerfile, samples excl.); every matrix dockerfile path resolves; single &svc_list anchor (1.5-UNIT-216); :${github.sha} tag; verify-matrix-coverage CI count assertion EXPECTED=17."
+    - ac: AC3 (B3 — Applications + AppProject + values-staging)
+      status: VERIFIED
+      evidence: "13 Applications, all project: he-api with [values.yaml, values-staging.yaml]; every source.path chart exists (Chart+values+values-staging); AppProject he-api defined (sourceRepos=monorepo, destinations=he-api-staging/he-api-adapters); all Application destination namespaces within whitelist; no dangling project refs (T8.3)."
+    - ac: AC4 (B4 — placeholder + tag)
+      status: VERIFIED
+      evidence: "0 `tag: latest`, 0 `$$ACR_REGISTRY`; unified ${ACR_REGISTRY} deploy-time token really wired in update-helm-values (sed) + pre-sync grep guard fails closed (BOUNDARY-002); recursive yq SHA bump over every repository+tag block; bump set single-sourced from applications/*.yaml."
+    - ac: AC5 (B5 — Ingress + TLS)
+      status: VERIFIED
+      evidence: "api-gateway templates/ingress.yaml + values-staging ingress.enabled, className ingress-nginx, host api.staging.he-api.com, TLS secretName api-gateway-staging-tls + cert-manager.io/cluster-issuer letsencrypt-staging; FORBIDDEN-ingress whitelist formally lifted + naming-drift (1.4→1.7) comment fixed (BR5.2)."
+    - ac: AC6 (B6 — cron Dockerfiles + billing Deployment)
+      status: VERIFIED
+      evidence: "safety-log-retention + account-deletion-sweeper Dockerfiles exist; billing-svc templates/deployment.yaml + values main-service block; fx-refresh schedule '0 0 * * *' unchanged; verify-cron-schedule.sh gold-gate (H-2) GREEN; db-doctor reuse decision recorded → count holds at 17."
+    - ac: AC7 (B7 — payment-svc chart + 5 secrets)
+      status: VERIFIED
+      evidence: "payment-svc chart (auth-svc structure); envFrom secretRef → he-api-payment-provider; paymentProvider.requiredKeys (16) == 16 secret env vars read by apps/payment-svc/cmd/server/main.go os.Getenv (Stripe 2/PayPal 3/Coinbase 2/Alipay 3/WeChat 6, incl APIV3_KEY); no plaintext secret values; WECHAT_PAY_APPID correctly excluded (non-secret config)."
+    - ac: AC8 (B7b — analytics-svc chart, H-1)
+      status: VERIFIED
+      evidence: "analytics-svc chart (auth-svc structure); secretRef = db.credsSecretName (Story 1.6 DB creds), NO payment secrets (BR8.1); Application source.path infra/helm/analytics-svc resolves (no longer dangling); folded into 4-place single-source list."
+    - ac: Cross-AC / boundary
+      status: VERIFIED
+      evidence: "tri-count closure: 17 images → 13 charts/Applications (4 crons are CronJob sub-workloads) → values-staging bump, all derived from one source (applications/*.yaml in both bump+sync jobs); B8 boundary held (no envs/prod, no values-prod, no prod ArgoCD app); 14/14 blind spots covered; no trivial test stubs."
+
+next_story_id: "2.1"

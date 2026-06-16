@@ -1,0 +1,16 @@
+apiVersion: v2
+name: payment-svc
+description: He-API payment service (Epic 7). HTTP service consumed by api-gateway/billing-svc; owns the 5 provider SDKs (Stripe / PayPal / Coinbase / Alipay+ / WeChat Pay HK) + their secrets, isolated from the billing-svc money-ledger core. Chart added by Story 1.7 B7 (reuses the auth-svc chart structure).
+type: application
+version: 0.1.0
+appVersion: "0.0.1"
+kubeVersion: ">=1.29.0-0"
+
+keywords:
+  - he-api
+  - payment
+  - stripe
+  - paypal
+
+maintainers:
+  - name: He-API platform team

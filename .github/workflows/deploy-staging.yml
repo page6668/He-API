@@ -42,40 +42,72 @@ jobs:
           fi
           echo "SHA=$(cat image-sha.txt)" >> "$GITHUB_ENV"
 
-      - name: Probe helm values existence
-        id: probe_helm
-        run: |
-          if [ -f infra/helm/api-gateway/values-staging.yaml ]; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Install yq
-        if: steps.probe_helm.outputs.exists == 'true'
         run: |
           sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
 
+      # Story 1.7 B3/B4 single source — the staging app set is derived from the
+      # ArgoCD Application inventory (infra/argocd/applications/*.yaml). Every
+      # Application's source.path → that chart's values-staging.yaml is the file
+      # we SHA-bump. This is the SAME list the trigger-argocd-sync job syncs, so
+      # a service can never be bumped-but-not-synced or vice-versa (BR4.4/BR1.4).
+      - name: Probe staging helm values
+        id: probe_helm
+        run: |
+          found=0
+          while IFS= read -r app; do
+            path="$(yq '.spec.source.path' "$app")"
+            if [ -f "${path}/values-staging.yaml" ]; then
+              found=1
+              break
+            fi
+          done < <(find infra/argocd/applications -name '*.yaml' | sort)
+          echo "exists=${found}" >> "$GITHUB_OUTPUT"
+
       - name: Update helm values (real)
-        if: steps.probe_helm.outputs.exists == 'true'
+        if: steps.probe_helm.outputs.exists == '1'
         env:
           SHA: ${{ env.SHA }}
+          ACR_REGISTRY: ${{ secrets.ACR_REGISTRY }}
         run: |
-          yq eval -i '.image.tag = strenv(SHA)' infra/helm/api-gateway/values-staging.yaml
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name  "github-actions[bot]"
-          git add infra/helm/api-gateway/values-staging.yaml
-          git commit -m "chore(deploy): bump api-gateway staging to ${SHA}"
-          git push
-          {
-            echo "Updated infra/helm/api-gateway/values-staging.yaml image.tag → ${SHA}"
-          } >> "$GITHUB_STEP_SUMMARY"
+          changed=0
+          while IFS= read -r app; do
+            path="$(yq '.spec.source.path' "$app")"
+            vs="${path}/values-staging.yaml"
+            [ -f "$vs" ] || continue
+
+            # B4 — bump EVERY image block (main service + cron sub-images) to the
+            # immutable :SHA tag (BR4.1). The recursive selector matches any map
+            # carrying both `repository` and `tag` (.image, .fxRefresh.image,
+            # .monthlyCostReset.image, .accountDeletionSweeper.image, …).
+            SHA="$SHA" yq -i '(.. | select(has("repository") and has("tag")) | .tag) = strenv(SHA)' "$vs"
+
+            # B4 — resolve the unified ${ACR_REGISTRY} deploy-time token to the
+            # real registry (T0.3 convention ②, REALLY wired here — not a
+            # comment). Guarded: with no ACR registry the token stays and the
+            # pre-sync guard blocks it from reaching the cluster (BOUNDARY-002).
+            if [ -n "${ACR_REGISTRY}" ]; then
+              sed -i "s|\${ACR_REGISTRY}|${ACR_REGISTRY}|g" "$vs"
+            fi
+            git add "$vs"
+            changed=1
+          done < <(find infra/argocd/applications -name '*.yaml' | sort)
+
+          if [ "$changed" = "1" ] && ! git diff --cached --quiet; then
+            git config --local user.email "github-actions[bot]@users.noreply.github.com"
+            git config --local user.name  "github-actions[bot]"
+            git commit -m "chore(deploy): bump staging images to ${SHA}"
+            git push
+            echo "Bumped all staging app image tags → ${SHA}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No staging values changed for ${SHA}" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Skip helm update (fallback)
-        if: steps.probe_helm.outputs.exists != 'true'
+        if: steps.probe_helm.outputs.exists != '1'
         run: |
-          echo "values-staging.yaml not yet created (Story 1.3 dependency) — skipping update" >> "$GITHUB_STEP_SUMMARY"
+          echo "No staging values-staging.yaml found (Story 1.3 dependency) — skipping update" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Emit image SHA to summary
         if: always()
@@ -90,13 +122,70 @@ jobs:
     env:
       HAS_ARGOCD: ${{ vars.ARGOCD_ENDPOINT != '' && 'true' || 'false' }}
     steps:
-      - name: Trigger ArgoCD sync (real)
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      # Story 1.7 B1 — real ArgoCD sync (replaces the placeholder echo).
+      # The app list is the single-source Application inventory (BR1.4); each app
+      # is synced + waited-on for health so a failed rollout fails the job
+      # (BR1.3 — errors are NOT swallowed).
+      - name: Install argocd CLI + yq
         if: env.HAS_ARGOCD == 'true'
         run: |
-          # Story 1.4 fills this with `argocd app sync he-api-gateway --server "${{ vars.ARGOCD_ENDPOINT }}"`
-          echo "ArgoCD sync placeholder (real CLI wired in Story 1.4)" >> "$GITHUB_STEP_SUMMARY"
+          sudo wget -qO /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          sudo chmod +x /usr/local/bin/argocd
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: ArgoCD login
+        if: env.HAS_ARGOCD == 'true'
+        env:
+          ARGOCD_SERVER: ${{ vars.ARGOCD_ENDPOINT }}
+          ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_AUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Credentials come ONLY from secrets/vars (BR1.2) — no hardcoded
+          # endpoint or token. --grpc-web for ingress-fronted ArgoCD servers.
+          # Token auth via env (ARGOCD_AUTH_TOKEN) — no plaintext token on the CLI.
+          # A bad token/endpoint fails here (non-zero) BEFORE any sync (ERROR-001).
+          argocd account get-user-info \
+            --server "$ARGOCD_SERVER" \
+            --grpc-web
+
+      - name: Trigger ArgoCD sync (real)
+        if: env.HAS_ARGOCD == 'true'
+        env:
+          ARGOCD_SERVER: ${{ vars.ARGOCD_ENDPOINT }}
+          ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_AUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          rc=0
+          while IFS= read -r appfile; do
+            name="$(yq '.metadata.name' "$appfile")"
+            path="$(yq '.spec.source.path' "$appfile")"
+            vs="${path}/values-staging.yaml"
+
+            # BOUNDARY-002 — fail closed if an unreplaced ${ACR_REGISTRY} token
+            # would reach the cluster (an unresolved placeholder → ImagePullBackOff).
+            if [ -f "$vs" ] && grep -q '${ACR_REGISTRY}' "$vs"; then
+              echo "::error::${vs} still contains an unreplaced \${ACR_REGISTRY} token — refusing to sync ${name}" >&2
+              rc=1
+              continue
+            fi
+
+            echo "syncing ${name} (project he-api)…"
+            argocd app sync "$name" \
+              --server "$ARGOCD_SERVER" --grpc-web || rc=1
+            # BR1.3 — wait for Healthy+Synced; a non-zero exit (timeout/unhealthy)
+            # fails the job. Errors are surfaced, never swallowed.
+            argocd app wait "$name" \
+              --server "$ARGOCD_SERVER" --grpc-web \
+              --health --sync --timeout 300 || rc=1
+          done < <(find infra/argocd/applications -name '*.yaml' | sort)
+          exit "$rc"
 
       - name: Skip ArgoCD sync (fallback)
         if: env.HAS_ARGOCD != 'true'
         run: |
-          echo "ArgoCD endpoint not configured (Story 1.4 dependency) — skipping sync" >> "$GITHUB_STEP_SUMMARY"
+          echo "ArgoCD endpoint not configured — skipping sync" >> "$GITHUB_STEP_SUMMARY"

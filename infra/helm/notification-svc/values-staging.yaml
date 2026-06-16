@@ -1,7 +1,9 @@
-# notification-svc staging overrides (Story 2.2).
+# notification-svc staging overrides (Story 2.2; B4 standardised by Story 1.7).
+# `${ACR_REGISTRY}` is the unified deploy-time substitution token (T0.3);
+# image.tag is SHA-bumped by deploy-staging (BR4.1; NEVER `latest`).
 image:
-  repository: $$ACR_REGISTRY/he-api/notification-svc
-  tag: latest
+  repository: ${ACR_REGISTRY}/he-api/notification-svc
+  tag: "0.0.1"
   pullPolicy: IfNotPresent
 
 replicaCount: 1

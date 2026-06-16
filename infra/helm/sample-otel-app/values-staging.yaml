@@ -1,12 +1,12 @@
-# sample-otel-app staging overrides — Story 1.4.
+# sample-otel-app staging overrides — Story 1.4 (B4 standardised by Story 1.7).
 #
-# Round 1 M-4 contract: image.tag is `latest` by default; install.sh injects
-# the current git SHA at install time via `--set image.tag=$(git rev-parse
-# --short HEAD)`. Story 1.2's deploy-staging.yml hard-codes the api-gateway
-# chart path and is NOT touched by this story (multi-chart rollout = Story 1.5).
+# `${ACR_REGISTRY}` is the unified deploy-time substitution token (T0.3). The tag
+# is the chart appVersion (semver) — NOT `latest`: Story 1.7 BR4.1 bans moving
+# tags in ANY values*.yaml repo-wide (the sample is excluded from the "17" deploy
+# set but still subject to the immutable-tag grep gate, 1.7-UNIT-030/080).
 image:
   repository: ${ACR_REGISTRY}/he-api/sample-otel-app
-  tag: latest
+  tag: "0.1.0"
   pullPolicy: IfNotPresent
 
 replicaCount: 1

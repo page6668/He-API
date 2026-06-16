@@ -8,7 +8,7 @@ definition_of_done:
   - staging 环境可访问，含 OTel + Prometheus + Grafana
 test_design_level: standard
 priority: P0
-estimated_stories: 6
+estimated_stories: 7
 prerequisite_epics: []
 unblocks_epics: [2, 3]
 stories:
@@ -40,3 +40,20 @@ stories:
     acceptance_criteria:
       - 三个 DB 可达
       - migration 工具就绪（atlas 或 goose）
+  - id: "1.7"
+    title: staging 部署管线接通（GitOps 端到端）
+    repository_type: monolith
+    priority: P0
+    estimated_complexity: high
+    dependencies: ["1.2", "1.3"]
+    acceptance_criteria:
+      - "B1: deploy-staging.yml 的 ArgoCD 同步占位 echo 换成真实 argocd app sync"
+      - "B2: build-images.yml 矩阵扩到全部 17 个可部署服务/cron 镜像"
+      - "B3: 补齐缺失 ArgoCD Application(api-gateway/auth-svc/billing-svc/notification-svc) + 所有 app 读 values-staging.yaml + 定义 he-api AppProject"
+      - "B4: 替换镜像占位符 ${ACR_REGISTRY}/$$ACR_REGISTRY 为真实仓库 + 消除 tag:latest(改 :SHA)"
+      - "B5: 新增 Ingress 模板 + staging DNS/TLS 配置(staging hosts)"
+      - "B6: 补 safety-log-retention/account-deletion-sweeper/db-doctor 三个 cron Dockerfile + billing-svc Deployment 模板"
+      - "B7: 新建 payment-svc Helm chart 接入 5 支付密钥"
+    out_of_scope:
+      - "B8: prod 环境接线(数据层/values-prod/prod ArgoCD app) — staging 端到端跑通后再做"
+    notes: "Story 1.4(GitOps 接线)未完成的部署收尾工作包。来源: docs/runbooks/deployment-prerequisites-and-audit.md PART B。"

@@ -1,0 +1,110 @@
+# Default values for payment-svc (Story 1.7 B7). Pod Security Restricted profile
+# mirrors auth-svc (Story 2.2) so admission stays uniform across HTTP services.
+
+image:
+  repository: he-api/payment-svc
+  tag: "0.0.1"
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 96Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+env:
+  OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector.monitoring.svc.cluster.local:4317
+  # payment.completed Kafka producer brokers (comma-separated host:port). Empty
+  # → producer disabled (webhooks still verify + count, but do not drive credit);
+  # staging/prod overlays set the managed-Kafka brokers.
+  kafkaBrokers: ""
+
+# payment-svc server health endpoints (apps/payment-svc/internal/server):
+# /livez (liveness) + /ready (readiness flips true once the listener is up).
+probes:
+  readiness:
+    httpGet:
+      path: /ready
+      port: 8080
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  liveness:
+    httpGet:
+      path: /livez
+      port: 8080
+    initialDelaySeconds: 15
+    periodSeconds: 20
+
+# -----------------------------------------------------------------------------
+# Story 1.7 B7 (BR7.1 / BR7.3) — the 5 payment providers' credentials.
+#
+# The secrets are injected via `envFrom.secretRef` from an OUT-OF-BAND K8s
+# Secret (`secretName`) — they NEVER render into this manifest and are NEVER
+# committed in plaintext (Vault/ESO is Epic 9; staging uses a hand-built Secret,
+# see docs/dev/secrets/payment-provider.md). With `secretName` empty the
+# secretRef is omitted and payment-svc boots with NO provider wired (the
+# PaymentService falls back to Unimplemented; /livez + /ready still serve), so a
+# no-credentials cluster never CrashLoops.
+#
+# `requiredKeys` is the SINGLE-SOURCE contract of the env-var key names the
+# out-of-band Secret MUST carry. Each name is read verbatim by
+# apps/payment-svc/cmd/server/main.go (os.Getenv) — Story 1.7 1.7-INT-009 fails
+# CI if this list drifts from the provider code. A key-name mismatch would make
+# a provider silently un-wired (its gate env unset → channel disabled), so the
+# list is asserted, not assumed.
+# -----------------------------------------------------------------------------
+paymentProvider:
+  secretName: he-api-payment-provider
+  requiredKeys:
+    # Stripe (Story 7.3) — API secret + webhook signing secret (distinct blast radius).
+    - STRIPE_SECRET_KEY
+    - STRIPE_WEBHOOK_SIGNING_SECRET
+    # PayPal (Story 7.3).
+    - PAYPAL_CLIENT_ID
+    - PAYPAL_CLIENT_SECRET
+    - PAYPAL_WEBHOOK_ID
+    # Coinbase Commerce / USDC (Story 7.4).
+    - COINBASE_COMMERCE_API_KEY
+    - COINBASE_COMMERCE_WEBHOOK_SECRET
+    # Alipay+ / Antom (Story 7.5) — first asymmetric scheme.
+    - ALIPAY_PLUS_CLIENT_ID
+    - ALIPAY_PLUS_MERCHANT_PRIVATE_KEY
+    - ALIPAY_PLUS_ALIPAY_PUBLIC_KEY
+    # WeChat Pay HK / cross-border (Story 7.6) — 2 high-value secrets on one channel.
+    - WECHAT_PAY_MCH_ID
+    - WECHAT_PAY_MERCHANT_PRIVATE_KEY
+    - WECHAT_PAY_MERCHANT_CERT_SERIAL
+    - WECHAT_PAY_PLATFORM_PUBLIC_KEY
+    - WECHAT_PAY_PLATFORM_CERT_SERIAL
+    - WECHAT_PAY_APIV3_KEY
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+serviceMonitor:
+  enabled: true
+  interval: 15s
+
+# NetworkPolicy — default-deny ingress+egress; explicit allows below. Egress to
+# the payment providers is HTTPS (443); operators tighten with provider CIDRs.
+networkPolicy:
+  enabled: true
+  monitoringNamespace: monitoring
+  kafkaCIDRs: []
+  kafkaPort: 9092
+  providerCIDRs: []
+  providerEgressPort: 443
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

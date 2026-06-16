@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: he-api
+  namespace: argocd
+  labels:
+    he-api/epic: "1"
+    he-api/story: "1.7"
+  # Story 1.7 B3 (BR3.1) — every Application in infra/argocd/applications/*.yaml
+  # references `spec.project: he-api`, but no AppProject defined it until this
+  # story. This closes the dangling-project reference (1.7-BLIND-DATA-002 / T8.3).
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: He-API platform applications (staging). Created by Story 1.7.
+  # sourceRepos — limited to this monorepo (BR3.1). No other Git source may be
+  # synced under this project.
+  sourceRepos:
+    - https://github.com/he-api/he-api
+  # destinations — the in-cluster API server only, restricted to the he-api
+  # namespaces actually used by the Applications: he-api-staging (gateway, auth,
+  # billing, notification, payment, analytics, routing) + he-api-adapters (the 6
+  # vendor adapters). No other cluster / namespace is permitted (BR3.1).
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: he-api-staging
+    - server: https://kubernetes.default.svc
+      namespace: he-api-adapters
+  # Allow the namespaced + cluster-scoped resource kinds these charts render.
+  # NetworkPolicy / ServiceMonitor / Ingress are namespaced; the charts create
+  # no cluster-scoped resources, so clusterResourceWhitelist stays empty.
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

@@ -1,25 +1,27 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: adapter-ernie
+  name: api-gateway
   namespace: argocd
   labels:
-    he-api/epic: "4"
-    he-api/story: "4.6"
+    he-api/epic: "3"
+    he-api/story: "3.1"
 spec:
   project: he-api
   source:
     repoURL: https://github.com/he-api/he-api
     targetRevision: HEAD
-    path: infra/helm/adapter-ernie
+    path: infra/helm/api-gateway
     helm:
-      releaseName: adapter-ernie
+      releaseName: api-gateway
+      # Story 1.7 B3 (BR3.4) — values.yaml first, values-staging.yaml overlay
+      # last (overlay wins). The staging overlay carries the SHA-bumped image.
       valueFiles:
         - values.yaml
         - values-staging.yaml
   destination:
     server: https://kubernetes.default.svc
-    namespace: he-api-adapters
+    namespace: he-api-staging
   syncPolicy:
     automated:
       prune: true

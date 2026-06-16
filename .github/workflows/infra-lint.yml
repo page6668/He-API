@@ -112,6 +112,13 @@ jobs:
   # Story 1.5 Q7 ruling — Helm chart lint for scaffolded gRPC services. The
   # scaffold tool atomically appends each new `<svc>` to the matrix below
   # (Q8 auto-append for infra-lint.yml).
+  #
+  # Story 1.7 B3/B6/B7/B7b (T9.1) — brought the rest of the deployable charts
+  # under helm lint + template|kubeconform: the two NEW charts (payment-svc,
+  # analytics-svc), billing-svc (new main-service Deployment), and every chart
+  # that gained a values-staging.yaml the deploy pipeline now consumes (auth-svc,
+  # notification-svc, routing-svc, 6 adapters). api-gateway has its own dedicated
+  # job above; the samples are covered by the services/observability jobs.
   helm-lint-services:
     name: helm-lint-services (${{ matrix.chart }})
     runs-on: ubuntu-22.04
@@ -120,6 +127,18 @@ jobs:
       matrix:
         chart:
           - sample-grpc-app
+          - payment-svc
+          - analytics-svc
+          - billing-svc
+          - auth-svc
+          - notification-svc
+          - routing-svc
+          - adapter-deepseek
+          - adapter-doubao
+          - adapter-ernie
+          - adapter-glm
+          - adapter-kimi
+          - adapter-qwen
     steps:
       - name: Checkout
         uses: actions/checkout@v4

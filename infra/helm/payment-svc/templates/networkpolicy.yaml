@@ -1,0 +1,115 @@
+{{- if .Values.networkPolicy.enabled }}
+# Story 1.7 B7 — payment-svc NetworkPolicy (mirrors auth-svc INT-067).
+#
+# Ingress (default-deny + explicit allows):
+#   - api-gateway + billing-svc pods (port 8080) — recharge / webhook flows
+#   - monitoring namespace (port 8080) — Prometheus scrape /metrics
+#
+# Egress: DNS + OTel + payment.completed Kafka + the 5 payment providers over
+# HTTPS (443). K8s NetworkPolicy lacks FQDN matching, so the provider allowance
+# is ipBlock + port-only; operators narrow via providerCIDRs before prod cutover.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "payment-svc.fullname" . }}-default-deny
+  labels:
+    {{- include "payment-svc.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "payment-svc.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "payment-svc.fullname" . }}-allow-ingress
+  labels:
+    {{- include "payment-svc.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "payment-svc.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: api-gateway
+        - podSelector:
+            matchLabels:
+              app: billing-svc
+      ports:
+        - protocol: TCP
+          port: 8080
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.monitoringNamespace | default "monitoring" }}
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "payment-svc.fullname" . }}-allow-egress
+  labels:
+    {{- include "payment-svc.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "payment-svc.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Egress
+  egress:
+    # DNS — kube-dns / CoreDNS in kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # OTel collector — telemetry uplink.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.monitoringNamespace | default "monitoring" }}
+      ports:
+        - protocol: TCP
+          port: 4317
+    # payment.completed Kafka — managed, off-cluster, port-only allow.
+    - to:
+        {{- with .Values.networkPolicy.kafkaCIDRs }}
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+        {{- else }}
+        - ipBlock:
+            cidr: 0.0.0.0/0
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.kafkaPort | default 9092 }}
+    # Payment providers (Stripe / PayPal / Coinbase / Antom / WeChat) over HTTPS.
+    - to:
+        {{- with .Values.networkPolicy.providerCIDRs }}
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+        {{- else }}
+        - ipBlock:
+            cidr: 0.0.0.0/0
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.providerEgressPort | default 443 }}
+{{- end }}

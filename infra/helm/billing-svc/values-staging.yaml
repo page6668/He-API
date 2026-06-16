@@ -1,0 +1,15 @@
+# billing-svc staging overrides (Story 1.7 B3/B4/B6). Unified ${ACR_REGISTRY}
+# deploy-time token (T0.3). BOTH the main-service image (B6 Deployment) AND the
+# fx-refresh cron image are SHA-bumped by deploy-staging (BR4.1; never `latest`)
+# — the cron image is a build-matrix entry, so it must appear here for the
+# tri-count closure (T8.1). The fx-refresh `schedule` literal is the H-2
+# gold-gate and lives in values.yaml ONLY — NOT overridden here.
+image:
+  repository: ${ACR_REGISTRY}/he-api/billing-svc
+  tag: "0.0.1"
+  pullPolicy: IfNotPresent
+fxRefresh:
+  image:
+    repository: ${ACR_REGISTRY}/he-api/fx-refresh
+    tag: "0.0.1"
+    pullPolicy: IfNotPresent

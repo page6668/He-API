@@ -1,15 +1,23 @@
-# Staging-specific overrides — MINIMAL whitelist per Architect Round 1 Q1.
+# Staging-specific overrides — whitelist per Architect Round 1 Q1, EXPANDED by
+# Story 1.7 (B4 bump scope + B5 ingress; BR4.3 / BR5.2).
 #
-# Allowed top-level keys: image / service / networkPolicy / serviceAccount.
-# FORBIDDEN (any depth):
-#   * ingress.*           — Story 1.4 adds ingress-nginx + Ingress resources
+# Allowed top-level keys: image / service / networkPolicy / serviceAccount /
+#   ingress (B5 — lifted from FORBIDDEN; ingress is owned by Story 1.7, NOT 1.4)
+#   safetyLogRetention.image (B4 — the safety-log-retention cron image is a
+#     build-matrix entry, SHA-bumped here for tri-count closure, T8.1).
+# Still FORBIDDEN (any depth):
 #   * autoscaling.*       — Story 1.4 brings metrics-server online
 #   * resources.requests / resources.limits — fall back to values.yaml; Story 1.5 retunes
-#   * env / envFrom containing plaintext creds — forever banned; use Vault from Story 1.7+
+#   * env / envFrom containing plaintext creds — forever banned; Vault is Epic 9
+#
+# NAMING-DRIFT FIX (Story 1.7): ingress/Vault were mis-attributed to "Story 1.4"
+# / "Story 1.7+" in the old comment. Reality: Story 1.4 = observability; THIS
+# story (1.7) owns ingress; Vault/ESO is Epic 9.
 #
 # This file MUST exist non-empty — Story 1.2's `deploy-staging.yml` probe_helm
 # step closes its fallback branch by detecting it; deleting this file silently
-# re-opens the fallback (no real ACR push).
+# re-opens the fallback (no real ACR push). `${ACR_REGISTRY}` is the unified
+# deploy-time token (T0.3); image.tag is SHA-bumped by deploy-staging (BR4.1).
 image:
   repository: ${ACR_REGISTRY}/he-api/api-gateway
   tag: "0.1.0"
@@ -22,3 +30,27 @@ networkPolicy:
 serviceAccount:
   create: true
   name: ""
+# B4 — safety-log-retention cron image (build-matrix entry) SHA-bumped here.
+safetyLogRetention:
+  image:
+    repository: ${ACR_REGISTRY}/he-api/safety-log-retention
+    tag: "0.0.1"
+    pullPolicy: IfNotPresent
+# B5 — staging Ingress for the public traffic entrypoint. ingressClassName points
+# at the staging ingress-nginx controller (a cluster prerequisite — see Dev
+# Notes 前置依赖边界). TLS via cert-manager ClusterIssuer (also a prerequisite);
+# the cert is issued out-of-band, this story only declares the secretName/host.
+ingress:
+  enabled: true
+  className: ingress-nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+  hosts:
+    - host: api.staging.he-api.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: api-gateway-staging-tls
+      hosts:
+        - api.staging.he-api.com

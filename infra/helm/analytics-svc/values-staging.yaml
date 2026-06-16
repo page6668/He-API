@@ -1,0 +1,24 @@
+# analytics-svc staging overrides (Story 1.7 B7b/AC8). `${ACR_REGISTRY}` is the
+# unified deploy-time substitution token (T0.3 — convention ②); image.tag is
+# SHA-bumped by deploy-staging's update-helm-values step (BR4.1; NEVER `latest`).
+image:
+  repository: ${ACR_REGISTRY}/he-api/analytics-svc
+  tag: "0.0.1"
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 8080
+
+networkPolicy:
+  enabled: true
+
+serviceAccount:
+  create: true
+  name: ""
+
+serviceMonitor:
+  enabled: true
+  interval: 15s

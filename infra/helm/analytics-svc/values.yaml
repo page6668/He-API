@@ -1,0 +1,75 @@
+# Default values for analytics-svc (Story 1.7 B7b/AC8). Pod Security Restricted
+# profile mirrors auth-svc. NO payment secrets (BR8.1) — analytics-svc is a
+# Kafka-loop worker, not a payment service.
+
+image:
+  repository: he-api/analytics-svc
+  tag: "0.0.1"
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 96Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+env:
+  OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector.monitoring.svc.cluster.local:4317
+  # Kafka brokers for the usage-log / analytics consumer loop (comma-separated
+  # host:port). Empty in defaults; staging/prod overlays set managed Kafka.
+  kafkaBrokers: ""
+  # GDPR-exports OSS bucket (non-secret config; defaults in the binary).
+  ossGdprExportsBucket: "he-api-gdpr-exports"
+
+# analytics-svc exposes a single /healthz endpoint (apps/analytics-svc/cmd/server)
+# on :8080 for liveness+readiness; the main work is the Kafka consumer loop.
+probes:
+  readiness:
+    httpGet:
+      path: /healthz
+      port: 8080
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  liveness:
+    httpGet:
+      path: /healthz
+      port: 8080
+    initialDelaySeconds: 15
+    periodSeconds: 20
+
+# DB creds reused from Story 1.6 he-api-db-creds Secret (PG/Redis URIs).
+# NOTE (BR8.4 prerequisite): the ClickHouse DSN (HE_API_CLICKHOUSE_DSN) is a
+# downstream dependency provisioned out-of-band; this chart wires the shared
+# Secret but does NOT execute the real ClickHouse connection (Epic 9 / ops).
+db:
+  credsSecretName: he-api-db-creds
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+serviceMonitor:
+  enabled: true
+  interval: 15s
+
+networkPolicy:
+  enabled: true
+  monitoringNamespace: monitoring
+  kafkaCIDRs: []
+  kafkaPort: 9092
+  # ClickHouse + OSS egress (off-cluster managed); operators tighten via CIDRs.
+  downstreamCIDRs: []
+  downstreamPort: 443
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

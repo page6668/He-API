@@ -1,0 +1,103 @@
+{{- if .Values.networkPolicy.enabled }}
+# Story 1.7 B7b/AC8 — analytics-svc NetworkPolicy (mirrors auth-svc INT-067).
+#
+# Ingress (default-deny + explicit allows):
+#   - monitoring namespace (port 8080) — Prometheus scrape /metrics + /healthz
+#     (analytics-svc is a Kafka-loop worker; no in-cluster RPC clients).
+#
+# Egress: DNS + OTel + Kafka (consumer loop) + downstream ClickHouse/OSS (443).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "analytics-svc.fullname" . }}-default-deny
+  labels:
+    {{- include "analytics-svc.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "analytics-svc.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "analytics-svc.fullname" . }}-allow-ingress
+  labels:
+    {{- include "analytics-svc.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "analytics-svc.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.monitoringNamespace | default "monitoring" }}
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "analytics-svc.fullname" . }}-allow-egress
+  labels:
+    {{- include "analytics-svc.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "analytics-svc.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Egress
+  egress:
+    # DNS — kube-dns / CoreDNS in kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # OTel collector — telemetry uplink.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.monitoringNamespace | default "monitoring" }}
+      ports:
+        - protocol: TCP
+          port: 4317
+    # Kafka — consumer loop, managed/off-cluster, port-only allow.
+    - to:
+        {{- with .Values.networkPolicy.kafkaCIDRs }}
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+        {{- else }}
+        - ipBlock:
+            cidr: 0.0.0.0/0
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.kafkaPort | default 9092 }}
+    # Downstream ClickHouse + OSS exports over HTTPS (off-cluster managed).
+    - to:
+        {{- with .Values.networkPolicy.downstreamCIDRs }}
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+        {{- else }}
+        - ipBlock:
+            cidr: 0.0.0.0/0
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.downstreamPort | default 443 }}
+{{- end }}

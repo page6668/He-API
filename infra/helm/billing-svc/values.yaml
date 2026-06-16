@@ -1,5 +1,9 @@
-# Default values for billing-svc (Story 7.2). Currently scopes the fx-refresh
-# CronJob only; the billing-svc Deployment is provisioned separately.
+# Default values for billing-svc. Ships BOTH the Story-7.2 fx-refresh CronJob
+# AND (Story 1.7 B6) the billing-svc main-service Deployment. The two are
+# SEPARATE workloads that share this values file but render from distinct
+# templates (deployment.yaml vs cronjob-fx-refresh.yaml) — the fx-refresh cron
+# `schedule` literal is the H-2 gold-gate (verify-cron-schedule.sh) and is NOT
+# touched by the Deployment block.
 
 env:
   OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector.monitoring.svc.cluster.local:4317
@@ -8,6 +12,47 @@ env:
 # billing-svc consumes HE_API_DB_POSTGRES_URI via envFrom.
 db:
   credsSecretName: he-api-db-creds
+
+# Story 1.7 B6 — billing-svc main-service Deployment image. Distinct from the
+# fx-refresh cron image (fxRefresh.image); the Deployment binary is built from
+# apps/billing-svc/cmd/server (he-api/billing-svc). values.yaml keeps the
+# semver appVersion tag; values-staging.yaml SHA-bumps it (BR4.4).
+image:
+  repository: he-api/billing-svc
+  tag: "0.0.1"
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+# billing-svc server health endpoints (apps/billing-svc/internal/server):
+# /livez (liveness) + /ready (readiness gates traffic until the pricing
+# snapshot is loaded + the HTTP listener is up). /metrics is scraped via the
+# shared observability middleware.
+probes:
+  readiness:
+    httpGet:
+      path: /ready
+      port: 8080
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  liveness:
+    httpGet:
+      path: /livez
+      port: 8080
+    initialDelaySeconds: 15
+    periodSeconds: 20
 
 serviceAccount:
   create: true

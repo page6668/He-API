@@ -1,25 +1,28 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: adapter-ernie
+  name: payment-svc
   namespace: argocd
   labels:
-    he-api/epic: "4"
-    he-api/story: "4.6"
+    he-api/epic: "7"
+    he-api/story: "7.3"
+  # Story 1.7 B7 — Application + chart both created this story. The payment-svc
+  # service originates Epic 7; its Helm chart was added by 1.7/T7.1.
 spec:
   project: he-api
   source:
     repoURL: https://github.com/he-api/he-api
     targetRevision: HEAD
-    path: infra/helm/adapter-ernie
+    path: infra/helm/payment-svc
     helm:
-      releaseName: adapter-ernie
+      releaseName: payment-svc
+      # Story 1.7 B3 (BR3.4) — values.yaml first, values-staging.yaml overlay last.
       valueFiles:
         - values.yaml
         - values-staging.yaml
   destination:
     server: https://kubernetes.default.svc
-    namespace: he-api-adapters
+    namespace: he-api-staging
   syncPolicy:
     automated:
       prune: true

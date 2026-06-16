@@ -16,6 +16,7 @@ spec:
       releaseName: adapter-glm
       valueFiles:
         - values.yaml
+        - values-staging.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: he-api-adapters

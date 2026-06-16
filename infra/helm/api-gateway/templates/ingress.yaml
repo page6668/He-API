@@ -1,0 +1,40 @@
+{{- if .Values.ingress.enabled -}}
+# Story 1.7 B5 — api-gateway Ingress (the public traffic entrypoint). Disabled by
+# default (values.yaml); only values-staging.yaml turns it on with staging hosts
+# + TLS (BR5.1). ingressClassName + cert-manager issuer are cluster prerequisites
+# (Dev Notes 前置依赖边界). The 1.4-misattributed naming drift is corrected: this
+# resource belongs to Story 1.7, not 1.4 (BR5.2).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "api-gateway.fullname" . }}
+  labels:
+    {{- include "api-gateway.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType | default "Prefix" }}
+            backend:
+              service:
+                name: {{ include "api-gateway.fullname" $ }}
+                port:
+                  number: {{ $.Values.service.port }}
+          {{- end }}
+    {{- end }}
+{{- end }}

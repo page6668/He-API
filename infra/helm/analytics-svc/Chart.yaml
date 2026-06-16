@@ -1,0 +1,15 @@
+apiVersion: v2
+name: analytics-svc
+description: He-API analytics service (Epic 9). Kafka-loop worker (usage-log export / GDPR exports) with an HTTP health + /metrics listener. Chart added by Story 1.7 B7b/AC8 (H-1 — resolves the dangling ArgoCD Application; reuses the auth-svc chart structure, NO payment secrets).
+type: application
+version: 0.1.0
+appVersion: "0.0.1"
+kubeVersion: ">=1.29.0-0"
+
+keywords:
+  - he-api
+  - analytics
+  - kafka
+
+maintainers:
+  - name: He-API platform team
