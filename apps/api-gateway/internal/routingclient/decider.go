@@ -68,6 +68,20 @@ type Decider struct {
 	deadline time.Duration
 	metrics  *metrics
 	logger   *slog.Logger
+	// resolveUserDefault (Story 6.5) resolves the caller's account-level default
+	// routing strategy on the hot path (Q-A Option B — gateway cache + sentinel,
+	// wired in cmd/server/main.go). Nil → no user-default tier (byte-for-byte
+	// 6.2 behaviour; BR3-3). It NEVER errors — every uncertain path inside the
+	// resolver folds into STRATEGY_UNSPECIFIED (fail-OPEN, Q-F).
+	resolveUserDefault func(ctx context.Context, userID string) routingv1.Strategy
+}
+
+// SetUserDefaultResolver wires the Story-6.5 per-user default routing-strategy
+// resolver (the userpref.Resolver.ResolveUserDefault seam). Call once at
+// startup. A nil fn (or never calling this) leaves the user-default tier off —
+// Decide then behaves exactly as Story 6.2 (BR3-3 zero-regression).
+func (d *Decider) SetUserDefaultResolver(fn func(ctx context.Context, userID string) routingv1.Strategy) {
+	d.resolveUserDefault = fn
 }
 
 // NewDecider builds a Decider. A nil client disables routing — Decide then
@@ -89,7 +103,14 @@ func NewDecider(client ClientHandle, logger *slog.Logger) *Decider {
 // Decision (success or fail-open passthrough) or an *EnvelopeError (fail-closed
 // / invalid). The 100ms deadline (Q-E) is applied at this call site.
 func (d *Decider) Decide(ctx context.Context, model string, header http.Header, userID, heRequestID string) (Decision, error) {
-	strategy, requested, isMeta, conflict := ParseStrategy(model, header)
+	// Story 6.5 — resolve the account-level default BEFORE ParseStrategy (BR3-2).
+	// The resolver never errors (fail-OPEN to UNSPECIFIED inside). A nil resolver
+	// → UNSPECIFIED → the user-default tier is skipped (byte-for-byte 6.2).
+	userDefault := routingv1.Strategy_STRATEGY_UNSPECIFIED
+	if d.resolveUserDefault != nil {
+		userDefault = d.resolveUserDefault(ctx, userID)
+	}
+	strategy, requested, isMeta, conflict := ParseStrategy(model, header, userDefault)
 	if conflict {
 		d.logger.WarnContext(ctx, "strategy_conflict",
 			slog.String("event", "strategy_conflict"),
@@ -98,6 +119,16 @@ func (d *Decider) Decide(ctx context.Context, model string, header http.Header, 
 			slog.String("resolved_strategy", strategyLabel(strategy)),
 			slog.String("he_request_id", heRequestID),
 		) // Q-I: meta-model wins; header ignored.
+	}
+	// Story 6.5 (Q-G) — record when the user-default drove the decision. Non-PII:
+	// strategy_source + resolved_strategy + he_request_id only, NEVER user_id.
+	if userDefaultDrove(isMeta, header, userDefault) {
+		d.logger.InfoContext(ctx, "routing_strategy_source",
+			slog.String("event", "routing_strategy_source"),
+			slog.String("strategy_source", "user_default"),
+			slog.String("resolved_strategy", strategyLabel(strategy)),
+			slog.String("he_request_id", heRequestID),
+		)
 	}
 
 	// Routing disabled → passthrough (preserves pre-6.2 behaviour).

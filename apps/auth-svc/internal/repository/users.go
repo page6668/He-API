@@ -49,6 +49,10 @@ type User struct {
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
 	DisplayName         *string // Story 2.5 — nullable display name (BR-1.6)
+	// DefaultRoutingStrategy (Story 6.5) is the account-level default routing
+	// strategy ("quality"|"cost"|"latency"), or nil when the user has set no
+	// default (→ STRATEGY_DEFAULT passthrough). Enum-validated in auth-svc.
+	DefaultRoutingStrategy *string
 }
 
 var (
@@ -101,7 +105,7 @@ FROM he_api.users WHERE id = $1 LIMIT 1`
 	// hot path tight and avoids leaking encrypted secrets through the Settings
 	// page response surface.
 	getProfileByIDSQL = `SELECT id, email, password_hash, email_verified_at, oauth_provider, oauth_subject,
-       locale, timezone, totp_enabled, status, created_at, updated_at, display_name
+       locale, timezone, totp_enabled, status, created_at, updated_at, display_name, default_routing_strategy
 FROM he_api.users WHERE id = $1 LIMIT 1`
 
 	softLockUserSQL = `UPDATE he_api.users SET status='locked', locked_until=$1, updated_at=NOW() WHERE id=$2`
@@ -269,7 +273,7 @@ func scanProfileRow(row pgx.Row) (*User, error) {
 		&u.ID, &u.Email, &u.PasswordHash, &u.EmailVerifiedAt,
 		&u.OAuthProvider, &u.OAuthSubject, &u.Locale, &u.Timezone,
 		&u.TOTPEnabled, &u.Status, &u.CreatedAt, &u.UpdatedAt,
-		&u.DisplayName,
+		&u.DisplayName, &u.DefaultRoutingStrategy,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -444,7 +448,7 @@ func MarkTOTPUsed(ctx context.Context, q Querier, userID uuid.UUID) error {
 // factor='totp' paths. Separate from the full User row to avoid pulling the
 // rest of the columns on every challenge.
 type TOTPSecretRow struct {
-	EncryptedSecret []byte     // NULL when totp_enabled=FALSE
+	EncryptedSecret []byte // NULL when totp_enabled=FALSE
 	Enabled         bool
 	EnrolledAt      *time.Time
 }
@@ -463,6 +467,10 @@ type UpdateProfileParams struct {
 	LocaleSet      bool
 	Timezone       string
 	TimezoneSet    bool
+	// Story 6.5 — DefaultRoutingStrategy uses *string so callers express both
+	// "set to <value>" and "clear to NULL" (nil-valued pointer with Set=true).
+	DefaultRoutingStrategy    *string
+	DefaultRoutingStrategySet bool
 }
 
 // UpdateProfile applies the partial profile update, validating the supplied
@@ -543,6 +551,11 @@ func UpdateProfile(
 		setBuilder.WriteString(", timezone=")
 		setBuilder.WriteString(placeholder(len(args)))
 	}
+	if params.DefaultRoutingStrategySet {
+		args = append(args, params.DefaultRoutingStrategy) // *string — nil → SQL NULL (clear)
+		setBuilder.WriteString(", default_routing_strategy=")
+		setBuilder.WriteString(placeholder(len(args)))
+	}
 	args = append(args, userID)
 
 	var sqlBuilder strings.Builder
@@ -614,7 +627,7 @@ const (
 	// (no fmt.Sprintf with SQL verbs in format string per the package-level
 	// static SQL scan in users_test.go TestSourceUsesParameterizedSQL).
 	updateProfilePrefix    = "UPDATE he_api.users SET "
-	updateProfileReturning = " RETURNING id, email, password_hash, email_verified_at, oauth_provider, oauth_subject, locale, timezone, totp_enabled, status, created_at, updated_at, display_name"
+	updateProfileReturning = " RETURNING id, email, password_hash, email_verified_at, oauth_provider, oauth_subject, locale, timezone, totp_enabled, status, created_at, updated_at, display_name, default_routing_strategy"
 )
 
 // RequestAccountDeletion runs the AC2 active→pending_deletion single-winner CAS

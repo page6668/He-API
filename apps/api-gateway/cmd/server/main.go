@@ -49,6 +49,7 @@ import (
 	"github.com/he-api/he-api/apps/api-gateway/internal/routingclient"
 	"github.com/he-api/he-api/apps/api-gateway/internal/safetylog"
 	"github.com/he-api/he-api/apps/api-gateway/internal/usage"
+	"github.com/he-api/he-api/apps/api-gateway/internal/userpref"
 	obs "github.com/he-api/he-api/packages/go-observability"
 	plancatalogue "github.com/he-api/he-api/packages/plan-catalogue"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1/authv1connect"
@@ -374,6 +375,18 @@ func main() {
 	// Story 6.2 — routing decision client. ROUTING_SVC_ENDPOINT unset → nil
 	// client → the Decider passes req.Model through (pre-6.2 behaviour).
 	routingDecider := routingclient.NewDecider(routingclient.LoadFromEnv(), logger)
+	// Story 6.5 (Q-A Option B) — wire the per-user default routing-strategy
+	// resolver: a single hot-path Redis GET on the auth-svc-owned
+	// `user:routing_pref:{id}` key (distinct namespace from entitlement:*),
+	// sentinel-invalidated on profile save, lazy-populated via the auth-svc GetMe
+	// RPC on a miss. Every uncertain path fails OPEN to STRATEGY_UNSPECIFIED (Q-F)
+	// → byte-for-byte 6.2 passthrough. auth-svc is the sole writer (write-through).
+	userDefaultResolver := userpref.NewResolver(
+		redis.NewClient(mustRedisOptions(redisURL, logger)),
+		authUpstream,
+		logger,
+	)
+	routingDecider.SetUserDefaultResolver(userDefaultResolver.ResolveUserDefault)
 
 	// Story 7.1 — usage.recorded PRODUCER (Q-PRODUCER: the gateway emits, billing-
 	// svc consumes). HE_API_KAFKA_BROKERS unset → Nop emitter (no emission). The

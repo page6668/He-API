@@ -493,6 +493,10 @@ message GetMeResponse {
   // Architect Q2 ruling 2026-05-16. The api-gateway forwards verbatim as the
   // ETag response header.
   string etag = 10;
+  // Story 6.5 — account-level default routing strategy ("quality"|"cost"|
+  // "latency"), or absent when the user has set no default (→ STRATEGY_DEFAULT
+  // passthrough). Additive (buf breaking: FILE stays green).
+  optional string default_routing_strategy = 11;
 }
 
 message UpdateProfileRequest {
@@ -511,6 +515,11 @@ message UpdateProfileRequest {
   // pattern as RegisterUserRequest etc).
   string client_ip = 6;
   string user_agent = 7;
+  // Story 6.5 — proto3 optional carries the three-way intent the gateway
+  // resolves from the HTTP body: wire-absent = "do not change"; "" = clear to
+  // NULL (→ STRATEGY_DEFAULT passthrough); "quality"|"cost"|"latency" = set.
+  // auth-svc validates the enum (any other value → INVALID_ARGUMENT, no write).
+  optional string default_routing_strategy = 8;
 }
 
 message UpdateProfileResponse {
@@ -529,6 +538,9 @@ message UpdateProfileResponse {
   // pre-update DB value. api-gateway uses this to decide whether to
   // rewrite the he_locale cookie (BR-3.10 / Architect Q3).
   bool locale_changed = 11;
+  // Story 6.5 — echoes the persisted default_routing_strategy so the console
+  // renders the saved value on PUT success (absent → no default).
+  optional string default_routing_strategy = 12;
 }
 
 // --- Story 3.2 — ValidateApiKey (Bearer-token API key validation) --------

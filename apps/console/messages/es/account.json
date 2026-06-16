@@ -325,5 +325,37 @@
         "body": "Tu cuenta de He-API y tus datos personales se han eliminado permanentemente el {executed_at}. Los registros de facturación exigidos por ley se han conservado."
       }
     }
+  },
+  "routing": {
+    "title": "Estrategia de enrutamiento predeterminada",
+    "description": "Elige cómo enruta He-API tus solicitudes de chat de forma predeterminada. Las anulaciones por solicitud (la cabecera X-He-Routing-Strategy o los modelos he-router-*) siempre tienen prioridad.",
+    "options": {
+      "passthrough": "Predeterminado (passthrough)",
+      "quality": "Calidad",
+      "cost": "Coste",
+      "latency": "Latencia"
+    },
+    "hints": {
+      "passthrough": "Sin valor predeterminado: las solicitudes se enrutan al modelo que especifiques.",
+      "quality": "Prioriza el modelo de mayor calidad.",
+      "cost": "Prioriza el modelo de menor coste.",
+      "latency": "Prioriza el modelo de respuesta más rápida."
+    },
+    "actions": {
+      "save": "Guardar estrategia de enrutamiento"
+    },
+    "toast": {
+      "saved": "Estrategia de enrutamiento predeterminada guardada."
+    },
+    "errors": {
+      "generic": "No se pudo guardar tu estrategia de enrutamiento. Inténtalo de nuevo.",
+      "rate_limited": "Demasiados cambios. Espera un momento e inténtalo de nuevo."
+    },
+    "banners": {
+      "concurrent_update": {
+        "message": "Tu perfil cambió en otra pestaña.",
+        "reload_cta": "Recargar"
+      }
+    }
   }
 }

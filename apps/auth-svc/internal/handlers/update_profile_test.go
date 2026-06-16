@@ -47,6 +47,8 @@ type profileFlowOpts struct {
 	newDisplayName    *string
 	oldLocale, newLocale     string
 	oldTimezone, newTimezone string
+	oldDefaultRouting *string // Story 6.5 — default_routing_strategy seed/return
+	newDefaultRouting *string
 	expectUpdateArgs []interface{}
 	updateSQLRegex   string
 }
@@ -62,7 +64,7 @@ func expectFullProfileUpdate(t *testing.T, mock pgxmock.PgxConnIface, o profileF
 			o.id, "user@example.com", []byte("$2a$12$hash"), &verifiedAt,
 			(*string)(nil), (*string)(nil), o.oldLocale, o.oldTimezone,
 			false, "active", o.oldUpdatedAt.Add(-time.Hour*24), o.oldUpdatedAt,
-			o.oldDisplayName,
+			o.oldDisplayName, o.oldDefaultRouting,
 		))
 	// repository.UpdateProfile SELECT FOR UPDATE.
 	mock.ExpectQuery(`SELECT updated_at, status FROM he_api\.users WHERE id=\$1 FOR UPDATE`).
@@ -76,7 +78,7 @@ func expectFullProfileUpdate(t *testing.T, mock pgxmock.PgxConnIface, o profileF
 			o.id, "user@example.com", []byte("$2a$12$hash"), &verifiedAt,
 			(*string)(nil), (*string)(nil), o.newLocale, o.newTimezone,
 			false, "active", o.oldUpdatedAt.Add(-time.Hour*24), o.newUpdatedAt,
-			o.newDisplayName,
+			o.newDisplayName, o.newDefaultRouting,
 		))
 }
 
@@ -262,7 +264,7 @@ func TestUpdateProfile_EtagMismatch_Returns412(t *testing.T) {
 			id, "u@example.com", []byte("$2a$12$x"), &verifiedAt,
 			(*string)(nil), (*string)(nil), "en", "UTC",
 			false, "active", current.Add(-time.Hour*24), current,
-			(*string)(nil),
+			(*string)(nil), (*string)(nil),
 		))
 	h.mock.ExpectQuery(`SELECT updated_at, status FROM he_api\.users WHERE id=\$1 FOR UPDATE`).
 		WithArgs(id).

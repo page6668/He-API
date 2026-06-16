@@ -28,6 +28,10 @@ const profileResponseSchema = z.object({
   oauth_provider: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
+  // Story 6.5 — account-level default routing strategy (always present, nullable
+  // on the wire). `.optional()` keeps the Profile type backward-compatible for
+  // callers that construct it without this field (e.g. ProfileForm tests).
+  default_routing_strategy: z.string().nullable().optional(),
 });
 
 export type Profile = z.infer<typeof profileResponseSchema>;

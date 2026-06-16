@@ -83,6 +83,11 @@ func profileSnapshot(u *repository.User, localeChanged bool) *authv1.GetMeRespon
 	if u.OAuthProvider != nil {
 		resp.OauthProvider = u.OAuthProvider
 	}
+	// Story 6.5 — surface the persisted default routing strategy (nil → absent →
+	// no default → STRATEGY_DEFAULT passthrough).
+	if u.DefaultRoutingStrategy != nil {
+		resp.DefaultRoutingStrategy = u.DefaultRoutingStrategy
+	}
 	_ = localeChanged // UpdateProfile encodes via UpdateProfileResponse.LocaleChanged separately
 	return resp
 }

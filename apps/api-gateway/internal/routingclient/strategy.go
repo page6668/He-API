@@ -15,11 +15,20 @@ const MetaModelPrefix = "he-router-"
 const RoutingStrategyHeader = "X-He-Routing-Strategy"
 
 // ParseStrategy resolves the routing strategy from the request per the
-// cascade-locked Q-I precedence:
+// cascade-locked precedence — EXTENDED by Story 6.5 with the account-level
+// user-default tier inserted between the header and the terminal default:
 //
 //	he-router-{quality,cost,latency} meta-model in `model`  WINS
 //	  → else X-He-Routing-Strategy header
+//	  → else the caller's persisted user default (Story 6.5)   [NEW tier]
 //	  → else STRATEGY_DEFAULT (passthrough of the concrete `model`)
+//
+// userDefault is the strategy resolved from the caller's account preference
+// (routingclient is mechanism-agnostic — the gateway resolves it via the
+// Story-6.5 userpref cache resolver before calling here). STRATEGY_UNSPECIFIED
+// (and the defensive STRATEGY_DEFAULT) mean "no default" → the tier is skipped
+// and behaviour is BYTE-FOR-BYTE the pre-6.5 Story-6.2 cascade (BR3-3 — the
+// user-default tier is a pure addition; zero regression when unset).
 //
 // Returns:
 //   - strategy        — the resolved Strategy enum;
@@ -30,11 +39,11 @@ const RoutingStrategyHeader = "X-He-Routing-Strategy"
 //   - conflict        — true when BOTH a meta-model and a header were present
 //     (meta wins; the caller logs WARN strategy_conflict).
 //
-// An unknown/empty header value resolves to the default path (UNSPECIFIED ≡
-// DEFAULT), never an error (BLIND-BOUNDARY-005); an unknown he-router-xyz suffix
-// is NOT a valid meta-model and falls through to the default path as a concrete
-// (unresolvable) model id.
-func ParseStrategy(model string, header http.Header) (strategy routingv1.Strategy, requestedModel string, isMeta, conflict bool) {
+// An unknown/empty header value resolves PAST the header branch (into the
+// user-default tier, then default), never an error (BLIND-BOUNDARY-005); an
+// unknown he-router-xyz suffix is NOT a valid meta-model and falls through as a
+// concrete (unresolvable) model id.
+func ParseStrategy(model string, header http.Header, userDefault routingv1.Strategy) (strategy routingv1.Strategy, requestedModel string, isMeta, conflict bool) {
 	hdrPresent := strings.TrimSpace(header.Get(RoutingStrategyHeader)) != ""
 
 	if s, ok := metaStrategy(model); ok {
@@ -47,10 +56,36 @@ func ParseStrategy(model string, header http.Header) (strategy routingv1.Strateg
 		if s, ok := headerStrategy(header.Get(RoutingStrategyHeader)); ok {
 			return s, model, false, false
 		}
-		// Unknown header value → default path (not an error).
+		// Unknown header value → fall through to the user-default tier.
+	}
+
+	// Story 6.5 — account-level user-default tier (the concrete model is still
+	// sent to routing-svc; only the STRATEGY enum changes — BR3-5). UNSPECIFIED /
+	// DEFAULT mean "no default" and skip the tier (BR3-3 additive purity).
+	if userDefault != routingv1.Strategy_STRATEGY_UNSPECIFIED && userDefault != routingv1.Strategy_STRATEGY_DEFAULT {
+		return userDefault, model, false, false
 	}
 
 	return routingv1.Strategy_STRATEGY_DEFAULT, model, false, false
+}
+
+// userDefaultDrove reports whether the Story-6.5 account-level user-default tier
+// is what resolved the strategy (i.e. no meta-model, no VALID header, and a real
+// persisted default). Used by Decide for the Q-G strategy_source observability —
+// it mirrors ParseStrategy's fall-through exactly (an invalid/empty header falls
+// past the header branch into the user-default tier).
+func userDefaultDrove(isMeta bool, header http.Header, userDefault routingv1.Strategy) bool {
+	if isMeta ||
+		userDefault == routingv1.Strategy_STRATEGY_UNSPECIFIED ||
+		userDefault == routingv1.Strategy_STRATEGY_DEFAULT {
+		return false
+	}
+	if raw := header.Get(RoutingStrategyHeader); strings.TrimSpace(raw) != "" {
+		if _, ok := headerStrategy(raw); ok {
+			return false // a valid header outranks the user-default
+		}
+	}
+	return true
 }
 
 // metaStrategy maps a he-router-{quality,cost,latency} model id to its strategy.

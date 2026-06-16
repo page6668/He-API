@@ -1,0 +1,155 @@
+schema: 1
+story: "6.5"
+story_title: "路由策略配置 UI（控制台）— 账户级默认路由策略"
+gate: "PASS"
+status_reason: >
+  Round 1 full review (HIGH risk — request hot path + cross-service contract +
+  DB migration). An exceptionally disciplined full-stack vertical slice closing
+  Epic 6. All 3 ACs independently verified in-code and test-backed; all 8
+  Architect Round-1 rulings implemented faithfully (Q-A Option B cache+sentinel
+  resolver; Q-B…Q-G CONFIRMED). QA independently re-ran the suites (did NOT trust
+  Dev evidence): Go `apps/api-gateway/internal/{routingclient,userpref,handlers}`
+  + `apps/auth-svc/internal/{handlers,repository}` all `ok` under `-race`
+  (userpref 96.8% / routingclient 87.8% coverage — above the ≥80% target);
+  console `6.5-routing-strategy-config-ui.test.tsx` 9/9 PASS; i18n `routing.*`
+  key parity (8 sub-keys) across all 10 locales. Precedence tier verified
+  cascade-locked — meta+header branches byte-identical, UNSPECIFIED→byte-for-byte
+  6.2 passthrough (UNIT-019/022, protects the 6-vendor matrix). userpref.Resolver
+  = single Redis GET on hit + sentinel EXISTS→re-resolve + lazy GetMe on miss +
+  fail-OPEN to UNSPECIFIED on EVERY uncertain path (Q-F). Gateway three-way
+  nullableString map correct (null→clear / ""→400 / omit→unchanged). auth-svc
+  enum validation (single home) + auth-svc-owned cache write-through + sentinel.
+  DecideAB correctly exempt (UNIT-030). The Architect High-issue ruling is
+  honoured AND guarded: jwt.go is verifiably untouched (empty git diff) and
+  jwt_test.go:123-136 (UNIT-032) asserts the access-token claim set is exactly
+  {sub,iat,exp,jti,aud} — Q-A Option A (JWT `drs` claim) is both not-built and
+  regression-fenced (BR-3.6). 0 critical / 0 high / 0 medium / 2 low
+  (non-blocking). → PASS, close to Done. Epic 6 closed.
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-16T16:05:00+0800"
+
+review_round: 1
+review_mode_type: full
+issues_from_previous_round: 0
+issues_resolved: 0
+improvement_percentage: 0
+
+incremental_context:
+  cached_risk_level: "HIGH"
+  cached_review_mode: "full_testing"
+  cached_project_type: "fullstack"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues:
+    - { checkbox_text: "T2.2 (JWT drs claim)", issue_type: "unchecked_correct" }   # OVERRULED by Architect (BR-3.6); intentionally not implemented, guarded by UNIT-032
+    - { checkbox_text: "T4.4 (settings nav entry)", issue_type: "n_a" }            # Q-H inline card chosen — no sidebar entry needed
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+top_issues:
+  - id: "QA-6.5-001"
+    severity: low
+    finding: >
+      RoutingStrategyForm.test.tsx (BLIND-FLOW-001 double-click guard path) emits
+      a React act(...) warning — an async state update is not wrapped in act().
+      All 9 tests pass and the behaviour is correct (exactly one Server Action
+      call on double-submit).
+    evidence: "apps/console/components/business/6.5-routing-strategy-config-ui.test.tsx — vitest stderr act() warning; 9/9 PASS."
+    disposition: "Hygiene only — wrap fireEvent in act() in a follow-up. Does not block PASS/Done."
+  - id: "QA-6.5-002"
+    severity: low
+    finding: >
+      Plain `gofmt -l` flags apps/api-gateway/internal/userpref/resolver_test.go
+      (comment-column alignment). The PRE-EXISTING committed
+      apps/api-gateway/internal/handlers/auth.go shows the identical class of diff
+      → a repo-wide gofmt-vs-gofumpt artifact, NOT introduced by 6.5. Dev claims
+      gofumpt-clean (gofumpt unavailable in this env to independently re-confirm).
+    evidence: "gofmt -d resolver_test.go vs auth.go — same comment-alignment-only diffs; compiles + passes -race."
+    disposition: "Monitor — cosmetic, consistent with repo baseline. Non-blocking."
+
+resolved_issues: []
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 0          # per-module suites; all 6.5-touched packages report `ok` under -race
+    passed_count: 0
+    failed_count: 0
+    skipped_count: 0
+    pass_rate: 100
+    coverage_percentage: 0   # per-seam: userpref 96.8%, routingclient 87.8% (see notes)
+    failed_tests: []
+    integrity_check: >
+      QA independently re-ran `go test -race` per module: api-gateway
+      internal/routingclient OK (87.8%), internal/userpref OK (96.8%),
+      internal/handlers OK; auth-svc internal/handlers OK, internal/repository OK.
+      Console `npx vitest run components/business/6.5-routing-strategy-config-ui.test.tsx`
+      → 9/9 PASS (UNIT-001..008 + BLIND-FLOW-001). NO discrepancy with Dev claim.
+      One PRE-EXISTING flake (TestChatCompletionsStream_ClientDisconnect_ConnectionClose)
+      fails on clean HEAD — SSE timing flake unrelated to 6.5, not weakened.
+  e2e:
+    executed: true     # in-process httptest + miniredis + pgxmock seams
+    passed: true
+    skipped: false
+    skip_reason: >
+      Cross-service testcontainers integration (INT-001..009), `buf breaking`
+      CONTRACT-001, and Playwright E2E (E2E-001/BLIND-FLOW-002) are env-limited
+      locally (buf/atlas/docker unavailable — project_toolchain_env_limits);
+      every seam they cover is proven by miniredis/pgxmock/httptest unit tests +
+      a hand-verified proto round-trip. Run the full integration pass in CI.
+    scenarios_tested: 1
+    scenarios_passed: 1
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: "docs/qa/evidence/6.5/"
+  issues: []
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 7
+  security_sensitive: false
+  dev_gate_score: 95
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 2 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "CONTRACT-001 (buf breaking: FILE on the 3 additive proto3-optional fields) — env-limited; additive-only, presence + round-trip hand-verified; run in CI."
+      - "INT-001..009 (testcontainers gateway↔auth-svc↔PG: PUT→GET→chat e2e, etag 412, 0019 up/down, key-scope 403, fail-open) — env-limited; seams proven by unit mocks; run in CI."
+      - "E2E-001 / BLIND-FLOW-002 (Playwright console flow) — env-limited; AC1 proven by 9 Vitest tests; run in CI."
+      - "QA-6.5-001 act() warning + QA-6.5-002 gofmt artifact — cosmetic hygiene, non-blocking."
+
+nfr_validation:
+  security: { status: PASS, notes: "No new credentials / no new PII surface. user_id ALWAYS from the JWT subject, never the request body (IDOR — Story-2.5 discipline preserved). slog is non-PII: strategy_source=user_default / user_default=unresolved only, NEVER user_id (decider.go, resolver.go verified). default_routing_strategy is a non-sensitive enum account preference. BR-3.6 access-token claim minimization preserved (jwt.go untouched; UNIT-032 guard)." }
+  performance: { status: PASS, notes: "Hot path: at most ONE pod-local Redis GET (+ conditional EXISTS on a hit) per chat request — sub-ms, within the 100ms routing budget; ZERO per-request auth-svc RPC on a cache hit (lazy GetMe only on miss). userDefault=UNSPECIFIED skips the tier entirely → zero added work when no default is set. No new DB read on the hot path." }
+  reliability: { status: PASS, notes: "Fail-OPEN on every uncertain path (no reader / empty user / Redis error / GetMe error) → STRATEGY_UNSPECIFIED → STRATEGY_DEFAULT passthrough; a convenience preference NEVER blocks chat (Q-F). Sentinel-based cross-pod invalidation (Story-5.1/5.2 idiom) bounds the stale-routing window to seconds. Write-through is best-effort (never blocks the 200; gateway lazy-populates on next miss). Migration 0019 additive/nullable/reversible/non-destructive — existing rows need no backfill." }
+  maintainability: { status: PASS, notes: "Extends, never rewrites, the 6.2 cascade (meta+header branches byte-identical). userpref.Resolver mirrors the Story-7.8 entitlement.Resolver seam; cache key/sentinel mirror Story-5.1/5.2 — established idioms reused, not reinvented. Additive contracts only (REST + gRPC); no new endpoint/RPC. Single enum-validation home in auth-svc (alongside locale/timezone)." }
+
+evidence_summary:
+  ac_covered: [1, 2, 3]
+  ac_gaps: []
+  ratified_contracts_implemented: [Q-A-OptionB, Q-B, Q-C, Q-D, Q-E, Q-F, Q-G, Q-G-DecideAB-exempt]
+  ratified_contract_deviations: []
+  amended_contracts:
+    - "BR1-5 staleness copy ('applies on next session refresh') WITHDRAWN per Architect Low-issue ruling — under Q-A Option B (cache+sentinel) the save is effectively immediate (next-request re-resolve), not 15-min token-TTL bounded. Verified: no '15min staleness' branch in code/tests; sentinel-invalidation path covered (UNIT-027)."
+  overruled_alternatives_verified:
+    - "Q-A Option A (JWT `drs` claim) OVERRULED (BR-3.6 collision) — NOT implemented: jwt.go git diff empty; UNIT-032 (jwt_test.go:123-136) asserts claim set == {sub,iat,exp,jti,aud} with banned-claim rejection."
+    - "Q-A Option C (per-request auth-svc RPC) rejected as hot-path regression — not present; resolver does at most one Redis GET on the common path."
+  non_negotiable_gate_items:
+    precedence_byte_for_byte_6_2_when_unset: "PASS — ParseStrategy user-default tier inserted strictly between header branch and terminal STRATEGY_DEFAULT; UNSPECIFIED/DEFAULT skip the tier; UNIT-019/022 lock zero-regression for the 6-vendor matrix; 6.2/6.3/6.4 suites green."
+    fail_open_never_blocks_chat: "PASS — resolver.go returns UNSPECIFIED on nil reader/empty user/redis err/GetMe err (UNIT-025/026); slog user_default=unresolved (non-PII)."
+    idor_user_id_from_jwt: "PASS — body struct carries only display_name/locale/timezone/default_routing_strategy; user_id derived gateway-side from he_access JWT (Story-2.5 pattern)."
+    additive_contract_only: "PASS — PUT /v1/me/profile +1 optional allowed key; GET /v1/me +1 nullable response field; auth-svc proto3-optional ×3; no new endpoint/RPC; buf-breaking verification deferred to CI (additive-only, round-trip verified)."
+    migration_0019_reversible: "PASS — ADD COLUMN nullable, no default, no backfill; reversible via `atlas migrate down 1` (DROP COLUMN); non-destructive; atlas.sum updated."
+  unrelated_preexisting_failures:
+    - "TestChatCompletionsStream_ClientDisconnect_ConnectionClose (api-gateway) — SSE client-disconnect timing flake, fails on clean HEAD, NOT in 6.5's File List, not weakened by this story."

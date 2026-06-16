@@ -77,6 +77,9 @@ const (
 	// Story 2.5 profile status codes — map 1:1 to AC1-AC4 Error Handling tables.
 	StatusInvalidDisplayName     = "400_invalid_display_name"
 	StatusInvalidTimezone        = "400_invalid_timezone"
+	// Story 6.5 — invalid default_routing_strategy value (not in
+	// {quality,cost,latency}). Maps to 400; no DB write (UNIT-010).
+	StatusInvalidDefaultRoutingStrategy = "400_invalid_default_routing_strategy"
 	StatusUnknownField           = "400_unknown_field"
 	StatusEtagMissing            = "428_precondition_required"
 	StatusEtagMismatch           = "412_etag_mismatch"

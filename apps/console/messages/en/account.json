@@ -325,5 +325,37 @@
         "body": "Your He-API account and personal data have been permanently deleted on {executed_at}. Billing records required by law have been retained."
       }
     }
+  },
+  "routing": {
+    "title": "Default routing strategy",
+    "description": "Choose how He-API routes your chat requests by default. Per-request overrides (the X-He-Routing-Strategy header or he-router-* models) always take precedence.",
+    "options": {
+      "passthrough": "Default (passthrough)",
+      "quality": "Quality",
+      "cost": "Cost",
+      "latency": "Latency"
+    },
+    "hints": {
+      "passthrough": "No default — requests route to the model you specify.",
+      "quality": "Prefer the highest-quality model.",
+      "cost": "Prefer the lowest-cost model.",
+      "latency": "Prefer the fastest-responding model."
+    },
+    "actions": {
+      "save": "Save routing strategy"
+    },
+    "toast": {
+      "saved": "Default routing strategy saved."
+    },
+    "errors": {
+      "generic": "Couldn’t save your routing strategy. Please try again.",
+      "rate_limited": "Too many changes. Please wait a moment and try again."
+    },
+    "banners": {
+      "concurrent_update": {
+        "message": "Your profile changed in another tab.",
+        "reload_cta": "Reload"
+      }
+    }
   }
 }

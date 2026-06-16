@@ -10,6 +10,7 @@ import { unstable_setRequestLocale, getTranslations } from 'next-intl/server';
 import { isLocale, defaultLocale, type Locale } from '@/i18n/config';
 import { getMyProfile } from './_actions/get-my-profile';
 import { ProfileForm } from '@/components/business/ProfileForm';
+import { RoutingStrategyForm } from '@/components/business/RoutingStrategyForm';
 
 interface ProfilePageProps {
   params: { locale: string };
@@ -44,10 +45,22 @@ export default async function ProfilePage({ params: { locale } }: ProfilePagePro
   }
 
   return (
-    <ProfileForm
-      defaults={result.data}
-      etag={result.etag}
-      currentLocale={resolvedLocale}
-    />
+    <div className="space-y-10">
+      <ProfileForm
+        defaults={result.data}
+        etag={result.etag}
+        currentLocale={resolvedLocale}
+      />
+      {/* Story 6.5 — account-level default routing strategy (Q-H: inline card on
+          the existing settings surface). Shares the profile etag for the
+          optimistic-concurrency If-Match contract. */}
+      <section className="border-t pt-10">
+        <RoutingStrategyForm
+          defaultRoutingStrategy={result.data.default_routing_strategy ?? null}
+          etag={result.etag}
+          currentLocale={resolvedLocale}
+        />
+      </section>
+    </div>
   );
 }

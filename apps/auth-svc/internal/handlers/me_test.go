@@ -22,14 +22,15 @@ import (
 )
 
 // profileRowColumns mirrors the projection of the Story 2.5 getProfileByIDSQL
-// (repository.scanProfileRow scans 13 columns: id, email, password_hash,
+// (repository.scanProfileRow scans 14 columns: id, email, password_hash,
 // email_verified_at, oauth_provider, oauth_subject, locale, timezone,
-// totp_enabled, status, created_at, updated_at, display_name).
+// totp_enabled, status, created_at, updated_at, display_name,
+// default_routing_strategy [Story 6.5]).
 var profileRowColumns = []string{
 	"id", "email", "password_hash", "email_verified_at",
 	"oauth_provider", "oauth_subject", "locale", "timezone",
 	"totp_enabled", "status", "created_at", "updated_at",
-	"display_name",
+	"display_name", "default_routing_strategy",
 }
 
 // expectProfileSelect wires the pgxmock expectation for repository.GetProfileByID's
@@ -42,14 +43,19 @@ func expectProfileSelect(t *testing.T, mock pgxmock.PgxConnIface, id uuid.UUID, 
 		WillReturnRows(rows)
 }
 
-// happyProfileRow builds a populated profile row.
+// happyProfileRow builds a populated profile row. defaultRouting is the Story
+// 6.5 default_routing_strategy column (nil = no default).
 func happyProfileRow(id uuid.UUID, updatedAt time.Time, displayName *string) *pgxmock.Rows {
+	return happyProfileRowWithRouting(id, updatedAt, displayName, nil)
+}
+
+func happyProfileRowWithRouting(id uuid.UUID, updatedAt time.Time, displayName, defaultRouting *string) *pgxmock.Rows {
 	verifiedAt := updatedAt.Add(-time.Hour)
 	return pgxmock.NewRows(profileRowColumns).AddRow(
 		id, "user@example.com", []byte("$2a$12$hash"), &verifiedAt,
 		(*string)(nil), (*string)(nil), "en", "UTC",
 		false, "active", updatedAt.Add(-time.Hour*24), updatedAt,
-		displayName,
+		displayName, defaultRouting,
 	)
 }
 
@@ -131,7 +137,7 @@ func TestGetMe_PendingDeletion_ReturnsFailedPrecondition(t *testing.T) {
 		id, "u@example.com", []byte{}, &now,
 		(*string)(nil), (*string)(nil), "en", "UTC",
 		false, "pending_deletion", now, now,
-		(*string)(nil),
+		(*string)(nil), (*string)(nil),
 	)
 	expectProfileSelect(t, h.mock, id, rows)
 

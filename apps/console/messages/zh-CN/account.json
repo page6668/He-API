@@ -325,5 +325,37 @@
         "body": "您的 He-API 账户和个人数据已于 {executed_at} 永久删除。法律要求保留的账单记录已予以保留。"
       }
     }
+  },
+  "routing": {
+    "title": "默认路由策略",
+    "description": "选择 He-API 默认如何路由你的聊天请求。单次请求的覆盖设置（X-He-Routing-Strategy 请求头或 he-router-* 模型）始终优先生效。",
+    "options": {
+      "passthrough": "默认（透传）",
+      "quality": "质量",
+      "cost": "成本",
+      "latency": "延迟"
+    },
+    "hints": {
+      "passthrough": "无默认策略——请求将路由到你指定的模型。",
+      "quality": "优先选择质量最高的模型。",
+      "cost": "优先选择成本最低的模型。",
+      "latency": "优先选择响应最快的模型。"
+    },
+    "actions": {
+      "save": "保存路由策略"
+    },
+    "toast": {
+      "saved": "默认路由策略已保存。"
+    },
+    "errors": {
+      "generic": "无法保存你的路由策略，请重试。",
+      "rate_limited": "更改过于频繁。请稍候片刻后重试。"
+    },
+    "banners": {
+      "concurrent_update": {
+        "message": "你的资料已在另一个标签页中被修改。",
+        "reload_cta": "重新加载"
+      }
+    }
   }
 }

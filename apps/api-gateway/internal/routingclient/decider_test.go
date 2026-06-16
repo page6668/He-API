@@ -54,7 +54,7 @@ func ok(model string, strat routingv1.Strategy, src string) *routingv1.SelectMod
 // 6.2-UNIT-001 — he-router-cost meta-model → COST, requested_model="" (meta wins).
 func TestParseStrategy_MetaModelWins(t *testing.T) {
 	t.Parallel()
-	s, req, isMeta, conflict := routingclient.ParseStrategy("he-router-cost", http.Header{})
+	s, req, isMeta, conflict := routingclient.ParseStrategy("he-router-cost", http.Header{}, routingv1.Strategy_STRATEGY_UNSPECIFIED)
 	if s != routingv1.Strategy_STRATEGY_COST || req != "" || !isMeta || conflict {
 		t.Errorf("got (%v,%q,meta=%v,conflict=%v), want (COST,\"\",true,false)", s, req, isMeta, conflict)
 	}
@@ -63,7 +63,7 @@ func TestParseStrategy_MetaModelWins(t *testing.T) {
 // 6.2-UNIT-002 — header strategy + concrete model → QUALITY, requested=concrete.
 func TestParseStrategy_Header(t *testing.T) {
 	t.Parallel()
-	s, req, isMeta, _ := routingclient.ParseStrategy("qwen-max", hdr(routingclient.RoutingStrategyHeader, "quality"))
+	s, req, isMeta, _ := routingclient.ParseStrategy("qwen-max", hdr(routingclient.RoutingStrategyHeader, "quality"), routingv1.Strategy_STRATEGY_UNSPECIFIED)
 	if s != routingv1.Strategy_STRATEGY_QUALITY || req != "qwen-max" || isMeta {
 		t.Errorf("got (%v,%q,meta=%v), want (QUALITY,qwen-max,false)", s, req, isMeta)
 	}
@@ -72,7 +72,7 @@ func TestParseStrategy_Header(t *testing.T) {
 // 6.2-UNIT-003 — conflict: meta-model + header → meta wins, conflict=true.
 func TestParseStrategy_Conflict(t *testing.T) {
 	t.Parallel()
-	s, req, isMeta, conflict := routingclient.ParseStrategy("he-router-cost", hdr(routingclient.RoutingStrategyHeader, "quality"))
+	s, req, isMeta, conflict := routingclient.ParseStrategy("he-router-cost", hdr(routingclient.RoutingStrategyHeader, "quality"), routingv1.Strategy_STRATEGY_UNSPECIFIED)
 	if s != routingv1.Strategy_STRATEGY_COST || req != "" || !isMeta || !conflict {
 		t.Errorf("got (%v,%q,meta=%v,conflict=%v), want (COST,\"\",true,true)", s, req, isMeta, conflict)
 	}
@@ -81,7 +81,7 @@ func TestParseStrategy_Conflict(t *testing.T) {
 // 6.2-UNIT-004 — concrete model, no header → DEFAULT, requested=concrete.
 func TestParseStrategy_DefaultPassthrough(t *testing.T) {
 	t.Parallel()
-	s, req, isMeta, _ := routingclient.ParseStrategy("qwen-max", http.Header{})
+	s, req, isMeta, _ := routingclient.ParseStrategy("qwen-max", http.Header{}, routingv1.Strategy_STRATEGY_UNSPECIFIED)
 	if s != routingv1.Strategy_STRATEGY_DEFAULT || req != "qwen-max" || isMeta {
 		t.Errorf("got (%v,%q,meta=%v), want (DEFAULT,qwen-max,false)", s, req, isMeta)
 	}
@@ -91,11 +91,11 @@ func TestParseStrategy_DefaultPassthrough(t *testing.T) {
 // default path, no panic.
 func TestParseStrategy_UnknownValues(t *testing.T) {
 	t.Parallel()
-	s, req, _, _ := routingclient.ParseStrategy("qwen-max", hdr(routingclient.RoutingStrategyHeader, "bogus"))
+	s, req, _, _ := routingclient.ParseStrategy("qwen-max", hdr(routingclient.RoutingStrategyHeader, "bogus"), routingv1.Strategy_STRATEGY_UNSPECIFIED)
 	if s != routingv1.Strategy_STRATEGY_DEFAULT || req != "qwen-max" {
 		t.Errorf("unknown header: got (%v,%q), want DEFAULT/qwen-max", s, req)
 	}
-	s2, req2, isMeta, _ := routingclient.ParseStrategy("he-router-xyz", http.Header{})
+	s2, req2, isMeta, _ := routingclient.ParseStrategy("he-router-xyz", http.Header{}, routingv1.Strategy_STRATEGY_UNSPECIFIED)
 	if s2 != routingv1.Strategy_STRATEGY_DEFAULT || req2 != "he-router-xyz" || isMeta {
 		t.Errorf("he-router-xyz: got (%v,%q,meta=%v), want DEFAULT/he-router-xyz/false", s2, req2, isMeta)
 	}
@@ -109,7 +109,7 @@ func TestParseStrategy_AllMetaSuffixes(t *testing.T) {
 		"he-router-latency": routingv1.Strategy_STRATEGY_LATENCY,
 		"he-router-cost":    routingv1.Strategy_STRATEGY_COST,
 	} {
-		if s, _, isMeta, _ := routingclient.ParseStrategy(suffix, http.Header{}); s != want || !isMeta {
+		if s, _, isMeta, _ := routingclient.ParseStrategy(suffix, http.Header{}, routingv1.Strategy_STRATEGY_UNSPECIFIED); s != want || !isMeta {
 			t.Errorf("%s → (%v,meta=%v), want (%v,true)", suffix, s, isMeta, want)
 		}
 	}

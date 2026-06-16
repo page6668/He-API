@@ -4,16 +4,16 @@
 // nil-valued → "do not change". For display_name specifically, empty string
 // is normalised to NULL ("clear") per BR-2.4. Validation order:
 //
-//   1. Parse user_id.
-//   2. Per-field validation (display_name NFC + rune-count + char-class;
-//      locale MVP-set; timezone IANA via time.LoadLocation).
-//   3. Parse If-Match → int64 microseconds (Architect Q2).
-//   4. Rate-limit check (BR-2.8 — 10/hour/user).
-//   5. repository.UpdateProfile (FOR UPDATE → etag compare → UPDATE in tx).
-//   6. Emit audit event with redacted diff (BR-2.10 — display_name
-//      <set>/<cleared>; locale/timezone literal).
-//   7. Build UpdateProfileResponse (mirrors GetMeResponse + locale_changed
-//      flag for the gateway's Set-Cookie decision).
+//  1. Parse user_id.
+//  2. Per-field validation (display_name NFC + rune-count + char-class;
+//     locale MVP-set; timezone IANA via time.LoadLocation).
+//  3. Parse If-Match → int64 microseconds (Architect Q2).
+//  4. Rate-limit check (BR-2.8 — 10/hour/user).
+//  5. repository.UpdateProfile (FOR UPDATE → etag compare → UPDATE in tx).
+//  6. Emit audit event with redacted diff (BR-2.10 — display_name
+//     <set>/<cleared>; locale/timezone literal).
+//  7. Build UpdateProfileResponse (mirrors GetMeResponse + locale_changed
+//     flag for the gateway's Set-Cookie decision).
 //
 // The repository UpdateProfile expects a transactional Querier — here we
 // pass s.DB directly because pgxpool.Pool autocommits each statement and
@@ -101,6 +101,23 @@ func (s *AuthServer) UpdateProfile(
 		params.Timezone = in.GetTimezone()
 		params.TimezoneSet = true
 	}
+	// Story 6.5 — default_routing_strategy three-way intent (Q-D / BLIND-BOUNDARY-002):
+	//   wire-absent (nil)        → leave unchanged (partial-update, UNIT-012)
+	//   "" (explicit clear)      → clear to NULL (UNIT-011)
+	//   quality|cost|latency     → set (UNIT-009)
+	//   anything else            → 400, NO DB write (UNIT-010 / BLIND-BOUNDARY-001)
+	if in.DefaultRoutingStrategy != nil {
+		v := in.GetDefaultRoutingStrategy()
+		switch {
+		case v == "":
+			params.DefaultRoutingStrategy = nil // clear → NULL
+		case validDefaultRoutingStrategies[v]:
+			params.DefaultRoutingStrategy = &v
+		default:
+			return nil, statusError(connect.CodeInvalidArgument, StatusInvalidDefaultRoutingStrategy)
+		}
+		params.DefaultRoutingStrategySet = true
+	}
 
 	// 2. Etag parse. The wire format is the quoted-string returned by
 	//    GetMeResponse — strip the surrounding quotes and parse as int64
@@ -168,20 +185,34 @@ func (s *AuthServer) UpdateProfile(
 		})
 	}
 
-	// 6. Build the response. Mirrors GetMeResponse with locale_changed signal.
+	// 6. Story 6.5 — write-through the routing preference to the gateway hot-path
+	//    cache + set the invalidation sentinel (INT-005). Best-effort: a Redis
+	//    failure NEVER blocks the 200 — the gateway lazy-populates on its next
+	//    cache miss (Q-A Option B). Only fires when the field participated.
+	if params.DefaultRoutingStrategySet && s.Redis != nil {
+		if err := writeThroughRoutingPref(ctx, s.Redis, userID.String(), newUser.DefaultRoutingStrategy); err != nil && s.Logger != nil {
+			s.Logger.WarnContext(ctx, "routing_pref_write_through_failed",
+				"event", "routing_pref_write_through_failed",
+				"error", err.Error(),
+			)
+		}
+	}
+
+	// 7. Build the response. Mirrors GetMeResponse with locale_changed signal.
 	resp := profileSnapshot(newUser, localeChanged)
 	return connect.NewResponse(&authv1.UpdateProfileResponse{
-		UserId:        resp.GetUserId(),
-		Email:         resp.GetEmail(),
-		DisplayName:   resp.DisplayName,
-		Locale:        resp.GetLocale(),
-		Timezone:      resp.GetTimezone(),
-		TotpEnabled:   resp.GetTotpEnabled(),
-		OauthProvider: resp.OauthProvider,
-		CreatedAt:     resp.GetCreatedAt(),
-		UpdatedAt:     resp.GetUpdatedAt(),
-		Etag:          resp.GetEtag(),
-		LocaleChanged: localeChanged,
+		UserId:                 resp.GetUserId(),
+		Email:                  resp.GetEmail(),
+		DisplayName:            resp.DisplayName,
+		Locale:                 resp.GetLocale(),
+		Timezone:               resp.GetTimezone(),
+		TotpEnabled:            resp.GetTotpEnabled(),
+		OauthProvider:          resp.OauthProvider,
+		CreatedAt:              resp.GetCreatedAt(),
+		UpdatedAt:              resp.GetUpdatedAt(),
+		Etag:                   resp.GetEtag(),
+		LocaleChanged:          localeChanged,
+		DefaultRoutingStrategy: resp.DefaultRoutingStrategy,
 	}), nil
 }
 
@@ -296,11 +327,11 @@ func buildProfileUpdatedMetadata(oldUser, newUser *repository.User, params repos
 	}
 
 	return map[string]any{
-		"severity":         audit.SeverityLow,
-		"fields_changed":   fields,
-		"diff":             diff,
-		"client_ip_hash":   hashClientIP(clientIP),
-		"user_agent_hash":  hashUserAgent(userAgent),
+		"severity":        audit.SeverityLow,
+		"fields_changed":  fields,
+		"diff":            diff,
+		"client_ip_hash":  hashClientIP(clientIP),
+		"user_agent_hash": hashUserAgent(userAgent),
 	}
 }
 

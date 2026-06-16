@@ -2151,9 +2151,12 @@ type GetMeResponse struct {
 	// etag = `"{updated_at.UnixMicro()}"` (quoted-string per RFC 7232 §2.3) —
 	// Architect Q2 ruling 2026-05-16. The api-gateway forwards verbatim as the
 	// ETag response header.
-	Etag          string `protobuf:"bytes,10,opt,name=etag,proto3" json:"etag,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Etag string `protobuf:"bytes,10,opt,name=etag,proto3" json:"etag,omitempty"`
+	// Story 6.5 — account-level default routing strategy (quality|cost|latency),
+	// or absent when the user has set no default (→ STRATEGY_DEFAULT passthrough).
+	DefaultRoutingStrategy *string `protobuf:"bytes,11,opt,name=default_routing_strategy,json=defaultRoutingStrategy,proto3,oneof" json:"default_routing_strategy,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *GetMeResponse) Reset() {
@@ -2256,6 +2259,13 @@ func (x *GetMeResponse) GetEtag() string {
 	return ""
 }
 
+func (x *GetMeResponse) GetDefaultRoutingStrategy() string {
+	if x != nil && x.DefaultRoutingStrategy != nil {
+		return *x.DefaultRoutingStrategy
+	}
+	return ""
+}
+
 type UpdateProfileRequest struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	UserId string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
@@ -2271,10 +2281,15 @@ type UpdateProfileRequest struct {
 	IfMatch string `protobuf:"bytes,5,opt,name=if_match,json=ifMatch,proto3" json:"if_match,omitempty"`
 	// Client attribution (api-gateway populates from request headers — same
 	// pattern as RegisterUserRequest etc).
-	ClientIp      string `protobuf:"bytes,6,opt,name=client_ip,json=clientIp,proto3" json:"client_ip,omitempty"`
-	UserAgent     string `protobuf:"bytes,7,opt,name=user_agent,json=userAgent,proto3" json:"user_agent,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	ClientIp  string `protobuf:"bytes,6,opt,name=client_ip,json=clientIp,proto3" json:"client_ip,omitempty"`
+	UserAgent string `protobuf:"bytes,7,opt,name=user_agent,json=userAgent,proto3" json:"user_agent,omitempty"`
+	// Story 6.5 — proto3 optional carries the three-way intent from the gateway:
+	// nil = "do not change"; "" = clear to NULL (default_routing_strategy →
+	// STRATEGY_DEFAULT passthrough); "quality"|"cost"|"latency" = set. auth-svc
+	// validates the enum (anything else → INVALID_ARGUMENT, no DB write).
+	DefaultRoutingStrategy *string `protobuf:"bytes,8,opt,name=default_routing_strategy,json=defaultRoutingStrategy,proto3,oneof" json:"default_routing_strategy,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *UpdateProfileRequest) Reset() {
@@ -2356,6 +2371,13 @@ func (x *UpdateProfileRequest) GetUserAgent() string {
 	return ""
 }
 
+func (x *UpdateProfileRequest) GetDefaultRoutingStrategy() string {
+	if x != nil && x.DefaultRoutingStrategy != nil {
+		return *x.DefaultRoutingStrategy
+	}
+	return ""
+}
+
 type UpdateProfileResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Mirrors GetMeResponse so console reuses the same renderer.
@@ -2373,8 +2395,11 @@ type UpdateProfileResponse struct {
 	// pre-update DB value. api-gateway uses this to decide whether to
 	// rewrite the he_locale cookie (BR-3.10 / Architect Q3).
 	LocaleChanged bool `protobuf:"varint,11,opt,name=locale_changed,json=localeChanged,proto3" json:"locale_changed,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// Story 6.5 — echoes the persisted default_routing_strategy so the console
+	// renders the saved value on PUT success (absent → no default).
+	DefaultRoutingStrategy *string `protobuf:"bytes,12,opt,name=default_routing_strategy,json=defaultRoutingStrategy,proto3,oneof" json:"default_routing_strategy,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *UpdateProfileResponse) Reset() {
@@ -2482,6 +2507,13 @@ func (x *UpdateProfileResponse) GetLocaleChanged() bool {
 		return x.LocaleChanged
 	}
 	return false
+}
+
+func (x *UpdateProfileResponse) GetDefaultRoutingStrategy() string {
+	if x != nil && x.DefaultRoutingStrategy != nil {
+		return *x.DefaultRoutingStrategy
+	}
+	return ""
 }
 
 type ValidateApiKeyRequest struct {
@@ -4173,7 +4205,7 @@ const file_he_auth_v1_auth_proto_rawDesc = "" +
 	"\x1fRegenerateRecoveryCodesResponse\x12%\n" +
 	"\x0erecovery_codes\x18\x01 \x03(\tR\rrecoveryCodes\"'\n" +
 	"\fGetMeRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\"\x97\x03\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\"\xf3\x03\n" +
 	"\rGetMeResponse\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12&\n" +
@@ -4187,9 +4219,11 @@ const file_he_auth_v1_auth_proto_rawDesc = "" +
 	"\n" +
 	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x12\n" +
 	"\x04etag\x18\n" +
-	" \x01(\tR\x04etagB\x0f\n" +
+	" \x01(\tR\x04etag\x12=\n" +
+	"\x18default_routing_strategy\x18\v \x01(\tH\x02R\x16defaultRoutingStrategy\x88\x01\x01B\x0f\n" +
 	"\r_display_nameB\x11\n" +
-	"\x0f_oauth_provider\"\x95\x02\n" +
+	"\x0f_oauth_providerB\x1b\n" +
+	"\x19_default_routing_strategy\"\xf1\x02\n" +
 	"\x14UpdateProfileRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12&\n" +
 	"\fdisplay_name\x18\x02 \x01(\tH\x00R\vdisplayName\x88\x01\x01\x12\x1b\n" +
@@ -4198,10 +4232,12 @@ const file_he_auth_v1_auth_proto_rawDesc = "" +
 	"\bif_match\x18\x05 \x01(\tR\aifMatch\x12\x1b\n" +
 	"\tclient_ip\x18\x06 \x01(\tR\bclientIp\x12\x1d\n" +
 	"\n" +
-	"user_agent\x18\a \x01(\tR\tuserAgentB\x0f\n" +
+	"user_agent\x18\a \x01(\tR\tuserAgent\x12=\n" +
+	"\x18default_routing_strategy\x18\b \x01(\tH\x03R\x16defaultRoutingStrategy\x88\x01\x01B\x0f\n" +
 	"\r_display_nameB\t\n" +
 	"\a_localeB\v\n" +
-	"\t_timezone\"\xc6\x03\n" +
+	"\t_timezoneB\x1b\n" +
+	"\x19_default_routing_strategy\"\xa2\x04\n" +
 	"\x15UpdateProfileResponse\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12&\n" +
@@ -4216,9 +4252,11 @@ const file_he_auth_v1_auth_proto_rawDesc = "" +
 	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x12\n" +
 	"\x04etag\x18\n" +
 	" \x01(\tR\x04etag\x12%\n" +
-	"\x0elocale_changed\x18\v \x01(\bR\rlocaleChangedB\x0f\n" +
+	"\x0elocale_changed\x18\v \x01(\bR\rlocaleChanged\x12=\n" +
+	"\x18default_routing_strategy\x18\f \x01(\tH\x02R\x16defaultRoutingStrategy\x88\x01\x01B\x0f\n" +
 	"\r_display_nameB\x11\n" +
-	"\x0f_oauth_provider\"x\n" +
+	"\x0f_oauth_providerB\x1b\n" +
+	"\x19_default_routing_strategy\"x\n" +
 	"\x15ValidateApiKeyRequest\x12#\n" +
 	"\rplaintext_key\x18\x01 \x01(\tR\fplaintextKey\x12\x1b\n" +
 	"\tclient_ip\x18\x02 \x01(\tR\bclientIp\x12\x1d\n" +

@@ -319,14 +319,14 @@ func byteOffsetToLine(b []byte, off int) int {
 // -- Story 2.5 — display_name + UpdateProfile -----------------------------
 
 // profileColumns is the Story 2.5 GetProfileByID + UpdateProfile RETURNING
-// projection (13 cols — narrower than scanUserRow's 15; adds display_name
-// at the tail). Centralised so the tests stay in lockstep with
-// scanProfileRow's column ordering.
+// projection (14 cols — narrower than scanUserRow's 15; adds display_name then
+// default_routing_strategy [Story 6.5] at the tail). Centralised so the tests
+// stay in lockstep with scanProfileRow's column ordering.
 var profileColumns = []string{
 	"id", "email", "password_hash", "email_verified_at",
 	"oauth_provider", "oauth_subject", "locale", "timezone",
 	"totp_enabled", "status", "created_at", "updated_at",
-	"display_name",
+	"display_name", "default_routing_strategy",
 }
 
 // Scenario: 2.5-UNIT-001 — GetProfileByID surfaces display_name through the
@@ -345,6 +345,7 @@ func TestGetProfileByID_DisplayNameNullPropagatesAsNil(t *testing.T) {
 			nil, nil, "en", "UTC",
 			false, "active", now, now,
 			(*string)(nil), // display_name NULL
+			(*string)(nil), // default_routing_strategy NULL
 		))
 
 	user, err := repository.GetProfileByID(context.Background(), mock, id)
@@ -370,7 +371,7 @@ func TestGetProfileByID_DisplayNamePopulated(t *testing.T) {
 			id, "user@example.com", []byte("$2a$12$hash"), &now,
 			nil, nil, "en", "UTC",
 			false, "active", now, now,
-			&want,
+			&want, (*string)(nil),
 		))
 
 	user, err := repository.GetProfileByID(context.Background(), mock, id)
@@ -396,7 +397,7 @@ func TestGetProfileByID_PendingDeletion_ReturnsErr(t *testing.T) {
 			id, "u@example.com", []byte{}, &now,
 			nil, nil, "en", "UTC",
 			false, "pending_deletion", now, now,
-			(*string)(nil),
+			(*string)(nil), (*string)(nil),
 		))
 
 	_, err := repository.GetProfileByID(context.Background(), mock, id)
@@ -443,7 +444,7 @@ func TestUpdateProfile_HappyPath_AllThreeFields(t *testing.T) {
 			id, "user@example.com", []byte("$2a$12$hash"), &oldUpdatedAt,
 			nil, nil, "zh-CN", "Asia/Shanghai",
 			false, "active", oldUpdatedAt, newUpdatedAt,
-			&newName,
+			&newName, (*string)(nil),
 		))
 
 	got, err := repository.UpdateProfile(context.Background(), mock, id, oldUpdatedAt.UnixMicro(),
@@ -508,7 +509,7 @@ func TestUpdateProfile_PartialUpdate_LocaleOnly(t *testing.T) {
 			id, "user@example.com", []byte("$2a$12$hash"), &now,
 			nil, nil, "de", "UTC",
 			false, "active", now, newer,
-			(*string)(nil),
+			(*string)(nil), (*string)(nil),
 		))
 
 	got, err := repository.UpdateProfile(context.Background(), mock, id, now.UnixMicro(),
@@ -540,7 +541,7 @@ func TestUpdateProfile_DisplayNameNilClearsToNull(t *testing.T) {
 			id, "user@example.com", []byte("$2a$12$hash"), &now,
 			nil, nil, "en", "UTC",
 			false, "active", now, now.Add(time.Millisecond),
-			(*string)(nil),
+			(*string)(nil), (*string)(nil),
 		))
 
 	got, err := repository.UpdateProfile(context.Background(), mock, id, now.UnixMicro(),
@@ -615,7 +616,7 @@ func TestUpdateProfile_UpdateStatement_AlwaysAdvancesUpdatedAt(t *testing.T) {
 			id, "u@example.com", []byte{}, &now,
 			nil, nil, "en", "UTC",
 			false, "active", now, newer,
-			&newName,
+			&newName, (*string)(nil),
 		))
 
 	if _, err := repository.UpdateProfile(context.Background(), mock, id, now.UnixMicro(),

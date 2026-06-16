@@ -325,5 +325,37 @@
         "body": "He-API 계정과 개인 데이터가 {executed_at}에 영구적으로 삭제되었습니다. 법적으로 보관이 요구되는 청구 기록은 유지되었습니다."
       }
     }
+  },
+  "routing": {
+    "title": "기본 라우팅 전략",
+    "description": "He-API가 기본적으로 채팅 요청을 라우팅하는 방식을 선택하세요. 요청별 재정의(X-He-Routing-Strategy 헤더 또는 he-router-* 모델)가 항상 우선합니다.",
+    "options": {
+      "passthrough": "기본값(패스스루)",
+      "quality": "품질",
+      "cost": "비용",
+      "latency": "지연 시간"
+    },
+    "hints": {
+      "passthrough": "기본값 없음 — 요청은 지정한 모델로 라우팅됩니다.",
+      "quality": "품질이 가장 높은 모델을 우선합니다.",
+      "cost": "비용이 가장 낮은 모델을 우선합니다.",
+      "latency": "응답이 가장 빠른 모델을 우선합니다."
+    },
+    "actions": {
+      "save": "라우팅 전략 저장"
+    },
+    "toast": {
+      "saved": "기본 라우팅 전략이 저장되었습니다."
+    },
+    "errors": {
+      "generic": "라우팅 전략을 저장하지 못했습니다. 다시 시도해 주세요.",
+      "rate_limited": "변경이 너무 많습니다. 잠시 후 다시 시도해 주세요."
+    },
+    "banners": {
+      "concurrent_update": {
+        "message": "다른 탭에서 프로필이 변경되었습니다.",
+        "reload_cta": "새로고침"
+      }
+    }
   }
 }

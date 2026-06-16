@@ -325,5 +325,37 @@
         "body": "Ihr He-API-Konto und Ihre persönlichen Daten wurden am {executed_at} dauerhaft gelöscht. Gesetzlich vorgeschriebene Abrechnungsunterlagen wurden aufbewahrt."
       }
     }
+  },
+  "routing": {
+    "title": "Standard-Routing-Strategie",
+    "description": "Wählen Sie, wie He-API Ihre Chat-Anfragen standardmäßig weiterleitet. Überschreibungen pro Anfrage (der X-He-Routing-Strategy-Header oder he-router-*-Modelle) haben stets Vorrang.",
+    "options": {
+      "passthrough": "Standard (Passthrough)",
+      "quality": "Qualität",
+      "cost": "Kosten",
+      "latency": "Latenz"
+    },
+    "hints": {
+      "passthrough": "Kein Standard – Anfragen werden an das von Ihnen angegebene Modell weitergeleitet.",
+      "quality": "Das Modell mit der höchsten Qualität bevorzugen.",
+      "cost": "Das Modell mit den niedrigsten Kosten bevorzugen.",
+      "latency": "Das Modell mit der schnellsten Antwort bevorzugen."
+    },
+    "actions": {
+      "save": "Routing-Strategie speichern"
+    },
+    "toast": {
+      "saved": "Standard-Routing-Strategie gespeichert."
+    },
+    "errors": {
+      "generic": "Ihre Routing-Strategie konnte nicht gespeichert werden. Bitte versuchen Sie es erneut.",
+      "rate_limited": "Zu viele Änderungen. Bitte warten Sie einen Moment und versuchen Sie es erneut."
+    },
+    "banners": {
+      "concurrent_update": {
+        "message": "Ihr Profil wurde in einem anderen Tab geändert.",
+        "reload_cta": "Neu laden"
+      }
+    }
   }
 }

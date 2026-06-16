@@ -325,5 +325,37 @@
         "body": "Sua conta He-API e seus dados pessoais foram excluídos permanentemente em {executed_at}. Os registros de faturamento exigidos por lei foram mantidos."
       }
     }
+  },
+  "routing": {
+    "title": "Estratégia de roteamento padrão",
+    "description": "Escolha como o He-API roteia suas solicitações de chat por padrão. As substituições por solicitação (o cabeçalho X-He-Routing-Strategy ou os modelos he-router-*) sempre têm prioridade.",
+    "options": {
+      "passthrough": "Padrão (passthrough)",
+      "quality": "Qualidade",
+      "cost": "Custo",
+      "latency": "Latência"
+    },
+    "hints": {
+      "passthrough": "Sem padrão — as solicitações são roteadas para o modelo que você especificar.",
+      "quality": "Priorizar o modelo de maior qualidade.",
+      "cost": "Priorizar o modelo de menor custo.",
+      "latency": "Priorizar o modelo de resposta mais rápida."
+    },
+    "actions": {
+      "save": "Salvar estratégia de roteamento"
+    },
+    "toast": {
+      "saved": "Estratégia de roteamento padrão salva."
+    },
+    "errors": {
+      "generic": "Não foi possível salvar sua estratégia de roteamento. Tente novamente.",
+      "rate_limited": "Muitas alterações. Aguarde um momento e tente novamente."
+    },
+    "banners": {
+      "concurrent_update": {
+        "message": "Seu perfil foi alterado em outra aba.",
+        "reload_cta": "Recarregar"
+      }
+    }
   }
 }

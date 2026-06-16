@@ -325,5 +325,37 @@
         "body": "Votre compte He-API et vos données personnelles ont été définitivement supprimés le {executed_at}. Les enregistrements de facturation requis par la loi ont été conservés."
       }
     }
+  },
+  "routing": {
+    "title": "Stratégie de routage par défaut",
+    "description": "Choisissez comment He-API achemine vos requêtes de chat par défaut. Les remplacements par requête (l’en-tête X-He-Routing-Strategy ou les modèles he-router-*) ont toujours la priorité.",
+    "options": {
+      "passthrough": "Par défaut (passthrough)",
+      "quality": "Qualité",
+      "cost": "Coût",
+      "latency": "Latence"
+    },
+    "hints": {
+      "passthrough": "Aucune valeur par défaut — les requêtes sont acheminées vers le modèle que vous spécifiez.",
+      "quality": "Privilégier le modèle de la plus haute qualité.",
+      "cost": "Privilégier le modèle au coût le plus bas.",
+      "latency": "Privilégier le modèle au temps de réponse le plus rapide."
+    },
+    "actions": {
+      "save": "Enregistrer la stratégie de routage"
+    },
+    "toast": {
+      "saved": "Stratégie de routage par défaut enregistrée."
+    },
+    "errors": {
+      "generic": "Impossible d’enregistrer votre stratégie de routage. Veuillez réessayer.",
+      "rate_limited": "Trop de modifications. Veuillez patienter un instant et réessayer."
+    },
+    "banners": {
+      "concurrent_update": {
+        "message": "Votre profil a été modifié dans un autre onglet.",
+        "reload_cta": "Recharger"
+      }
+    }
   }
 }

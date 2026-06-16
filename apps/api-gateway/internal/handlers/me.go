@@ -9,17 +9,17 @@
 //
 // Response shape (snake_case per coding-standards §12.3):
 //
-//   {
-//     "user_id": "uuid",
-//     "email": "user@example.com",
-//     "display_name": "Alice" | null,
-//     "locale": "en",
-//     "timezone": "UTC",
-//     "totp_enabled": false,
-//     "oauth_provider": "google" | null,
-//     "created_at": "RFC3339",
-//     "updated_at": "RFC3339"
-//   }
+//	{
+//	  "user_id": "uuid",
+//	  "email": "user@example.com",
+//	  "display_name": "Alice" | null,
+//	  "locale": "en",
+//	  "timezone": "UTC",
+//	  "totp_enabled": false,
+//	  "oauth_provider": "google" | null,
+//	  "created_at": "RFC3339",
+//	  "updated_at": "RFC3339"
+//	}
 //
 // Headers:
 //   - ETag: "{UnixMicro}" (Architect Q2)
@@ -51,6 +51,10 @@ type meResponseBody struct {
 	OAuthProvider *string `json:"oauth_provider"`
 	CreatedAt     string  `json:"created_at"`
 	UpdatedAt     string  `json:"updated_at"`
+	// DefaultRoutingStrategy (Story 6.5) is ALWAYS present, nullable: the
+	// account-level default routing strategy ("quality"|"cost"|"latency"), or
+	// JSON null when the user has set no default (→ STRATEGY_DEFAULT passthrough).
+	DefaultRoutingStrategy *string `json:"default_routing_strategy"`
 }
 
 // GetMe implements GET /v1/me.
@@ -86,6 +90,8 @@ func (p *AuthProxy) GetMe(w http.ResponseWriter, r *http.Request) {
 		OAuthProvider: msg.OauthProvider,
 		CreatedAt:     msg.GetCreatedAt().AsTime().UTC().Format(time.RFC3339),
 		UpdatedAt:     msg.GetUpdatedAt().AsTime().UTC().Format(time.RFC3339),
+		// Story 6.5 — forward the proto3 optional verbatim (nil → JSON null).
+		DefaultRoutingStrategy: msg.DefaultRoutingStrategy,
 	}
 	writeJSON(w, http.StatusOK, body)
 }
