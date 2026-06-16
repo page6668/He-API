@@ -12,7 +12,9 @@
  * Algorithm:
  *   1. discover `messages/en/*.json` (per-namespace files; alphabetic order)
  *   2. for each file: JSON.parse → flatten to dot-namespaced keys → sort lexicographically
- *   3. validate every flat key matches `^[a-zA-Z][a-zA-Z0-9_-]*(\.[a-zA-Z0-9][a-zA-Z0-9_-]*)*$`
+ *   3. validate every flat key matches `^[a-zA-Z0-9][a-zA-Z0-9_-]*(\.[a-zA-Z0-9][a-zA-Z0-9_-]*)*$`
+ *      (first segment may start with a digit — e.g. the `2fa.*` namespace — since the
+ *       emitted output is a string-literal union, not a TS identifier)
  *   4. emit `src/{namespace}.ts` containing `export type {Name}Keys = 'key.a' | 'key.b' | ...;`
  *      with the literal `// @generated — DO NOT EDIT` header
  *   5. emit `src/index.ts` with one `export * from './<namespace>';` per namespace
@@ -25,7 +27,7 @@ const EN_MESSAGES_DIR = join(ROOT, 'apps/console/messages/en');
 const OUT_DIR = join(ROOT, 'packages/i18n-keys/src');
 
 const HEADER = `// @generated — DO NOT EDIT — run \`pnpm --filter @he-api/i18n-keys build\``;
-const KEY_RE = /^[a-zA-Z][a-zA-Z0-9_-]*(\.[a-zA-Z0-9][a-zA-Z0-9_-]*)*$/;
+const KEY_RE = /^[a-zA-Z0-9][a-zA-Z0-9_-]*(\.[a-zA-Z0-9][a-zA-Z0-9_-]*)*$/;
 
 type JsonObject = { [k: string]: unknown };
 
