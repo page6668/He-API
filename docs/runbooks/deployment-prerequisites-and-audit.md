@@ -61,30 +61,32 @@
 
 # PART B — 部署前必须先补的工程接线(不是运维准备,是 Dev 工作)
 
-> ⚠️ 准备好 PART A 的所有凭据后,**仍无法部署**,因为以下管线缺口:
+> ✅ **B1–B7 已由 Story 1.7「staging 部署管线接通」闭合**(commit `d0cdb6f`,QA Round 1 PASS,2026-06-16,逐项独立核验)。**B8(prod)仍未做**,按计划等 staging 跑通后再接。
+> 原始审计快照(下表)保留作记录;状态列为当前。
 
-| # | 缺口 | 证据 | 影响 |
+| # | 缺口(原始审计)| 状态 | 闭合证据(Story 1.7)|
 |---|---|---|---|
-| B1 | **ArgoCD 同步是占位 echo** | `deploy-staging.yml:96-97` | 没有任何东西自动进集群 |
-| B2 | **CI 只构建 3/17 服务**(api-gateway/sample-*)| `build-images.yml:28-32` | auth/billing/notification/routing/6 适配器/cron **都没镜像** |
-| B3 | **ArgoCD app 只有 7 个**(6 适配器+routing),且读 `values.yaml` 不读 `values-staging.yaml` | `infra/argocd/applications/` | api-gateway/auth/billing/notification **无 app**;CI bump 的 staging values 被忽略 |
-| B4 | **镜像引用是占位符** `${ACR_REGISTRY}/...` 从不替换 + 部分 `tag: latest` | `auth-svc/values-staging.yaml:5-6` | 真渲染会 ImagePullBackOff |
-| B5 | **无 Ingress / DNS / TLS** | 所有 chart `ingress.enabled: false`,无 Ingress 模板 | 外部无流量入口 |
-| B6 | **3 个 cron + billing-svc 无 Dockerfile/Deployment** | safety-log-retention / account-deletion-sweeper / db-doctor 无 Dockerfile;billing-svc chart 只有 cronjob | 这些 workload 无法构建/部署 |
-| B7 | **payment-svc 无 Helm chart** | `infra/helm/` 只有 billing-svc | 5 支付密钥documented 但无 pod 消费 |
-| B8 | **prod 环境完全没接** | `envs/prod` 缺数据层;无 values-prod / prod ArgoCD app;`he-api` AppProject 引用但未定义 | prod 不可部署 |
+| B1 | ArgoCD 同步是占位 echo | ✅ 已闭合 | `deploy-staging.yml` 真实 `trigger-argocd-sync` job + pre-sync guard |
+| B2 | CI 只构建 3/17 服务 | ✅ 已闭合 | `build-images.yml` 全服务 matrix + `verify-matrix-coverage` 断言 |
+| B3 | ArgoCD app 只 7 个、读 values.yaml | ✅ 已闭合 | 13 个 app(补 api-gateway/auth/billing/notification/analytics/payment)+ `he-api` AppProject + 读 values-staging |
+| B4 | 镜像占位符不替换 + tag:latest | ✅ 已闭合 | 统一 `${ACR_REGISTRY}` + 部署时 `sed` 替换 + BOUNDARY-002 fail-closed 守卫 + 全改 `:SHA` |
+| B5 | 无 Ingress / DNS / TLS | ✅ 已闭合 | Ingress 模板(`api-gateway/templates/ingress.yaml` 等)+ staging hosts |
+| B6 | 3 cron + billing-svc 无 Dockerfile/Deployment | ✅ 已闭合 | safety-log-retention / account-deletion-sweeper Dockerfile 补齐 + billing-svc Deployment |
+| B7 | payment-svc 无 Helm chart | ✅ 已闭合 | `infra/helm/payment-svc/`(Chart+templates+values-staging,接 5 支付密钥)|
+| B8 | **prod 环境完全没接** | ⏸️ **未做(out-of-scope)** | `envs/prod` 缺数据层;无 values-prod / prod ArgoCD app。**staging 验证通过后再接** |
 
-**这些根因是 Story 1.4(GitOps 接线)未完成。** 建议作为一个 **"Epic 1 部署接线收尾"工作包**走 Orchestrix 链补齐(类似 Phase C 补 2.7/6.5)。
+**原因:Story 1.4(GitOps 接线)未完成,已由 Story 1.7 收尾(staging 部分)。** prod(B8)作为后续工作包,待 staging 端到端验证通过后再起。
 
 ---
 
 ## 推荐顺序
-1. **(Dev)补 PART B 工程接线**(B1–B8)—— 否则 PART A 准备了也部署不了。
-2. **(你/运维)准备 PART A**(云账号 + bootstrap + 5 变量 + 凭据)—— 可与 1 并行准备。
-3. `terraform apply`(staging)→ 数据层 + 集群起来。
-4. CI 构建全 17 镜像 → ArgoCD 同步 → DB 迁移。
-5. 跑 `docs/qa/ga-readiness-checklist.md` 的 🔴 验证项。
-6. 修复 → 复验 → GA 切换(Beta 开关 + 10.8 GA badge)。
+1. ✅ ~~(Dev)补 PART B 工程接线(B1–B7)~~ —— **已完成(Story 1.7)**。
+2. ⬜ **(你/运维)准备 PART A**(云账号 + bootstrap + 5 变量 + 凭据)。
+3. ⬜ `terraform apply`(staging)→ 数据层 + 集群起来。
+4. ⬜ CI 构建全 17 镜像 → ArgoCD 同步 → DB 迁移。
+5. ⬜ 跑 `docs/qa/ga-readiness-checklist.md` 的 🔴 验证项。
+6. ⬜ 修复 → 复验 → GA 切换(Beta 开关 + 10.8 GA badge)。
+7. ⬜ **(Dev)B8 prod 环境接线**(staging 验证通过后)。
 
 ## 关键文档索引
 - 部署架构/GitOps:`docs/architecture/infrastructure-deployment.md`
