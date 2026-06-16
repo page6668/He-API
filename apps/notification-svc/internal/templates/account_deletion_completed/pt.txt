@@ -1,0 +1,3 @@
+Sua conta He-API foi excluída
+
+Sua conta He-API e seus dados pessoais foram excluídos permanentemente em {{.executed_at}}. Os registros de faturamento exigidos por lei foram mantidos.

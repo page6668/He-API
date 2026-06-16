@@ -25,9 +25,11 @@ export default async function ProfilePage({ params: { locale } }: ProfilePagePro
     redirect(`/${resolvedLocale}/signin?return_to=${encodeURIComponent(`/${resolvedLocale}/settings/profile`)}`);
   }
   if (result.kind === 'pending_deletion') {
-    // Story 2.7 owns the recovery page. Until it lands, surface a generic
-    // signin redirect with an error query parameter so ops can detect.
-    redirect(`/${resolvedLocale}/signin?error=account_pending_deletion`);
+    // Story 2.7 AC4 BR-4.3 — the recovery page is now live; route straight
+    // there (supersedes the interim /signin?error=account_pending_deletion).
+    // (The (console) layout guard catches this first, but keep the per-page
+    // redirect as defence-in-depth.)
+    redirect(`/${resolvedLocale}/account/recovery`);
   }
   if (result.kind === 'error') {
     const t = await getTranslations('account');

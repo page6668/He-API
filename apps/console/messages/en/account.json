@@ -281,5 +281,49 @@
         "security_disclaimer": "If you didn't request this export, contact support immediately."
       }
     }
+  },
+  "delete": {
+    "cta": {
+      "label": "Delete My Account",
+      "disabled_pending": "Your account is already scheduled for deletion."
+    },
+    "dialog": {
+      "title": "Permanently delete your account?",
+      "consequences": "Your account will be scheduled for deletion with a 30-day grace period. You can cancel any time within 30 days by signing back in. After the grace period, your profile, API keys, and personal data are permanently erased. Billing records required by law are retained.",
+      "password_label": "Enter your password to confirm",
+      "email_confirm_label": "Type your account email to confirm",
+      "totp_label": "Enter your 6-digit authentication code",
+      "confirm": "Delete my account",
+      "cancel": "Cancel",
+      "errors": {
+        "bad_password": "That password didn't match. Please try again.",
+        "bad_totp": "That code didn't match. Please try again."
+      }
+    },
+    "errors": {
+      "rate_limited": "Too many deletion requests. Please try again later.",
+      "generic": "Something went wrong. Please try again."
+    },
+    "recovery": {
+      "title": "Your account is scheduled for deletion",
+      "countdown": "{days, plural, =0 {Your account will be permanently deleted today.} =1 {Your account will be permanently deleted in 1 day.} other {Your account will be permanently deleted in # days.}}",
+      "reactivate_cta": "Reactivate My Account",
+      "explainer": "If you do nothing, your account and data are permanently deleted on the scheduled date. Reactivate any time before then to keep your account.",
+      "expired": "This account has been permanently deleted."
+    },
+    "email": {
+      "requested": {
+        "subject": "Your He-API account is scheduled for deletion",
+        "body": "Your account is scheduled for permanent deletion on {pending_deletion_at}. If you didn't request this, sign in before then to cancel."
+      },
+      "cancelled": {
+        "subject": "Your He-API account deletion was cancelled",
+        "body": "Good news — your account deletion has been cancelled and your account is active again."
+      },
+      "completed": {
+        "subject": "Your He-API account has been deleted",
+        "body": "Your He-API account and personal data have been permanently deleted on {executed_at}. Billing records required by law have been retained."
+      }
+    }
   }
 }

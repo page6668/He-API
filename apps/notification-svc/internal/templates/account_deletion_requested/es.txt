@@ -1,0 +1,3 @@
+Tu cuenta de He-API está programada para eliminación
+
+Tu cuenta está programada para eliminación permanente el {{.pending_deletion_at}}. Si no solicitaste esto, inicia sesión antes de esa fecha para cancelar.

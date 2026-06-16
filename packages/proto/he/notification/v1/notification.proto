@@ -69,6 +69,18 @@ enum EmailTemplate {
   // precise current-cost figure (security.md §8.3 PII discipline). Slug
   // `cap_tripped`.
   EMAIL_TEMPLATE_MONTHLY_CAP_TRIPPED      = 8;
+  // Story 2.7 — GDPR account deletion lifecycle (append-only; BR-7.2). Slugs
+  // are internal to notification-svc (R-2 enum-not-string): the loader maps
+  // enum → account_deletion_{requested|cancelled|completed}.{locale}.{html,txt}.
+  // REQUESTED: deletion scheduled — variables {display_name, pending_deletion_at,
+  //   cancel_url}. Fired on RequestAccountDeletion success (AC2).
+  // CANCELLED: reactivated — variables {display_name}. Fired on
+  //   CancelAccountDeletion success (AC3).
+  // COMPLETED: erasure done — variables {pending_deletion_at, executed_at}; sent
+  //   with the user's ORIGINAL email captured before anonymization (AC6 BR-6.4).
+  EMAIL_TEMPLATE_ACCOUNT_DELETION_REQUESTED = 9;
+  EMAIL_TEMPLATE_ACCOUNT_DELETION_CANCELLED = 10;
+  EMAIL_TEMPLATE_ACCOUNT_DELETION_COMPLETED = 11;
 }
 
 // ThresholdLevel — Story 5.4 monthly-cost-cap crossing classification. The

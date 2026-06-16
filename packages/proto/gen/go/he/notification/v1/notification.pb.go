@@ -61,31 +61,54 @@ const (
 	// precise current-cost figure (security.md §8.3 PII discipline). Slug
 	// `cap_tripped`.
 	EmailTemplate_EMAIL_TEMPLATE_MONTHLY_CAP_TRIPPED EmailTemplate = 8
+	// Story 2.7 — GDPR account deletion lifecycle (append-only; BR-7.2). Slugs
+	// are internal to notification-svc (R-2 enum-not-string): the loader maps
+	// enum → account_deletion_{requested|cancelled|completed}.{locale}.{html,txt}.
+	// REQUESTED: deletion scheduled — variables {display_name, pending_deletion_at,
+	//
+	//	cancel_url}. Fired on RequestAccountDeletion success (AC2).
+	//
+	// CANCELLED: reactivated — variables {display_name}. Fired on
+	//
+	//	CancelAccountDeletion success (AC3).
+	//
+	// COMPLETED: erasure done — variables {pending_deletion_at, executed_at}; sent
+	//
+	//	with the user's ORIGINAL email captured before anonymization (AC6 BR-6.4).
+	EmailTemplate_EMAIL_TEMPLATE_ACCOUNT_DELETION_REQUESTED EmailTemplate = 9
+	EmailTemplate_EMAIL_TEMPLATE_ACCOUNT_DELETION_CANCELLED EmailTemplate = 10
+	EmailTemplate_EMAIL_TEMPLATE_ACCOUNT_DELETION_COMPLETED EmailTemplate = 11
 )
 
 // Enum value maps for EmailTemplate.
 var (
 	EmailTemplate_name = map[int32]string{
-		0: "EMAIL_TEMPLATE_UNSPECIFIED",
-		1: "EMAIL_TEMPLATE_EMAIL_VERIFICATION",
-		2: "EMAIL_TEMPLATE_2FA_ENABLED",
-		3: "EMAIL_TEMPLATE_2FA_RECOVERY_USED",
-		4: "EMAIL_TEMPLATE_2FA_RECOVERY_REGENERATED",
-		5: "EMAIL_TEMPLATE_2FA_DISABLED",
-		6: "EMAIL_TEMPLATE_GDPR_EXPORT_READY",
-		7: "EMAIL_TEMPLATE_MONTHLY_CAP_WARNING",
-		8: "EMAIL_TEMPLATE_MONTHLY_CAP_TRIPPED",
+		0:  "EMAIL_TEMPLATE_UNSPECIFIED",
+		1:  "EMAIL_TEMPLATE_EMAIL_VERIFICATION",
+		2:  "EMAIL_TEMPLATE_2FA_ENABLED",
+		3:  "EMAIL_TEMPLATE_2FA_RECOVERY_USED",
+		4:  "EMAIL_TEMPLATE_2FA_RECOVERY_REGENERATED",
+		5:  "EMAIL_TEMPLATE_2FA_DISABLED",
+		6:  "EMAIL_TEMPLATE_GDPR_EXPORT_READY",
+		7:  "EMAIL_TEMPLATE_MONTHLY_CAP_WARNING",
+		8:  "EMAIL_TEMPLATE_MONTHLY_CAP_TRIPPED",
+		9:  "EMAIL_TEMPLATE_ACCOUNT_DELETION_REQUESTED",
+		10: "EMAIL_TEMPLATE_ACCOUNT_DELETION_CANCELLED",
+		11: "EMAIL_TEMPLATE_ACCOUNT_DELETION_COMPLETED",
 	}
 	EmailTemplate_value = map[string]int32{
-		"EMAIL_TEMPLATE_UNSPECIFIED":              0,
-		"EMAIL_TEMPLATE_EMAIL_VERIFICATION":       1,
-		"EMAIL_TEMPLATE_2FA_ENABLED":              2,
-		"EMAIL_TEMPLATE_2FA_RECOVERY_USED":        3,
-		"EMAIL_TEMPLATE_2FA_RECOVERY_REGENERATED": 4,
-		"EMAIL_TEMPLATE_2FA_DISABLED":             5,
-		"EMAIL_TEMPLATE_GDPR_EXPORT_READY":        6,
-		"EMAIL_TEMPLATE_MONTHLY_CAP_WARNING":      7,
-		"EMAIL_TEMPLATE_MONTHLY_CAP_TRIPPED":      8,
+		"EMAIL_TEMPLATE_UNSPECIFIED":                0,
+		"EMAIL_TEMPLATE_EMAIL_VERIFICATION":         1,
+		"EMAIL_TEMPLATE_2FA_ENABLED":                2,
+		"EMAIL_TEMPLATE_2FA_RECOVERY_USED":          3,
+		"EMAIL_TEMPLATE_2FA_RECOVERY_REGENERATED":   4,
+		"EMAIL_TEMPLATE_2FA_DISABLED":               5,
+		"EMAIL_TEMPLATE_GDPR_EXPORT_READY":          6,
+		"EMAIL_TEMPLATE_MONTHLY_CAP_WARNING":        7,
+		"EMAIL_TEMPLATE_MONTHLY_CAP_TRIPPED":        8,
+		"EMAIL_TEMPLATE_ACCOUNT_DELETION_REQUESTED": 9,
+		"EMAIL_TEMPLATE_ACCOUNT_DELETION_CANCELLED": 10,
+		"EMAIL_TEMPLATE_ACCOUNT_DELETION_COMPLETED": 11,
 	}
 )
 
@@ -711,7 +734,7 @@ const file_he_notification_v1_notification_proto_rawDesc = "" +
 	"!NotifyMonthlyCapThresholdResponse\x120\n" +
 	"\x14was_already_notified\x18\x01 \x01(\bR\x12wasAlreadyNotified\x12\x1d\n" +
 	"\n" +
-	"email_sent\x18\x02 \x01(\bR\temailSent*\xe0\x02\n" +
+	"email_sent\x18\x02 \x01(\bR\temailSent*\xed\x03\n" +
 	"\rEmailTemplate\x12\x1e\n" +
 	"\x1aEMAIL_TEMPLATE_UNSPECIFIED\x10\x00\x12%\n" +
 	"!EMAIL_TEMPLATE_EMAIL_VERIFICATION\x10\x01\x12\x1e\n" +
@@ -721,7 +744,11 @@ const file_he_notification_v1_notification_proto_rawDesc = "" +
 	"\x1bEMAIL_TEMPLATE_2FA_DISABLED\x10\x05\x12$\n" +
 	" EMAIL_TEMPLATE_GDPR_EXPORT_READY\x10\x06\x12&\n" +
 	"\"EMAIL_TEMPLATE_MONTHLY_CAP_WARNING\x10\a\x12&\n" +
-	"\"EMAIL_TEMPLATE_MONTHLY_CAP_TRIPPED\x10\b*n\n" +
+	"\"EMAIL_TEMPLATE_MONTHLY_CAP_TRIPPED\x10\b\x12-\n" +
+	")EMAIL_TEMPLATE_ACCOUNT_DELETION_REQUESTED\x10\t\x12-\n" +
+	")EMAIL_TEMPLATE_ACCOUNT_DELETION_CANCELLED\x10\n" +
+	"\x12-\n" +
+	")EMAIL_TEMPLATE_ACCOUNT_DELETION_COMPLETED\x10\v*n\n" +
 	"\x0eThresholdLevel\x12\x1f\n" +
 	"\x1bTHRESHOLD_LEVEL_UNSPECIFIED\x10\x00\x12\x1e\n" +
 	"\x1aTHRESHOLD_LEVEL_WARNING_80\x10\x01\x12\x1b\n" +

@@ -123,6 +123,31 @@ service AuthService {
   // exposes the JOIN result over gRPC. Single PG round-trip; called
   // fire-and-forget off the gateway hot path.
   rpc GetCapNotificationContext(GetCapNotificationContextRequest) returns (GetCapNotificationContextResponse);
+
+  // Story 2.7 — GDPR account deletion (30-day grace). Added to the EXISTING
+  // auth service (BR-2.2), NOT a new service.
+  //
+  // RequestAccountDeletion: re-auth-gated active→pending_deletion transition
+  // (OWASP ASVS L2 V8.3). Server-side re-verifies a fresh credential
+  // (password / confirm_email for OAuth-only / +TOTP when totp_enabled),
+  // single-winner CAS `UPDATE ... WHERE id=$1 AND status='active'`, sets
+  // pending_deletion_at = NOW() + 30d (server UTC, never client-supplied),
+  // revokes all sessions, audits account.deletion.requested, fires
+  // EMAIL_TEMPLATE_ACCOUNT_DELETION_REQUESTED. Idempotent: a 2nd request while
+  // already pending returns the SAME pending_deletion_at (no new audit/email).
+  // user_id is gateway-populated from JWT sub (BR-2.4 IDOR defence).
+  //
+  // CancelAccountDeletion: restorative pending_deletion→active CAS during the
+  // grace window. Requires ONLY a valid JWT — no fresh re-auth (OQ-2 ratified
+  // asymmetry; deletion is destructive, cancellation is restorative and is
+  // already gated by signin). 0 rows + grace expired/deleted → grace_expired.
+  //
+  // GetAccountDeletionState: read-only hydration for AC1 dialog field
+  // branching (has_password / totp_enabled are server-authoritative; the
+  // password hash NEVER leaves auth-svc) + AC3 recovery countdown + AC4 guard.
+  rpc RequestAccountDeletion(RequestAccountDeletionRequest) returns (RequestAccountDeletionResponse);
+  rpc CancelAccountDeletion(CancelAccountDeletionRequest) returns (CancelAccountDeletionResponse);
+  rpc GetAccountDeletionState(GetAccountDeletionStateRequest) returns (GetAccountDeletionStateResponse);
 }
 
 // --- RegisterUser --------------------------------------------------------
@@ -537,6 +562,10 @@ message ValidateApiKeyResponse {
   // api-gateway keypolicy middleware (AC4) enforces the cap from the bearer
   // cache WITHOUT a per-request PG round-trip (Q-A cache-shape extension).
   optional string monthly_cost_cap_usd = 7;
+  // Story 8.4 — the key's content_safety_strictness ("strict"/"default"/"loose")
+  // on the Validate hot path so the gateway gates the bidirectional filter from
+  // cache (NOT NULL column → always populated on ok=true; "" fail-closes strict).
+  string content_safety_strictness = 8;
 }
 
 enum ApiKeyValidationReason {
@@ -592,6 +621,9 @@ message ApiKeyEntry {
   optional google.protobuf.Timestamp last_used_at = 7;
   optional google.protobuf.Timestamp revoked_at = 8;
   google.protobuf.Timestamp created_at = 9;
+  // Story 8.4 — content_safety_strictness on the LIST/GET read path so the
+  // owner can observe the effective level (NOT NULL → always populated).
+  string content_safety_strictness = 10;
 }
 
 message RevokeApiKeyRequest {
@@ -640,6 +672,9 @@ message UpdateApiKeyRequest {
   bool clear_monthly_cap = 5;                 // true → set monthly_cost_cap_usd = NULL
   string client_ip = 6;                       // audit (hashed)
   string user_agent = 7;                      // audit (hashed)
+  // Story 8.4 — present → set content_safety_strictness; absent → untouched
+  // (BR-1.7 partial-update merge semantics, mirrors monthly_cost_cap_usd).
+  optional string content_safety_strictness = 8;
 }
 
 // UpdateApiKeyResponse mirrors ApiKeyEntry's field set (minus key_hash) so
@@ -656,6 +691,8 @@ message UpdateApiKeyResponse {
   optional google.protobuf.Timestamp last_used_at = 7;
   optional google.protobuf.Timestamp revoked_at = 8;  // always null on UPDATE
   google.protobuf.Timestamp created_at = 9;
+  // Story 8.4 — echoes the effective content_safety_strictness post-update.
+  string content_safety_strictness = 10;
 }
 
 // GetCapNotificationContextRequest — Story 5.4 Q-L Fix-A. Looks up the
@@ -678,4 +715,69 @@ message GetCapNotificationContextResponse {
   string user_display_name = 3;
   string key_name = 4;
   string key_monthly_cost_cap_usd = 5;
+}
+
+// --- Account Deletion (Story 2.7) ----------------------------------------
+
+// ReauthCredentials — the fresh credential re-verified server-side before the
+// destructive active→pending_deletion transition (BR-2.4, OWASP ASVS L2 V8.3).
+// Exactly the fields appropriate to the account shape are populated by the
+// console (AC1 BR-1.4): password for password-users; confirm_email for
+// OAuth-only; totp_code additionally when totp_enabled. All optional at the
+// wire level — auth-svc decides which are REQUIRED from the account shape and
+// fails closed (403_bad_reauth) on absence/mismatch.
+message ReauthCredentials {
+  optional string password = 1;       // bcrypt-verified (password-users)
+  optional string confirm_email = 2;  // exact NFC match to users.email (OAuth-only)
+  optional string totp_code = 3;      // 6-digit RFC 6238 (when totp_enabled)
+}
+
+// RequestAccountDeletionRequest. user_id is gateway-populated from JWT sub
+// (BR-2.4 IDOR defence) — the client request body MUST NOT carry it.
+message RequestAccountDeletionRequest {
+  string user_id = 1;
+  ReauthCredentials reauth = 2;
+  string client_ip = 3;    // audit (hashed; never raw-stored — BR-7.6)
+  string user_agent = 4;   // audit (hashed)
+}
+
+// RequestAccountDeletionResponse. status is "pending_deletion". On the
+// idempotent re-request path the SAME pending_deletion_at is returned (BR-2.6).
+// can_cancel_until == pending_deletion_at (the whole grace window is cancelable).
+message RequestAccountDeletionResponse {
+  string status = 1;
+  google.protobuf.Timestamp pending_deletion_at = 2;
+  google.protobuf.Timestamp can_cancel_until = 3;
+}
+
+// CancelAccountDeletionRequest. user_id gateway-populated (JWT sub). No fresh
+// re-auth (OQ-2 ratified asymmetry — BR-3.4).
+message CancelAccountDeletionRequest {
+  string user_id = 1;
+  string client_ip = 2;
+  string user_agent = 3;
+}
+
+// CancelAccountDeletionResponse. status is "active" on success or the
+// idempotent already-active path (BR-3.6).
+message CancelAccountDeletionResponse {
+  string status = 1;
+}
+
+// GetAccountDeletionStateRequest. user_id gateway-populated (JWT sub).
+message GetAccountDeletionStateRequest {
+  string user_id = 1;
+}
+
+// GetAccountDeletionStateResponse — read-only hydration. has_password /
+// totp_enabled are server-authoritative and drive AC1 dialog field branching;
+// the password hash NEVER leaves auth-svc. pending_deletion_at is present only
+// while status='pending_deletion' (AC3 countdown). timezone renders the
+// scheduled date in the user's tz (Story 2.5; AC3 BR-3.7).
+message GetAccountDeletionStateResponse {
+  string status = 1;
+  optional google.protobuf.Timestamp pending_deletion_at = 2;
+  bool has_password = 3;
+  bool totp_enabled = 4;
+  string timezone = 5;
 }

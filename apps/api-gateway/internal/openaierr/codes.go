@@ -116,6 +116,15 @@ var CodeMetadata = map[string]struct {
 	"404_api_key_not_found":     {404, "invalid_request_error"},
 	"429_rate_limit_key_create": {429, "invalid_request_error"},
 
+	// account-deletion surface (Story 2.7 — GDPR right-to-erasure). 4 NEW codes;
+	// 403_account_pending_deletion (above) is REUSED for the AC4 console/business
+	// guard (the recovery-only-session boundary — OQ-1). 429 follows the
+	// 429_rate_limit_<scope> registry convention (Architect m-4).
+	"403_bad_reauth":                  {403, "invalid_request_error"}, // AC2 re-auth mismatch (password/email/TOTP)
+	"409_account_not_deletable":       {409, "invalid_request_error"}, // AC2 status ∈ {suspended,locked,deleted}
+	"410_grace_expired":               {410, "invalid_request_error"}, // AC3 cancel after sweeper ran / grace passed
+	"429_rate_limit_account_delete":   {429, "invalid_request_error"}, // AC2 BR-2.5 anti-accident 5/24h
+
 	// Story 10.6 — Playground proxy endpoint (POST /v1/me/playground/chat). The
 	// JWT-authed endpoint resolves a body-carried api_key_id to the caller's own
 	// per-key policy, IDOR-fenced on WHERE user_id=$JWT.sub. A foreign / unknown /

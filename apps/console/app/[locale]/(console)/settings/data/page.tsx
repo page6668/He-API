@@ -11,6 +11,9 @@ import { unstable_setRequestLocale, getTranslations } from 'next-intl/server';
 import { isLocale, defaultLocale, type Locale } from '@/i18n/config';
 import { getCurrentExport } from './_actions/get-current-export';
 import { ExportDataDialog } from '@/components/business/ExportDataDialog';
+import { DeleteAccountDialog } from '@/components/business/DeleteAccountDialog';
+import { getDeletionState } from '@/lib/account/deletion-actions';
+import { getMyProfile } from '../profile/_actions/get-my-profile';
 
 interface DataPageProps {
   params: { locale: string };
@@ -39,6 +42,11 @@ export default async function DataPage({ params: { locale } }: DataPageProps) {
     );
   }
 
+  // Story 2.7 AC1 — prefetch the account shape + email for the Danger Zone
+  // (server-authoritative re-auth field branching; the client never guesses).
+  // Failures degrade gracefully: the Danger Zone is simply omitted.
+  const [deletion, profile] = await Promise.all([getDeletionState(), getMyProfile()]);
+
   return (
     <section className="space-y-6 py-8">
       <header className="space-y-2">
@@ -46,6 +54,9 @@ export default async function DataPage({ params: { locale } }: DataPageProps) {
         <p className="text-sm text-neutral-700">{t('description')}</p>
       </header>
       <ExportDataDialog currentExport={result.data} />
+      {deletion.kind === 'ok' && profile.kind === 'ok' && (
+        <DeleteAccountDialog state={deletion.data} email={profile.data.email} locale={resolvedLocale} />
+      )}
     </section>
   );
 }

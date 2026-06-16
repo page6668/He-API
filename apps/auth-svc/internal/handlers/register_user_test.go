@@ -54,6 +54,24 @@ type fakeNotification struct {
 	lastAlertTo   string
 	lastAlertVars map[string]string
 	alertErr      error
+
+	// Story 2.7 account-deletion email capture.
+	delCalls    int
+	lastDelTmpl notification.AccountDeletionTemplate
+	lastDelTo   string
+	lastDelVars map[string]string
+	delErr      error
+}
+
+func (f *fakeNotification) SendAccountDeletionEmail(_ context.Context, template notification.AccountDeletionTemplate, to, locale string, vars map[string]string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.delCalls++
+	f.lastDelTmpl = template
+	f.lastDelTo = to
+	f.lastLocale = locale
+	f.lastDelVars = vars
+	return f.delErr
 }
 
 func (f *fakeNotification) SendVerificationEmail(_ context.Context, to, locale, tok, link string) error {

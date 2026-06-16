@@ -56,6 +56,16 @@ type fakeAuthClient struct {
 	getMeErr          error
 	updateProfileResp *authv1.UpdateProfileResponse
 	updateProfileErr  error
+	// Story 2.7 — account deletion (T2/T3)
+	reqDeletionResp       *authv1.RequestAccountDeletionResponse
+	reqDeletionErr        error
+	cancelDeletionResp    *authv1.CancelAccountDeletionResponse
+	cancelDeletionErr     error
+	deletionStateResp     *authv1.GetAccountDeletionStateResponse
+	deletionStateErr      error
+	lastReqDeletionReq    *authv1.RequestAccountDeletionRequest
+	lastCancelDeletionReq *authv1.CancelAccountDeletionRequest
+	lastDeletionStateReq  *authv1.GetAccountDeletionStateRequest
 	// captured inputs for assertions
 	lastReq              *authv1.RegisterUserRequest
 	lastVerifyReq        *authv1.VerifyEmailRequest
@@ -73,6 +83,39 @@ type fakeAuthClient struct {
 }
 
 var errFakeUnimplemented = errors.New("fakeAuthClient: method not stubbed")
+
+func (f *fakeAuthClient) RequestAccountDeletion(_ context.Context, r *connect.Request[authv1.RequestAccountDeletionRequest]) (*connect.Response[authv1.RequestAccountDeletionResponse], error) {
+	f.lastReqDeletionReq = r.Msg
+	if f.reqDeletionErr != nil {
+		return nil, f.reqDeletionErr
+	}
+	if f.reqDeletionResp == nil {
+		return nil, errFakeUnimplemented
+	}
+	return connect.NewResponse(f.reqDeletionResp), nil
+}
+
+func (f *fakeAuthClient) CancelAccountDeletion(_ context.Context, r *connect.Request[authv1.CancelAccountDeletionRequest]) (*connect.Response[authv1.CancelAccountDeletionResponse], error) {
+	f.lastCancelDeletionReq = r.Msg
+	if f.cancelDeletionErr != nil {
+		return nil, f.cancelDeletionErr
+	}
+	if f.cancelDeletionResp == nil {
+		return nil, errFakeUnimplemented
+	}
+	return connect.NewResponse(f.cancelDeletionResp), nil
+}
+
+func (f *fakeAuthClient) GetAccountDeletionState(_ context.Context, r *connect.Request[authv1.GetAccountDeletionStateRequest]) (*connect.Response[authv1.GetAccountDeletionStateResponse], error) {
+	f.lastDeletionStateReq = r.Msg
+	if f.deletionStateErr != nil {
+		return nil, f.deletionStateErr
+	}
+	if f.deletionStateResp == nil {
+		return nil, errFakeUnimplemented
+	}
+	return connect.NewResponse(f.deletionStateResp), nil
+}
 
 func (f *fakeAuthClient) RegisterUser(
 	_ context.Context,

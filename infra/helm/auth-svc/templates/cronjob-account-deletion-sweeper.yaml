@@ -1,0 +1,79 @@
+{{- if .Values.accountDeletionSweeper.enabled }}
+# Story 2.7 AC6 — account-deletion sweeper CronJob. After the 30-day grace
+# elapses it anonymizes the users row (soft-delete), EXPLICITLY deletes the PII
+# children (CASCADE does NOT fire on the UPDATE — BR-6.3), detaches + deletes
+# the Stripe payment methods (OQ-3 OVERRIDE), anonymizes ClickHouse + purges
+# OSS, then closes the reconcile gate + emits the HIGH audit + completion email.
+# concurrencyPolicy: Forbid + backoffLimit: 0 → one cron, one outcome,
+# human-verified on failure (security-sensitive-cron posture; BLIND-CONCURRENCY).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "auth-svc.fullname" . }}-account-deletion-sweeper
+  labels:
+    {{- include "auth-svc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: account-deletion-sweeper
+spec:
+  # NOTE: the literal schedule below is the single-source-of-truth asserted by
+  # scripts/ci/verify-cron-schedule.sh. Do not template it away.
+  schedule: {{ .Values.accountDeletionSweeper.schedule | quote }}
+  timeZone: {{ .Values.accountDeletionSweeper.timeZone | quote }}
+  concurrencyPolicy: {{ .Values.accountDeletionSweeper.concurrencyPolicy }}
+  startingDeadlineSeconds: {{ .Values.accountDeletionSweeper.startingDeadlineSeconds }}
+  successfulJobsHistoryLimit: {{ .Values.accountDeletionSweeper.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.accountDeletionSweeper.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      backoffLimit: {{ .Values.accountDeletionSweeper.backoffLimit }}
+      activeDeadlineSeconds: 330  # > the binary's 5-min ctx deadline
+      template:
+        metadata:
+          labels:
+            {{- include "auth-svc.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: account-deletion-sweeper
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ include "auth-svc.serviceAccountName" . }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: account-deletion-sweeper
+              image: "{{ .Values.accountDeletionSweeper.image.repository }}:{{ .Values.accountDeletionSweeper.image.tag }}"
+              imagePullPolicy: {{ .Values.accountDeletionSweeper.image.pullPolicy }}
+              env:
+                - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                  value: {{ .Values.env.OTEL_EXPORTER_OTLP_ENDPOINT | quote }}
+                # Audit emit is best-effort; empty value skips it gracefully.
+                - name: HE_API_AUDIT_KAFKA_BROKERS
+                  value: {{ .Values.audit.kafkaBrokers | quote }}
+                # Completion email is best-effort; empty value skips it.
+                - name: HE_API_NOTIFICATION_SVC_URL
+                  value: {{ .Values.accountDeletionSweeper.notificationSvcURL | quote }}
+              envFrom:
+                - secretRef:
+                    name: {{ .Values.db.credsSecretName }}
+                {{- if .Values.externalSecret.enabled }}
+                - secretRef:
+                    name: {{ .Values.externalSecret.targetSecretName }}
+                {{- end }}
+              securityContext:
+                runAsNonRoot: true
+                runAsUser: 65532
+                readOnlyRootFilesystem: true
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                seccompProfile:
+                  type: RuntimeDefault
+              resources:
+                requests:
+                  cpu: {{ .Values.accountDeletionSweeper.resources.requests.cpu }}
+                  memory: {{ .Values.accountDeletionSweeper.resources.requests.memory }}
+                limits:
+                  cpu: {{ .Values.accountDeletionSweeper.resources.limits.cpu }}
+                  memory: {{ .Values.accountDeletionSweeper.resources.limits.memory }}
+{{- end }}

@@ -2568,10 +2568,9 @@ type ValidateApiKeyResponse struct {
 	// api-gateway keypolicy middleware (AC4) enforces the cap from the bearer
 	// cache WITHOUT a per-request PG round-trip (Q-A cache-shape extension).
 	MonthlyCostCapUsd *string `protobuf:"bytes,7,opt,name=monthly_cost_cap_usd,json=monthlyCostCapUsd,proto3,oneof" json:"monthly_cost_cap_usd,omitempty"`
-	// Story 8.4 — the key's content_safety_strictness ("strict"/"default"/"loose").
-	// Column is NOT NULL so this is always populated on ok=true; "" only if the RPC
-	// predates 8.4 (the gateway resolver fail-closes "" → strict). Carried on the
-	// Validate hot path so the gateway gates the bidirectional filter from cache.
+	// Story 8.4 — the key's content_safety_strictness ("strict"/"default"/"loose")
+	// on the Validate hot path so the gateway gates the bidirectional filter from
+	// cache (NOT NULL column → always populated on ok=true; "" fail-closes strict).
 	ContentSafetyStrictness string `protobuf:"bytes,8,opt,name=content_safety_strictness,json=contentSafetyStrictness,proto3" json:"content_safety_strictness,omitempty"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
@@ -2918,8 +2917,8 @@ type ApiKeyEntry struct {
 	LastUsedAt          *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=last_used_at,json=lastUsedAt,proto3,oneof" json:"last_used_at,omitempty"`
 	RevokedAt           *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=revoked_at,json=revokedAt,proto3,oneof" json:"revoked_at,omitempty"`
 	CreatedAt           *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	// Story 8.4 — the key's content_safety_strictness on the LIST/GET read path so
-	// the owner can observe the effective level (NOT NULL → always populated).
+	// Story 8.4 — content_safety_strictness on the LIST/GET read path so the
+	// owner can observe the effective level (NOT NULL → always populated).
 	ContentSafetyStrictness string `protobuf:"bytes,10,opt,name=content_safety_strictness,json=contentSafetyStrictness,proto3" json:"content_safety_strictness,omitempty"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
@@ -3246,10 +3245,8 @@ type UpdateApiKeyRequest struct {
 	ClearMonthlyCap   bool                   `protobuf:"varint,5,opt,name=clear_monthly_cap,json=clearMonthlyCap,proto3" json:"clear_monthly_cap,omitempty"`              // true → set monthly_cost_cap_usd = NULL
 	ClientIp          string                 `protobuf:"bytes,6,opt,name=client_ip,json=clientIp,proto3" json:"client_ip,omitempty"`                                      // audit (hashed)
 	UserAgent         string                 `protobuf:"bytes,7,opt,name=user_agent,json=userAgent,proto3" json:"user_agent,omitempty"`                                   // audit (hashed)
-	// Story 8.4 — present → set api_keys.content_safety_strictness; absent →
-	// untouched (proto3 optional present/absent semantics, mirroring the cap
-	// pointer). The gateway validates the {strict,default,loose} enum BEFORE the
-	// RPC; no "clear" flag is needed (the column is NOT NULL — no NULL state).
+	// Story 8.4 — present → set content_safety_strictness; absent → untouched
+	// (BR-1.7 partial-update merge semantics, mirrors monthly_cost_cap_usd).
 	ContentSafetyStrictness *string `protobuf:"bytes,8,opt,name=content_safety_strictness,json=contentSafetyStrictness,proto3,oneof" json:"content_safety_strictness,omitempty"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
@@ -3356,8 +3353,7 @@ type UpdateApiKeyResponse struct {
 	LastUsedAt          *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=last_used_at,json=lastUsedAt,proto3,oneof" json:"last_used_at,omitempty"`
 	RevokedAt           *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=revoked_at,json=revokedAt,proto3,oneof" json:"revoked_at,omitempty"` // always null on UPDATE
 	CreatedAt           *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	// Story 8.4 — the persisted content_safety_strictness echoed on the PATCH
-	// read-back so the owner sees the effective level (NOT NULL → always populated).
+	// Story 8.4 — echoes the effective content_safety_strictness post-update.
 	ContentSafetyStrictness string `protobuf:"bytes,10,opt,name=content_safety_strictness,json=contentSafetyStrictness,proto3" json:"content_safety_strictness,omitempty"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
@@ -3449,18 +3445,18 @@ func (x *UpdateApiKeyResponse) GetRevokedAt() *timestamppb.Timestamp {
 	return nil
 }
 
-func (x *UpdateApiKeyResponse) GetContentSafetyStrictness() string {
-	if x != nil {
-		return x.ContentSafetyStrictness
-	}
-	return ""
-}
-
 func (x *UpdateApiKeyResponse) GetCreatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.CreatedAt
 	}
 	return nil
+}
+
+func (x *UpdateApiKeyResponse) GetContentSafetyStrictness() string {
+	if x != nil {
+		return x.ContentSafetyStrictness
+	}
+	return ""
 }
 
 // GetCapNotificationContextRequest — Story 5.4 Q-L Fix-A. Looks up the
@@ -3593,9 +3589,831 @@ func (x *GetCapNotificationContextResponse) GetKeyMonthlyCostCapUsd() string {
 	return ""
 }
 
+// ReauthCredentials — the fresh credential re-verified server-side before the
+// destructive active→pending_deletion transition (BR-2.4, OWASP ASVS L2 V8.3).
+// Exactly the fields appropriate to the account shape are populated by the
+// console (AC1 BR-1.4): password for password-users; confirm_email for
+// OAuth-only; totp_code additionally when totp_enabled. All optional at the
+// wire level — auth-svc decides which are REQUIRED from the account shape and
+// fails closed (403_bad_reauth) on absence/mismatch.
+type ReauthCredentials struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Password      *string                `protobuf:"bytes,1,opt,name=password,proto3,oneof" json:"password,omitempty"`                             // bcrypt-verified (password-users)
+	ConfirmEmail  *string                `protobuf:"bytes,2,opt,name=confirm_email,json=confirmEmail,proto3,oneof" json:"confirm_email,omitempty"` // exact NFC match to users.email (OAuth-only)
+	TotpCode      *string                `protobuf:"bytes,3,opt,name=totp_code,json=totpCode,proto3,oneof" json:"totp_code,omitempty"`             // 6-digit RFC 6238 (when totp_enabled)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReauthCredentials) Reset() {
+	*x = ReauthCredentials{}
+	mi := &file_he_auth_v1_auth_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReauthCredentials) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReauthCredentials) ProtoMessage() {}
+
+func (x *ReauthCredentials) ProtoReflect() protoreflect.Message {
+	mi := &file_he_auth_v1_auth_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReauthCredentials.ProtoReflect.Descriptor instead.
+func (*ReauthCredentials) Descriptor() ([]byte, []int) {
+	return file_he_auth_v1_auth_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *ReauthCredentials) GetPassword() string {
+	if x != nil && x.Password != nil {
+		return *x.Password
+	}
+	return ""
+}
+
+func (x *ReauthCredentials) GetConfirmEmail() string {
+	if x != nil && x.ConfirmEmail != nil {
+		return *x.ConfirmEmail
+	}
+	return ""
+}
+
+func (x *ReauthCredentials) GetTotpCode() string {
+	if x != nil && x.TotpCode != nil {
+		return *x.TotpCode
+	}
+	return ""
+}
+
+// RequestAccountDeletionRequest. user_id is gateway-populated from JWT sub
+// (BR-2.4 IDOR defence) — the client request body MUST NOT carry it.
+type RequestAccountDeletionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Reauth        *ReauthCredentials     `protobuf:"bytes,2,opt,name=reauth,proto3" json:"reauth,omitempty"`
+	ClientIp      string                 `protobuf:"bytes,3,opt,name=client_ip,json=clientIp,proto3" json:"client_ip,omitempty"`    // audit (hashed; never raw-stored — BR-7.6)
+	UserAgent     string                 `protobuf:"bytes,4,opt,name=user_agent,json=userAgent,proto3" json:"user_agent,omitempty"` // audit (hashed)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RequestAccountDeletionRequest) Reset() {
+	*x = RequestAccountDeletionRequest{}
+	mi := &file_he_auth_v1_auth_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RequestAccountDeletionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RequestAccountDeletionRequest) ProtoMessage() {}
+
+func (x *RequestAccountDeletionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_he_auth_v1_auth_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RequestAccountDeletionRequest.ProtoReflect.Descriptor instead.
+func (*RequestAccountDeletionRequest) Descriptor() ([]byte, []int) {
+	return file_he_auth_v1_auth_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *RequestAccountDeletionRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *RequestAccountDeletionRequest) GetReauth() *ReauthCredentials {
+	if x != nil {
+		return x.Reauth
+	}
+	return nil
+}
+
+func (x *RequestAccountDeletionRequest) GetClientIp() string {
+	if x != nil {
+		return x.ClientIp
+	}
+	return ""
+}
+
+func (x *RequestAccountDeletionRequest) GetUserAgent() string {
+	if x != nil {
+		return x.UserAgent
+	}
+	return ""
+}
+
+// RequestAccountDeletionResponse. status is "pending_deletion". On the
+// idempotent re-request path the SAME pending_deletion_at is returned (BR-2.6).
+// can_cancel_until == pending_deletion_at (the whole grace window is cancelable).
+type RequestAccountDeletionResponse struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Status            string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	PendingDeletionAt *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=pending_deletion_at,json=pendingDeletionAt,proto3" json:"pending_deletion_at,omitempty"`
+	CanCancelUntil    *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=can_cancel_until,json=canCancelUntil,proto3" json:"can_cancel_until,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *RequestAccountDeletionResponse) Reset() {
+	*x = RequestAccountDeletionResponse{}
+	mi := &file_he_auth_v1_auth_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RequestAccountDeletionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RequestAccountDeletionResponse) ProtoMessage() {}
+
+func (x *RequestAccountDeletionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_he_auth_v1_auth_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RequestAccountDeletionResponse.ProtoReflect.Descriptor instead.
+func (*RequestAccountDeletionResponse) Descriptor() ([]byte, []int) {
+	return file_he_auth_v1_auth_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *RequestAccountDeletionResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *RequestAccountDeletionResponse) GetPendingDeletionAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.PendingDeletionAt
+	}
+	return nil
+}
+
+func (x *RequestAccountDeletionResponse) GetCanCancelUntil() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CanCancelUntil
+	}
+	return nil
+}
+
+// CancelAccountDeletionRequest. user_id gateway-populated (JWT sub). No fresh
+// re-auth (OQ-2 ratified asymmetry — BR-3.4).
+type CancelAccountDeletionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	ClientIp      string                 `protobuf:"bytes,2,opt,name=client_ip,json=clientIp,proto3" json:"client_ip,omitempty"`
+	UserAgent     string                 `protobuf:"bytes,3,opt,name=user_agent,json=userAgent,proto3" json:"user_agent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelAccountDeletionRequest) Reset() {
+	*x = CancelAccountDeletionRequest{}
+	mi := &file_he_auth_v1_auth_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelAccountDeletionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelAccountDeletionRequest) ProtoMessage() {}
+
+func (x *CancelAccountDeletionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_he_auth_v1_auth_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelAccountDeletionRequest.ProtoReflect.Descriptor instead.
+func (*CancelAccountDeletionRequest) Descriptor() ([]byte, []int) {
+	return file_he_auth_v1_auth_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *CancelAccountDeletionRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *CancelAccountDeletionRequest) GetClientIp() string {
+	if x != nil {
+		return x.ClientIp
+	}
+	return ""
+}
+
+func (x *CancelAccountDeletionRequest) GetUserAgent() string {
+	if x != nil {
+		return x.UserAgent
+	}
+	return ""
+}
+
+// CancelAccountDeletionResponse. status is "active" on success or the
+// idempotent already-active path (BR-3.6).
+type CancelAccountDeletionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelAccountDeletionResponse) Reset() {
+	*x = CancelAccountDeletionResponse{}
+	mi := &file_he_auth_v1_auth_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelAccountDeletionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelAccountDeletionResponse) ProtoMessage() {}
+
+func (x *CancelAccountDeletionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_he_auth_v1_auth_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelAccountDeletionResponse.ProtoReflect.Descriptor instead.
+func (*CancelAccountDeletionResponse) Descriptor() ([]byte, []int) {
+	return file_he_auth_v1_auth_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *CancelAccountDeletionResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+// GetAccountDeletionStateRequest. user_id gateway-populated (JWT sub).
+type GetAccountDeletionStateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAccountDeletionStateRequest) Reset() {
+	*x = GetAccountDeletionStateRequest{}
+	mi := &file_he_auth_v1_auth_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAccountDeletionStateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAccountDeletionStateRequest) ProtoMessage() {}
+
+func (x *GetAccountDeletionStateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_he_auth_v1_auth_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAccountDeletionStateRequest.ProtoReflect.Descriptor instead.
+func (*GetAccountDeletionStateRequest) Descriptor() ([]byte, []int) {
+	return file_he_auth_v1_auth_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *GetAccountDeletionStateRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+// GetAccountDeletionStateResponse — read-only hydration. has_password /
+// totp_enabled are server-authoritative and drive AC1 dialog field branching;
+// the password hash NEVER leaves auth-svc. pending_deletion_at is present only
+// while status='pending_deletion' (AC3 countdown). timezone renders the
+// scheduled date in the user's tz (Story 2.5; AC3 BR-3.7).
+type GetAccountDeletionStateResponse struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Status            string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	PendingDeletionAt *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=pending_deletion_at,json=pendingDeletionAt,proto3,oneof" json:"pending_deletion_at,omitempty"`
+	HasPassword       bool                   `protobuf:"varint,3,opt,name=has_password,json=hasPassword,proto3" json:"has_password,omitempty"`
+	TotpEnabled       bool                   `protobuf:"varint,4,opt,name=totp_enabled,json=totpEnabled,proto3" json:"totp_enabled,omitempty"`
+	Timezone          string                 `protobuf:"bytes,5,opt,name=timezone,proto3" json:"timezone,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *GetAccountDeletionStateResponse) Reset() {
+	*x = GetAccountDeletionStateResponse{}
+	mi := &file_he_auth_v1_auth_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAccountDeletionStateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAccountDeletionStateResponse) ProtoMessage() {}
+
+func (x *GetAccountDeletionStateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_he_auth_v1_auth_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAccountDeletionStateResponse.ProtoReflect.Descriptor instead.
+func (*GetAccountDeletionStateResponse) Descriptor() ([]byte, []int) {
+	return file_he_auth_v1_auth_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *GetAccountDeletionStateResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *GetAccountDeletionStateResponse) GetPendingDeletionAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.PendingDeletionAt
+	}
+	return nil
+}
+
+func (x *GetAccountDeletionStateResponse) GetHasPassword() bool {
+	if x != nil {
+		return x.HasPassword
+	}
+	return false
+}
+
+func (x *GetAccountDeletionStateResponse) GetTotpEnabled() bool {
+	if x != nil {
+		return x.TotpEnabled
+	}
+	return false
+}
+
+func (x *GetAccountDeletionStateResponse) GetTimezone() string {
+	if x != nil {
+		return x.Timezone
+	}
+	return ""
+}
+
 var File_he_auth_v1_auth_proto protoreflect.FileDescriptor
 
-const file_he_auth_v1_auth_proto_rawDesc = "\n\x15he/auth/v1/auth.proto\x12\nhe.auth.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9b\x01\n\x13RegisterUserRequest\x12\x14\n\x05email\x18\x01 \x01(\tR\x05email\x12\x1a\n\bpassword\x18\x02 \x01(\tR\bpassword\x12\x16\n\x06locale\x18\x03 \x01(\tR\x06locale\x12\x1b\n\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x05 \x01(\tR\tuserAgent\".\n\x14RegisterUserResponse\x12\x16\n\x06status\x18\x01 \x01(\tR\x06status\"f\n\x12VerifyEmailRequest\x12\x14\n\x05token\x18\x01 \x01(\tR\x05token\x12\x1b\n\tclient_ip\x18\x02 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x03 \x01(\tR\tuserAgent\"r\n\x13VerifyEmailResponse\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12*\n\x11email_verified_at\x18\x02 \x01(\tR\x0femailVerifiedAt\x12\x16\n\x06status\x18\x03 \x01(\tR\x06status\"m\n\x19ResendVerificationRequest\x12\x14\n\x05email\x18\x01 \x01(\tR\x05email\x12\x1b\n\tclient_ip\x18\x02 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x03 \x01(\tR\tuserAgent\"4\n\x1aResendVerificationResponse\x12\x16\n\x06status\x18\x01 \x01(\tR\x06status\"\x80\x01\n\x10LoginUserRequest\x12\x14\n\x05email\x18\x01 \x01(\tR\x05email\x12\x1a\n\bpassword\x18\x02 \x01(\tR\bpassword\x12\x1b\n\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x04 \x01(\tR\tuserAgent\"\xc9\x02\n\x11LoginUserResponse\x12/\n\x06status\x18\x01 \x01(\x0e2\x17.he.auth.v1.LoginStatusR\x06status\x12!\n\faccess_token\x18\x02 \x01(\tR\vaccessToken\x12#\n\rrefresh_token\x18\x03 \x01(\tR\frefreshToken\x12D\n\x1faccess_token_expires_in_seconds\x18\x04 \x01(\x05R\x1baccessTokenExpiresInSeconds\x12F\n refresh_token_expires_in_seconds\x18\x05 \x01(\x05R\x1crefreshTokenExpiresInSeconds\x12\x1b\n\tmfa_token\x18\x06 \x01(\tR\bmfaToken\x12\x10\n\x03aal\x18\a \x01(\x05R\x03aal\"v\n\x13RefreshTokenRequest\x12#\n\rrefresh_token\x18\x01 \x01(\tR\frefreshToken\x12\x1b\n\tclient_ip\x18\x02 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x03 \x01(\tR\tuserAgent\"\xec\x01\n\x14RefreshTokenResponse\x12!\n\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12D\n\x1faccess_token_expires_in_seconds\x18\x03 \x01(\x05R\x1baccessTokenExpiresInSeconds\x12F\n refresh_token_expires_in_seconds\x18\x04 \x01(\x05R\x1crefreshTokenExpiresInSeconds\"\xa0\x01\n\x11BeginOAuthRequest\x12\x1a\n\bprovider\x18\x01 \x01(\tR\bprovider\x12\x1b\n\treturn_to\x18\x02 \x01(\tR\breturnTo\x12\x16\n\x06locale\x18\x03 \x01(\tR\x06locale\x12\x1b\n\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x05 \x01(\tR\tuserAgent\"|\n\x12BeginOAuthResponse\x12#\n\rauthorize_url\x18\x01 \x01(\tR\fauthorizeUrl\x12\x19\n\bstate_id\x18\x02 \x01(\tR\astateId\x12&\n\x0fexpires_at_unix\x18\x03 \x01(\x03R\rexpiresAtUnix\"\x9d\x01\n\x14CompleteOAuthRequest\x12\x1a\n\bprovider\x18\x01 \x01(\tR\bprovider\x12\x12\n\x04code\x18\x02 \x01(\tR\x04code\x12\x19\n\bstate_id\x18\x03 \x01(\tR\astateId\x12\x1b\n\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x05 \x01(\tR\tuserAgent\"\xb1\x02\n\x15CompleteOAuthResponse\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12!\n\faccess_token\x18\x02 \x01(\tR\vaccessToken\x12#\n\rrefresh_token\x18\x03 \x01(\tR\frefreshToken\x12!\n\frequires_2fa\x18\x04 \x01(\bR\vrequires2fa\x12\x1e\n\vis_new_user\x18\x05 \x01(\bR\tisNewUser\x12:\n\flink_outcome\x18\x06 \x01(\x0e2\x17.he.auth.v1.LinkOutcomeR\vlinkOutcome\x12\x1b\n\treturn_to\x18\a \x01(\tR\breturnTo\x12\x1b\n\tmfa_token\x18\b \x01(\tR\bmfaToken\"l\n\x15EnrollTOTPInitRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1b\n\tclient_ip\x18\x02 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x03 \x01(\tR\tuserAgent\"\xa8\x01\n\x16EnrollTOTPInitResponse\x12\x1f\n\votpauth_uri\x18\x01 \x01(\tR\notpauthUri\x12\x1e\n\vqr_code_png\x18\x02 \x01(\fR\tqrCodePng\x12%\n\x0erecovery_codes\x18\x03 \x03(\tR\rrecoveryCodes\x12&\n\x0fexpires_at_unix\x18\x04 \x01(\x03R\rexpiresAtUnix\"\xbb\x01\n\x17EnrollTOTPVerifyRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12\x12\n\x04code\x18\x02 \x01(\tR\x04code\x127\n\x18ack_recovery_codes_saved\x18\x03 \x01(\bR\x15ackRecoveryCodesSaved\x12\x1b\n\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x05 \x01(\tR\tuserAgent\"T\n\x18EnrollTOTPVerifyResponse\x12\x0e\n\x02ok\x18\x01 \x01(\bR\x02ok\x12(\n\x10enrolled_at_unix\x18\x02 \x01(\x03R\x0eenrolledAtUnix\"\x83\x01\n\x14ChallengeTOTPRequest\x12\x1b\n\tmfa_token\x18\x01 \x01(\tR\bmfaToken\x12\x12\n\x04code\x18\x02 \x01(\tR\x04code\x12\x1b\n\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x04 \x01(\tR\tuserAgent\"\x9c\x02\n\x15ChallengeTOTPResponse\x12!\n\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12D\n\x1faccess_token_expires_in_seconds\x18\x03 \x01(\x05R\x1baccessTokenExpiresInSeconds\x12F\n refresh_token_expires_in_seconds\x18\x04 \x01(\x05R\x1crefreshTokenExpiresInSeconds\x12\x10\n\x03aal\x18\x05 \x01(\x05R\x03aal\x12\x1b\n\treturn_to\x18\x06 \x01(\tR\breturnTo\"\x85\x01\n\x16UseRecoveryCodeRequest\x12\x1b\n\tmfa_token\x18\x01 \x01(\tR\bmfaToken\x12\x12\n\x04code\x18\x02 \x01(\tR\x04code\x12\x1b\n\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x04 \x01(\tR\tuserAgent\"\x86\x03\n\x17UseRecoveryCodeResponse\x12!\n\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12D\n\x1faccess_token_expires_in_seconds\x18\x03 \x01(\x05R\x1baccessTokenExpiresInSeconds\x12F\n refresh_token_expires_in_seconds\x18\x04 \x01(\x05R\x1crefreshTokenExpiresInSeconds\x12\x10\n\x03aal\x18\x05 \x01(\x05R\x03aal\x128\n\x18recovery_codes_remaining\x18\x06 \x01(\x05R\x16recoveryCodesRemaining\x12,\n\x12recovery_codes_low\x18\a \x01(\bR\x10recoveryCodesLow\x12\x1b\n\treturn_to\x18\b \x01(\tR\breturnTo\"\xb7\x01\n\x12DisableTOTPRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x126\n\x06factor\x18\x02 \x01(\x0e2\x1e.he.auth.v1.VerificationFactorR\x06factor\x12\x14\n\x05value\x18\x03 \x01(\tR\x05value\x12\x1b\n\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x05 \x01(\tR\tuserAgent\"%\n\x13DisableTOTPResponse\x12\x0e\n\x02ok\x18\x01 \x01(\bR\x02ok\"\xc3\x01\n\x1eRegenerateRecoveryCodesRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x126\n\x06factor\x18\x02 \x01(\x0e2\x1e.he.auth.v1.VerificationFactorR\x06factor\x12\x14\n\x05value\x18\x03 \x01(\tR\x05value\x12\x1b\n\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x05 \x01(\tR\tuserAgent\"H\n\x1fRegenerateRecoveryCodesResponse\x12%\n\x0erecovery_codes\x18\x01 \x03(\tR\rrecoveryCodes\"'\n\fGetMeRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\"\x97\x03\n\rGetMeResponse\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n\x05email\x18\x02 \x01(\tR\x05email\x12&\n\fdisplay_name\x18\x03 \x01(\tH\x00R\vdisplayName\x88\x01\x01\x12\x16\n\x06locale\x18\x04 \x01(\tR\x06locale\x12\x1a\n\btimezone\x18\x05 \x01(\tR\btimezone\x12!\n\ftotp_enabled\x18\x06 \x01(\bR\vtotpEnabled\x12*\n\x0eoauth_provider\x18\a \x01(\tH\x01R\roauthProvider\x88\x01\x01\x129\n\ncreated_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n\nupdated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x12\n\x04etag\x18\n \x01(\tR\x04etagB\x0f\n\r_display_nameB\x11\n\x0f_oauth_provider\"\x95\x02\n\x14UpdateProfileRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12&\n\fdisplay_name\x18\x02 \x01(\tH\x00R\vdisplayName\x88\x01\x01\x12\x1b\n\x06locale\x18\x03 \x01(\tH\x01R\x06locale\x88\x01\x01\x12\x1f\n\btimezone\x18\x04 \x01(\tH\x02R\btimezone\x88\x01\x01\x12\x19\n\bif_match\x18\x05 \x01(\tR\aifMatch\x12\x1b\n\tclient_ip\x18\x06 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\a \x01(\tR\tuserAgentB\x0f\n\r_display_nameB\t\n\a_localeB\v\n\t_timezone\"\xc6\x03\n\x15UpdateProfileResponse\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n\x05email\x18\x02 \x01(\tR\x05email\x12&\n\fdisplay_name\x18\x03 \x01(\tH\x00R\vdisplayName\x88\x01\x01\x12\x16\n\x06locale\x18\x04 \x01(\tR\x06locale\x12\x1a\n\btimezone\x18\x05 \x01(\tR\btimezone\x12!\n\ftotp_enabled\x18\x06 \x01(\bR\vtotpEnabled\x12*\n\x0eoauth_provider\x18\a \x01(\tH\x01R\roauthProvider\x88\x01\x01\x129\n\ncreated_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n\nupdated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x12\n\x04etag\x18\n \x01(\tR\x04etag\x12%\n\x0elocale_changed\x18\v \x01(\bR\rlocaleChangedB\x0f\n\r_display_nameB\x11\n\x0f_oauth_provider\"x\n\x15ValidateApiKeyRequest\x12#\n\rplaintext_key\x18\x01 \x01(\tR\fplaintextKey\x12\x1b\n\tclient_ip\x18\x02 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x03 \x01(\tR\tuserAgent\"\xd5\x02\n\x16ValidateApiKeyResponse\x12\x0e\n\x02ok\x18\x01 \x01(\bR\x02ok\x12\x1c\n\napi_key_id\x18\x02 \x01(\tR\bapiKeyId\x12\x17\n\auser_id\x18\x03 \x01(\tR\x06userId\x12\x17\n\ateam_id\x18\x04 \x01(\tR\x06teamId\x12\x14\n\x05scope\x18\x05 \x01(\tR\x05scope\x12:\n\x06reason\x18\x06 \x01(\x0e2\".he.auth.v1.ApiKeyValidationReasonR\x06reason\x124\n\x14monthly_cost_cap_usd\x18\a \x01(\tH\x00R\x11monthlyCostCapUsd\x88\x01\x01\x12:\n\x19content_safety_strictness\x18\b \x01(\tR\x17contentSafetyStrictnessB\x17\n\x15_monthly_cost_cap_usd\"~\n\x13CreateApiKeyRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x04 \x01(\tR\tuserAgent\"\xc0\x01\n\x14CreateApiKeyResponse\x12\x1c\n\napi_key_id\x18\x01 \x01(\tR\bapiKeyId\x12\x1d\n\nkey_prefix\x18\x02 \x01(\tR\tkeyPrefix\x12\x12\n\x04name\x18\x03 \x01(\tR\x04name\x129\n\ncreated_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x1c\n\tplaintext\x18\x05 \x01(\tR\tplaintext\"-\n\x12ListApiKeysRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\"B\n\x13ListApiKeysResponse\x12+\n\x04keys\x18\x01 \x03(\v2\x17.he.auth.v1.ApiKeyEntryR\x04keys\"\x92\x04\n\vApiKeyEntry\x12\x1c\n\napi_key_id\x18\x01 \x01(\tR\bapiKeyId\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n\nkey_prefix\x18\x03 \x01(\tR\tkeyPrefix\x12\x14\n\x05scope\x18\x04 \x01(\tR\x05scope\x124\n\x14monthly_cost_cap_usd\x18\x05 \x01(\tH\x00R\x11monthlyCostCapUsd\x88\x01\x01\x123\n\x16current_month_cost_usd\x18\x06 \x01(\tR\x13currentMonthCostUsd\x12A\n\flast_used_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampH\x01R\nlastUsedAt\x88\x01\x01\x12>\n\nrevoked_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampH\x02R\trevokedAt\x88\x01\x01\x129\n\ncreated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12:\n\x19content_safety_strictness\x18\n \x01(\tR\x17contentSafetyStrictnessB\x17\n\x15_monthly_cost_cap_usdB\x0f\n\r_last_used_atB\r\n\v_revoked_at\"\x88\x01\n\x13RevokeApiKeyRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1c\n\napi_key_id\x18\x02 \x01(\tR\bapiKeyId\x12\x1b\n\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\x04 \x01(\tR\tuserAgent\"\x9f\x01\n\x14RevokeApiKeyResponse\x12\x1c\n\napi_key_id\x18\x01 \x01(\tR\bapiKeyId\x129\n\nrevoked_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\trevokedAt\x12.\n\x13was_already_revoked\x18\x03 \x01(\bR\x11wasAlreadyRevoked\"\xa0\x01\n\nScopePatch\x12\x16\n\x06models\x18\x01 \x03(\tR\x06models\x12%\n\x0emodels_present\x18\x02 \x01(\bR\rmodelsPresent\x12!\n\fip_whitelist\x18\x03 \x03(\tR\vipWhitelist\x120\n\x14ip_whitelist_present\x18\x04 \x01(\bR\x12ipWhitelistPresent\"\x90\x03\n\x13UpdateApiKeyRequest\x12\x17\n\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1c\n\napi_key_id\x18\x02 \x01(\tR\bapiKeyId\x12,\n\x05scope\x18\x03 \x01(\v2\x16.he.auth.v1.ScopePatchR\x05scope\x124\n\x14monthly_cost_cap_usd\x18\x04 \x01(\tH\x00R\x11monthlyCostCapUsd\x88\x01\x01\x12*\n\x11clear_monthly_cap\x18\x05 \x01(\bR\x0fclearMonthlyCap\x12\x1b\n\tclient_ip\x18\x06 \x01(\tR\bclientIp\x12\x1d\n\nuser_agent\x18\a \x01(\tR\tuserAgent\x12?\n\x19content_safety_strictness\x18\b \x01(\tH\x01R\x17contentSafetyStrictness\x88\x01\x01B\x17\n\x15_monthly_cost_cap_usdB\x1c\n\x1a_content_safety_strictness\"\x9b\x04\n\x14UpdateApiKeyResponse\x12\x1c\n\napi_key_id\x18\x01 \x01(\tR\bapiKeyId\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n\nkey_prefix\x18\x03 \x01(\tR\tkeyPrefix\x12\x14\n\x05scope\x18\x04 \x01(\tR\x05scope\x124\n\x14monthly_cost_cap_usd\x18\x05 \x01(\tH\x00R\x11monthlyCostCapUsd\x88\x01\x01\x123\n\x16current_month_cost_usd\x18\x06 \x01(\tR\x13currentMonthCostUsd\x12A\n\flast_used_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampH\x01R\nlastUsedAt\x88\x01\x01\x12>\n\nrevoked_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampH\x02R\trevokedAt\x88\x01\x01\x129\n\ncreated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12:\n\x19content_safety_strictness\x18\n \x01(\tR\x17contentSafetyStrictnessB\x17\n\x15_monthly_cost_cap_usdB\x0f\n\r_last_used_atB\r\n\v_revoked_at\"@\n GetCapNotificationContextRequest\x12\x1c\n\napi_key_id\x18\x01 \x01(\tR\bapiKeyId\"\xe2\x01\n!GetCapNotificationContextResponse\x12\x1d\n\nuser_email\x18\x01 \x01(\tR\tuserEmail\x12\x1f\n\vuser_locale\x18\x02 \x01(\tR\nuserLocale\x12*\n\x11user_display_name\x18\x03 \x01(\tR\x0fuserDisplayName\x12\x19\n\bkey_name\x18\x04 \x01(\tR\akeyName\x126\n\x18key_monthly_cost_cap_usd\x18\x05 \x01(\tR\x14keyMonthlyCostCapUsd*_\n\vLoginStatus\x12\x1c\n\x18LOGIN_STATUS_UNSPECIFIED\x10\x00\x12\x13\n\x0fLOGIN_STATUS_OK\x10\x01\x12\x1d\n\x19LOGIN_STATUS_REQUIRES_2FA\x10\x02*y\n\vLinkOutcome\x12\x1c\n\x18LINK_OUTCOME_UNSPECIFIED\x10\x00\x12\x19\n\x15LINK_OUTCOME_NEW_USER\x10\x01\x12\x17\n\x13LINK_OUTCOME_LINKED\x10\x02\x12\x18\n\x14LINK_OUTCOME_RELOGIN\x10\x03*y\n\x12VerificationFactor\x12#\n\x1fVERIFICATION_FACTOR_UNSPECIFIED\x10\x00\x12\x1c\n\x18VERIFICATION_FACTOR_TOTP\x10\x01\x12 \n\x1cVERIFICATION_FACTOR_PASSWORD\x10\x02*\x93\x01\n\x16ApiKeyValidationReason\x12)\n%API_KEY_VALIDATION_REASON_UNSPECIFIED\x10\x00\x12'\n#API_KEY_VALIDATION_REASON_NOT_FOUND\x10\x01\x12%\n!API_KEY_VALIDATION_REASON_REVOKED\x10\x022\xb3\x0e\n\vAuthService\x12Q\n\fRegisterUser\x12\x1f.he.auth.v1.RegisterUserRequest\x1a .he.auth.v1.RegisterUserResponse\x12N\n\vVerifyEmail\x12\x1e.he.auth.v1.VerifyEmailRequest\x1a\x1f.he.auth.v1.VerifyEmailResponse\x12c\n\x12ResendVerification\x12%.he.auth.v1.ResendVerificationRequest\x1a&.he.auth.v1.ResendVerificationResponse\x12H\n\tLoginUser\x12\x1c.he.auth.v1.LoginUserRequest\x1a\x1d.he.auth.v1.LoginUserResponse\x12Q\n\fRefreshToken\x12\x1f.he.auth.v1.RefreshTokenRequest\x1a .he.auth.v1.RefreshTokenResponse\x12K\n\nBeginOAuth\x12\x1d.he.auth.v1.BeginOAuthRequest\x1a\x1e.he.auth.v1.BeginOAuthResponse\x12T\n\rCompleteOAuth\x12 .he.auth.v1.CompleteOAuthRequest\x1a!.he.auth.v1.CompleteOAuthResponse\x12W\n\x0eEnrollTOTPInit\x12!.he.auth.v1.EnrollTOTPInitRequest\x1a\".he.auth.v1.EnrollTOTPInitResponse\x12]\n\x10EnrollTOTPVerify\x12#.he.auth.v1.EnrollTOTPVerifyRequest\x1a$.he.auth.v1.EnrollTOTPVerifyResponse\x12T\n\rChallengeTOTP\x12 .he.auth.v1.ChallengeTOTPRequest\x1a!.he.auth.v1.ChallengeTOTPResponse\x12Z\n\x0fUseRecoveryCode\x12\".he.auth.v1.UseRecoveryCodeRequest\x1a#.he.auth.v1.UseRecoveryCodeResponse\x12N\n\vDisableTOTP\x12\x1e.he.auth.v1.DisableTOTPRequest\x1a\x1f.he.auth.v1.DisableTOTPResponse\x12r\n\x17RegenerateRecoveryCodes\x12*.he.auth.v1.RegenerateRecoveryCodesRequest\x1a+.he.auth.v1.RegenerateRecoveryCodesResponse\x12<\n\x05GetMe\x12\x18.he.auth.v1.GetMeRequest\x1a\x19.he.auth.v1.GetMeResponse\x12T\n\rUpdateProfile\x12 .he.auth.v1.UpdateProfileRequest\x1a!.he.auth.v1.UpdateProfileResponse\x12W\n\x0eValidateApiKey\x12!.he.auth.v1.ValidateApiKeyRequest\x1a\".he.auth.v1.ValidateApiKeyResponse\x12Q\n\fCreateApiKey\x12\x1f.he.auth.v1.CreateApiKeyRequest\x1a .he.auth.v1.CreateApiKeyResponse\x12N\n\vListApiKeys\x12\x1e.he.auth.v1.ListApiKeysRequest\x1a\x1f.he.auth.v1.ListApiKeysResponse\x12Q\n\fRevokeApiKey\x12\x1f.he.auth.v1.RevokeApiKeyRequest\x1a .he.auth.v1.RevokeApiKeyResponse\x12Q\n\fUpdateApiKey\x12\x1f.he.auth.v1.UpdateApiKeyRequest\x1a .he.auth.v1.UpdateApiKeyResponse\x12x\n\x19GetCapNotificationContext\x12,.he.auth.v1.GetCapNotificationContextRequest\x1a-.he.auth.v1.GetCapNotificationContextResponseBBZ@github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1;authv1b\x06proto3"
+const file_he_auth_v1_auth_proto_rawDesc = "" +
+	"\n" +
+	"\x15he/auth/v1/auth.proto\x12\n" +
+	"he.auth.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9b\x01\n" +
+	"\x13RegisterUserRequest\x12\x14\n" +
+	"\x05email\x18\x01 \x01(\tR\x05email\x12\x1a\n" +
+	"\bpassword\x18\x02 \x01(\tR\bpassword\x12\x16\n" +
+	"\x06locale\x18\x03 \x01(\tR\x06locale\x12\x1b\n" +
+	"\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\x05 \x01(\tR\tuserAgent\".\n" +
+	"\x14RegisterUserResponse\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status\"f\n" +
+	"\x12VerifyEmailRequest\x12\x14\n" +
+	"\x05token\x18\x01 \x01(\tR\x05token\x12\x1b\n" +
+	"\tclient_ip\x18\x02 \x01(\tR\bclientIp\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\x03 \x01(\tR\tuserAgent\"r\n" +
+	"\x13VerifyEmailResponse\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12*\n" +
+	"\x11email_verified_at\x18\x02 \x01(\tR\x0femailVerifiedAt\x12\x16\n" +
+	"\x06status\x18\x03 \x01(\tR\x06status\"m\n" +
+	"\x19ResendVerificationRequest\x12\x14\n" +
+	"\x05email\x18\x01 \x01(\tR\x05email\x12\x1b\n" +
+	"\tclient_ip\x18\x02 \x01(\tR\bclientIp\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\x03 \x01(\tR\tuserAgent\"4\n" +
+	"\x1aResendVerificationResponse\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status\"\x80\x01\n" +
+	"\x10LoginUserRequest\x12\x14\n" +
+	"\x05email\x18\x01 \x01(\tR\x05email\x12\x1a\n" +
+	"\bpassword\x18\x02 \x01(\tR\bpassword\x12\x1b\n" +
+	"\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\x04 \x01(\tR\tuserAgent\"\xc9\x02\n" +
+	"\x11LoginUserResponse\x12/\n" +
+	"\x06status\x18\x01 \x01(\x0e2\x17.he.auth.v1.LoginStatusR\x06status\x12!\n" +
+	"\faccess_token\x18\x02 \x01(\tR\vaccessToken\x12#\n" +
+	"\rrefresh_token\x18\x03 \x01(\tR\frefreshToken\x12D\n" +
+	"\x1faccess_token_expires_in_seconds\x18\x04 \x01(\x05R\x1baccessTokenExpiresInSeconds\x12F\n" +
+	" refresh_token_expires_in_seconds\x18\x05 \x01(\x05R\x1crefreshTokenExpiresInSeconds\x12\x1b\n" +
+	"\tmfa_token\x18\x06 \x01(\tR\bmfaToken\x12\x10\n" +
+	"\x03aal\x18\a \x01(\x05R\x03aal\"v\n" +
+	"\x13RefreshTokenRequest\x12#\n" +
+	"\rrefresh_token\x18\x01 \x01(\tR\frefreshToken\x12\x1b\n" +
+	"\tclient_ip\x18\x02 \x01(\tR\bclientIp\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\x03 \x01(\tR\tuserAgent\"\xec\x01\n" +
+	"\x14RefreshTokenResponse\x12!\n" +
+	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n" +
+	"\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12D\n" +
+	"\x1faccess_token_expires_in_seconds\x18\x03 \x01(\x05R\x1baccessTokenExpiresInSeconds\x12F\n" +
+	" refresh_token_expires_in_seconds\x18\x04 \x01(\x05R\x1crefreshTokenExpiresInSeconds\"\xa0\x01\n" +
+	"\x11BeginOAuthRequest\x12\x1a\n" +
+	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x1b\n" +
+	"\treturn_to\x18\x02 \x01(\tR\breturnTo\x12\x16\n" +
+	"\x06locale\x18\x03 \x01(\tR\x06locale\x12\x1b\n" +
+	"\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\x05 \x01(\tR\tuserAgent\"|\n" +
+	"\x12BeginOAuthResponse\x12#\n" +
+	"\rauthorize_url\x18\x01 \x01(\tR\fauthorizeUrl\x12\x19\n" +
+	"\bstate_id\x18\x02 \x01(\tR\astateId\x12&\n" +
+	"\x0fexpires_at_unix\x18\x03 \x01(\x03R\rexpiresAtUnix\"\x9d\x01\n" +
+	"\x14CompleteOAuthRequest\x12\x1a\n" +
+	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x12\n" +
+	"\x04code\x18\x02 \x01(\tR\x04code\x12\x19\n" +
+	"\bstate_id\x18\x03 \x01(\tR\astateId\x12\x1b\n" +
+	"\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\x05 \x01(\tR\tuserAgent\"\xb1\x02\n" +
+	"\x15CompleteOAuthResponse\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12!\n" +
+	"\faccess_token\x18\x02 \x01(\tR\vaccessToken\x12#\n" +
+	"\rrefresh_token\x18\x03 \x01(\tR\frefreshToken\x12!\n" +
+	"\frequires_2fa\x18\x04 \x01(\bR\vrequires2fa\x12\x1e\n" +
+	"\vis_new_user\x18\x05 \x01(\bR\tisNewUser\x12:\n" +
+	"\flink_outcome\x18\x06 \x01(\x0e2\x17.he.auth.v1.LinkOutcomeR\vlinkOutcome\x12\x1b\n" +
+	"\treturn_to\x18\a \x01(\tR\breturnTo\x12\x1b\n" +
+	"\tmfa_token\x18\b \x01(\tR\bmfaToken\"l\n" +
+	"\x15EnrollTOTPInitRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1b\n" +
+	"\tclient_ip\x18\x02 \x01(\tR\bclientIp\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\x03 \x01(\tR\tuserAgent\"\xa8\x01\n" +
+	"\x16EnrollTOTPInitResponse\x12\x1f\n" +
+	"\votpauth_uri\x18\x01 \x01(\tR\n" +
+	"otpauthUri\x12\x1e\n" +
+	"\vqr_code_png\x18\x02 \x01(\fR\tqrCodePng\x12%\n" +
+	"\x0erecovery_codes\x18\x03 \x03(\tR\rrecoveryCodes\x12&\n" +
+	"\x0fexpires_at_unix\x18\x04 \x01(\x03R\rexpiresAtUnix\"\xbb\x01\n" +
+	"\x17EnrollTOTPVerifyRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x12\n" +
+	"\x04code\x18\x02 \x01(\tR\x04code\x127\n" +
+	"\x18ack_recovery_codes_saved\x18\x03 \x01(\bR\x15ackRecoveryCodesSaved\x12\x1b\n" +
+	"\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\x05 \x01(\tR\tuserAgent\"T\n" +
+	"\x18EnrollTOTPVerifyResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12(\n" +
+	"\x10enrolled_at_unix\x18\x02 \x01(\x03R\x0eenrolledAtUnix\"\x83\x01\n" +
+	"\x14ChallengeTOTPRequest\x12\x1b\n" +
+	"\tmfa_token\x18\x01 \x01(\tR\bmfaToken\x12\x12\n" +
+	"\x04code\x18\x02 \x01(\tR\x04code\x12\x1b\n" +
+	"\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\x04 \x01(\tR\tuserAgent\"\x9c\x02\n" +
+	"\x15ChallengeTOTPResponse\x12!\n" +
+	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n" +
+	"\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12D\n" +
+	"\x1faccess_token_expires_in_seconds\x18\x03 \x01(\x05R\x1baccessTokenExpiresInSeconds\x12F\n" +
+	" refresh_token_expires_in_seconds\x18\x04 \x01(\x05R\x1crefreshTokenExpiresInSeconds\x12\x10\n" +
+	"\x03aal\x18\x05 \x01(\x05R\x03aal\x12\x1b\n" +
+	"\treturn_to\x18\x06 \x01(\tR\breturnTo\"\x85\x01\n" +
+	"\x16UseRecoveryCodeRequest\x12\x1b\n" +
+	"\tmfa_token\x18\x01 \x01(\tR\bmfaToken\x12\x12\n" +
+	"\x04code\x18\x02 \x01(\tR\x04code\x12\x1b\n" +
+	"\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\x04 \x01(\tR\tuserAgent\"\x86\x03\n" +
+	"\x17UseRecoveryCodeResponse\x12!\n" +
+	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n" +
+	"\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12D\n" +
+	"\x1faccess_token_expires_in_seconds\x18\x03 \x01(\x05R\x1baccessTokenExpiresInSeconds\x12F\n" +
+	" refresh_token_expires_in_seconds\x18\x04 \x01(\x05R\x1crefreshTokenExpiresInSeconds\x12\x10\n" +
+	"\x03aal\x18\x05 \x01(\x05R\x03aal\x128\n" +
+	"\x18recovery_codes_remaining\x18\x06 \x01(\x05R\x16recoveryCodesRemaining\x12,\n" +
+	"\x12recovery_codes_low\x18\a \x01(\bR\x10recoveryCodesLow\x12\x1b\n" +
+	"\treturn_to\x18\b \x01(\tR\breturnTo\"\xb7\x01\n" +
+	"\x12DisableTOTPRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x126\n" +
+	"\x06factor\x18\x02 \x01(\x0e2\x1e.he.auth.v1.VerificationFactorR\x06factor\x12\x14\n" +
+	"\x05value\x18\x03 \x01(\tR\x05value\x12\x1b\n" +
+	"\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\x05 \x01(\tR\tuserAgent\"%\n" +
+	"\x13DisableTOTPResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\"\xc3\x01\n" +
+	"\x1eRegenerateRecoveryCodesRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x126\n" +
+	"\x06factor\x18\x02 \x01(\x0e2\x1e.he.auth.v1.VerificationFactorR\x06factor\x12\x14\n" +
+	"\x05value\x18\x03 \x01(\tR\x05value\x12\x1b\n" +
+	"\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\x05 \x01(\tR\tuserAgent\"H\n" +
+	"\x1fRegenerateRecoveryCodesResponse\x12%\n" +
+	"\x0erecovery_codes\x18\x01 \x03(\tR\rrecoveryCodes\"'\n" +
+	"\fGetMeRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\"\x97\x03\n" +
+	"\rGetMeResponse\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
+	"\x05email\x18\x02 \x01(\tR\x05email\x12&\n" +
+	"\fdisplay_name\x18\x03 \x01(\tH\x00R\vdisplayName\x88\x01\x01\x12\x16\n" +
+	"\x06locale\x18\x04 \x01(\tR\x06locale\x12\x1a\n" +
+	"\btimezone\x18\x05 \x01(\tR\btimezone\x12!\n" +
+	"\ftotp_enabled\x18\x06 \x01(\bR\vtotpEnabled\x12*\n" +
+	"\x0eoauth_provider\x18\a \x01(\tH\x01R\roauthProvider\x88\x01\x01\x129\n" +
+	"\n" +
+	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x12\n" +
+	"\x04etag\x18\n" +
+	" \x01(\tR\x04etagB\x0f\n" +
+	"\r_display_nameB\x11\n" +
+	"\x0f_oauth_provider\"\x95\x02\n" +
+	"\x14UpdateProfileRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12&\n" +
+	"\fdisplay_name\x18\x02 \x01(\tH\x00R\vdisplayName\x88\x01\x01\x12\x1b\n" +
+	"\x06locale\x18\x03 \x01(\tH\x01R\x06locale\x88\x01\x01\x12\x1f\n" +
+	"\btimezone\x18\x04 \x01(\tH\x02R\btimezone\x88\x01\x01\x12\x19\n" +
+	"\bif_match\x18\x05 \x01(\tR\aifMatch\x12\x1b\n" +
+	"\tclient_ip\x18\x06 \x01(\tR\bclientIp\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\a \x01(\tR\tuserAgentB\x0f\n" +
+	"\r_display_nameB\t\n" +
+	"\a_localeB\v\n" +
+	"\t_timezone\"\xc6\x03\n" +
+	"\x15UpdateProfileResponse\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
+	"\x05email\x18\x02 \x01(\tR\x05email\x12&\n" +
+	"\fdisplay_name\x18\x03 \x01(\tH\x00R\vdisplayName\x88\x01\x01\x12\x16\n" +
+	"\x06locale\x18\x04 \x01(\tR\x06locale\x12\x1a\n" +
+	"\btimezone\x18\x05 \x01(\tR\btimezone\x12!\n" +
+	"\ftotp_enabled\x18\x06 \x01(\bR\vtotpEnabled\x12*\n" +
+	"\x0eoauth_provider\x18\a \x01(\tH\x01R\roauthProvider\x88\x01\x01\x129\n" +
+	"\n" +
+	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x12\n" +
+	"\x04etag\x18\n" +
+	" \x01(\tR\x04etag\x12%\n" +
+	"\x0elocale_changed\x18\v \x01(\bR\rlocaleChangedB\x0f\n" +
+	"\r_display_nameB\x11\n" +
+	"\x0f_oauth_provider\"x\n" +
+	"\x15ValidateApiKeyRequest\x12#\n" +
+	"\rplaintext_key\x18\x01 \x01(\tR\fplaintextKey\x12\x1b\n" +
+	"\tclient_ip\x18\x02 \x01(\tR\bclientIp\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\x03 \x01(\tR\tuserAgent\"\xd5\x02\n" +
+	"\x16ValidateApiKeyResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x1c\n" +
+	"\n" +
+	"api_key_id\x18\x02 \x01(\tR\bapiKeyId\x12\x17\n" +
+	"\auser_id\x18\x03 \x01(\tR\x06userId\x12\x17\n" +
+	"\ateam_id\x18\x04 \x01(\tR\x06teamId\x12\x14\n" +
+	"\x05scope\x18\x05 \x01(\tR\x05scope\x12:\n" +
+	"\x06reason\x18\x06 \x01(\x0e2\".he.auth.v1.ApiKeyValidationReasonR\x06reason\x124\n" +
+	"\x14monthly_cost_cap_usd\x18\a \x01(\tH\x00R\x11monthlyCostCapUsd\x88\x01\x01\x12:\n" +
+	"\x19content_safety_strictness\x18\b \x01(\tR\x17contentSafetyStrictnessB\x17\n" +
+	"\x15_monthly_cost_cap_usd\"~\n" +
+	"\x13CreateApiKeyRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n" +
+	"\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\x04 \x01(\tR\tuserAgent\"\xc0\x01\n" +
+	"\x14CreateApiKeyResponse\x12\x1c\n" +
+	"\n" +
+	"api_key_id\x18\x01 \x01(\tR\bapiKeyId\x12\x1d\n" +
+	"\n" +
+	"key_prefix\x18\x02 \x01(\tR\tkeyPrefix\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x129\n" +
+	"\n" +
+	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x1c\n" +
+	"\tplaintext\x18\x05 \x01(\tR\tplaintext\"-\n" +
+	"\x12ListApiKeysRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\"B\n" +
+	"\x13ListApiKeysResponse\x12+\n" +
+	"\x04keys\x18\x01 \x03(\v2\x17.he.auth.v1.ApiKeyEntryR\x04keys\"\x92\x04\n" +
+	"\vApiKeyEntry\x12\x1c\n" +
+	"\n" +
+	"api_key_id\x18\x01 \x01(\tR\bapiKeyId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n" +
+	"\n" +
+	"key_prefix\x18\x03 \x01(\tR\tkeyPrefix\x12\x14\n" +
+	"\x05scope\x18\x04 \x01(\tR\x05scope\x124\n" +
+	"\x14monthly_cost_cap_usd\x18\x05 \x01(\tH\x00R\x11monthlyCostCapUsd\x88\x01\x01\x123\n" +
+	"\x16current_month_cost_usd\x18\x06 \x01(\tR\x13currentMonthCostUsd\x12A\n" +
+	"\flast_used_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampH\x01R\n" +
+	"lastUsedAt\x88\x01\x01\x12>\n" +
+	"\n" +
+	"revoked_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampH\x02R\trevokedAt\x88\x01\x01\x129\n" +
+	"\n" +
+	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12:\n" +
+	"\x19content_safety_strictness\x18\n" +
+	" \x01(\tR\x17contentSafetyStrictnessB\x17\n" +
+	"\x15_monthly_cost_cap_usdB\x0f\n" +
+	"\r_last_used_atB\r\n" +
+	"\v_revoked_at\"\x88\x01\n" +
+	"\x13RevokeApiKeyRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1c\n" +
+	"\n" +
+	"api_key_id\x18\x02 \x01(\tR\bapiKeyId\x12\x1b\n" +
+	"\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\x04 \x01(\tR\tuserAgent\"\x9f\x01\n" +
+	"\x14RevokeApiKeyResponse\x12\x1c\n" +
+	"\n" +
+	"api_key_id\x18\x01 \x01(\tR\bapiKeyId\x129\n" +
+	"\n" +
+	"revoked_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\trevokedAt\x12.\n" +
+	"\x13was_already_revoked\x18\x03 \x01(\bR\x11wasAlreadyRevoked\"\xa0\x01\n" +
+	"\n" +
+	"ScopePatch\x12\x16\n" +
+	"\x06models\x18\x01 \x03(\tR\x06models\x12%\n" +
+	"\x0emodels_present\x18\x02 \x01(\bR\rmodelsPresent\x12!\n" +
+	"\fip_whitelist\x18\x03 \x03(\tR\vipWhitelist\x120\n" +
+	"\x14ip_whitelist_present\x18\x04 \x01(\bR\x12ipWhitelistPresent\"\x90\x03\n" +
+	"\x13UpdateApiKeyRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1c\n" +
+	"\n" +
+	"api_key_id\x18\x02 \x01(\tR\bapiKeyId\x12,\n" +
+	"\x05scope\x18\x03 \x01(\v2\x16.he.auth.v1.ScopePatchR\x05scope\x124\n" +
+	"\x14monthly_cost_cap_usd\x18\x04 \x01(\tH\x00R\x11monthlyCostCapUsd\x88\x01\x01\x12*\n" +
+	"\x11clear_monthly_cap\x18\x05 \x01(\bR\x0fclearMonthlyCap\x12\x1b\n" +
+	"\tclient_ip\x18\x06 \x01(\tR\bclientIp\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\a \x01(\tR\tuserAgent\x12?\n" +
+	"\x19content_safety_strictness\x18\b \x01(\tH\x01R\x17contentSafetyStrictness\x88\x01\x01B\x17\n" +
+	"\x15_monthly_cost_cap_usdB\x1c\n" +
+	"\x1a_content_safety_strictness\"\x9b\x04\n" +
+	"\x14UpdateApiKeyResponse\x12\x1c\n" +
+	"\n" +
+	"api_key_id\x18\x01 \x01(\tR\bapiKeyId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n" +
+	"\n" +
+	"key_prefix\x18\x03 \x01(\tR\tkeyPrefix\x12\x14\n" +
+	"\x05scope\x18\x04 \x01(\tR\x05scope\x124\n" +
+	"\x14monthly_cost_cap_usd\x18\x05 \x01(\tH\x00R\x11monthlyCostCapUsd\x88\x01\x01\x123\n" +
+	"\x16current_month_cost_usd\x18\x06 \x01(\tR\x13currentMonthCostUsd\x12A\n" +
+	"\flast_used_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampH\x01R\n" +
+	"lastUsedAt\x88\x01\x01\x12>\n" +
+	"\n" +
+	"revoked_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampH\x02R\trevokedAt\x88\x01\x01\x129\n" +
+	"\n" +
+	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12:\n" +
+	"\x19content_safety_strictness\x18\n" +
+	" \x01(\tR\x17contentSafetyStrictnessB\x17\n" +
+	"\x15_monthly_cost_cap_usdB\x0f\n" +
+	"\r_last_used_atB\r\n" +
+	"\v_revoked_at\"@\n" +
+	" GetCapNotificationContextRequest\x12\x1c\n" +
+	"\n" +
+	"api_key_id\x18\x01 \x01(\tR\bapiKeyId\"\xe2\x01\n" +
+	"!GetCapNotificationContextResponse\x12\x1d\n" +
+	"\n" +
+	"user_email\x18\x01 \x01(\tR\tuserEmail\x12\x1f\n" +
+	"\vuser_locale\x18\x02 \x01(\tR\n" +
+	"userLocale\x12*\n" +
+	"\x11user_display_name\x18\x03 \x01(\tR\x0fuserDisplayName\x12\x19\n" +
+	"\bkey_name\x18\x04 \x01(\tR\akeyName\x126\n" +
+	"\x18key_monthly_cost_cap_usd\x18\x05 \x01(\tR\x14keyMonthlyCostCapUsd\"\xad\x01\n" +
+	"\x11ReauthCredentials\x12\x1f\n" +
+	"\bpassword\x18\x01 \x01(\tH\x00R\bpassword\x88\x01\x01\x12(\n" +
+	"\rconfirm_email\x18\x02 \x01(\tH\x01R\fconfirmEmail\x88\x01\x01\x12 \n" +
+	"\ttotp_code\x18\x03 \x01(\tH\x02R\btotpCode\x88\x01\x01B\v\n" +
+	"\t_passwordB\x10\n" +
+	"\x0e_confirm_emailB\f\n" +
+	"\n" +
+	"_totp_code\"\xab\x01\n" +
+	"\x1dRequestAccountDeletionRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x125\n" +
+	"\x06reauth\x18\x02 \x01(\v2\x1d.he.auth.v1.ReauthCredentialsR\x06reauth\x12\x1b\n" +
+	"\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\x04 \x01(\tR\tuserAgent\"\xca\x01\n" +
+	"\x1eRequestAccountDeletionResponse\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status\x12J\n" +
+	"\x13pending_deletion_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x11pendingDeletionAt\x12D\n" +
+	"\x10can_cancel_until\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x0ecanCancelUntil\"s\n" +
+	"\x1cCancelAccountDeletionRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1b\n" +
+	"\tclient_ip\x18\x02 \x01(\tR\bclientIp\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\x03 \x01(\tR\tuserAgent\"7\n" +
+	"\x1dCancelAccountDeletionResponse\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status\"9\n" +
+	"\x1eGetAccountDeletionStateRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\"\x84\x02\n" +
+	"\x1fGetAccountDeletionStateResponse\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status\x12O\n" +
+	"\x13pending_deletion_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampH\x00R\x11pendingDeletionAt\x88\x01\x01\x12!\n" +
+	"\fhas_password\x18\x03 \x01(\bR\vhasPassword\x12!\n" +
+	"\ftotp_enabled\x18\x04 \x01(\bR\vtotpEnabled\x12\x1a\n" +
+	"\btimezone\x18\x05 \x01(\tR\btimezoneB\x16\n" +
+	"\x14_pending_deletion_at*_\n" +
+	"\vLoginStatus\x12\x1c\n" +
+	"\x18LOGIN_STATUS_UNSPECIFIED\x10\x00\x12\x13\n" +
+	"\x0fLOGIN_STATUS_OK\x10\x01\x12\x1d\n" +
+	"\x19LOGIN_STATUS_REQUIRES_2FA\x10\x02*y\n" +
+	"\vLinkOutcome\x12\x1c\n" +
+	"\x18LINK_OUTCOME_UNSPECIFIED\x10\x00\x12\x19\n" +
+	"\x15LINK_OUTCOME_NEW_USER\x10\x01\x12\x17\n" +
+	"\x13LINK_OUTCOME_LINKED\x10\x02\x12\x18\n" +
+	"\x14LINK_OUTCOME_RELOGIN\x10\x03*y\n" +
+	"\x12VerificationFactor\x12#\n" +
+	"\x1fVERIFICATION_FACTOR_UNSPECIFIED\x10\x00\x12\x1c\n" +
+	"\x18VERIFICATION_FACTOR_TOTP\x10\x01\x12 \n" +
+	"\x1cVERIFICATION_FACTOR_PASSWORD\x10\x02*\x93\x01\n" +
+	"\x16ApiKeyValidationReason\x12)\n" +
+	"%API_KEY_VALIDATION_REASON_UNSPECIFIED\x10\x00\x12'\n" +
+	"#API_KEY_VALIDATION_REASON_NOT_FOUND\x10\x01\x12%\n" +
+	"!API_KEY_VALIDATION_REASON_REVOKED\x10\x022\x86\x11\n" +
+	"\vAuthService\x12Q\n" +
+	"\fRegisterUser\x12\x1f.he.auth.v1.RegisterUserRequest\x1a .he.auth.v1.RegisterUserResponse\x12N\n" +
+	"\vVerifyEmail\x12\x1e.he.auth.v1.VerifyEmailRequest\x1a\x1f.he.auth.v1.VerifyEmailResponse\x12c\n" +
+	"\x12ResendVerification\x12%.he.auth.v1.ResendVerificationRequest\x1a&.he.auth.v1.ResendVerificationResponse\x12H\n" +
+	"\tLoginUser\x12\x1c.he.auth.v1.LoginUserRequest\x1a\x1d.he.auth.v1.LoginUserResponse\x12Q\n" +
+	"\fRefreshToken\x12\x1f.he.auth.v1.RefreshTokenRequest\x1a .he.auth.v1.RefreshTokenResponse\x12K\n" +
+	"\n" +
+	"BeginOAuth\x12\x1d.he.auth.v1.BeginOAuthRequest\x1a\x1e.he.auth.v1.BeginOAuthResponse\x12T\n" +
+	"\rCompleteOAuth\x12 .he.auth.v1.CompleteOAuthRequest\x1a!.he.auth.v1.CompleteOAuthResponse\x12W\n" +
+	"\x0eEnrollTOTPInit\x12!.he.auth.v1.EnrollTOTPInitRequest\x1a\".he.auth.v1.EnrollTOTPInitResponse\x12]\n" +
+	"\x10EnrollTOTPVerify\x12#.he.auth.v1.EnrollTOTPVerifyRequest\x1a$.he.auth.v1.EnrollTOTPVerifyResponse\x12T\n" +
+	"\rChallengeTOTP\x12 .he.auth.v1.ChallengeTOTPRequest\x1a!.he.auth.v1.ChallengeTOTPResponse\x12Z\n" +
+	"\x0fUseRecoveryCode\x12\".he.auth.v1.UseRecoveryCodeRequest\x1a#.he.auth.v1.UseRecoveryCodeResponse\x12N\n" +
+	"\vDisableTOTP\x12\x1e.he.auth.v1.DisableTOTPRequest\x1a\x1f.he.auth.v1.DisableTOTPResponse\x12r\n" +
+	"\x17RegenerateRecoveryCodes\x12*.he.auth.v1.RegenerateRecoveryCodesRequest\x1a+.he.auth.v1.RegenerateRecoveryCodesResponse\x12<\n" +
+	"\x05GetMe\x12\x18.he.auth.v1.GetMeRequest\x1a\x19.he.auth.v1.GetMeResponse\x12T\n" +
+	"\rUpdateProfile\x12 .he.auth.v1.UpdateProfileRequest\x1a!.he.auth.v1.UpdateProfileResponse\x12W\n" +
+	"\x0eValidateApiKey\x12!.he.auth.v1.ValidateApiKeyRequest\x1a\".he.auth.v1.ValidateApiKeyResponse\x12Q\n" +
+	"\fCreateApiKey\x12\x1f.he.auth.v1.CreateApiKeyRequest\x1a .he.auth.v1.CreateApiKeyResponse\x12N\n" +
+	"\vListApiKeys\x12\x1e.he.auth.v1.ListApiKeysRequest\x1a\x1f.he.auth.v1.ListApiKeysResponse\x12Q\n" +
+	"\fRevokeApiKey\x12\x1f.he.auth.v1.RevokeApiKeyRequest\x1a .he.auth.v1.RevokeApiKeyResponse\x12Q\n" +
+	"\fUpdateApiKey\x12\x1f.he.auth.v1.UpdateApiKeyRequest\x1a .he.auth.v1.UpdateApiKeyResponse\x12x\n" +
+	"\x19GetCapNotificationContext\x12,.he.auth.v1.GetCapNotificationContextRequest\x1a-.he.auth.v1.GetCapNotificationContextResponse\x12o\n" +
+	"\x16RequestAccountDeletion\x12).he.auth.v1.RequestAccountDeletionRequest\x1a*.he.auth.v1.RequestAccountDeletionResponse\x12l\n" +
+	"\x15CancelAccountDeletion\x12(.he.auth.v1.CancelAccountDeletionRequest\x1a).he.auth.v1.CancelAccountDeletionResponse\x12r\n" +
+	"\x17GetAccountDeletionState\x12*.he.auth.v1.GetAccountDeletionStateRequest\x1a+.he.auth.v1.GetAccountDeletionStateResponseBBZ@github.com/he-api/he-api/packages/proto/gen/go/he/auth/v1;authv1b\x06proto3"
 
 var (
 	file_he_auth_v1_auth_proto_rawDescOnce sync.Once
@@ -3610,7 +4428,7 @@ func file_he_auth_v1_auth_proto_rawDescGZIP() []byte {
 }
 
 var file_he_auth_v1_auth_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_he_auth_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 44)
+var file_he_auth_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 51)
 var file_he_auth_v1_auth_proto_goTypes = []any{
 	(LoginStatus)(0),                          // 0: he.auth.v1.LoginStatus
 	(LinkOutcome)(0),                          // 1: he.auth.v1.LinkOutcome
@@ -3660,75 +4478,92 @@ var file_he_auth_v1_auth_proto_goTypes = []any{
 	(*UpdateApiKeyResponse)(nil),              // 45: he.auth.v1.UpdateApiKeyResponse
 	(*GetCapNotificationContextRequest)(nil),  // 46: he.auth.v1.GetCapNotificationContextRequest
 	(*GetCapNotificationContextResponse)(nil), // 47: he.auth.v1.GetCapNotificationContextResponse
-	(*timestamppb.Timestamp)(nil),             // 48: google.protobuf.Timestamp
+	(*ReauthCredentials)(nil),                 // 48: he.auth.v1.ReauthCredentials
+	(*RequestAccountDeletionRequest)(nil),     // 49: he.auth.v1.RequestAccountDeletionRequest
+	(*RequestAccountDeletionResponse)(nil),    // 50: he.auth.v1.RequestAccountDeletionResponse
+	(*CancelAccountDeletionRequest)(nil),      // 51: he.auth.v1.CancelAccountDeletionRequest
+	(*CancelAccountDeletionResponse)(nil),     // 52: he.auth.v1.CancelAccountDeletionResponse
+	(*GetAccountDeletionStateRequest)(nil),    // 53: he.auth.v1.GetAccountDeletionStateRequest
+	(*GetAccountDeletionStateResponse)(nil),   // 54: he.auth.v1.GetAccountDeletionStateResponse
+	(*timestamppb.Timestamp)(nil),             // 55: google.protobuf.Timestamp
 }
 var file_he_auth_v1_auth_proto_depIdxs = []int32{
 	0,  // 0: he.auth.v1.LoginUserResponse.status:type_name -> he.auth.v1.LoginStatus
 	1,  // 1: he.auth.v1.CompleteOAuthResponse.link_outcome:type_name -> he.auth.v1.LinkOutcome
 	2,  // 2: he.auth.v1.DisableTOTPRequest.factor:type_name -> he.auth.v1.VerificationFactor
 	2,  // 3: he.auth.v1.RegenerateRecoveryCodesRequest.factor:type_name -> he.auth.v1.VerificationFactor
-	48, // 4: he.auth.v1.GetMeResponse.created_at:type_name -> google.protobuf.Timestamp
-	48, // 5: he.auth.v1.GetMeResponse.updated_at:type_name -> google.protobuf.Timestamp
-	48, // 6: he.auth.v1.UpdateProfileResponse.created_at:type_name -> google.protobuf.Timestamp
-	48, // 7: he.auth.v1.UpdateProfileResponse.updated_at:type_name -> google.protobuf.Timestamp
+	55, // 4: he.auth.v1.GetMeResponse.created_at:type_name -> google.protobuf.Timestamp
+	55, // 5: he.auth.v1.GetMeResponse.updated_at:type_name -> google.protobuf.Timestamp
+	55, // 6: he.auth.v1.UpdateProfileResponse.created_at:type_name -> google.protobuf.Timestamp
+	55, // 7: he.auth.v1.UpdateProfileResponse.updated_at:type_name -> google.protobuf.Timestamp
 	3,  // 8: he.auth.v1.ValidateApiKeyResponse.reason:type_name -> he.auth.v1.ApiKeyValidationReason
-	48, // 9: he.auth.v1.CreateApiKeyResponse.created_at:type_name -> google.protobuf.Timestamp
+	55, // 9: he.auth.v1.CreateApiKeyResponse.created_at:type_name -> google.protobuf.Timestamp
 	40, // 10: he.auth.v1.ListApiKeysResponse.keys:type_name -> he.auth.v1.ApiKeyEntry
-	48, // 11: he.auth.v1.ApiKeyEntry.last_used_at:type_name -> google.protobuf.Timestamp
-	48, // 12: he.auth.v1.ApiKeyEntry.revoked_at:type_name -> google.protobuf.Timestamp
-	48, // 13: he.auth.v1.ApiKeyEntry.created_at:type_name -> google.protobuf.Timestamp
-	48, // 14: he.auth.v1.RevokeApiKeyResponse.revoked_at:type_name -> google.protobuf.Timestamp
+	55, // 11: he.auth.v1.ApiKeyEntry.last_used_at:type_name -> google.protobuf.Timestamp
+	55, // 12: he.auth.v1.ApiKeyEntry.revoked_at:type_name -> google.protobuf.Timestamp
+	55, // 13: he.auth.v1.ApiKeyEntry.created_at:type_name -> google.protobuf.Timestamp
+	55, // 14: he.auth.v1.RevokeApiKeyResponse.revoked_at:type_name -> google.protobuf.Timestamp
 	43, // 15: he.auth.v1.UpdateApiKeyRequest.scope:type_name -> he.auth.v1.ScopePatch
-	48, // 16: he.auth.v1.UpdateApiKeyResponse.last_used_at:type_name -> google.protobuf.Timestamp
-	48, // 17: he.auth.v1.UpdateApiKeyResponse.revoked_at:type_name -> google.protobuf.Timestamp
-	48, // 18: he.auth.v1.UpdateApiKeyResponse.created_at:type_name -> google.protobuf.Timestamp
-	4,  // 19: he.auth.v1.AuthService.RegisterUser:input_type -> he.auth.v1.RegisterUserRequest
-	6,  // 20: he.auth.v1.AuthService.VerifyEmail:input_type -> he.auth.v1.VerifyEmailRequest
-	8,  // 21: he.auth.v1.AuthService.ResendVerification:input_type -> he.auth.v1.ResendVerificationRequest
-	10, // 22: he.auth.v1.AuthService.LoginUser:input_type -> he.auth.v1.LoginUserRequest
-	12, // 23: he.auth.v1.AuthService.RefreshToken:input_type -> he.auth.v1.RefreshTokenRequest
-	14, // 24: he.auth.v1.AuthService.BeginOAuth:input_type -> he.auth.v1.BeginOAuthRequest
-	16, // 25: he.auth.v1.AuthService.CompleteOAuth:input_type -> he.auth.v1.CompleteOAuthRequest
-	18, // 26: he.auth.v1.AuthService.EnrollTOTPInit:input_type -> he.auth.v1.EnrollTOTPInitRequest
-	20, // 27: he.auth.v1.AuthService.EnrollTOTPVerify:input_type -> he.auth.v1.EnrollTOTPVerifyRequest
-	22, // 28: he.auth.v1.AuthService.ChallengeTOTP:input_type -> he.auth.v1.ChallengeTOTPRequest
-	24, // 29: he.auth.v1.AuthService.UseRecoveryCode:input_type -> he.auth.v1.UseRecoveryCodeRequest
-	26, // 30: he.auth.v1.AuthService.DisableTOTP:input_type -> he.auth.v1.DisableTOTPRequest
-	28, // 31: he.auth.v1.AuthService.RegenerateRecoveryCodes:input_type -> he.auth.v1.RegenerateRecoveryCodesRequest
-	30, // 32: he.auth.v1.AuthService.GetMe:input_type -> he.auth.v1.GetMeRequest
-	32, // 33: he.auth.v1.AuthService.UpdateProfile:input_type -> he.auth.v1.UpdateProfileRequest
-	34, // 34: he.auth.v1.AuthService.ValidateApiKey:input_type -> he.auth.v1.ValidateApiKeyRequest
-	36, // 35: he.auth.v1.AuthService.CreateApiKey:input_type -> he.auth.v1.CreateApiKeyRequest
-	38, // 36: he.auth.v1.AuthService.ListApiKeys:input_type -> he.auth.v1.ListApiKeysRequest
-	41, // 37: he.auth.v1.AuthService.RevokeApiKey:input_type -> he.auth.v1.RevokeApiKeyRequest
-	44, // 38: he.auth.v1.AuthService.UpdateApiKey:input_type -> he.auth.v1.UpdateApiKeyRequest
-	46, // 39: he.auth.v1.AuthService.GetCapNotificationContext:input_type -> he.auth.v1.GetCapNotificationContextRequest
-	5,  // 40: he.auth.v1.AuthService.RegisterUser:output_type -> he.auth.v1.RegisterUserResponse
-	7,  // 41: he.auth.v1.AuthService.VerifyEmail:output_type -> he.auth.v1.VerifyEmailResponse
-	9,  // 42: he.auth.v1.AuthService.ResendVerification:output_type -> he.auth.v1.ResendVerificationResponse
-	11, // 43: he.auth.v1.AuthService.LoginUser:output_type -> he.auth.v1.LoginUserResponse
-	13, // 44: he.auth.v1.AuthService.RefreshToken:output_type -> he.auth.v1.RefreshTokenResponse
-	15, // 45: he.auth.v1.AuthService.BeginOAuth:output_type -> he.auth.v1.BeginOAuthResponse
-	17, // 46: he.auth.v1.AuthService.CompleteOAuth:output_type -> he.auth.v1.CompleteOAuthResponse
-	19, // 47: he.auth.v1.AuthService.EnrollTOTPInit:output_type -> he.auth.v1.EnrollTOTPInitResponse
-	21, // 48: he.auth.v1.AuthService.EnrollTOTPVerify:output_type -> he.auth.v1.EnrollTOTPVerifyResponse
-	23, // 49: he.auth.v1.AuthService.ChallengeTOTP:output_type -> he.auth.v1.ChallengeTOTPResponse
-	25, // 50: he.auth.v1.AuthService.UseRecoveryCode:output_type -> he.auth.v1.UseRecoveryCodeResponse
-	27, // 51: he.auth.v1.AuthService.DisableTOTP:output_type -> he.auth.v1.DisableTOTPResponse
-	29, // 52: he.auth.v1.AuthService.RegenerateRecoveryCodes:output_type -> he.auth.v1.RegenerateRecoveryCodesResponse
-	31, // 53: he.auth.v1.AuthService.GetMe:output_type -> he.auth.v1.GetMeResponse
-	33, // 54: he.auth.v1.AuthService.UpdateProfile:output_type -> he.auth.v1.UpdateProfileResponse
-	35, // 55: he.auth.v1.AuthService.ValidateApiKey:output_type -> he.auth.v1.ValidateApiKeyResponse
-	37, // 56: he.auth.v1.AuthService.CreateApiKey:output_type -> he.auth.v1.CreateApiKeyResponse
-	39, // 57: he.auth.v1.AuthService.ListApiKeys:output_type -> he.auth.v1.ListApiKeysResponse
-	42, // 58: he.auth.v1.AuthService.RevokeApiKey:output_type -> he.auth.v1.RevokeApiKeyResponse
-	45, // 59: he.auth.v1.AuthService.UpdateApiKey:output_type -> he.auth.v1.UpdateApiKeyResponse
-	47, // 60: he.auth.v1.AuthService.GetCapNotificationContext:output_type -> he.auth.v1.GetCapNotificationContextResponse
-	40, // [40:61] is the sub-list for method output_type
-	19, // [19:40] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	55, // 16: he.auth.v1.UpdateApiKeyResponse.last_used_at:type_name -> google.protobuf.Timestamp
+	55, // 17: he.auth.v1.UpdateApiKeyResponse.revoked_at:type_name -> google.protobuf.Timestamp
+	55, // 18: he.auth.v1.UpdateApiKeyResponse.created_at:type_name -> google.protobuf.Timestamp
+	48, // 19: he.auth.v1.RequestAccountDeletionRequest.reauth:type_name -> he.auth.v1.ReauthCredentials
+	55, // 20: he.auth.v1.RequestAccountDeletionResponse.pending_deletion_at:type_name -> google.protobuf.Timestamp
+	55, // 21: he.auth.v1.RequestAccountDeletionResponse.can_cancel_until:type_name -> google.protobuf.Timestamp
+	55, // 22: he.auth.v1.GetAccountDeletionStateResponse.pending_deletion_at:type_name -> google.protobuf.Timestamp
+	4,  // 23: he.auth.v1.AuthService.RegisterUser:input_type -> he.auth.v1.RegisterUserRequest
+	6,  // 24: he.auth.v1.AuthService.VerifyEmail:input_type -> he.auth.v1.VerifyEmailRequest
+	8,  // 25: he.auth.v1.AuthService.ResendVerification:input_type -> he.auth.v1.ResendVerificationRequest
+	10, // 26: he.auth.v1.AuthService.LoginUser:input_type -> he.auth.v1.LoginUserRequest
+	12, // 27: he.auth.v1.AuthService.RefreshToken:input_type -> he.auth.v1.RefreshTokenRequest
+	14, // 28: he.auth.v1.AuthService.BeginOAuth:input_type -> he.auth.v1.BeginOAuthRequest
+	16, // 29: he.auth.v1.AuthService.CompleteOAuth:input_type -> he.auth.v1.CompleteOAuthRequest
+	18, // 30: he.auth.v1.AuthService.EnrollTOTPInit:input_type -> he.auth.v1.EnrollTOTPInitRequest
+	20, // 31: he.auth.v1.AuthService.EnrollTOTPVerify:input_type -> he.auth.v1.EnrollTOTPVerifyRequest
+	22, // 32: he.auth.v1.AuthService.ChallengeTOTP:input_type -> he.auth.v1.ChallengeTOTPRequest
+	24, // 33: he.auth.v1.AuthService.UseRecoveryCode:input_type -> he.auth.v1.UseRecoveryCodeRequest
+	26, // 34: he.auth.v1.AuthService.DisableTOTP:input_type -> he.auth.v1.DisableTOTPRequest
+	28, // 35: he.auth.v1.AuthService.RegenerateRecoveryCodes:input_type -> he.auth.v1.RegenerateRecoveryCodesRequest
+	30, // 36: he.auth.v1.AuthService.GetMe:input_type -> he.auth.v1.GetMeRequest
+	32, // 37: he.auth.v1.AuthService.UpdateProfile:input_type -> he.auth.v1.UpdateProfileRequest
+	34, // 38: he.auth.v1.AuthService.ValidateApiKey:input_type -> he.auth.v1.ValidateApiKeyRequest
+	36, // 39: he.auth.v1.AuthService.CreateApiKey:input_type -> he.auth.v1.CreateApiKeyRequest
+	38, // 40: he.auth.v1.AuthService.ListApiKeys:input_type -> he.auth.v1.ListApiKeysRequest
+	41, // 41: he.auth.v1.AuthService.RevokeApiKey:input_type -> he.auth.v1.RevokeApiKeyRequest
+	44, // 42: he.auth.v1.AuthService.UpdateApiKey:input_type -> he.auth.v1.UpdateApiKeyRequest
+	46, // 43: he.auth.v1.AuthService.GetCapNotificationContext:input_type -> he.auth.v1.GetCapNotificationContextRequest
+	49, // 44: he.auth.v1.AuthService.RequestAccountDeletion:input_type -> he.auth.v1.RequestAccountDeletionRequest
+	51, // 45: he.auth.v1.AuthService.CancelAccountDeletion:input_type -> he.auth.v1.CancelAccountDeletionRequest
+	53, // 46: he.auth.v1.AuthService.GetAccountDeletionState:input_type -> he.auth.v1.GetAccountDeletionStateRequest
+	5,  // 47: he.auth.v1.AuthService.RegisterUser:output_type -> he.auth.v1.RegisterUserResponse
+	7,  // 48: he.auth.v1.AuthService.VerifyEmail:output_type -> he.auth.v1.VerifyEmailResponse
+	9,  // 49: he.auth.v1.AuthService.ResendVerification:output_type -> he.auth.v1.ResendVerificationResponse
+	11, // 50: he.auth.v1.AuthService.LoginUser:output_type -> he.auth.v1.LoginUserResponse
+	13, // 51: he.auth.v1.AuthService.RefreshToken:output_type -> he.auth.v1.RefreshTokenResponse
+	15, // 52: he.auth.v1.AuthService.BeginOAuth:output_type -> he.auth.v1.BeginOAuthResponse
+	17, // 53: he.auth.v1.AuthService.CompleteOAuth:output_type -> he.auth.v1.CompleteOAuthResponse
+	19, // 54: he.auth.v1.AuthService.EnrollTOTPInit:output_type -> he.auth.v1.EnrollTOTPInitResponse
+	21, // 55: he.auth.v1.AuthService.EnrollTOTPVerify:output_type -> he.auth.v1.EnrollTOTPVerifyResponse
+	23, // 56: he.auth.v1.AuthService.ChallengeTOTP:output_type -> he.auth.v1.ChallengeTOTPResponse
+	25, // 57: he.auth.v1.AuthService.UseRecoveryCode:output_type -> he.auth.v1.UseRecoveryCodeResponse
+	27, // 58: he.auth.v1.AuthService.DisableTOTP:output_type -> he.auth.v1.DisableTOTPResponse
+	29, // 59: he.auth.v1.AuthService.RegenerateRecoveryCodes:output_type -> he.auth.v1.RegenerateRecoveryCodesResponse
+	31, // 60: he.auth.v1.AuthService.GetMe:output_type -> he.auth.v1.GetMeResponse
+	33, // 61: he.auth.v1.AuthService.UpdateProfile:output_type -> he.auth.v1.UpdateProfileResponse
+	35, // 62: he.auth.v1.AuthService.ValidateApiKey:output_type -> he.auth.v1.ValidateApiKeyResponse
+	37, // 63: he.auth.v1.AuthService.CreateApiKey:output_type -> he.auth.v1.CreateApiKeyResponse
+	39, // 64: he.auth.v1.AuthService.ListApiKeys:output_type -> he.auth.v1.ListApiKeysResponse
+	42, // 65: he.auth.v1.AuthService.RevokeApiKey:output_type -> he.auth.v1.RevokeApiKeyResponse
+	45, // 66: he.auth.v1.AuthService.UpdateApiKey:output_type -> he.auth.v1.UpdateApiKeyResponse
+	47, // 67: he.auth.v1.AuthService.GetCapNotificationContext:output_type -> he.auth.v1.GetCapNotificationContextResponse
+	50, // 68: he.auth.v1.AuthService.RequestAccountDeletion:output_type -> he.auth.v1.RequestAccountDeletionResponse
+	52, // 69: he.auth.v1.AuthService.CancelAccountDeletion:output_type -> he.auth.v1.CancelAccountDeletionResponse
+	54, // 70: he.auth.v1.AuthService.GetAccountDeletionState:output_type -> he.auth.v1.GetAccountDeletionStateResponse
+	47, // [47:71] is the sub-list for method output_type
+	23, // [23:47] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_he_auth_v1_auth_proto_init() }
@@ -3743,13 +4578,15 @@ func file_he_auth_v1_auth_proto_init() {
 	file_he_auth_v1_auth_proto_msgTypes[36].OneofWrappers = []any{}
 	file_he_auth_v1_auth_proto_msgTypes[40].OneofWrappers = []any{}
 	file_he_auth_v1_auth_proto_msgTypes[41].OneofWrappers = []any{}
+	file_he_auth_v1_auth_proto_msgTypes[44].OneofWrappers = []any{}
+	file_he_auth_v1_auth_proto_msgTypes[50].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_he_auth_v1_auth_proto_rawDesc), len(file_he_auth_v1_auth_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   44,
+			NumMessages:   51,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

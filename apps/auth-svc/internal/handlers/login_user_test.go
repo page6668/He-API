@@ -297,8 +297,11 @@ func TestLoginUser_AccountSuspended(t *testing.T) {
 	assertConnectStatus(t, err, connect.CodePermissionDenied, handlers.StatusAccountSuspended)
 }
 
-// Account pending_deletion → 410_account_deleted.
-func TestLoginUser_AccountPendingDeletion(t *testing.T) {
+// Story 2.7 OQ-1 — a pending_deletion user MUST be able to sign in during the
+// grace window (so they can reach the recovery page to cancel). Login succeeds +
+// issues a session; the recovery-only boundary is the AC4 console guard, not a
+// login rejection. (Supersedes the prior 410_account_deleted behavior.)
+func TestLoginUser_AccountPendingDeletion_SucceedsForRecovery(t *testing.T) {
 	t.Parallel()
 	h, _ := newSigninHarness(t)
 	userID := uuid.New()
@@ -311,12 +314,20 @@ func TestLoginUser_AccountPendingDeletion(t *testing.T) {
 			time.Now(), time.Now(),
 		))
 
-	_, err := h.srv.LoginUser(context.Background(), connect.NewRequest(&authv1.LoginUserRequest{
+	resp, err := h.srv.LoginUser(context.Background(), connect.NewRequest(&authv1.LoginUserRequest{
 		Email:    "del@example.com",
 		Password: "p",
 		ClientIp: "1.2.3.4",
 	}))
-	assertConnectStatus(t, err, connect.CodeFailedPrecondition, handlers.StatusAccountDeleted)
+	if err != nil {
+		t.Fatalf("LoginUser pending_deletion should succeed (OQ-1): %v", err)
+	}
+	if resp.Msg.GetStatus() != authv1.LoginStatus_LOGIN_STATUS_OK {
+		t.Errorf("status = %v, want LOGIN_STATUS_OK", resp.Msg.GetStatus())
+	}
+	if resp.Msg.GetAccessToken() == "" {
+		t.Errorf("access_token empty — pending_deletion login must issue a session")
+	}
 }
 
 // Account locked + unexpired → 423_account_locked + Retry-After.

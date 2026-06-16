@@ -1,0 +1,3 @@
+Tu cuenta de He-API ha sido eliminada
+
+Tu cuenta de He-API y tus datos personales se han eliminado permanentemente el {{.executed_at}}. Los registros de facturación exigidos por ley se han conservado.

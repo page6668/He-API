@@ -908,10 +908,16 @@ func (s *AuthServer) LoginUser(
 		s.auditSigninFailure(ctx, user.ID.String(), emailHash, in.GetClientIp(), in.GetUserAgent(), now, StatusAccountSuspended)
 		s.Metrics.IncSignin(ctx, metrics.SigninResultFailure, StatusAccountSuspended)
 		return nil, statusError(connect.CodePermissionDenied, StatusAccountSuspended)
-	case "pending_deletion":
-		s.auditSigninFailure(ctx, user.ID.String(), emailHash, in.GetClientIp(), in.GetUserAgent(), now, StatusAccountDeleted)
-		s.Metrics.IncSignin(ctx, metrics.SigninResultFailure, StatusAccountDeleted)
-		return nil, statusError(connect.CodeFailedPrecondition, StatusAccountDeleted)
+	// Story 2.7 OQ-1 (RATIFIED) — a pending_deletion user MUST be able to sign
+	// in DURING the grace window so they can reach the recovery page and cancel
+	// (security.md §8.3 "can login during 30d to cancel" is controlling). Login
+	// therefore authenticates normally; the recovery-only-session boundary is
+	// enforced downstream by the AC4 console guard (status-driven + fail-closed)
+	// + the per-endpoint 403_account_pending_deletion (e.g. GetMe). A 'deleted'
+	// (anonymized) account's email no longer matches → it fails the lookup above
+	// on the generic invalid-credentials path (anti-enumeration, BR-4.4). So
+	// pending_deletion intentionally has NO case here — it falls through to the
+	// email-verified + bcrypt + token-issue path.
 	case "locked":
 		if user.LockedUntil != nil && user.LockedUntil.After(now) {
 			retryAfter := int(time.Until(*user.LockedUntil).Seconds()) + 1
@@ -1217,6 +1223,21 @@ func (s *AuthServer) RefreshToken(
 	}
 	familyID, err := uuid.Parse(claims.FamilyID)
 	if err != nil {
+		return nil, statusError(connect.CodeUnauthenticated, StatusInvalidCredentials)
+	}
+
+	// Story 2.7 BR-2.8 — refresh is refused once the user has requested account
+	// deletion. The RequestAccountDeletion handler writes the per-user tombstone
+	// `auth:refresh:revoked:{user_id}`; while it exists, no refresh family for
+	// that user may rotate (the only live session is the recovery-only one
+	// minted at signin; the AC4 guard fences console access). Reactivation
+	// (CancelAccountDeletion) does NOT clear the tombstone — the recovery flow
+	// mints a fresh session, so pre-deletion refresh tokens stay dead.
+	revokedKey := refreshRevokedKeyPrefix + userID.String()
+	if exists, rerr := s.Redis.Exists(ctx, revokedKey).Result(); rerr != nil {
+		return nil, internalErr(rerr, "redis_revoke_check")
+	} else if exists > 0 {
+		s.auditSigninFailure(ctx, userID.String(), "", in.GetClientIp(), in.GetUserAgent(), now, StatusInvalidCredentials)
 		return nil, statusError(connect.CodeUnauthenticated, StatusInvalidCredentials)
 	}
 

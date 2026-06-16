@@ -281,5 +281,49 @@
         "security_disclaimer": "Se você não solicitou esta exportação, entre em contato com o suporte imediatamente."
       }
     }
+  },
+  "delete": {
+    "cta": {
+      "label": "Excluir minha conta",
+      "disabled_pending": "Sua conta já está programada para exclusão."
+    },
+    "dialog": {
+      "title": "Excluir permanentemente sua conta?",
+      "consequences": "Sua conta será programada para exclusão com um período de carência de 30 dias. Você pode cancelar a qualquer momento dentro de 30 dias fazendo login novamente. Após o período de carência, seu perfil, chaves API e dados pessoais serão apagados permanentemente. Os registros de faturamento exigidos por lei são mantidos.",
+      "password_label": "Digite sua senha para confirmar",
+      "email_confirm_label": "Digite o e-mail da sua conta para confirmar",
+      "totp_label": "Digite seu código de autenticação de 6 dígitos",
+      "confirm": "Excluir minha conta",
+      "cancel": "Cancelar",
+      "errors": {
+        "bad_password": "A senha não confere. Tente novamente.",
+        "bad_totp": "O código não confere. Tente novamente."
+      }
+    },
+    "errors": {
+      "rate_limited": "Muitas solicitações de exclusão. Tente novamente mais tarde.",
+      "generic": "Algo deu errado. Tente novamente."
+    },
+    "recovery": {
+      "title": "Sua conta está programada para exclusão",
+      "countdown": "{days, plural, =0 {Sua conta será excluída permanentemente hoje.} one {Sua conta será excluída permanentemente em 1 dia.} other {Sua conta será excluída permanentemente em # dias.}}",
+      "reactivate_cta": "Reativar minha conta",
+      "explainer": "Se você não fizer nada, sua conta e seus dados serão excluídos permanentemente na data programada. Reative a qualquer momento antes disso para manter sua conta.",
+      "expired": "Esta conta foi excluída permanentemente."
+    },
+    "email": {
+      "requested": {
+        "subject": "Sua conta He-API está programada para exclusão",
+        "body": "Sua conta está programada para exclusão permanente em {pending_deletion_at}. Se você não solicitou isso, faça login antes dessa data para cancelar."
+      },
+      "cancelled": {
+        "subject": "A exclusão da sua conta He-API foi cancelada",
+        "body": "Boa notícia — a exclusão da sua conta foi cancelada e sua conta está ativa novamente."
+      },
+      "completed": {
+        "subject": "Sua conta He-API foi excluída",
+        "body": "Sua conta He-API e seus dados pessoais foram excluídos permanentemente em {executed_at}. Os registros de faturamento exigidos por lei foram mantidos."
+      }
+    }
   }
 }

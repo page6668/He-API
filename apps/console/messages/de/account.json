@@ -281,5 +281,49 @@
         "security_disclaimer": "Wenn Sie diesen Export nicht angefordert haben, wenden Sie sich sofort an den Support."
       }
     }
+  },
+  "delete": {
+    "cta": {
+      "label": "Mein Konto löschen",
+      "disabled_pending": "Ihr Konto ist bereits zur Löschung vorgemerkt."
+    },
+    "dialog": {
+      "title": "Ihr Konto dauerhaft löschen?",
+      "consequences": "Ihr Konto wird mit einer Kulanzfrist von 30 Tagen zur Löschung vorgemerkt. Sie können den Vorgang innerhalb von 30 Tagen jederzeit abbrechen, indem Sie sich erneut anmelden. Nach Ablauf der Kulanzfrist werden Ihr Profil, Ihre API-Keys und Ihre persönlichen Daten dauerhaft gelöscht. Gesetzlich vorgeschriebene Abrechnungsunterlagen werden aufbewahrt.",
+      "password_label": "Geben Sie zur Bestätigung Ihr Passwort ein",
+      "email_confirm_label": "Geben Sie zur Bestätigung die E-Mail-Adresse Ihres Kontos ein",
+      "totp_label": "Geben Sie Ihren 6-stelligen Authentifizierungscode ein",
+      "confirm": "Mein Konto löschen",
+      "cancel": "Abbrechen",
+      "errors": {
+        "bad_password": "Das Passwort stimmt nicht überein. Bitte erneut versuchen.",
+        "bad_totp": "Der Code stimmt nicht überein. Bitte erneut versuchen."
+      }
+    },
+    "errors": {
+      "rate_limited": "Zu viele Löschanfragen. Bitte versuchen Sie es später erneut.",
+      "generic": "Ein Fehler ist aufgetreten. Bitte erneut versuchen."
+    },
+    "recovery": {
+      "title": "Ihr Konto ist zur Löschung vorgemerkt",
+      "countdown": "{days, plural, =0 {Ihr Konto wird heute dauerhaft gelöscht.} one {Ihr Konto wird in einem Tag dauerhaft gelöscht.} other {Ihr Konto wird in # Tagen dauerhaft gelöscht.}}",
+      "reactivate_cta": "Mein Konto reaktivieren",
+      "explainer": "Wenn Sie nichts unternehmen, werden Ihr Konto und Ihre Daten am vorgemerkten Datum dauerhaft gelöscht. Reaktivieren Sie Ihr Konto jederzeit vorher, um es zu behalten.",
+      "expired": "Dieses Konto wurde dauerhaft gelöscht."
+    },
+    "email": {
+      "requested": {
+        "subject": "Ihr He-API-Konto ist zur Löschung vorgemerkt",
+        "body": "Ihr Konto ist zur dauerhaften Löschung am {pending_deletion_at} vorgemerkt. Falls Sie dies nicht angefordert haben, melden Sie sich vorher an, um den Vorgang abzubrechen."
+      },
+      "cancelled": {
+        "subject": "Die Löschung Ihres He-API-Kontos wurde abgebrochen",
+        "body": "Gute Nachrichten — die Löschung Ihres Kontos wurde abgebrochen und Ihr Konto ist wieder aktiv."
+      },
+      "completed": {
+        "subject": "Ihr He-API-Konto wurde gelöscht",
+        "body": "Ihr He-API-Konto und Ihre persönlichen Daten wurden am {executed_at} dauerhaft gelöscht. Gesetzlich vorgeschriebene Abrechnungsunterlagen wurden aufbewahrt."
+      }
+    }
   }
 }

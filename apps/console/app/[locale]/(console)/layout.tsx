@@ -15,6 +15,7 @@ import { getTranslations } from 'next-intl/server';
 
 import { defaultLocale, isLocale } from '@/i18n/config';
 import { ACCESS_COOKIE } from '@/lib/auth/cookies';
+import { getDeletionState } from '@/lib/account/deletion-actions';
 import { ConsoleSidebarNav } from '@/components/ConsoleSidebarNav';
 import { IntercomMessenger } from '@/components/business/IntercomMessenger';
 import { BetaBadge } from '@/components/business/BetaBadge';
@@ -36,6 +37,20 @@ export default async function ConsoleLayout({
   const hasAccessCookie = cookies().get(ACCESS_COOKIE);
   if (!hasAccessCookie) {
     redirect(`/${resolvedLocale}/signin?return_to=${encodeURIComponent(`/${resolvedLocale}/settings/profile`)}`);
+  }
+
+  // Story 2.7 AC4 — recovery-only-session guard (OQ-1). A pending_deletion user
+  // authenticates but is BLOCKED from the console: every (console) route bounces
+  // to /{locale}/account/recovery (which lives outside this layout, so no
+  // redirect loop — BR-4.2). Fail-closed (BR-4.5): if the deletion-state read is
+  // unreachable, deny console (redirect to recovery) rather than risk granting a
+  // pending account console access. A 401 (token expired) routes to signin.
+  const deletionState = await getDeletionState();
+  if (deletionState.kind === 'unauthorized') {
+    redirect(`/${resolvedLocale}/signin?return_to=${encodeURIComponent(`/${resolvedLocale}/settings/profile`)}`);
+  }
+  if (deletionState.kind === 'error' || deletionState.data.status !== 'active') {
+    redirect(`/${resolvedLocale}/account/recovery`);
   }
 
   const t = await getTranslations('account');

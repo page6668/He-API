@@ -18,6 +18,9 @@ import (
 //go:embed low_balance/*.txt low_balance/*.html
 //go:embed low_balance_failed/*.txt low_balance_failed/*.html
 //go:embed usage_log_export_ready/*.txt usage_log_export_ready/*.html
+//go:embed account_deletion_requested/*.txt account_deletion_requested/*.html
+//go:embed account_deletion_cancelled/*.txt account_deletion_cancelled/*.html
+//go:embed account_deletion_completed/*.txt account_deletion_completed/*.html
 var fs embed.FS
 
 // FallbackLocale is the locale that any non-resolvable locale falls back to.
@@ -49,6 +52,14 @@ const (
 	// parity with the 2.6 NoOp-email deferral; the template + renderer are real
 	// + tested here).
 	TemplateUsageLogExportReady = "usage_log_export_ready"
+	// Story 2.7 — account-deletion lifecycle emails. Slugs internal to this
+	// package (R-2 cascade); the wire contract uses the EmailTemplate enum
+	// (9/10/11). requested vars: pending_deletion_at (+ display_name/cancel_url
+	// passed by the caller, unused by the body). cancelled: none. completed:
+	// executed_at.
+	TemplateAccountDeletionRequested = "account_deletion_requested"
+	TemplateAccountDeletionCancelled = "account_deletion_cancelled"
+	TemplateAccountDeletionCompleted = "account_deletion_completed"
 )
 
 // Rendered is what the SendGrid client needs to build one outbound mail.

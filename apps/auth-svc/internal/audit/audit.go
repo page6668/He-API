@@ -112,6 +112,25 @@ const (
 	// of the key. Distinct event_type so audit-svc routes by type with no
 	// consumer code change.
 	EventAPIKeyConfigUpdated EventType = "api_key.config_updated" // LOW
+
+	// Story 2.7 — GDPR account-deletion taxonomy (3 types per AC7 BR-7.1).
+	// Taxonomy count 37 → 40 (Architect Review M-3: the prior "34" baseline
+	// omitted Story 5.1's 3 api_key events; the actual pre-2.7 count is 37, so
+	// these three make 40 — verified by grep over this file).
+	//
+	// Severity per BR-7.1 (recorded in Event.Metadata["severity"] like the 2.4
+	// taxonomy; see SeverityAccountDeletion):
+	//   - requested → MEDIUM (account-lifecycle state change)
+	//   - cancelled → LOW    (restorative, no privilege grant)
+	//   - executed  → HIGH   (irreversible physical erasure)
+	//
+	// Payload is PII-safe (BR-7.6): only user_id (UUID) + server-derived
+	// client_ip_hash / user_agent_hash + the relevant timestamps — NEVER email,
+	// display_name, or a raw client IP. Published to the EXISTING `audit.event`
+	// topic (no new topic), partition key = user_id.
+	EventAccountDeletionRequested EventType = "account.deletion.requested" // MEDIUM
+	EventAccountDeletionCancelled EventType = "account.deletion.cancelled" // LOW
+	EventAccountDeletionExecuted  EventType = "account.deletion.executed"  // HIGH — irreversible
 )
 
 // Severity classification for the 10 Story 2.4 event types per BR-5.7.
@@ -135,6 +154,22 @@ func Severity2FA(t EventType) string {
 		return SeverityMedium
 	case Event2FAEnrollInitiated, Event2FAEnrollFailed,
 		Event2FAChallengeSuccess, Event2FAChallengeFailed:
+		return SeverityLow
+	default:
+		return SeverityLow
+	}
+}
+
+// SeverityAccountDeletion returns the canonical severity for a Story 2.7
+// account-deletion event type (AC7 BR-7.1). Returns SeverityLow for any other
+// event type (callers only pass the three deletion constants).
+func SeverityAccountDeletion(t EventType) string {
+	switch t {
+	case EventAccountDeletionExecuted:
+		return SeverityHigh
+	case EventAccountDeletionRequested:
+		return SeverityMedium
+	case EventAccountDeletionCancelled:
 		return SeverityLow
 	default:
 		return SeverityLow

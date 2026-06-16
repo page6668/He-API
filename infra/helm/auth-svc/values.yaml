@@ -123,6 +123,31 @@ monthlyCostReset:
       cpu: 200m
       memory: 128Mi
 
+# Story 2.7 AC6 — account-deletion sweeper CronJob. Physical-erasure pass after
+# the 30-day grace. Same security-sensitive-cron posture as monthly-cost-reset
+# (Forbid / backoffLimit 0 / human-verified on failure).
+accountDeletionSweeper:
+  enabled: true
+  schedule: "0 2 * * *"        # 02:00 UTC daily (AC6 BR-6.1)
+  timeZone: "Etc/UTC"          # K8s 1.27+ CronJob TimeZone
+  concurrencyPolicy: Forbid    # BLIND-CONCURRENCY-003 — no overlapping sweeps
+  startingDeadlineSeconds: 200
+  backoffLimit: 0              # no auto-retry; failures reconcile next run / on-call
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  notificationSvcURL: ""       # completion email (best-effort; empty → skip)
+  image:
+    repository: he-api/account-deletion-sweeper
+    tag: "0.0.1"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
 # Story 5.4 H-3 — Vault ExternalSecret. When enabled, projects the auth-svc
 # PG/Redis/Kafka credentials from Vault into a K8s Secret (auth-svc-vault-secret)
 # that BOTH the Deployment + the monthly-cost-reset CronJob consume via envFrom.

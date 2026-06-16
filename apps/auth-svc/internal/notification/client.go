@@ -48,7 +48,26 @@ type Sender interface {
 	// `vars` carries template-specific keys: time, ip_summary, ua_summary,
 	// and template-specific extras (remaining_count, disable_method).
 	SendSecurityAlert(ctx context.Context, template SecurityAlertTemplate, to, locale string, vars map[string]string) error
+	// SendAccountDeletionEmail dispatches one of the Story 2.7 account-deletion
+	// lifecycle templates (AC2/AC3/AC6, BR-7.2). `template` is one of the three
+	// AccountDeletion* constants; `vars` carries template-specific keys
+	// (display_name, pending_deletion_at, cancel_url, executed_at). Best-effort
+	// at every call site — a deletion/cancel/erasure stands even if the email
+	// fails (the user opted in; AC6 BR-6.4 completion email is non-fatal).
+	SendAccountDeletionEmail(ctx context.Context, template AccountDeletionTemplate, to, locale string, vars map[string]string) error
 }
+
+// AccountDeletionTemplate enumerates the Story 2.7 account-deletion email
+// templates. Typed wrapper (parity with SecurityAlertTemplate) so call sites
+// cannot pass an arbitrary EmailTemplate; the Send method maps to the protobuf
+// enum (9/10/11) internally.
+type AccountDeletionTemplate int
+
+const (
+	AccountDeletionRequested AccountDeletionTemplate = iota + 1 // → EMAIL_TEMPLATE_ACCOUNT_DELETION_REQUESTED=9
+	AccountDeletionCancelled                                    // → ...CANCELLED=10
+	AccountDeletionCompleted                                    // → ...COMPLETED=11
+)
 
 // SecurityAlertTemplate enumerates the Story 2.4 2FA template ids. Defined
 // as a typed wrapper so handler call sites cannot accidentally swap in an
@@ -112,6 +131,32 @@ func (c *Client) SendSecurityAlert(ctx context.Context, template SecurityAlertTe
 		tmpl = notificationv1.EmailTemplate_EMAIL_TEMPLATE_2FA_DISABLED
 	default:
 		return fmt.Errorf("%w: unknown SecurityAlertTemplate %d", ErrPermanent, template)
+	}
+	req := connect.NewRequest(&notificationv1.SendEmailRequest{
+		Template:  tmpl,
+		ToEmail:   to,
+		Locale:    locale,
+		Variables: vars,
+	})
+	if _, err := c.upstream.SendEmail(ctx, req); err != nil {
+		return mapConnectErr(err)
+	}
+	return nil
+}
+
+// SendAccountDeletionEmail maps the AccountDeletionTemplate wrapper onto the
+// protobuf EmailTemplate enum (9/10/11) and invokes notification-svc.
+func (c *Client) SendAccountDeletionEmail(ctx context.Context, template AccountDeletionTemplate, to, locale string, vars map[string]string) error {
+	var tmpl notificationv1.EmailTemplate
+	switch template {
+	case AccountDeletionRequested:
+		tmpl = notificationv1.EmailTemplate_EMAIL_TEMPLATE_ACCOUNT_DELETION_REQUESTED
+	case AccountDeletionCancelled:
+		tmpl = notificationv1.EmailTemplate_EMAIL_TEMPLATE_ACCOUNT_DELETION_CANCELLED
+	case AccountDeletionCompleted:
+		tmpl = notificationv1.EmailTemplate_EMAIL_TEMPLATE_ACCOUNT_DELETION_COMPLETED
+	default:
+		return fmt.Errorf("%w: unknown AccountDeletionTemplate %d", ErrPermanent, template)
 	}
 	req := connect.NewRequest(&notificationv1.SendEmailRequest{
 		Template:  tmpl,

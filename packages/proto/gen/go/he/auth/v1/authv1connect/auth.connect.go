@@ -100,6 +100,15 @@ const (
 	// AuthServiceGetCapNotificationContextProcedure is the fully-qualified name of the AuthService's
 	// GetCapNotificationContext RPC.
 	AuthServiceGetCapNotificationContextProcedure = "/he.auth.v1.AuthService/GetCapNotificationContext"
+	// AuthServiceRequestAccountDeletionProcedure is the fully-qualified name of the AuthService's
+	// RequestAccountDeletion RPC.
+	AuthServiceRequestAccountDeletionProcedure = "/he.auth.v1.AuthService/RequestAccountDeletion"
+	// AuthServiceCancelAccountDeletionProcedure is the fully-qualified name of the AuthService's
+	// CancelAccountDeletion RPC.
+	AuthServiceCancelAccountDeletionProcedure = "/he.auth.v1.AuthService/CancelAccountDeletion"
+	// AuthServiceGetAccountDeletionStateProcedure is the fully-qualified name of the AuthService's
+	// GetAccountDeletionState RPC.
+	AuthServiceGetAccountDeletionStateProcedure = "/he.auth.v1.AuthService/GetAccountDeletionState"
 )
 
 // AuthServiceClient is a client for the he.auth.v1.AuthService service.
@@ -204,6 +213,30 @@ type AuthServiceClient interface {
 	// exposes the JOIN result over gRPC. Single PG round-trip; called
 	// fire-and-forget off the gateway hot path.
 	GetCapNotificationContext(context.Context, *connect.Request[v1.GetCapNotificationContextRequest]) (*connect.Response[v1.GetCapNotificationContextResponse], error)
+	// Story 2.7 — GDPR account deletion (30-day grace). Added to the EXISTING
+	// auth service (BR-2.2), NOT a new service.
+	//
+	// RequestAccountDeletion: re-auth-gated active→pending_deletion transition
+	// (OWASP ASVS L2 V8.3). Server-side re-verifies a fresh credential
+	// (password / confirm_email for OAuth-only / +TOTP when totp_enabled),
+	// single-winner CAS `UPDATE ... WHERE id=$1 AND status='active'`, sets
+	// pending_deletion_at = NOW() + 30d (server UTC, never client-supplied),
+	// revokes all sessions, audits account.deletion.requested, fires
+	// EMAIL_TEMPLATE_ACCOUNT_DELETION_REQUESTED. Idempotent: a 2nd request while
+	// already pending returns the SAME pending_deletion_at (no new audit/email).
+	// user_id is gateway-populated from JWT sub (BR-2.4 IDOR defence).
+	//
+	// CancelAccountDeletion: restorative pending_deletion→active CAS during the
+	// grace window. Requires ONLY a valid JWT — no fresh re-auth (OQ-2 ratified
+	// asymmetry; deletion is destructive, cancellation is restorative and is
+	// already gated by signin). 0 rows + grace expired/deleted → grace_expired.
+	//
+	// GetAccountDeletionState: read-only hydration for AC1 dialog field
+	// branching (has_password / totp_enabled are server-authoritative; the
+	// password hash NEVER leaves auth-svc) + AC3 recovery countdown + AC4 guard.
+	RequestAccountDeletion(context.Context, *connect.Request[v1.RequestAccountDeletionRequest]) (*connect.Response[v1.RequestAccountDeletionResponse], error)
+	CancelAccountDeletion(context.Context, *connect.Request[v1.CancelAccountDeletionRequest]) (*connect.Response[v1.CancelAccountDeletionResponse], error)
+	GetAccountDeletionState(context.Context, *connect.Request[v1.GetAccountDeletionStateRequest]) (*connect.Response[v1.GetAccountDeletionStateResponse], error)
 }
 
 // NewAuthServiceClient constructs a client for the he.auth.v1.AuthService service. By default, it
@@ -343,6 +376,24 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("GetCapNotificationContext")),
 			connect.WithClientOptions(opts...),
 		),
+		requestAccountDeletion: connect.NewClient[v1.RequestAccountDeletionRequest, v1.RequestAccountDeletionResponse](
+			httpClient,
+			baseURL+AuthServiceRequestAccountDeletionProcedure,
+			connect.WithSchema(authServiceMethods.ByName("RequestAccountDeletion")),
+			connect.WithClientOptions(opts...),
+		),
+		cancelAccountDeletion: connect.NewClient[v1.CancelAccountDeletionRequest, v1.CancelAccountDeletionResponse](
+			httpClient,
+			baseURL+AuthServiceCancelAccountDeletionProcedure,
+			connect.WithSchema(authServiceMethods.ByName("CancelAccountDeletion")),
+			connect.WithClientOptions(opts...),
+		),
+		getAccountDeletionState: connect.NewClient[v1.GetAccountDeletionStateRequest, v1.GetAccountDeletionStateResponse](
+			httpClient,
+			baseURL+AuthServiceGetAccountDeletionStateProcedure,
+			connect.WithSchema(authServiceMethods.ByName("GetAccountDeletionState")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -369,6 +420,9 @@ type authServiceClient struct {
 	revokeApiKey              *connect.Client[v1.RevokeApiKeyRequest, v1.RevokeApiKeyResponse]
 	updateApiKey              *connect.Client[v1.UpdateApiKeyRequest, v1.UpdateApiKeyResponse]
 	getCapNotificationContext *connect.Client[v1.GetCapNotificationContextRequest, v1.GetCapNotificationContextResponse]
+	requestAccountDeletion    *connect.Client[v1.RequestAccountDeletionRequest, v1.RequestAccountDeletionResponse]
+	cancelAccountDeletion     *connect.Client[v1.CancelAccountDeletionRequest, v1.CancelAccountDeletionResponse]
+	getAccountDeletionState   *connect.Client[v1.GetAccountDeletionStateRequest, v1.GetAccountDeletionStateResponse]
 }
 
 // RegisterUser calls he.auth.v1.AuthService.RegisterUser.
@@ -476,6 +530,21 @@ func (c *authServiceClient) GetCapNotificationContext(ctx context.Context, req *
 	return c.getCapNotificationContext.CallUnary(ctx, req)
 }
 
+// RequestAccountDeletion calls he.auth.v1.AuthService.RequestAccountDeletion.
+func (c *authServiceClient) RequestAccountDeletion(ctx context.Context, req *connect.Request[v1.RequestAccountDeletionRequest]) (*connect.Response[v1.RequestAccountDeletionResponse], error) {
+	return c.requestAccountDeletion.CallUnary(ctx, req)
+}
+
+// CancelAccountDeletion calls he.auth.v1.AuthService.CancelAccountDeletion.
+func (c *authServiceClient) CancelAccountDeletion(ctx context.Context, req *connect.Request[v1.CancelAccountDeletionRequest]) (*connect.Response[v1.CancelAccountDeletionResponse], error) {
+	return c.cancelAccountDeletion.CallUnary(ctx, req)
+}
+
+// GetAccountDeletionState calls he.auth.v1.AuthService.GetAccountDeletionState.
+func (c *authServiceClient) GetAccountDeletionState(ctx context.Context, req *connect.Request[v1.GetAccountDeletionStateRequest]) (*connect.Response[v1.GetAccountDeletionStateResponse], error) {
+	return c.getAccountDeletionState.CallUnary(ctx, req)
+}
+
 // AuthServiceHandler is an implementation of the he.auth.v1.AuthService service.
 type AuthServiceHandler interface {
 	RegisterUser(context.Context, *connect.Request[v1.RegisterUserRequest]) (*connect.Response[v1.RegisterUserResponse], error)
@@ -578,6 +647,30 @@ type AuthServiceHandler interface {
 	// exposes the JOIN result over gRPC. Single PG round-trip; called
 	// fire-and-forget off the gateway hot path.
 	GetCapNotificationContext(context.Context, *connect.Request[v1.GetCapNotificationContextRequest]) (*connect.Response[v1.GetCapNotificationContextResponse], error)
+	// Story 2.7 — GDPR account deletion (30-day grace). Added to the EXISTING
+	// auth service (BR-2.2), NOT a new service.
+	//
+	// RequestAccountDeletion: re-auth-gated active→pending_deletion transition
+	// (OWASP ASVS L2 V8.3). Server-side re-verifies a fresh credential
+	// (password / confirm_email for OAuth-only / +TOTP when totp_enabled),
+	// single-winner CAS `UPDATE ... WHERE id=$1 AND status='active'`, sets
+	// pending_deletion_at = NOW() + 30d (server UTC, never client-supplied),
+	// revokes all sessions, audits account.deletion.requested, fires
+	// EMAIL_TEMPLATE_ACCOUNT_DELETION_REQUESTED. Idempotent: a 2nd request while
+	// already pending returns the SAME pending_deletion_at (no new audit/email).
+	// user_id is gateway-populated from JWT sub (BR-2.4 IDOR defence).
+	//
+	// CancelAccountDeletion: restorative pending_deletion→active CAS during the
+	// grace window. Requires ONLY a valid JWT — no fresh re-auth (OQ-2 ratified
+	// asymmetry; deletion is destructive, cancellation is restorative and is
+	// already gated by signin). 0 rows + grace expired/deleted → grace_expired.
+	//
+	// GetAccountDeletionState: read-only hydration for AC1 dialog field
+	// branching (has_password / totp_enabled are server-authoritative; the
+	// password hash NEVER leaves auth-svc) + AC3 recovery countdown + AC4 guard.
+	RequestAccountDeletion(context.Context, *connect.Request[v1.RequestAccountDeletionRequest]) (*connect.Response[v1.RequestAccountDeletionResponse], error)
+	CancelAccountDeletion(context.Context, *connect.Request[v1.CancelAccountDeletionRequest]) (*connect.Response[v1.CancelAccountDeletionResponse], error)
+	GetAccountDeletionState(context.Context, *connect.Request[v1.GetAccountDeletionStateRequest]) (*connect.Response[v1.GetAccountDeletionStateResponse], error)
 }
 
 // NewAuthServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -713,6 +806,24 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("GetCapNotificationContext")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceRequestAccountDeletionHandler := connect.NewUnaryHandler(
+		AuthServiceRequestAccountDeletionProcedure,
+		svc.RequestAccountDeletion,
+		connect.WithSchema(authServiceMethods.ByName("RequestAccountDeletion")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceCancelAccountDeletionHandler := connect.NewUnaryHandler(
+		AuthServiceCancelAccountDeletionProcedure,
+		svc.CancelAccountDeletion,
+		connect.WithSchema(authServiceMethods.ByName("CancelAccountDeletion")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceGetAccountDeletionStateHandler := connect.NewUnaryHandler(
+		AuthServiceGetAccountDeletionStateProcedure,
+		svc.GetAccountDeletionState,
+		connect.WithSchema(authServiceMethods.ByName("GetAccountDeletionState")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/he.auth.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthServiceRegisterUserProcedure:
@@ -757,6 +868,12 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceUpdateApiKeyHandler.ServeHTTP(w, r)
 		case AuthServiceGetCapNotificationContextProcedure:
 			authServiceGetCapNotificationContextHandler.ServeHTTP(w, r)
+		case AuthServiceRequestAccountDeletionProcedure:
+			authServiceRequestAccountDeletionHandler.ServeHTTP(w, r)
+		case AuthServiceCancelAccountDeletionProcedure:
+			authServiceCancelAccountDeletionHandler.ServeHTTP(w, r)
+		case AuthServiceGetAccountDeletionStateProcedure:
+			authServiceGetAccountDeletionStateHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -848,4 +965,16 @@ func (UnimplementedAuthServiceHandler) UpdateApiKey(context.Context, *connect.Re
 
 func (UnimplementedAuthServiceHandler) GetCapNotificationContext(context.Context, *connect.Request[v1.GetCapNotificationContextRequest]) (*connect.Response[v1.GetCapNotificationContextResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.GetCapNotificationContext is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) RequestAccountDeletion(context.Context, *connect.Request[v1.RequestAccountDeletionRequest]) (*connect.Response[v1.RequestAccountDeletionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.RequestAccountDeletion is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) CancelAccountDeletion(context.Context, *connect.Request[v1.CancelAccountDeletionRequest]) (*connect.Response[v1.CancelAccountDeletionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.CancelAccountDeletion is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) GetAccountDeletionState(context.Context, *connect.Request[v1.GetAccountDeletionStateRequest]) (*connect.Response[v1.GetAccountDeletionStateResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("he.auth.v1.AuthService.GetAccountDeletionState is not implemented"))
 }

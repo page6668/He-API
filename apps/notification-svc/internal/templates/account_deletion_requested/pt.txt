@@ -1,0 +1,3 @@
+Sua conta He-API está programada para exclusão
+
+Sua conta está programada para exclusão permanente em {{.pending_deletion_at}}. Se você não solicitou isso, faça login antes dessa data para cancelar.

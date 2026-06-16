@@ -281,5 +281,49 @@
         "security_disclaimer": "Si vous n'avez pas demandé cet export, contactez immédiatement le support."
       }
     }
+  },
+  "delete": {
+    "cta": {
+      "label": "Supprimer mon compte",
+      "disabled_pending": "Votre compte est déjà programmé pour suppression."
+    },
+    "dialog": {
+      "title": "Supprimer définitivement votre compte ?",
+      "consequences": "Votre compte sera programmé pour suppression avec un délai de grâce de 30 jours. Vous pouvez annuler à tout moment dans les 30 jours en vous reconnectant. À l'issue du délai de grâce, votre profil, vos clés API et vos données personnelles seront définitivement effacés. Les enregistrements de facturation requis par la loi sont conservés.",
+      "password_label": "Saisissez votre mot de passe pour confirmer",
+      "email_confirm_label": "Saisissez l'e-mail de votre compte pour confirmer",
+      "totp_label": "Saisissez votre code d'authentification à 6 chiffres",
+      "confirm": "Supprimer mon compte",
+      "cancel": "Annuler",
+      "errors": {
+        "bad_password": "Ce mot de passe ne correspond pas. Veuillez réessayer.",
+        "bad_totp": "Ce code ne correspond pas. Veuillez réessayer."
+      }
+    },
+    "errors": {
+      "rate_limited": "Trop de demandes de suppression. Veuillez réessayer plus tard.",
+      "generic": "Une erreur s'est produite. Veuillez réessayer."
+    },
+    "recovery": {
+      "title": "Votre compte est programmé pour suppression",
+      "countdown": "{days, plural, =0 {Votre compte sera définitivement supprimé aujourd'hui.} one {Votre compte sera définitivement supprimé dans 1 jour.} other {Votre compte sera définitivement supprimé dans # jours.}}",
+      "reactivate_cta": "Réactiver mon compte",
+      "explainer": "Si vous ne faites rien, votre compte et vos données seront définitivement supprimés à la date prévue. Réactivez votre compte à tout moment avant cette date pour le conserver.",
+      "expired": "Ce compte a été définitivement supprimé."
+    },
+    "email": {
+      "requested": {
+        "subject": "Votre compte He-API est programmé pour suppression",
+        "body": "Votre compte est programmé pour une suppression définitive le {pending_deletion_at}. Si vous n'êtes pas à l'origine de cette demande, connectez-vous avant cette date pour l'annuler."
+      },
+      "cancelled": {
+        "subject": "La suppression de votre compte He-API a été annulée",
+        "body": "Bonne nouvelle — la suppression de votre compte a été annulée et votre compte est à nouveau actif."
+      },
+      "completed": {
+        "subject": "Votre compte He-API a été supprimé",
+        "body": "Votre compte He-API et vos données personnelles ont été définitivement supprimés le {executed_at}. Les enregistrements de facturation requis par la loi ont été conservés."
+      }
+    }
   }
 }

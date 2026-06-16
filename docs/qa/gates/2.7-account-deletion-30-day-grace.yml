@@ -1,0 +1,143 @@
+schema: 1
+story: "2.7"
+story_title: "账号注销与数据删除（30 天宽限期）"
+gate: PASS
+status_reason: >
+  Round 2 (incremental). The single Round-1 finding QA-2.7-001 (MEDIUM — AC3's
+  410 grace-expired path did not sign the user out) is verified fixed: a new
+  signOutAfterGraceExpiry Server Action clears he_access (path /) + he_refresh
+  (path /v1/auth/refresh) with attribute-matched Set-Cookie deletion and
+  redirects to signin; it is auto-fired by GraceExpiredSignOut on the recovery
+  page's expired branch and wired into ReactivateAccountButton's 410-race branch
+  (the generic error branch deliberately does NOT sign out). Independent
+  re-execution: console vitest 428 passed / 34 skipped / 3 todo (was 422; +6 new
+  genuine tests, verified to run in isolation). Backend unchanged (frontend-only
+  fix; account already anonymized server-side) — Round-1 Go suites remain GREEN.
+  All 7 ACs now verified (AC3 PARTIAL → VERIFIED). QA-2.7-002 (LOW) stays
+  OQ-1-ratified monitor-only. All Round-1 deviations carried & accepted. Epic 2 closed.
+reviewer: "Turing (Test Architect)"
+updated: "2026-06-16T06:10:00Z"
+
+review_round: 2
+review_mode_type: incremental
+issues_from_previous_round: 2
+issues_resolved: 1
+improvement_percentage: 100   # 1 of 1 actionable (must-fix) finding resolved; QA-2.7-002 was monitor-only by design
+
+incremental_context:
+  cached_risk_level: "HIGH"
+  cached_review_mode: "full_testing"
+  cached_project_type: "fullstack"
+  failed_acs: []
+  failed_e2e_scenarios: []
+  missing_blind_spots: []
+  checkbox_issues: []
+
+waiver: { active: false }
+
+architecture_concern: false
+escalation_reason: ""
+
+top_issues:
+  - id: "QA-2.7-002"
+    severity: low
+    finding: >
+      AC4 BR-4.1 (403_account_pending_deletion "for any non-recovery console/API
+      access") is implemented on the GetMe/profile path + the console layout guard,
+      not as a gateway-wide per-endpoint status gate (documented Dev Deviation #4).
+      UNIT-024's example (GET /v1/me) is covered. Ratified by OQ-1 for MVP; acceptable.
+    suggested_action: "Monitor — consider a gateway status-gate middleware in a follow-up (not blocking)."
+  - id: "QA-2.7-003"
+    severity: low
+    finding: >
+      Recovery page expired branch (account/recovery/page.tsx:43-47) also fires
+      GraceExpiredSignOut when getDeletionState() returns kind:'error' (transient
+      gateway read failure conflated with the genuine deleted/expired state —
+      pre-existing line-44 grouping, not introduced by the QA-2.7-001 fix). A
+      transient blip would sign the user out of recovery.
+    suggested_action: >
+      Monitor — bounded (fail-closed AC4 + OQ-1 re-loop signin→recovery means no
+      lockout, only a redundant re-auth). Optional hardening: distinguish 'error'
+      from 'deleted' and skip auto-signout on a transient read failure.
+
+resolved_issues:
+  - id: "QA-2.7-001"
+    severity: medium
+    resolution: >
+      FIXED in Round 2. signOutAfterGraceExpiry Server Action (attribute-matched
+      he_access/he_refresh cookie clear + redirect to signin) wired into both the
+      recovery page expired branch (GraceExpiredSignOut auto-fire) and
+      ReactivateAccountButton's grace_expired (410) branch. Generic error branch
+      correctly does NOT sign out. 6 new genuine tests (ReactivateAccountButton 4 +
+      GraceExpiredSignOut 2); independent vitest 428✓. AC3 now VERIFIED.
+
+test_results:
+  automated:
+    executed: true
+    passed: true
+    total: 428
+    passed_count: 428
+    failed_count: 0
+    skipped_count: 34
+    pass_rate: 100
+    coverage_percentage: 0
+    failed_tests: []
+    notes: >
+      Independent re-execution this round (frontend delta only): console vitest run
+      → 428 passed / 34 skipped / 3 todo (21 files); targeted run of the 2 new files
+      (GraceExpiredSignOut 2 + ReactivateAccountButton 4) → 6 passed in isolation,
+      genuine assertions (signout on 410, NOT on happy/401/generic-error, fires once,
+      renders nothing). Backend Go suites unchanged from Round 1 (no backend delta) —
+      auth-svc/api-gateway/notification-svc remain GREEN.
+  e2e:
+    executed: false
+    passed: false
+    skipped: true
+    skip_reason: >
+      Full live E2E requires PG+Redis+ClickHouse+Stripe+running services; not
+      available in this environment. Verified via independent unit/integration
+      suites + direct source-level AC semantic verification (frontend QA-2.7-001 fix).
+    scenarios_tested: 0
+    scenarios_passed: 0
+    scenarios_failed: 0
+    console_errors_found: false
+    network_errors_found: false
+
+evidence:
+  directory: "docs/qa/evidence/2.7/"
+  issues: []
+
+risk_assessment:
+  risk_level: HIGH
+  review_mode: full_testing
+  complexity_count: 8
+  security_sensitive: true
+  dev_gate_score: 95
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 2 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "Gateway-wide pending_deletion status-gate (QA-2.7-002) — defense-in-depth follow-up."
+      - "Recovery page: distinguish transient read error from deleted before auto-signout (QA-2.7-003)."
+
+nfr_validation:
+  security: { status: PASS, notes: "Re-auth matrix / IDOR fence / anti-enumeration / session-revoke tombstone all correct & tested; AC3 410 path now terminates the orphaned session (QA-2.7-001 fixed). Remaining items are low/monitor." }
+  performance: { status: PASS, notes: "Partial-index-bounded sweeper scan; per-user fail-isolated txns." }
+  reliability: { status: PASS, notes: "Cross-store reconcile gate (anonymized_at IS NULL) re-sweeps CH/OSS/Stripe; per-user crash-safe." }
+  maintainability: { status: PASS, notes: "Reuses 2.6 proxy / monthly-cost-reset cron / RevokeKeyDialog idioms; signout reuses build*CookieOptions for attribute-matched deletion." }
+
+deviations_reviewed:
+  - id: "Dev-Deviation-5 (OSS purge seam deferred)"
+    verdict: ACCEPTED
+    note: "Platform-wide OSS unwired; 2.6 export UPLOAD itself deferred → no objects to purge. Seam + reconcile present."
+  - id: "Dev-Deviation-5 (ClickHouse adapter build-verified only)"
+    verdict: ACCEPTED
+    note: "Adapter wired (clickhouse-go/v2); no live CH locally; reconcile gate covers async failure."
+  - id: "Dev-Deviation-5 (migration 0018 structural-verify)"
+    verdict: ACCEPTED
+    note: "atlas not runnable locally. SQL reviewed: additive deleted_at/anonymized_at + partial idx; no re-add of pending_deletion_at; no status CHECK; atlas.sum row added."
+  - id: "Dev-Deviation-4 (AC4 GetMe-scoped 403)"
+    verdict: ACCEPTED_WITH_FOLLOWUP
+    note: "See QA-2.7-002 (low, monitor-only)."

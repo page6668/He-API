@@ -158,7 +158,11 @@ Each event is `data: <single-line JSON>\n\n` per W3C EventSource §9.2.6. The te
 | 401 | `401_invalid_totp_code` / `401_mfa_token_invalid` / `401_mfa_token_binding_mismatch` | 2FA challenge — 各类 mfa_token 校验失败（Story 2.4，Story 3.6 promoted） |
 | 403 | `403_csrf_check_failed` | CSRF — Origin/Referer 校验失败（Story 2.2，Story 3.6 promoted） |
 | 403 | `403_aal2_required` | JWT — 二次因子要求未满足（Story 2.4，Story 3.6 promoted） |
-| 403 | `403_account_pending_deletion` | 帐号待删 — 软删除窗口期内拒绝登录（Story 2.5，Story 3.6 promoted） |
+| 403 | `403_account_pending_deletion` | 帐号待删 — 宽限期内 console/业务 API 访问被拒（**Story 2.7 首个消费方**；OQ-1 RATIFIED 调和：签入/恢复页/取消端点**不**触发此码——登录鉴权成功但只发"恢复态会话"，console 路由重定向到恢复页。原 2.5「拒绝登录」措辞被 OQ-1 取代）（Story 2.5 预留，Story 3.6 promoted） |
+| 403 | `403_bad_reauth` | POST /v1/account/deletion — 删除前的二次鉴权失败（密码/确认邮箱/TOTP 任一不匹配；AC2 BR-2.4 OWASP ASVS V8.3）；无状态变更（Story 2.7） |
+| 409 | `409_account_not_deletable` | POST /v1/account/deletion — 账号 status ∈ {suspended,locked,deleted} 不可删（AC2 BR-2.6）（Story 2.7） |
+| 410 | `410_grace_expired` | POST /v1/account/deletion/cancel — 宽限期已过/sweeper 已物理删除，恢复不再可能（AC3 BR-3.3）（Story 2.7） |
+| 429 | `429_rate_limit_account_delete` | POST /v1/account/deletion — 删除请求 5/24h 防误触限流（AC2 BR-2.5；遵循 `429_rate_limit_<scope>` 命名约定 m-4）（Story 2.7） |
 | 403 | `403_api_key_not_owned` | POST /v1/me/playground/chat — 体携 `api_key_id` 非本人/未知/已吊销（Story 10.6；IDOR fence `WHERE user_id=$JWT.sub`；QA 10.6-INT-002 钉死 403，区别于 5.1 管理面 `404_api_key_not_found` anti-enumeration） |
 | 410 | `410_token_expired` / `410_token_used` | 邮件验证 — token 过期或已用（Story 2.2，Story 3.6 promoted） |
 | 412 | `412_etag_mismatch` | PUT /v1/me/profile — If-Match 不匹配（Story 2.5，Story 3.6 promoted） |

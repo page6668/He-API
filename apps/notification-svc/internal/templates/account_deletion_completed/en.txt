@@ -1,0 +1,3 @@
+Your He-API account has been deleted
+
+Your He-API account and personal data have been permanently deleted on {{.executed_at}}. Billing records required by law have been retained.

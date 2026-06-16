@@ -161,6 +161,14 @@ func templateNameForEnum(e notificationv1.EmailTemplate) (string, error) {
 		return templates.TemplateMonthlyCapWarning, nil
 	case notificationv1.EmailTemplate_EMAIL_TEMPLATE_MONTHLY_CAP_TRIPPED:
 		return templates.TemplateMonthlyCapTripped, nil
+	case notificationv1.EmailTemplate_EMAIL_TEMPLATE_ACCOUNT_DELETION_REQUESTED:
+		// Story 2.7 — Architect R-2: caller passes the enum, this handler maps
+		// to the file-naming slug (account_deletion_{requested|cancelled|completed}).
+		return templates.TemplateAccountDeletionRequested, nil
+	case notificationv1.EmailTemplate_EMAIL_TEMPLATE_ACCOUNT_DELETION_CANCELLED:
+		return templates.TemplateAccountDeletionCancelled, nil
+	case notificationv1.EmailTemplate_EMAIL_TEMPLATE_ACCOUNT_DELETION_COMPLETED:
+		return templates.TemplateAccountDeletionCompleted, nil
 	case notificationv1.EmailTemplate_EMAIL_TEMPLATE_UNSPECIFIED:
 		return "", errors.New("send_email: template is required (UNSPECIFIED)")
 	default:
@@ -183,6 +191,12 @@ var requiredVars = map[string][]string{
 	// it (BR-2.10 — no precise current-cost, only the user's own cap).
 	templates.TemplateMonthlyCapWarning: {"display_name", "key_name", "cap_usd", "threshold_pct"},
 	templates.TemplateMonthlyCapTripped: {"display_name", "key_name", "cap_usd"},
+	// Story 2.7 — the vars each account-deletion template body references via
+	// {{.var}} (the caller MAY pass extras like display_name/cancel_url which
+	// the body doesn't use — those are not required at the wire level).
+	templates.TemplateAccountDeletionRequested: {"pending_deletion_at"},
+	templates.TemplateAccountDeletionCancelled: {},
+	templates.TemplateAccountDeletionCompleted: {"executed_at"},
 }
 
 func validateRequiredVars(tpl string, vars map[string]string) error {

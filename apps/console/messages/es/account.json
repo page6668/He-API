@@ -281,5 +281,49 @@
         "security_disclaimer": "Si no solicitaste esta exportación, contacta a soporte inmediatamente."
       }
     }
+  },
+  "delete": {
+    "cta": {
+      "label": "Eliminar mi cuenta",
+      "disabled_pending": "Tu cuenta ya está programada para eliminación."
+    },
+    "dialog": {
+      "title": "¿Eliminar permanentemente tu cuenta?",
+      "consequences": "Tu cuenta se programará para eliminación con un período de gracia de 30 días. Puedes cancelar en cualquier momento dentro de los 30 días volviendo a iniciar sesión. Tras el período de gracia, tu perfil, claves API y datos personales se borrarán permanentemente. Los registros de facturación exigidos por ley se conservan.",
+      "password_label": "Introduce tu contraseña para confirmar",
+      "email_confirm_label": "Escribe el correo de tu cuenta para confirmar",
+      "totp_label": "Introduce tu código de autenticación de 6 dígitos",
+      "confirm": "Eliminar mi cuenta",
+      "cancel": "Cancelar",
+      "errors": {
+        "bad_password": "Esa contraseña no coincide. Por favor, inténtalo de nuevo.",
+        "bad_totp": "Ese código no coincide. Por favor, inténtalo de nuevo."
+      }
+    },
+    "errors": {
+      "rate_limited": "Demasiadas solicitudes de eliminación. Por favor, inténtalo de nuevo más tarde.",
+      "generic": "Algo salió mal. Por favor, inténtalo de nuevo."
+    },
+    "recovery": {
+      "title": "Tu cuenta está programada para eliminación",
+      "countdown": "{days, plural, =0 {Tu cuenta se eliminará permanentemente hoy.} one {Tu cuenta se eliminará permanentemente en 1 día.} other {Tu cuenta se eliminará permanentemente en # días.}}",
+      "reactivate_cta": "Reactivar mi cuenta",
+      "explainer": "Si no haces nada, tu cuenta y tus datos se eliminarán permanentemente en la fecha programada. Reactívala en cualquier momento antes de esa fecha para conservar tu cuenta.",
+      "expired": "Esta cuenta ha sido eliminada permanentemente."
+    },
+    "email": {
+      "requested": {
+        "subject": "Tu cuenta de He-API está programada para eliminación",
+        "body": "Tu cuenta está programada para eliminación permanente el {pending_deletion_at}. Si no solicitaste esto, inicia sesión antes de esa fecha para cancelar."
+      },
+      "cancelled": {
+        "subject": "La eliminación de tu cuenta de He-API fue cancelada",
+        "body": "Buenas noticias: la eliminación de tu cuenta ha sido cancelada y tu cuenta está activa de nuevo."
+      },
+      "completed": {
+        "subject": "Tu cuenta de He-API ha sido eliminada",
+        "body": "Tu cuenta de He-API y tus datos personales se han eliminado permanentemente el {executed_at}. Los registros de facturación exigidos por ley se han conservado."
+      }
+    }
   }
 }

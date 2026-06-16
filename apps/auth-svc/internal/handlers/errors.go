@@ -83,6 +83,13 @@ const (
 	StatusAccountPendingDeletion = "403_account_pending_deletion"
 	StatusRateLimitProfileUpdate = "429_rate_limit_profile_update"
 	StatusDatabaseUnavailable    = "503_database_unavailable"
+
+	// Story 2.7 account-deletion status codes — map 1:1 to AC2/AC3 Error
+	// Handling tables. api-gateway translates the NNN_ prefix to HTTP status.
+	StatusBadReauth              = "403_bad_reauth"                // AC2 re-auth mismatch (password/email/TOTP)
+	StatusAccountNotDeletable    = "409_account_not_deletable"     // AC2 status ∈ {suspended,locked,deleted}
+	StatusGraceExpired           = "410_grace_expired"             // AC3 cancel after sweeper ran / grace passed
+	StatusRateLimitAccountDelete = "429_rate_limit_account_delete" // AC2 BR-2.5 anti-accident 5/24h
 )
 
 // statusError builds a Connect error whose Message is exactly the status

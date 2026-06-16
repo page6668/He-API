@@ -1,0 +1,3 @@
+Ihr He-API-Konto wurde gelöscht
+
+Ihr He-API-Konto und Ihre persönlichen Daten wurden am {{.executed_at}} dauerhaft gelöscht. Gesetzlich vorgeschriebene Abrechnungsunterlagen wurden aufbewahrt.

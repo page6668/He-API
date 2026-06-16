@@ -276,6 +276,20 @@ func main() {
 	mux.Handle("GET /v1/account/data-export/current",
 		jwtVerifier.RequireJWT(http.HandlerFunc(accountData.GetCurrentExport)))
 
+	// Story 2.7 — GDPR account-deletion routes (AC2/AC3/AC4). Proxies to
+	// auth-svc. JWT-protected; user_id is the JWT sub (BR-2.4 — never the body).
+	// The AC4 recovery-only-session boundary (403_account_pending_deletion for
+	// console/business APIs) is enforced by the console guard + per-endpoint
+	// status checks; these three deletion endpoints stay reachable for a
+	// pending_deletion user so they can cancel (OQ-1).
+	accountDeletion := handlers.NewAccountDeletionProxy(authUpstream)
+	mux.Handle("POST /v1/account/deletion",
+		jwtVerifier.RequireJWT(http.HandlerFunc(accountDeletion.RequestDeletion)))
+	mux.Handle("POST /v1/account/deletion/cancel",
+		jwtVerifier.RequireJWT(http.HandlerFunc(accountDeletion.CancelDeletion)))
+	mux.Handle("GET /v1/account/deletion",
+		jwtVerifier.RequireJWT(http.HandlerFunc(accountDeletion.GetDeletionState)))
+
 	// Story 9.3 — usage-log export routes (AC1). Proxies to notification-svc
 	// UsageLogExportService. ALWAYS mounted (BR-EX-8) — unlike the 9.2 read
 	// endpoints these do NOT depend on HE_API_CLICKHOUSE_DSN (they hit

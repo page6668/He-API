@@ -117,6 +117,39 @@ func TestRefreshToken_HappyRotation(t *testing.T) {
 	}
 }
 
+// Story 2.7 BR-2.8 — refresh is refused once the user requested account
+// deletion (the `auth:refresh:revoked:{user_id}` tombstone exists), even with a
+// valid family tracker. The family key is NOT rotated.
+func TestRefreshToken_RejectedAfterDeletionRequested(t *testing.T) {
+	t.Parallel()
+	userID := uuid.New()
+	familyID := uuid.New()
+	oldJTI := "old-refresh-jti-xyz"
+	verifier := &fakeVerifier{claims: &authjwt.Claims{
+		Subject:   userID.String(),
+		IssuedAt:  fixedNow.Add(-time.Hour).Unix(),
+		ExpiresAt: fixedNow.Add(29 * 24 * time.Hour).Unix(),
+		JTI:       oldJTI,
+		Audience:  authjwt.Audience,
+		FamilyID:  familyID.String(),
+	}}
+	h, _ := newRefreshHarness(t, verifier)
+
+	familyKey := "auth:refresh:" + familyID.String()
+	_ = h.rdb.Set(context.Background(), familyKey, oldJTI, 30*24*time.Hour).Err()
+	// The deletion tombstone.
+	_ = h.rdb.Set(context.Background(), "auth:refresh:revoked:"+userID.String(), fixedNow.Format(time.RFC3339), 30*24*time.Hour).Err()
+
+	_, err := h.srv.RefreshToken(context.Background(), connect.NewRequest(&authv1.RefreshTokenRequest{
+		RefreshToken: "any",
+		ClientIp:     "1.2.3.4",
+	}))
+	assertConnectStatus(t, err, connect.CodeUnauthenticated, handlers.StatusInvalidCredentials)
+	if got, _ := h.mr.Get(familyKey); got != oldJTI {
+		t.Errorf("family tracker rotated despite revoke tombstone: %q", got)
+	}
+}
+
 // Scenario: 2.2-UNIT-119
 // Reuse detection: presented jti != stored. The Lua script DEL's the
 // family entirely + handler returns 401 + audits refresh.reuse_detected.

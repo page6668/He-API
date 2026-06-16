@@ -185,6 +185,29 @@ WHERE id=$1`
 	// state. Used by ChallengeTOTP + DisableTOTP factor='totp' paths.
 	getTOTPSecretSQL = `SELECT totp_secret_encrypted, totp_enabled, totp_enrolled_at
 FROM he_api.users WHERE id=$1 LIMIT 1`
+
+	// -- Story 2.7 account-deletion CAS queries -----------------------------
+
+	// requestAccountDeletionSQL is the AC2 active→pending_deletion single-winner
+	// CAS (BR-2.3 / BR-2.7). The grace window is computed server-side, UTC, as
+	// NOW() + 30 days — NEVER client-supplied. `WHERE ... AND status='active'`
+	// makes the transition idempotent + race-safe: a concurrent winner (or an
+	// already-pending row) matches 0 rows → the handler re-reads state and
+	// applies the BR-2.6 idempotent/409 branch. RETURNING surfaces the
+	// authoritative pending_deletion_at for the response + the requested email.
+	requestAccountDeletionSQL = `UPDATE he_api.users
+SET status='pending_deletion', pending_deletion_at = NOW() + INTERVAL '30 days', updated_at=NOW()
+WHERE id=$1 AND status='active'
+RETURNING pending_deletion_at`
+
+	// cancelAccountDeletionSQL is the AC3 pending_deletion→active restorative
+	// CAS (BR-3.3). `AND pending_deletion_at > NOW()` rejects a row whose grace
+	// has already lapsed (the sweeper has run or is due) — 0 rows → the handler
+	// distinguishes already-active (idempotent 200) from grace-expired (410) via
+	// a follow-up status read.
+	cancelAccountDeletionSQL = `UPDATE he_api.users
+SET status='active', pending_deletion_at=NULL, updated_at=NOW()
+WHERE id=$1 AND status='pending_deletion' AND pending_deletion_at > NOW()`
 )
 
 // InsertUser inserts a fresh user row (status='active', email_verified_at=NULL)
@@ -593,6 +616,42 @@ const (
 	updateProfilePrefix    = "UPDATE he_api.users SET "
 	updateProfileReturning = " RETURNING id, email, password_hash, email_verified_at, oauth_provider, oauth_subject, locale, timezone, totp_enabled, status, created_at, updated_at, display_name"
 )
+
+// RequestAccountDeletion runs the AC2 active→pending_deletion single-winner CAS
+// (BR-2.7). Returns:
+//   - (pending_deletion_at, true, nil) when this call performed the transition;
+//   - (zero, false, nil) when 0 rows matched (already pending / not active /
+//     missing) — the caller MUST re-read state and apply the BR-2.6 branch
+//     (idempotent 200 vs 409_account_not_deletable);
+//   - (zero, false, err) on driver failure.
+//
+// The grace window is server-computed (NOW()+30d UTC) inside the SQL — never
+// client-supplied (BR-2.3). Pass a transactional Querier when the caller needs
+// the CAS + session-revocation bookkeeping atomic.
+func RequestAccountDeletion(ctx context.Context, q Querier, userID uuid.UUID) (time.Time, bool, error) {
+	var pendingAt time.Time
+	err := q.QueryRow(ctx, requestAccountDeletionSQL, userID).Scan(&pendingAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return time.Time{}, false, nil
+		}
+		return time.Time{}, false, err
+	}
+	return pendingAt, true, nil
+}
+
+// CancelAccountDeletion runs the AC3 pending_deletion→active restorative CAS
+// (BR-3.3). Returns (true, nil) when the row was reactivated; (false, nil) when
+// 0 rows matched (already active OR grace expired/deleted — caller disambiguates
+// via a status read → idempotent 200 vs 410_grace_expired); (false, err) on
+// driver failure.
+func CancelAccountDeletion(ctx context.Context, q Querier, userID uuid.UUID) (bool, error) {
+	tag, err := q.Exec(ctx, cancelAccountDeletionSQL, userID)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
+}
 
 // GetTOTPSecret returns the encrypted secret + enrollment state. Returns
 // ErrUserNotFound if the user_id does not exist; otherwise the row even

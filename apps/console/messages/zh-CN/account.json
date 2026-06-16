@@ -281,5 +281,49 @@
         "security_disclaimer": "如果您未请求此导出，请立即联系客服。"
       }
     }
+  },
+  "delete": {
+    "cta": {
+      "label": "删除我的账户",
+      "disabled_pending": "您的账户已安排删除。"
+    },
+    "dialog": {
+      "title": "永久删除您的账户?",
+      "consequences": "您的账户将被安排删除,并有 30 天的宽限期。您可以在 30 天内随时重新登录以取消删除。宽限期结束后,您的个人资料、API 密钥和个人数据将被永久清除。法律要求保留的账单记录将予以保留。",
+      "password_label": "请输入密码以确认",
+      "email_confirm_label": "请输入您的账户邮箱以确认",
+      "totp_label": "请输入您的 6 位验证码",
+      "confirm": "删除我的账户",
+      "cancel": "取消",
+      "errors": {
+        "bad_password": "密码不正确,请重试。",
+        "bad_totp": "验证码不正确,请重试。"
+      }
+    },
+    "errors": {
+      "rate_limited": "删除请求过于频繁,请稍后再试。",
+      "generic": "出错了,请重试。"
+    },
+    "recovery": {
+      "title": "您的账户已安排删除",
+      "countdown": "{days, plural, =0 {您的账户将于今天被永久删除。} =1 {您的账户将在 1 天后被永久删除。} other {您的账户将在 # 天后被永久删除。}}",
+      "reactivate_cta": "重新激活我的账户",
+      "explainer": "如果您不做任何操作,您的账户和数据将在预定日期被永久删除。请在此之前随时重新激活,以保留您的账户。",
+      "expired": "该账户已被永久删除。"
+    },
+    "email": {
+      "requested": {
+        "subject": "您的 He-API 账户已安排删除",
+        "body": "您的账户已安排于 {pending_deletion_at} 永久删除。如果这不是您本人的操作,请在此之前登录以取消。"
+      },
+      "cancelled": {
+        "subject": "您的 He-API 账户删除已取消",
+        "body": "好消息——您的账户删除已取消,您的账户已重新激活。"
+      },
+      "completed": {
+        "subject": "您的 He-API 账户已被删除",
+        "body": "您的 He-API 账户和个人数据已于 {executed_at} 永久删除。法律要求保留的账单记录已予以保留。"
+      }
+    }
   }
 }

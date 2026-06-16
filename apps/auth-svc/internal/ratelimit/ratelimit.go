@@ -34,6 +34,11 @@ const (
 	// per user). Per-user-only (no per-IP layer); matches the dimensionality
 	// of other authenticated-mutation endpoints.
 	KeyPrefixProfileUpdate = "ratelimit:profile:update:"
+	// Story 2.7 — account-deletion request rate-limit (AC2 BR-2.5 anti-accident:
+	// 5 requests / 24h per user). Per-user-only; counter TTL = 86400s passed to
+	// CheckAndIncr. Key pattern `^ratelimit:account:delete:[0-9a-f-]{36}$`
+	// (AC7 BR-7.4; registered in data-models.md §4.3).
+	KeyPrefixAccountDelete = "ratelimit:account:delete:"
 )
 
 // ErrRateLimited is returned by CheckAndIncr when the post-INCR count exceeds
@@ -183,6 +188,13 @@ const (
 // anti-abuse, not anti-error). userID is the canonical UUID string.
 func ProfileUpdateKey(userID string) string {
 	return KeyPrefixProfileUpdate + userID
+}
+
+// AccountDeleteKey returns the Story 2.7 account-deletion-request rate-limit
+// key (AC2 BR-2.5 — 5/24h per user). userID is the canonical UUID string from
+// the JWT sub claim; the raw value (already a non-PII UUID) is the suffix.
+func AccountDeleteKey(userID string) string {
+	return KeyPrefixAccountDelete + userID
 }
 
 func MFAKey(op MFA2FAOperation, userID string) string {

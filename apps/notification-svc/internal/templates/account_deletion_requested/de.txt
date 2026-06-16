@@ -1,0 +1,3 @@
+Ihr He-API-Konto ist zur Löschung vorgemerkt
+
+Ihr Konto ist zur dauerhaften Löschung am {{.pending_deletion_at}} vorgemerkt. Falls Sie dies nicht angefordert haben, melden Sie sich vorher an, um den Vorgang abzubrechen.

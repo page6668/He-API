@@ -1,0 +1,3 @@
+Your He-API account is scheduled for deletion
+
+Your account is scheduled for permanent deletion on {{.pending_deletion_at}}. If you didn't request this, sign in before then to cancel.

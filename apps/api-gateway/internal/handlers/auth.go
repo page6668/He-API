@@ -330,6 +330,8 @@ func httpStatusForCode(statusCode string, connectCode connect.Code) int {
 			return http.StatusUnauthorized
 		case "403":
 			return http.StatusForbidden
+		case "409":
+			return http.StatusConflict
 		case "410":
 			return http.StatusGone
 		case "412":
