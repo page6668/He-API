@@ -95,3 +95,14 @@
 - 状态后端:`infra/terraform/modules/oss-state/README.md` + `scripts/infra/bootstrap-state-backend.sh`
 - 各上游/支付/汇率密钥:`docs/dev/secrets/*.md`
 - GA 验证:`docs/qa/ga-readiness-checklist.md`
+- 容量/成本/服务器清单:`docs/runbooks/capacity-sizing.md`
+
+---
+
+## 变更记录(部署相关修复)
+| 日期 | commit | 修复 |
+|---|---|---|
+| 2026-06-16 | `d0cdb6f` | Story 1.7:staging 部署管线接通(B1–B7) |
+| 2026-06-22 | `ac42873` | **RDS `zone_id` 参数化,解除区域写死** —— 原审计 terraform 风险项(硬编码 `MAZ2(f,g)` cn-shanghai 专属,换 region 必失败)。现为 `var.zone_id` / env `postgres_multi_az_zone_id`,默认仍上海,**支持香港/海外部署**(切 region 时同步设 4 个变量,见 `terraform.tfvars.example`)。Redis/ClickHouse/ACK 已本就区域可移植。 |
+
+> 仍存的 terraform 小风险(非阻塞,后续 housekeeping):RDS/Redis/ClickHouse 的 `instance_name` 仍含 `staging` 字面量(prod 复用需参数化);版本 pin 仅下限无上限 + 无 `.terraform.lock.hcl`;backend.tf 与 envs/staging/backend.tf 重复需手工同步。
