@@ -112,10 +112,34 @@
 
 ---
 
-## 3. 采购清单速览
-| 类别 | Staging | 生产(估算)|
+## 2.6 ⭐ 上线测试阶段推荐配置(香港区 cn-hongkong)
+
+> 用途:部署到 staging + 跑 GA 验证(`docs/qa/ga-readiness-checklist.md`)。**不是生产承流量**,是把全栈跑起来 + 端到端验证。GA 验证测试本身不重(契约/支付sandbox/Playwright e2e 都是轻负载),集群只需**稳定跑全栈 + 观测栈**。
+
+**推荐(舒适,一次跑通不为资源打架):**
+| 类别 | 规格(香港)| 说明 |
 |---|---|---|
-| K8s 工作节点 | 3 台 c7.large(2c4g)[建议 4 台或 c7.xlarge] | 6-8 台 c7.xlarge(4c8g)或 3-4 台 c7.2xlarge(8c16g)+ 自动伸缩 |
+| **K8s 节点** | **3 × ecs.c7.xlarge(4c8g)= 12c/24G** | 14 服务 + 5 cron + 全套观测栈(Prometheus/Loki/Jaeger/Grafana)留足余量 |
+| RDS PG | pg.n2.medium.2c(2c4g)HA / 100GB | staging 档够测 |
+| Redis Tair | 小分片 | 够测 |
+| ClickHouse | S8(2c8g)/ 100GB | 够测 |
+| Kafka | 托管(小)| 够测 |
+| 其它 | ACK Pro + SLB×1 + NAT/EIP + OSS/KMS;ACR 可先用共享/个人版省钱 | |
+
+**预算下限(够用但偏紧):** 维持 IaC 默认 **3 × c7.large(2c4g)** —— 能跑,但观测栈全开内存会紧,适合极省/观测最小化。
+
+**计费方式:按量付费(Pay-As-You-Go)** —— 测试是临时的,验证完可销毁;**别买包年包月**(那是上生产再转)。空闲时段销毁集群可进一步省。
+
+**费用(香港 · 按量 · 月度等价):** 约 **¥6,500–9,500 /月**(= staging 基线 + 香港 ~10-30% 溢价 + xlarge 升档)。若集中 2–4 周验证、空闲销毁,**整个测试阶段实际花费约 ¥4,000–7,000**。
+
+> 切香港记得在 tfvars 设:`region=cn-hongkong` + `availability_zones=[cn-hongkong-b/c/d]` + `postgres_multi_az_zone_id`(用 `aliyun rds DescribeAvailableZones` 查)+ 确认机型在港有货。
+
+---
+
+## 3. 采购清单速览(staging vs 生产;上线测试推荐见 §2.6)
+| 类别 | Staging(IaC 默认)| 生产(估算)|
+|---|---|---|
+| K8s 工作节点 | 3 台 c7.large(2c4g)[测试建议 3×c7.xlarge,见 §2.6] | 6-8 台 c7.xlarge(4c8g)或 3-4 台 c7.2xlarge(8c16g)+ 自动伸缩 |
 | RDS PostgreSQL | 1 × 2c4g HA / 100GB | 1 × 4c8g+ HA + 读副本 |
 | Redis Tair | 1 × 小分片 | 集群多分片 |
 | ClickHouse | 1 × 2c8g / 100GB | 升档 + 副本 |
