@@ -10,10 +10,12 @@
 | # | 阶段 | 文档 | 谁 |
 |---|---|---|---|
 | 1 | **看懂前置 + 准备清单** | [`deployment-prerequisites-and-audit.md`](./deployment-prerequisites-and-audit.md) | 你 + Dev |
-| 2 | **定服务器规格 + 报预算** | [`capacity-sizing.md`](./capacity-sizing.md) | 你 |
-| 3 | **部署到 staging** | [`../architecture/infrastructure-deployment.md`](../architecture/infrastructure-deployment.md) | 运维 |
+| 2 | **定服务器规格 + 报预算** | [`capacity-sizing.md`](./capacity-sizing.md)(§2.6 上线测试推荐)| 你 |
+| 3 | **分步部署到 staging(香港)** | [`staging-deploy-steps.md`](./staging-deploy-steps.md) ⭐ 照着做 | 运维 |
 | 4 | **GA 前 staging 验证** | [`../qa/ga-readiness-checklist.md`](../qa/ga-readiness-checklist.md) | 运维 |
 | 5 | **上线检查 + GA 切换** | [`go-live-checklist.md`](./go-live-checklist.md) | PO + 运维 |
+
+> 部署架构原理参考 [`../architecture/infrastructure-deployment.md`](../architecture/infrastructure-deployment.md);**操作步骤看 §3 的 `staging-deploy-steps.md`**。
 
 ---
 
