@@ -22,6 +22,15 @@ variable "availability_zones" {
   default = ["cn-shanghai-f", "cn-shanghai-g", "cn-shanghai-h"]
 }
 
+# RDS multi-AZ HA zone id for var.region. Region-specific Aliyun string.
+# Default = cn-shanghai MAZ2(f,g). Change together with var.region /
+# var.availability_zones when deploying elsewhere (e.g. cn-hongkong).
+# See modules/rds-postgres/variables.tf:zone_id for how to query the value.
+variable "postgres_multi_az_zone_id" {
+  type    = string
+  default = "MAZ2(f,g)"
+}
+
 variable "k8s_version" {
   type    = string
   default = "1.29.1-aliyun.1"

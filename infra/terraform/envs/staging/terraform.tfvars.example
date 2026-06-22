@@ -10,6 +10,20 @@ vpc_cidr            = "10.20.0.0/16"
 vswitch_cidrs       = ["10.20.1.0/24", "10.20.2.0/24", "10.20.3.0/24"]
 availability_zones  = ["cn-shanghai-f", "cn-shanghai-g", "cn-shanghai-h"]
 
+# RDS multi-AZ HA zone id — region-specific (default = cn-shanghai).
+postgres_multi_az_zone_id = "MAZ2(f,g)"
+
+# -----------------------------------------------------------------------------
+# 海外/香港部署:把以上 4 项一起切换(无 ICP 备案要求)。示例(香港):
+#   region                    = "cn-hongkong"
+#   availability_zones        = ["cn-hongkong-b", "cn-hongkong-c", "cn-hongkong-d"]
+#   postgres_multi_az_zone_id = "MAZ1(b,c)"   # 用 `aliyun rds DescribeAvailableZones
+#                                             #  --RegionId cn-hongkong --Engine PostgreSQL` 查准确值
+# 同时确认 worker_instance_type / RDS class / ClickHouse / Tair 在该区有货,
+# 并更新 backend.tf 的 region/endpoint(状态后端可留上海或迁港)。详见
+# docs/runbooks/deployment-prerequisites-and-audit.md 与 capacity-sizing.md。
+# -----------------------------------------------------------------------------
+
 # ACK worker pool — staging baseline.
 worker_count         = 3
 worker_instance_type = "ecs.c7.large"

@@ -139,6 +139,7 @@ module "rds_postgres" {
   vpc_id         = module.vpc.vpc_id
   vswitch_ids    = module.vpc.vswitch_ids
   kms_key_id     = var.kms_key_id
+  zone_id        = var.postgres_multi_az_zone_id
   admin_password = var.postgres_admin_password
 
   tags = local.db_tags

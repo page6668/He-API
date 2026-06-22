@@ -27,6 +27,19 @@ variable "instance_storage_gb" {
   default     = 100
 }
 
+variable "zone_id" {
+  type        = string
+  description = <<-EOT
+    Multi-AZ HA zone selector for the RDS instance (Aliyun region-specific string).
+    Staging default is the cn-shanghai multi-AZ id MAZ2(f,g). To deploy in another
+    region (e.g. cn-hongkong) supply that region's multi-AZ id — query the valid
+    value with:  aliyun rds DescribeAvailableZones --RegionId <region> --Engine PostgreSQL
+    (look for a multi-AZ ZoneId such as MAZ1(b,c)). Must be consistent with var.region
+    and the two vSwitch AZs passed in vswitch_ids.
+  EOT
+  default     = "MAZ2(f,g)"
+}
+
 variable "app_user" {
   type        = string
   description = "Application role name (least-privilege scope to he_api schema)."

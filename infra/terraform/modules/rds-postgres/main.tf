@@ -19,9 +19,11 @@ resource "alicloud_db_instance" "this" {
   instance_charge_type = "Postpaid"
 
   # Multi-AZ HighAvailability category (BR-1.4 + AC1 main scenario "多 AZ").
+  # zone_id is region-specific (var.zone_id) so the module is portable across
+  # regions (e.g. cn-shanghai → cn-hongkong); default preserves staging behavior.
   category    = "HighAvailability"
   vswitch_id  = join(",", slice(var.vswitch_ids, 0, 2))
-  zone_id     = "MAZ2(f,g)"
+  zone_id     = var.zone_id
   monitoring_period = 60
 
   instance_name = "he-api-staging-pg"
