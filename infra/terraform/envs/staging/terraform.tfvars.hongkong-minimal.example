@@ -1,0 +1,62 @@
+# Staging tfvars EXAMPLE — 香港「单节点常驻最小档」(Option A: 真实早期用户 7×24)
+#
+# 用途:早期观察用户数据/反馈的最小常驻部署。相对 baseline(cn-shanghai · 3 节点)
+# 的差异只有「区域 → 香港」+「worker 压到 1 台 4c8g」。**不改任何模块代码**,
+# 纯变量覆盖;RDS 仍走多 AZ 高可用(数据不单点),ACR 仍 EE Basic(~¥100,
+# Story 9 镜像扫描需要)。观测栈在部署阶段「先不装 helm」实现,与本文件无关。
+#
+# 用法:copy 到 terraform.tfvars(gitignored)并补齐末尾的敏感值。
+# 参考:docs/runbooks/capacity-sizing.md §2.5/§2.6 · procurement-review-20260622.md
+#
+# ⚠️ 成本:常驻月费 ≈ ¥4,000–6,000(数据服务+集群+网络撑底,算力占比很小)。
+#         不含 6 家模型 token 过手费 + 公网出口带宽。
+
+# -----------------------------------------------------------------------------
+# 区域 / 网络 —— 香港(无 ICP 备案要求)
+# VPC 仍铺 3 个可用区子网(子网免费;RDS HA 需要 2 个 AZ)。worker 只有 1 台,
+# 会落在其中一个 AZ —— 这是刻意的:算力单点可接受(Pod 会重新调度),数据不单点。
+# -----------------------------------------------------------------------------
+region             = "cn-hongkong"
+vpc_cidr           = "10.20.0.0/16"
+vswitch_cidrs      = ["10.20.1.0/24", "10.20.2.0/24", "10.20.3.0/24"]
+availability_zones = ["cn-hongkong-b", "cn-hongkong-c", "cn-hongkong-d"]
+
+# RDS 多 AZ HA 的 zone id —— 香港值。务必用下面命令查准确值再填:
+#   aliyun rds DescribeAvailableZones --RegionId cn-hongkong --Engine PostgreSQL
+postgres_multi_az_zone_id = "MAZ1(b,c)"   # ← 占位,查证后替换
+
+# -----------------------------------------------------------------------------
+# ACK worker pool —— 单节点最小档
+#   worker_count = 1     : 只 1 台 worker(常驻最小)
+#   4c8g(ecs.c7.xlarge) : 8G 单节点够跑 14 服务 + K8s 系统 + ArgoCD + ingress
+#                          + cert-manager(≈5.4G),留 ~2.6G 余量。**跳观测才装得下**;
+#                          2c4g(4G)装不下,会 OOM。
+# 想更稳/后续验 Epic 9 观测:把 worker_count 提到 2–3、机型不变即可横向加。
+# -----------------------------------------------------------------------------
+worker_count         = 1
+worker_instance_type = "ecs.c7.xlarge"
+k8s_version          = "1.29.1-aliyun.1"
+
+# -----------------------------------------------------------------------------
+# ACK Path A2 ACL —— api_server_public_access_enabled=true 时必须非空。
+# 把「你的跳板机公网出口 /32」填进去;GitHub Actions 段每周从
+#   curl https://api.github.com/meta | jq .actions
+# 刷新。
+# -----------------------------------------------------------------------------
+api_server_public_access_allowed_cidrs = [
+  "140.82.112.0/20",   # GitHub Actions hosted runner；每周刷新
+  "203.0.113.42/32",   # ← 换成你跳板机的真实 /32 出口 IP
+]
+
+# ACR EE 实例名(端点 = <name>-registry.cn-hongkong.cr.aliyuncs.com)
+acr_instance_name = "he-api"
+
+# -----------------------------------------------------------------------------
+# 以下敏感值请在真正的 terraform.tfvars(gitignored)里填,勿提交:
+#   postgres_admin_password    = "<强密码>"
+#   redis_admin_password       = "<强密码>"
+#   clickhouse_admin_password  = "<强密码>"
+#   sendgrid_api_key           = "<SendGrid key>"
+#   kms_key_id                 = "<阶段1 bootstrap 脚本输出的 KMS key id>"
+#   ops_admin_group            = "<RBAC group claim,用于 cluster-admin 绑定>"
+# -----------------------------------------------------------------------------

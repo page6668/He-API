@@ -43,6 +43,7 @@ case "${REGION}" in
   cn-shenzhen)  REGION_SHORT="sz" ;;
   cn-beijing)   REGION_SHORT="bj" ;;
   cn-hangzhou)  REGION_SHORT="hz" ;;
+  cn-hongkong)  REGION_SHORT="hk" ;;
   *) echo "[ERR] unsupported region: ${REGION}" >&2; exit 2 ;;
 esac
 
