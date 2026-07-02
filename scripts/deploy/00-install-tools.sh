@@ -10,12 +10,12 @@ TF_VER="1.9.5"
 KUBECTL_VER="v1.29.1"
 say() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 
-# --- 前置:unzip/curl/tar ---------------------------------------------------
-say "安装前置(unzip/curl/tar)"
-if   command -v dnf >/dev/null; then sudo dnf install -y unzip curl tar
-elif command -v yum >/dev/null; then sudo yum install -y unzip curl tar
-elif command -v apt-get >/dev/null; then sudo apt-get update && sudo apt-get install -y unzip curl tar
-else echo "未识别的包管理器(非 dnf/yum/apt)。请手动装 unzip/curl/tar 后重跑。" >&2; exit 1
+# --- 前置:unzip/curl/tar/jq(jq 供阶段1 bootstrap 解析 aliyun 输出)----------
+say "安装前置(unzip/curl/tar/jq)"
+if   command -v dnf >/dev/null; then sudo dnf install -y unzip curl tar jq
+elif command -v yum >/dev/null; then sudo yum install -y unzip curl tar jq
+elif command -v apt-get >/dev/null; then sudo apt-get update && sudo apt-get install -y unzip curl tar jq
+else echo "未识别的包管理器(非 dnf/yum/apt)。请手动装 unzip/curl/tar/jq 后重跑。" >&2; exit 1
 fi
 
 ARCH="$(uname -m)"; [ "$ARCH" = "x86_64" ] || { echo "本脚本按 x86_64 写;你的架构是 $ARCH,请手动调整下载链接。" >&2; exit 1; }
