@@ -4,7 +4,7 @@
 # deploy-staging's update-helm-values step (BR4.1 immutable-tag; NEVER `latest`).
 image:
   repository: ${ACR_REGISTRY}/he-api/auth-svc
-  tag: "50418d782634269022c898b2d866949dff275e6d"
+  tag: "6e211035dd2a1e406acc8ef373d42304e09bbbdb"
   pullPolicy: IfNotPresent
 replicaCount: 1
 service:
@@ -19,12 +19,12 @@ env:
 monthlyCostReset:
   image:
     repository: ${ACR_REGISTRY}/he-api/monthly-cost-reset
-    tag: "50418d782634269022c898b2d866949dff275e6d"
+    tag: "6e211035dd2a1e406acc8ef373d42304e09bbbdb"
     pullPolicy: IfNotPresent
 accountDeletionSweeper:
   image:
     repository: ${ACR_REGISTRY}/he-api/account-deletion-sweeper
-    tag: "50418d782634269022c898b2d866949dff275e6d"
+    tag: "6e211035dd2a1e406acc8ef373d42304e09bbbdb"
     pullPolicy: IfNotPresent
 serviceAccount:
   create: true
