@@ -4,9 +4,8 @@
 # replicaCount, supportedModels, externalSecret).
 image:
   repository: ${ACR_REGISTRY}/he-api/adapter-doubao
-  tag: "0.1.0"
+  tag: "50418d782634269022c898b2d866949dff275e6d"
   pullPolicy: IfNotPresent
-
 # staging: ESO/Vault 延后(Epic 9)→ 手建 K8s Secret adapter-doubao-upstream-api-key
 # (docs/runbooks/staging-secrets-hongkong-minimal.md)。关掉 ExternalSecret,避免 ESO
 # 未装时 ArgoCD 因缺 external-secrets.io CRD 同步失败。base values.yaml 的 true 保留给 Epic 9。

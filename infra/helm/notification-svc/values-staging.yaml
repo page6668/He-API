@@ -3,22 +3,17 @@
 # image.tag is SHA-bumped by deploy-staging (BR4.1; NEVER `latest`).
 image:
   repository: ${ACR_REGISTRY}/he-api/notification-svc
-  tag: "0.0.1"
+  tag: "50418d782634269022c898b2d866949dff275e6d"
   pullPolicy: IfNotPresent
-
 replicaCount: 1
-
 service:
   type: ClusterIP
   port: 8080
-
 env:
   OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector.monitoring.svc.cluster.local:4317
-
 serviceAccount:
   create: true
   name: ""
-
 serviceMonitor:
   enabled: true
   interval: 15s

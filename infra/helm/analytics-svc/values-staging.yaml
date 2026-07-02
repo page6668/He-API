@@ -3,22 +3,17 @@
 # SHA-bumped by deploy-staging's update-helm-values step (BR4.1; NEVER `latest`).
 image:
   repository: ${ACR_REGISTRY}/he-api/analytics-svc
-  tag: "0.0.1"
+  tag: "50418d782634269022c898b2d866949dff275e6d"
   pullPolicy: IfNotPresent
-
 replicaCount: 1
-
 service:
   type: ClusterIP
   port: 8080
-
 networkPolicy:
   enabled: true
-
 serviceAccount:
   create: true
   name: ""
-
 serviceMonitor:
   enabled: true
   interval: 15s
