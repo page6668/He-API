@@ -8,7 +8,7 @@
 
 output "acr_endpoint" {
   description = "Registry endpoint for `docker login` / Helm image.repository prefix. EE Basic independent endpoint."
-  value       = "${alicloud_cr_ee_instance.this.name}-registry.${var.region}.cr.aliyuncs.com"
+  value       = "${var.instance_name}-registry.${var.region}.cr.aliyuncs.com"
 }
 
 output "acr_namespace" {
@@ -23,7 +23,7 @@ output "acr_instance_id" {
 
 output "acr_instance_name" {
   description = "EE instance name."
-  value       = alicloud_cr_ee_instance.this.name
+  value       = var.instance_name
 }
 
 output "acr_username_path" {

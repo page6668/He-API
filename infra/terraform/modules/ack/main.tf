@@ -39,9 +39,10 @@ resource "alicloud_cs_managed_kubernetes" "this" {
   # -----------------------------------------------------------------------
   # Path A2 endpoint exposure — variable-driven (NO hardcoded true).
   # -----------------------------------------------------------------------
-  cluster_endpoint_public_access          = var.api_server_public_access_enabled
-  cluster_endpoint_public_access_acl_cidrs = var.api_server_public_access_allowed_cidrs
-  cluster_endpoint_private_access_enabled  = true
+  # v1.284 schema:公网 API 访问由 slb_internet_enabled 控制。该资源无 ACL-cidr /
+  # private-access 参数(内网端点始终可用,见 connections.api_server_intranet 输出)。
+  # 公网白名单在此资源层不可设 —— 由 kubeconfig 证书鉴权保护;要 IP 限制可另配安全组。
+  slb_internet_enabled = var.api_server_public_access_enabled
 
   # -----------------------------------------------------------------------
   # Worker pool — spread across var.vswitch_ids (cross-AZ).
@@ -79,16 +80,7 @@ resource "alicloud_cs_managed_kubernetes" "this" {
   # api_server_public_access_allowed_cidrs while leaving _enabled=true.
   # -----------------------------------------------------------------------
   lifecycle {
-    precondition {
-      condition = (
-        var.api_server_public_access_enabled == false
-        || length(var.api_server_public_access_allowed_cidrs) > 0
-      )
-      error_message = "Path A2 contract violated: when api_server_public_access_enabled = true, api_server_public_access_allowed_cidrs must be a non-empty list of /32 or /N CIDR entries."
-    }
-
-    # Also reject any overlap with VPC public surface — pod_cidr / service_cidr
-    # MUST be distinct from each other (overlap would silently break routing).
+    # pod_cidr / service_cidr MUST be distinct (overlap would silently break kube-proxy routing).
     precondition {
       condition     = var.pod_cidr != var.service_cidr
       error_message = "pod_cidr and service_cidr must be distinct (overlap breaks kube-proxy routing)."

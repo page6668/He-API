@@ -33,19 +33,19 @@ resource "alicloud_db_instance" "this" {
   encryption_key = var.kms_key_id
   tde_status     = "Enabled"
 
-  # BR-1.2 — TLS enforced via parameter group.
+  # BR-1.2 — TLS enforced via 参数(rds_force_ssl=on)。v1.284 的 alicloud_db_instance
+  # 无 force_ssl 参数(SSL 用 ssl_action / 此参数),已删 force_ssl。
   parameters {
     name  = "rds_force_ssl"
     value = "on"
   }
-  force_ssl = true
 
   # BR-1.1 — VPC-private only. security_ips remains empty so the instance is
   # reachable from VPC peers only; no public CIDR is ever permitted here.
   security_ips = []
 
-  # AC1 Deliverables — 7-day automatic backup.
-  backup_retention_period = 7
+  # 备份保留:v1.284 的 alicloud_db_instance 无 backup_retention_period(在
+  # alicloud_db_backup_policy 单独配)。此处用默认自动备份;需自定义保留期再加该资源。
 
   # Db port pinned for predictable downstream connection string.
   port = 5432

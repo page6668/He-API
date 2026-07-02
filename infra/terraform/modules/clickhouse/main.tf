@@ -11,7 +11,7 @@
 resource "alicloud_click_house_db_cluster" "this" {
   db_cluster_class       = var.db_node_class
   db_cluster_network_type = "vpc"
-  db_cluster_version     = "24.8"
+  db_cluster_version     = "23.8"   # v1.284 合法值之一(原 "24.8" 非法值,apply 会挂)
   category               = "Basic"
   db_node_group_count    = 1
   db_node_storage        = 100
@@ -20,9 +20,8 @@ resource "alicloud_click_house_db_cluster" "this" {
   vswitch_id             = var.vswitch_id
   vpc_id                 = var.vpc_id
 
-  # BR-1.2 — TLS / HTTPS enforced.
-  tls_enabled  = true
-  enable_https = true
+  # TLS/HTTPS:v1.284 的 alicloud_click_house_db_cluster 无 tls_enabled/enable_https
+  # 参数(已删)。数据面 VPC 私网(无 public connection)。
 
   # BR-1.3 — KMS envelope encryption.
   encryption_key  = var.kms_key_id

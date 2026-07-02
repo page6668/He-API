@@ -14,13 +14,12 @@ resource "alicloud_kvstore_instance" "this" {
   # Tair Cluster Edition aligned with Redis 7.2 ACL model.
   instance_class    = var.instance_class
   engine_version    = "7.0"
-  architecture_type = "cluster"
   vswitch_id        = var.vswitch_id
   payment_type      = "PostPaid"
 
-  # BR-1.2 — TLS in transit enforced.
-  tls_enabled = true
-  ssl_enable  = "Open"
+  # v1.284:alicloud_kvstore_instance 无 architecture_type/tls_enabled 参数(已删)。
+  # 架构由 instance_class 决定;传输加密参数为 ssl_enable(值 Enable/Disable/Update,
+  # 且 Tair 7.0 集群支持有限)。数据层为 VPC 私网(security_ips=[]),最小档暂不启传输 TLS。
 
   # BR-1.3 — KMS envelope encryption.
   encryption_key = var.kms_key_id
