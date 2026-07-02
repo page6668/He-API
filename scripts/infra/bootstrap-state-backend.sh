@@ -87,9 +87,10 @@ else
   # NB: 自动轮换不在 CreateKey 时设置 —— 旧脚本用的 --EnableKeyRotation 不是有效
   # KMS 参数(会报错),且各 CLI 版本对 RotationInterval 格式要求不一。key 建好后
   # 如需自动轮换,在 KMS 控制台或 `aliyun kms UpdateRotationPolicy` 单独开(可选)。
+  # 不传 KeyUsage:阿里云 KMS 默认即 ENCRYPT/DECRYPT(对称加解密,正是 SSE-KMS 所需)。
+  # 旧脚本传的 ENCRYPT_DECRYPT 是 AWS 写法;阿里云要 ENCRYPT/DECRYPT(斜杠),会报 InvalidParameter。
   KMS_KEY_ID="$(aliyun kms CreateKey \
       --region "${REGION}" \
-      --KeyUsage ENCRYPT_DECRYPT \
       --Description "Terraform state encryption — ${ENV}" \
       | jq -r '.KeyMetadata.KeyId')"
   aliyun kms CreateAlias --region "${REGION}" \
