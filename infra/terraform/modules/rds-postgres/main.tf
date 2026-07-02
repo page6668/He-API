@@ -18,11 +18,12 @@ resource "alicloud_db_instance" "this" {
   instance_storage     = var.instance_storage_gb
   instance_charge_type = "Postpaid"
 
-  # Multi-AZ HighAvailability category (BR-1.4 + AC1 main scenario "多 AZ").
-  # zone_id is region-specific (var.zone_id) so the module is portable across
-  # regions (e.g. cn-shanghai → cn-hongkong); default preserves staging behavior.
+  # HighAvailability = 主备高可用(自动故障切换)。zone_id 由 var.zone_id 指定,
+  # 单一 vswitch(与 redis-tair / clickhouse 一致)—— 香港仅单可用区、无跨区 MAZ 值,
+  # 故为单区内主备 HA(非跨 AZ)。多可用区的 region(如上海)想跨 AZ 可传 MAZ zone_id,
+  # 但此处用单 vswitch 保证在只有单区的 region 也能建。
   category    = "HighAvailability"
-  vswitch_id  = join(",", slice(var.vswitch_ids, 0, 2))
+  vswitch_id  = var.vswitch_ids[0]
   zone_id     = var.zone_id
   monitoring_period = 60
 
