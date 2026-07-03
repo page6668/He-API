@@ -4,7 +4,7 @@
 # replicaCount, supportedModels, externalSecret).
 image:
   repository: ${ACR_REGISTRY}/he-api/adapter-kimi
-  tag: "52c744b362c515affffd6c6fcf749f5da2840d4d"
+  tag: "9e36b7e60e8bae9f3596109b3a89865a217ccc3f"
   pullPolicy: IfNotPresent
 # staging: ESO/Vault 延后(Epic 9)→ 手建 K8s Secret adapter-kimi-upstream-api-key
 # (docs/runbooks/staging-secrets-hongkong-minimal.md)。关掉 ExternalSecret,避免 ESO
