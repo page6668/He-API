@@ -21,6 +21,12 @@ variable "instance_class" {
   default     = "redis.shard.small.ce"
 }
 
+variable "access_cidrs" {
+  type        = list(string)
+  description = "security_ips 白名单(provider 要求 ≥1 条)。默认覆盖 VPC(10.0.0.0/8)+ Pod/Service(172.16.0.0/12)私网段;实例无公网端点,仅 VPC 内可达。"
+  default     = ["10.0.0.0/8", "172.16.0.0/12"]
+}
+
 variable "app_user" {
   type        = string
   description = "Application ACL user name (scoped to he-api:* key prefix)."

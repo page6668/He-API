@@ -26,11 +26,11 @@ terraform {
 }
 
 resource "alicloud_cs_managed_kubernetes" "this" {
-  name               = "he-api-${terraform.workspace}-ack"
-  version            = var.k8s_version
-  cluster_spec       = "ack.standard"
-  worker_vswitch_ids = var.vswitch_ids
-  security_group_id  = var.security_group_id
+  name              = "he-api-${terraform.workspace}-ack"
+  version           = var.k8s_version
+  cluster_spec      = "ack.standard"
+  vswitch_ids       = var.vswitch_ids   # v1.284:控制面 vswitch(原 worker_vswitch_ids 已弃用)
+  security_group_id = var.security_group_id
 
   # Service / Pod CIDRs — MUST NOT overlap var.vpc_cidr (validated by env composition).
   service_cidr = var.service_cidr
@@ -44,15 +44,8 @@ resource "alicloud_cs_managed_kubernetes" "this" {
   # 公网白名单在此资源层不可设 —— 由 kubeconfig 证书鉴权保护;要 IP 限制可另配安全组。
   slb_internet_enabled = var.api_server_public_access_enabled
 
-  # -----------------------------------------------------------------------
-  # Worker pool — spread across var.vswitch_ids (cross-AZ).
-  # -----------------------------------------------------------------------
-  worker_number              = var.worker_count
-  worker_instance_types      = [var.worker_instance_type]
-  worker_disk_category       = "cloud_essd"
-  worker_disk_size           = 80
-  worker_data_disk_category  = "cloud_essd"
-  worker_data_disk_size      = 100
+  # Worker 节点已移到独立的 alicloud_cs_kubernetes_node_pool 资源(见文件末尾)。
+  # v1.284 起 worker_number/worker_instance_types/worker_disk_* 全部从本资源移除。
 
   # -----------------------------------------------------------------------
   # Add-ons — flannel (CNI) + csi-plugin (CSI) + metrics-server.
@@ -74,11 +67,6 @@ resource "alicloud_cs_managed_kubernetes" "this" {
 
   tags = var.tags
 
-  # -----------------------------------------------------------------------
-  # Path A2 precondition — public access requires non-empty allow-list.
-  # `terraform plan` exits non-zero if the operator forgets to populate
-  # api_server_public_access_allowed_cidrs while leaving _enabled=true.
-  # -----------------------------------------------------------------------
   lifecycle {
     # pod_cidr / service_cidr MUST be distinct (overlap would silently break kube-proxy routing).
     precondition {
@@ -86,4 +74,20 @@ resource "alicloud_cs_managed_kubernetes" "this" {
       error_message = "pod_cidr and service_cidr must be distinct (overlap breaks kube-proxy routing)."
     }
   }
+}
+
+# -----------------------------------------------------------------------------
+# Worker 节点池(v1.284:worker 节点由独立资源管理,不再内联进 managed_kubernetes)。
+# 单节点最小档:desired_size = var.worker_count(=1)· 机型 var.worker_instance_type。
+# -----------------------------------------------------------------------------
+resource "alicloud_cs_kubernetes_node_pool" "workers" {
+  cluster_id           = alicloud_cs_managed_kubernetes.this.id
+  node_pool_name       = "he-api-${terraform.workspace}-workers"
+  vswitch_ids          = var.vswitch_ids
+  instance_types       = [var.worker_instance_type]
+  desired_size         = var.worker_count
+  system_disk_category = "cloud_essd"
+  system_disk_size     = 100
+
+  tags = var.tags
 }

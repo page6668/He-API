@@ -10,7 +10,7 @@
 
 resource "alicloud_kvstore_instance" "this" {
   instance_name = "he-api-staging-tair"
-  instance_type = "Tair"
+  instance_type = "Redis"   # v1.284 只接受 Redis/Memcache;Tair 由 instance_class 体现
   # Tair Cluster Edition aligned with Redis 7.2 ACL model.
   instance_class    = var.instance_class
   engine_version    = "7.0"
@@ -24,8 +24,9 @@ resource "alicloud_kvstore_instance" "this" {
   # BR-1.3 — KMS envelope encryption.
   encryption_key = var.kms_key_id
 
-  # BR-1.1 — no public network. security_ips empty means VPC-internal only.
-  security_ips = []
+  # BR-1.1 — VPC 私网访问白名单(provider 要求至少 1 条)。默认覆盖 VPC + Pod 网段,
+  # 由 env 传入真实网段;无公网端点,故只有 VPC 内可达。
+  security_ips = var.access_cidrs
 
   tags = var.tags
 }
