@@ -29,9 +29,8 @@ resource "alicloud_db_instance" "this" {
 
   instance_name = "he-api-staging-pg"
 
-  # BR-1.3 — KMS envelope encryption at rest.
-  encryption_key = var.kms_key_id
-  tde_status     = "Enabled"
+  # KMS TDE 去掉(需额外授权 RDS 访问 KMS,报 Kms.Unauthorized)。阿里云 RDS
+  # 默认已对存储做磁盘加密;最省档不启 KMS TDE。需要时授权 KMS 后再加回。
 
   # BR-1.2 — TLS enforced via 参数(rds_force_ssl=on)。v1.284 的 alicloud_db_instance
   # 无 force_ssl 参数(SSL 用 ssl_action / 此参数),已删 force_ssl。
