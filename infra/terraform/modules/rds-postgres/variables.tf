@@ -17,8 +17,8 @@ variable "kms_key_id" {
 
 variable "instance_class" {
   type        = string
-  description = "RDS instance class. Staging baseline per BR-1.4."
-  default     = "pg.n2.medium.2c"
+  description = "RDS instance class. 香港现售最小规格(旧 pg.n2.medium.2c 已下线)。"
+  default     = "pg.n2.2c.2m"
 }
 
 variable "instance_storage_gb" {
