@@ -159,17 +159,9 @@ module "redis_tair" {
 }
 
 # -----------------------------------------------------------------------------
-# 6. Story 1.6 — Aliyun ClickHouse 24+
+# 6. ClickHouse —— 香港最省档「先不建」(用户 2026-07 决策:早期无用户,省 ~¥1k+/月)。
+#    用量分析(Epic 9 / analytics-svc)暂不可用;需要时把此模块 + outputs 恢复即可。
 # -----------------------------------------------------------------------------
-module "clickhouse" {
-  source = "../../modules/clickhouse"
-
-  vpc_id     = module.vpc.vpc_id
-  vswitch_id = module.vpc.vswitch_ids[0]
-  kms_key_id = var.kms_key_id
-
-  tags = local.db_tags
-}
 
 # -----------------------------------------------------------------------------
 # 7. Story 1.6 — K8s namespaces + admin Secret (M-1 ruling: Vault deferred).
@@ -236,8 +228,8 @@ resource "kubernetes_secret" "he_api_db_admin_creds" {
   depends_on = [kubernetes_namespace.he_api_ops]
   type = "Opaque"
   data = {
-    postgres_admin_password   = var.postgres_admin_password
-    redis_admin_password      = var.redis_admin_password
-    clickhouse_admin_password = var.clickhouse_admin_password
+    postgres_admin_password = var.postgres_admin_password
+    redis_admin_password    = var.redis_admin_password
+    # clickhouse_admin_password 已移除(ClickHouse 本档不建)
   }
 }

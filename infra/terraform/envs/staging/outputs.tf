@@ -26,12 +26,4 @@ output "redis_port" {
   value       = module.redis_tair.port
 }
 
-output "clickhouse_endpoint" {
-  description = "VPC-private DNS FQDN of the ClickHouse cluster (m-5 ruling)."
-  value       = module.clickhouse.endpoint
-}
-
-output "clickhouse_port" {
-  description = "ClickHouse HTTPS port."
-  value       = module.clickhouse.port
-}
+# clickhouse_endpoint / clickhouse_port outputs 已移除(ClickHouse 本档不建)。

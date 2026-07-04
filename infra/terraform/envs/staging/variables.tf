@@ -105,8 +105,9 @@ variable "redis_admin_password" {
 
 variable "clickhouse_admin_password" {
   type        = string
-  description = "Admin password for the ClickHouse cluster. Sourced from operator-controlled tfvars; never committed (BR-2.3)."
+  description = "Admin password for the ClickHouse cluster. 本档不建 ClickHouse,故可选(默认空)。"
   sensitive   = true
+  default     = ""
 }
 
 # -----------------------------------------------------------------------------
