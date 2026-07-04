@@ -2,5 +2,5 @@
 # deploy-time token (T0.3); image.tag SHA-bumped by deploy-staging (BR4.1).
 image:
   repository: ${ACR_REGISTRY}/he-api/routing-svc
-  tag: "097ba47e137fb55ae38b896804b2d5f517ecfed7"
+  tag: "99970ee4d59ac4864c883c282947007642bdb6d2"
   pullPolicy: IfNotPresent
