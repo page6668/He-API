@@ -4,7 +4,7 @@
 # replicaCount, supportedModels, externalSecret).
 image:
   repository: ${ACR_REGISTRY}/he-api/adapter-qwen
-  tag: "c31f4b0e1d1fdd15c0cadedbc64d0b7129b23898"
+  tag: "68b9df463f0672873f1bc0dcac0eaea4e1f02681"
   pullPolicy: IfNotPresent
 # staging: ESO/Vault 延后(Epic 9)→ 手建 K8s Secret adapter-qwen-upstream-api-key
 # (docs/runbooks/staging-secrets-hongkong-minimal.md)。关掉 ExternalSecret,避免 ESO
