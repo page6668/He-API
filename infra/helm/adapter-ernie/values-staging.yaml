@@ -4,7 +4,7 @@
 # replicaCount, supportedModels, externalSecret).
 image:
   repository: ${ACR_REGISTRY}/he-api/adapter-ernie
-  tag: "99970ee4d59ac4864c883c282947007642bdb6d2"
+  tag: "c31f4b0e1d1fdd15c0cadedbc64d0b7129b23898"
   pullPolicy: IfNotPresent
 # staging: ESO/Vault 延后(Epic 9)→ 手建 K8s Secret adapter-ernie-upstream-api-key
 # (docs/runbooks/staging-secrets-hongkong-minimal.md)。关掉 ExternalSecret,避免 ESO
