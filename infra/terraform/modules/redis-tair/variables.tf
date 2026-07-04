@@ -17,8 +17,8 @@ variable "kms_key_id" {
 
 variable "instance_class" {
   type        = string
-  description = "Tair (Redis 7.2 compat) instance class. Staging baseline per BR-1.4."
-  default     = "redis.shard.small.ce"
+  description = "Redis 规格。香港 community 现售最小集群版(旧 redis.shard.small.ce 已下线)。"
+  default     = "redis.logic.sharding.2g.2db.0rodb.4proxy.default"
 }
 
 variable "access_cidrs" {
