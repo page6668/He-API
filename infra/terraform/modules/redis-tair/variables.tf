@@ -18,7 +18,7 @@ variable "kms_key_id" {
 variable "instance_class" {
   type        = string
   description = "Redis 规格。香港 community 现售最小集群版(旧 redis.shard.small.ce 已下线)。"
-  default     = "redis.logic.sharding.2g.2db.0rodb.4proxy.default"
+  default     = "redis.master.small.default"
 }
 
 variable "access_cidrs" {
