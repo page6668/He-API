@@ -32,12 +32,8 @@ resource "alicloud_db_instance" "this" {
   # KMS TDE 去掉(需额外授权 RDS 访问 KMS,报 Kms.Unauthorized)。阿里云 RDS
   # 默认已对存储做磁盘加密;最省档不启 KMS TDE。需要时授权 KMS 后再加回。
 
-  # BR-1.2 — TLS enforced via 参数(rds_force_ssl=on)。v1.284 的 alicloud_db_instance
-  # 无 force_ssl 参数(SSL 用 ssl_action / 此参数),已删 force_ssl。
-  parameters {
-    name  = "rds_force_ssl"
-    value = "on"
-  }
+  # SSL:rds_force_ssl 参数在此实例类型/版本被禁止(InvalidParameters.Prohibited),已去掉。
+  # 最省档不强制 SSL(VPC 私网,无公网端点);需要时用 ModifyDBInstanceSSL 单独开。
 
   # BR-1.1 — VPC-private only. security_ips remains empty so the instance is
   # reachable from VPC peers only; no public CIDR is ever permitted here.
