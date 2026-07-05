@@ -33,7 +33,7 @@ variable "postgres_multi_az_zone_id" {
 
 variable "k8s_version" {
   type    = string
-  default = "1.29.1-aliyun.1"
+  default = "1.34.3-aliyun.1"
 }
 
 variable "service_cidr" {

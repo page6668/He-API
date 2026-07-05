@@ -35,7 +35,7 @@ postgres_multi_az_zone_id = "MAZ1(b,c)"   # ← 占位,查证后替换
 # -----------------------------------------------------------------------------
 worker_count         = 1
 worker_instance_type = "ecs.c7.xlarge"
-k8s_version          = "1.29.1-aliyun.1"
+k8s_version          = "1.34.3-aliyun.1"
 
 # -----------------------------------------------------------------------------
 # ACK Path A2 ACL —— api_server_public_access_enabled=true 时必须非空。

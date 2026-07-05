@@ -18,11 +18,11 @@ variable "security_group_id" {
 variable "k8s_version" {
   type        = string
   description = "Kubernetes minor version. MUST be ≥ 1.29 (tech-stack §2.1)."
-  default     = "1.29.1-aliyun.1"
+  default     = "1.34.3-aliyun.1"   # 香港现售(旧 1.29 已下架 no-ros-component)
 
   validation {
-    condition     = can(regex("^1\\.(29|30|31|32|33)\\.", var.k8s_version))
-    error_message = "k8s_version must start with 1.29 or later (tech-stack §2.1 minimum)."
+    condition     = can(regex("^1\\.(29|30|31|32|33|34|35|36)\\.", var.k8s_version))
+    error_message = "k8s_version must start with 1.29–1.36."
   }
 }
 
