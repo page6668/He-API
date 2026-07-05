@@ -3,7 +3,7 @@
 # SHA-bumped by deploy-staging's update-helm-values step (BR4.1; NEVER `latest`).
 image:
   repository: ${ACR_REGISTRY}/he-api/analytics-svc
-  tag: "f9490dea50f5f09fd8585da4a2fc2bdd8f768b08"
+  tag: "137095d3b1c85cc067fc1dfe1d6e92782285282e"
   pullPolicy: IfNotPresent
 replicaCount: 1
 service:
