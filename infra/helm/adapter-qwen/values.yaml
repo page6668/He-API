@@ -20,7 +20,7 @@
 #   M4  — Namespace `he-api-adapters` shared across all six adapters.
 #   M5  — Cold-start budget ≤ 2s (readiness-probe gated).
 
-replicaCount: 2
+replicaCount: 1
 
 image:
   repository: ghcr.io/he-api/adapter-qwen

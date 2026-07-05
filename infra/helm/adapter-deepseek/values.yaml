@@ -9,7 +9,7 @@
 #         per-adapter, which would be six namespaces).
 #   M5  — Cold-start budget ≤ 2s (operator-side; readiness-probe gated).
 
-replicaCount: 2
+replicaCount: 1
 
 image:
   repository: ghcr.io/he-api/adapter-deepseek

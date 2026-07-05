@@ -11,7 +11,7 @@ image:
   pullPolicy: IfNotPresent
 
 # Q-J ruling: 2 replicas (HA pair) for a stateless dispatch service.
-replicaCount: 2
+replicaCount: 1
 
 service:
   type: ClusterIP
