@@ -152,7 +152,7 @@ module "redis_tair" {
   source = "../../modules/redis-tair"
 
   vpc_id     = module.vpc.vpc_id
-  vswitch_id = module.vpc.vswitch_ids[0]
+  vswitch_id = module.vpc.vswitch_ids[1]   # b 区(vsw[0])Redis 报 zone not supported,改用 c 区(vsw[1])
   kms_key_id = var.kms_key_id
 
   tags = local.db_tags
