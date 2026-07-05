@@ -6,10 +6,10 @@
 # gold-gate and lives in values.yaml ONLY — NOT overridden here.
 image:
   repository: ${ACR_REGISTRY}/he-api/billing-svc
-  tag: "537110eafac3966ad4d3c9a4ce0c14bf4969cd77"
+  tag: "3c76794892c39dbddf69e49dfac92a5cada48b12"
   pullPolicy: IfNotPresent
 fxRefresh:
   image:
     repository: ${ACR_REGISTRY}/he-api/fx-refresh
-    tag: "537110eafac3966ad4d3c9a4ce0c14bf4969cd77"
+    tag: "3c76794892c39dbddf69e49dfac92a5cada48b12"
     pullPolicy: IfNotPresent
