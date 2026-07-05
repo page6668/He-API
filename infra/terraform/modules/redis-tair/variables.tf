@@ -10,6 +10,12 @@ variable "vswitch_id" {
   description = "vSwitch ID (single AZ for Tair — cluster edition spans multiple shards within the AZ). Sourced from module.vpc.vswitch_ids[0]."
 }
 
+variable "zone_id" {
+  type        = string
+  description = "可用区,须与 vswitch_id 同区。显式传避免 provider 推断出错。"
+  default     = "cn-hongkong-c"
+}
+
 variable "kms_key_id" {
   type        = string
   description = "KMS key ID for static encryption (BR-1.3)."

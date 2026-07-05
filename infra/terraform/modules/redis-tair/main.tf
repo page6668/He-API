@@ -15,6 +15,7 @@ resource "alicloud_kvstore_instance" "this" {
   instance_class    = var.instance_class
   engine_version    = "5.0"   # 本地盘标准版最高 5.0(7.0 报 NotSupportOnLocalDisk);够用限流/会话/缓存
   vswitch_id        = var.vswitch_id
+  zone_id           = var.zone_id   # 显式指定,避免 provider 从 vswitch 推断出错(vSwitchId zone not supported)
   payment_type      = "PostPaid"
 
   # v1.284:alicloud_kvstore_instance 无 architecture_type/tls_enabled 参数(已删)。
