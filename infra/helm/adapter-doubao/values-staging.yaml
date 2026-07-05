@@ -1,9 +1,9 @@
-# adapter-doubao staging overrides (Story 1.7 B3/B4). Unified ${ACR_REGISTRY}
+# adapter-doubao staging overrides (Story 1.7 B3/B4). Unified he-api-registry.cn-hongkong.cr.aliyuncs.com
 # deploy-time token (T0.3); image.tag SHA-bumped by deploy-staging (BR4.1; never
 # `latest`). Other knobs inherit from values.yaml (he-api-adapters namespace,
 # replicaCount, supportedModels, externalSecret).
 image:
-  repository: ${ACR_REGISTRY}/he-api/adapter-doubao
+  repository: he-api-registry.cn-hongkong.cr.aliyuncs.com/he-api/adapter-doubao
   tag: "137095d3b1c85cc067fc1dfe1d6e92782285282e"
   pullPolicy: IfNotPresent
 # staging: ESO/Vault 延后(Epic 9)→ 手建 K8s Secret adapter-doubao-upstream-api-key

@@ -1,6 +1,6 @@
-# routing-svc staging overrides (Story 1.7 B3/B4). Unified ${ACR_REGISTRY}
+# routing-svc staging overrides (Story 1.7 B3/B4). Unified he-api-registry.cn-hongkong.cr.aliyuncs.com
 # deploy-time token (T0.3); image.tag SHA-bumped by deploy-staging (BR4.1).
 image:
-  repository: ${ACR_REGISTRY}/he-api/routing-svc
+  repository: he-api-registry.cn-hongkong.cr.aliyuncs.com/he-api/routing-svc
   tag: "137095d3b1c85cc067fc1dfe1d6e92782285282e"
   pullPolicy: IfNotPresent

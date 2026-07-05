@@ -1,9 +1,9 @@
 # auth-svc staging overrides (Story 2.2; B4 standardised by Story 1.7).
-# `${ACR_REGISTRY}` is the unified deploy-time substitution token (T0.3 —
+# `he-api-registry.cn-hongkong.cr.aliyuncs.com` is the unified deploy-time substitution token (T0.3 —
 # convention ②, wired in deploy-staging.yml). image.tag is SHA-bumped by
 # deploy-staging's update-helm-values step (BR4.1 immutable-tag; NEVER `latest`).
 image:
-  repository: ${ACR_REGISTRY}/he-api/auth-svc
+  repository: he-api-registry.cn-hongkong.cr.aliyuncs.com/he-api/auth-svc
   tag: "137095d3b1c85cc067fc1dfe1d6e92782285282e"
   pullPolicy: IfNotPresent
 replicaCount: 1
@@ -18,12 +18,12 @@ env:
 # NOT overridden here — only the image tags are staging-bumped.
 monthlyCostReset:
   image:
-    repository: ${ACR_REGISTRY}/he-api/monthly-cost-reset
+    repository: he-api-registry.cn-hongkong.cr.aliyuncs.com/he-api/monthly-cost-reset
     tag: "137095d3b1c85cc067fc1dfe1d6e92782285282e"
     pullPolicy: IfNotPresent
 accountDeletionSweeper:
   image:
-    repository: ${ACR_REGISTRY}/he-api/account-deletion-sweeper
+    repository: he-api-registry.cn-hongkong.cr.aliyuncs.com/he-api/account-deletion-sweeper
     tag: "137095d3b1c85cc067fc1dfe1d6e92782285282e"
     pullPolicy: IfNotPresent
 serviceAccount:

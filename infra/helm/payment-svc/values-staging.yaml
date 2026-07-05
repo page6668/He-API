@@ -1,9 +1,9 @@
-# payment-svc staging overrides (Story 1.7 B7). `${ACR_REGISTRY}` is the
+# payment-svc staging overrides (Story 1.7 B7). `he-api-registry.cn-hongkong.cr.aliyuncs.com` is the
 # unified deploy-time substitution token (T0.3 — convention ②, wired in
 # deploy-staging.yml). image.tag is SHA-bumped by deploy-staging's
 # update-helm-values step (BR4.1 immutable-tag; NEVER `latest`).
 image:
-  repository: ${ACR_REGISTRY}/he-api/payment-svc
+  repository: he-api-registry.cn-hongkong.cr.aliyuncs.com/he-api/payment-svc
   tag: "137095d3b1c85cc067fc1dfe1d6e92782285282e"
   pullPolicy: IfNotPresent
 replicaCount: 1

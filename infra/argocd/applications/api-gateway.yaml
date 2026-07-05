@@ -9,7 +9,7 @@ metadata:
 spec:
   project: he-api
   source:
-    repoURL: https://github.com/he-api/he-api
+    repoURL: https://github.com/page6668/He-API
     targetRevision: HEAD
     path: infra/helm/api-gateway
     helm:
