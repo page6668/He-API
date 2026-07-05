@@ -13,7 +13,7 @@ resource "alicloud_kvstore_instance" "this" {
   instance_type = "Redis"   # v1.284 只接受 Redis/Memcache;Tair 由 instance_class 体现
   # Tair Cluster Edition aligned with Redis 7.2 ACL model.
   instance_class    = var.instance_class
-  engine_version    = "7.0"   # 标准主备版支持 7.0
+  engine_version    = "5.0"   # 本地盘标准版最高 5.0(7.0 报 NotSupportOnLocalDisk);够用限流/会话/缓存
   vswitch_id        = var.vswitch_id
   payment_type      = "PostPaid"
 
