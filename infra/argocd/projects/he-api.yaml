@@ -16,7 +16,7 @@ spec:
   # sourceRepos — limited to this monorepo (BR3.1). No other Git source may be
   # synced under this project.
   sourceRepos:
-    - https://github.com/page6668/He-API
+    - git@github.com:page6668/He-API.git
   # destinations — the in-cluster API server only, restricted to the he-api
   # namespaces actually used by the Applications: he-api-staging (gateway, auth,
   # billing, notification, payment, analytics, routing) + he-api-adapters (the 6
