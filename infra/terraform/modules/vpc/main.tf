@@ -72,6 +72,16 @@ resource "alicloud_eip_association" "nat" {
   instance_type = "Nat"
 }
 
+# SNAT entries — 让每个子网的出网流量真正经 NAT 的 EIP 出去(节点拉镜像/调模型必需)。
+# 缺这个则 NAT 建了却不 SNAT → 节点连公网 i/o timeout(本次部署踩到)。
+resource "alicloud_snat_entry" "this" {
+  count             = length(alicloud_vswitch.this)
+  snat_table_id     = alicloud_nat_gateway.this.snat_table_ids
+  source_vswitch_id = alicloud_vswitch.this[count.index].id
+  snat_ip           = alicloud_eip.nat.ip_address
+  depends_on        = [alicloud_eip_association.nat]
+}
+
 # -------------------------------------------------------------------------
 # Default Security Group — deny-all baseline + intra-VPC ingress only
 # -------------------------------------------------------------------------
