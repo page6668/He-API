@@ -1,8 +1,8 @@
 # notification-svc staging overrides (Story 2.2; B4 standardised by Story 1.7).
-# `he-api-registry.cn-hongkong.cr.aliyuncs.com` is the unified deploy-time substitution token (T0.3);
+# `he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com` is the unified deploy-time substitution token (T0.3);
 # image.tag is SHA-bumped by deploy-staging (BR4.1; NEVER `latest`).
 image:
-  repository: he-api-registry.cn-hongkong.cr.aliyuncs.com/he-api/notification-svc
+  repository: he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com/he-api/notification-svc
   tag: "7182f0a517f79745849408ed050ac8a3afad1e2f"
   pullPolicy: IfNotPresent
 replicaCount: 1

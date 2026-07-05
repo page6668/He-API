@@ -16,10 +16,10 @@
 #
 # This file MUST exist non-empty — Story 1.2's `deploy-staging.yml` probe_helm
 # step closes its fallback branch by detecting it; deleting this file silently
-# re-opens the fallback (no real ACR push). `he-api-registry.cn-hongkong.cr.aliyuncs.com` is the unified
+# re-opens the fallback (no real ACR push). `he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com` is the unified
 # deploy-time token (T0.3); image.tag is SHA-bumped by deploy-staging (BR4.1).
 image:
-  repository: he-api-registry.cn-hongkong.cr.aliyuncs.com/he-api/api-gateway
+  repository: he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com/he-api/api-gateway
   tag: "7182f0a517f79745849408ed050ac8a3afad1e2f"
   pullPolicy: IfNotPresent
 service:
@@ -33,7 +33,7 @@ serviceAccount:
 # B4 — safety-log-retention cron image (build-matrix entry) SHA-bumped here.
 safetyLogRetention:
   image:
-    repository: he-api-registry.cn-hongkong.cr.aliyuncs.com/he-api/safety-log-retention
+    repository: he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com/he-api/safety-log-retention
     tag: "7182f0a517f79745849408ed050ac8a3afad1e2f"
     pullPolicy: IfNotPresent
 # B5 — staging Ingress for the public traffic entrypoint. ingressClassName points

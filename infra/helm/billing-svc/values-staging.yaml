@@ -1,15 +1,15 @@
-# billing-svc staging overrides (Story 1.7 B3/B4/B6). Unified he-api-registry.cn-hongkong.cr.aliyuncs.com
+# billing-svc staging overrides (Story 1.7 B3/B4/B6). Unified he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com
 # deploy-time token (T0.3). BOTH the main-service image (B6 Deployment) AND the
 # fx-refresh cron image are SHA-bumped by deploy-staging (BR4.1; never `latest`)
 # — the cron image is a build-matrix entry, so it must appear here for the
 # tri-count closure (T8.1). The fx-refresh `schedule` literal is the H-2
 # gold-gate and lives in values.yaml ONLY — NOT overridden here.
 image:
-  repository: he-api-registry.cn-hongkong.cr.aliyuncs.com/he-api/billing-svc
+  repository: he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com/he-api/billing-svc
   tag: "7182f0a517f79745849408ed050ac8a3afad1e2f"
   pullPolicy: IfNotPresent
 fxRefresh:
   image:
-    repository: he-api-registry.cn-hongkong.cr.aliyuncs.com/he-api/fx-refresh
+    repository: he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com/he-api/fx-refresh
     tag: "7182f0a517f79745849408ed050ac8a3afad1e2f"
     pullPolicy: IfNotPresent

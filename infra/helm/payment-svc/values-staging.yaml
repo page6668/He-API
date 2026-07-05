@@ -1,9 +1,9 @@
-# payment-svc staging overrides (Story 1.7 B7). `he-api-registry.cn-hongkong.cr.aliyuncs.com` is the
+# payment-svc staging overrides (Story 1.7 B7). `he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com` is the
 # unified deploy-time substitution token (T0.3 — convention ②, wired in
 # deploy-staging.yml). image.tag is SHA-bumped by deploy-staging's
 # update-helm-values step (BR4.1 immutable-tag; NEVER `latest`).
 image:
-  repository: he-api-registry.cn-hongkong.cr.aliyuncs.com/he-api/payment-svc
+  repository: he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com/he-api/payment-svc
   tag: "7182f0a517f79745849408ed050ac8a3afad1e2f"
   pullPolicy: IfNotPresent
 replicaCount: 1
