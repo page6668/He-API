@@ -4,7 +4,7 @@
 # replicaCount, supportedModels, externalSecret).
 image:
   repository: he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com/he-api/adapter-deepseek
-  tag: "b0d2e62eeae359ccea8632ae974d41e32506ed00"
+  tag: "a03be341b73d831bb416ace0c7d5b105a50addcf"
   pullPolicy: IfNotPresent
 # staging: ESO/Vault 延后(Epic 9)→ 手建 K8s Secret adapter-deepseek-upstream-api-key
 # (docs/runbooks/staging-secrets-hongkong-minimal.md)。关掉 ExternalSecret,避免 ESO
