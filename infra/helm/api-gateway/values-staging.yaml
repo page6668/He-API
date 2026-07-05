@@ -20,7 +20,7 @@
 # deploy-time token (T0.3); image.tag is SHA-bumped by deploy-staging (BR4.1).
 image:
   repository: ${ACR_REGISTRY}/he-api/api-gateway
-  tag: "c875e4c70f97cd9f462d627d3aaab4b5395d37d1"
+  tag: "f9490dea50f5f09fd8585da4a2fc2bdd8f768b08"
   pullPolicy: IfNotPresent
 service:
   type: ClusterIP
@@ -34,7 +34,7 @@ serviceAccount:
 safetyLogRetention:
   image:
     repository: ${ACR_REGISTRY}/he-api/safety-log-retention
-    tag: "c875e4c70f97cd9f462d627d3aaab4b5395d37d1"
+    tag: "f9490dea50f5f09fd8585da4a2fc2bdd8f768b08"
     pullPolicy: IfNotPresent
 # B5 — staging Ingress for the public traffic entrypoint. ingressClassName points
 # at the staging ingress-nginx controller (a cluster prerequisite — see Dev

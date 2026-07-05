@@ -4,7 +4,7 @@
 # update-helm-values step (BR4.1 immutable-tag; NEVER `latest`).
 image:
   repository: ${ACR_REGISTRY}/he-api/payment-svc
-  tag: "c875e4c70f97cd9f462d627d3aaab4b5395d37d1"
+  tag: "f9490dea50f5f09fd8585da4a2fc2bdd8f768b08"
   pullPolicy: IfNotPresent
 replicaCount: 1
 service:
