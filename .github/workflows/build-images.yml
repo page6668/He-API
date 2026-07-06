@@ -83,6 +83,11 @@ jobs:
       matrix:
         svc: *svc_list
       fail-fast: false
+    # OPS NOTE — if repo secret ACR_USERNAME is unset, HAS_ACR=false and the
+    # push step is SKIPPED while the job still reports success. deploy-staging
+    # then bumps image tags to a SHA whose images were never pushed → pods
+    # ImagePullBackOff (NotFound). Keep ACR_USERNAME/ACR_PASSWORD/ACR_REGISTRY
+    # configured on the repo for staging pushes to land.
     env:
       HAS_ACR: ${{ secrets.ACR_USERNAME != '' && 'true' || 'false' }}
     steps:
