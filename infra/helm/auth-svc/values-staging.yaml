@@ -4,7 +4,7 @@
 # deploy-staging's update-helm-values step (BR4.1 immutable-tag; NEVER `latest`).
 image:
   repository: he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com/he-api/auth-svc
-  tag: "a03be341b73d831bb416ace0c7d5b105a50addcf"
+  tag: "64ed55d568f42cf5311867f939443bf83a8c695a"
   pullPolicy: IfNotPresent
 replicaCount: 1
 service:
@@ -19,12 +19,12 @@ env:
 monthlyCostReset:
   image:
     repository: he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com/he-api/monthly-cost-reset
-    tag: "a03be341b73d831bb416ace0c7d5b105a50addcf"
+    tag: "64ed55d568f42cf5311867f939443bf83a8c695a"
     pullPolicy: IfNotPresent
 accountDeletionSweeper:
   image:
     repository: he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com/he-api/account-deletion-sweeper
-    tag: "a03be341b73d831bb416ace0c7d5b105a50addcf"
+    tag: "64ed55d568f42cf5311867f939443bf83a8c695a"
     pullPolicy: IfNotPresent
 serviceAccount:
   create: true
