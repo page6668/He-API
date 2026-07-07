@@ -10,7 +10,7 @@
 # Cold-start budget per Architect Round 2 M5 ruling (Story 4.1, inherited
 # by Stories 4.2-4.6): ≤ 2s. K8s readiness probe gates traffic until the
 # Connect-RPC handler is registered.
-FROM golang:1.22-alpine AS build
+FROM golang:1.25-alpine AS build
 WORKDIR /src
 COPY . .
 RUN --mount=type=cache,target=/root/.cache/go-build \

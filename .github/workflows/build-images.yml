@@ -35,11 +35,12 @@ jobs:
     strategy:
       matrix:
         svc: &svc_list
-          # --- Long-running services (context = apps/<svc>) ---
-          - { name: api-gateway,      context: apps/api-gateway,      dockerfile: apps/api-gateway/Dockerfile }
-          - { name: auth-svc,         context: apps/auth-svc,         dockerfile: apps/auth-svc/Dockerfile }
-          - { name: notification-svc, context: apps/notification-svc, dockerfile: apps/notification-svc/Dockerfile }
-          - { name: analytics-svc,    context: apps/analytics-svc,    dockerfile: apps/analytics-svc/Dockerfile }
+          # --- Long-running services (context = repo root; go.work + replace
+          #     directives to ../../packages/* require the full workspace) ---
+          - { name: api-gateway,      context: ., dockerfile: apps/api-gateway/Dockerfile }
+          - { name: auth-svc,         context: ., dockerfile: apps/auth-svc/Dockerfile }
+          - { name: notification-svc, context: ., dockerfile: apps/notification-svc/Dockerfile }
+          - { name: analytics-svc,    context: ., dockerfile: apps/analytics-svc/Dockerfile }
           # --- Long-running services (context = repo root, go.work modules) ---
           - { name: billing-svc,      context: ., dockerfile: apps/billing-svc/cmd/server/Dockerfile }
           - { name: payment-svc,      context: ., dockerfile: apps/payment-svc/cmd/server/Dockerfile }
@@ -52,13 +53,13 @@ jobs:
           - { name: adapter-kimi,     context: ., dockerfile: apps/adapters/kimi/Dockerfile }
           - { name: adapter-qwen,     context: ., dockerfile: apps/adapters/qwen/Dockerfile }
           # --- CronJob images (BR2.3 — explicit context/dockerfile override) ---
-          - { name: monthly-cost-reset,       context: apps/auth-svc,    dockerfile: apps/auth-svc/cmd/monthly-cost-reset/Dockerfile }
-          - { name: account-deletion-sweeper, context: apps/auth-svc,    dockerfile: apps/auth-svc/cmd/account-deletion-sweeper/Dockerfile }
-          - { name: fx-refresh,               context: .,                dockerfile: apps/billing-svc/cmd/fx-refresh/Dockerfile }
-          - { name: safety-log-retention,     context: apps/api-gateway, dockerfile: apps/api-gateway/cmd/safety-log-retention/Dockerfile }
+          - { name: monthly-cost-reset,       context: ., dockerfile: apps/auth-svc/cmd/monthly-cost-reset/Dockerfile }
+          - { name: account-deletion-sweeper, context: ., dockerfile: apps/auth-svc/cmd/account-deletion-sweeper/Dockerfile }
+          - { name: fx-refresh,               context: ., dockerfile: apps/billing-svc/cmd/fx-refresh/Dockerfile }
+          - { name: safety-log-retention,     context: ., dockerfile: apps/api-gateway/cmd/safety-log-retention/Dockerfile }
           # --- Sample images (BR2.2 — retained, NOT counted in the "17") ---
           - { name: sample-otel-app, context: apps/sample-otel-app, dockerfile: apps/sample-otel-app/Dockerfile, sample: true }
-          - { name: sample-grpc-app, context: apps/sample-grpc-app, dockerfile: apps/sample-grpc-app/Dockerfile, sample: true }
+          - { name: sample-grpc-app, context: ., dockerfile: apps/sample-grpc-app/Dockerfile, sample: true }
       fail-fast: false
     steps:
       - uses: actions/checkout@v4

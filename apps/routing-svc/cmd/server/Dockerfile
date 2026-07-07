@@ -7,7 +7,7 @@
 # Cold-start budget (Story-4.1 M5 inheritance): <= 2s. The K8s readiness probe
 # (GET /ready) gates traffic until the catalogue snapshot is loaded + the
 # decision engine is constructed (Story 6.1 AC1 / FLOW-001).
-FROM golang:1.22-alpine AS build
+FROM golang:1.25-alpine AS build
 WORKDIR /src
 COPY . .
 RUN --mount=type=cache,target=/root/.cache/go-build \

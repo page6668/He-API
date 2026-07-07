@@ -5,7 +5,7 @@
 # profile (UID 65532, readOnlyRootFilesystem, dropped capabilities) can admit
 # the pod into the `he-api-staging` namespace.
 
-FROM golang:1.22-alpine AS builder
+FROM golang:1.25-alpine AS builder
 WORKDIR /src
 ENV CGO_ENABLED=0
 ENV GOOS=linux

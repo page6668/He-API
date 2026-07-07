@@ -7,14 +7,12 @@
 #
 #   docker build -f cmd/monthly-cost-reset/Dockerfile -t monthly-cost-reset .
 
-FROM golang:1.22-alpine AS builder
+FROM golang:1.25-alpine AS builder
 WORKDIR /src
 ENV CGO_ENABLED=0
 ENV GOOS=linux
-COPY go.mod ./
-RUN go mod download || true
 COPY . .
-RUN go build -trimpath -ldflags="-s -w" -o /out/monthly-cost-reset ./cmd/monthly-cost-reset
+RUN go build -trimpath -ldflags="-s -w" -o /out/monthly-cost-reset ./apps/auth-svc/cmd/monthly-cost-reset
 
 FROM gcr.io/distroless/static-debian12
 COPY --from=builder /out/monthly-cost-reset /monthly-cost-reset

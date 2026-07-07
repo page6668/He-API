@@ -11,14 +11,12 @@
 # Story 1.7 B6 — wired into build-images.yml (context: apps/api-gateway) so the
 # cron image is produced by the same matrix that builds the deployable services.
 
-FROM golang:1.22-alpine AS builder
+FROM golang:1.25-alpine AS builder
 WORKDIR /src
 ENV CGO_ENABLED=0
 ENV GOOS=linux
-COPY go.mod ./
-RUN go mod download || true
 COPY . .
-RUN go build -trimpath -ldflags="-s -w" -o /out/safety-log-retention ./cmd/safety-log-retention
+RUN go build -trimpath -ldflags="-s -w" -o /out/safety-log-retention ./apps/api-gateway/cmd/safety-log-retention
 
 FROM gcr.io/distroless/static-debian12
 COPY --from=builder /out/safety-log-retention /safety-log-retention

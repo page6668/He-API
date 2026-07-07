@@ -4,7 +4,7 @@
 # Builder stage: vendored Go modules + connect-go + golang.org/x/net/http2.
 # Runtime stage: distroless static so the image footprint matches the
 # Story-3.1 api-gateway Dockerfile pattern.
-FROM golang:1.22-alpine AS build
+FROM golang:1.25-alpine AS build
 WORKDIR /src
 COPY . .
 RUN --mount=type=cache,target=/root/.cache/go-build \
