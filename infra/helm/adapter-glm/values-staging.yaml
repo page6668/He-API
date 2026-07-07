@@ -4,7 +4,7 @@
 # replicaCount, supportedModels, externalSecret).
 image:
   repository: he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com/he-api/adapter-glm
-  tag: "64ed55d568f42cf5311867f939443bf83a8c695a"
+  tag: "7f2e6c9653b570f2d2c8523ec96860e59bbdf670"
   pullPolicy: IfNotPresent
 # staging: ESO/Vault 延后(Epic 9)→ 手建 K8s Secret adapter-glm-upstream-api-key
 # (docs/runbooks/staging-secrets-hongkong-minimal.md)。关掉 ExternalSecret,避免 ESO
