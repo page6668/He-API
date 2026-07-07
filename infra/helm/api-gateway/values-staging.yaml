@@ -23,10 +23,19 @@ image:
   tag: "7f2e6c9653b570f2d2c8523ec96860e59bbdf670"
   pullPolicy: IfNotPresent
 service:
-  type: ClusterIP
+  # 香港最省档公网入口:LoadBalancer → ACK 自动开一个 SLB + 公网 IP。
+  # slb.s1.small(保障型最小规格)+ 按流量计费,把 staging 入口成本压到最低。
+  # 监听 8080(与容器端口一致);域名 A 记录指向 SLB IP,访问 http://<域名>:8080。
+  type: LoadBalancer
   port: 8080
+  annotations:
+    service.beta.kubernetes.io/alibaba-cloud-loadbalancer-address-type: internet
+    service.beta.kubernetes.io/alibaba-cloud-loadbalancer-spec: slb.s1.small
+    service.beta.kubernetes.io/alibaba-cloud-loadbalancer-charge-type: paybytraffic
 networkPolicy:
-  enabled: true
+  # 最小化 staging:LoadBalancer 直连,关闭 default-deny(它只放行 ingress-nginx
+  # 命名空间,会挡住 SLB→pod 流量)。需要收紧时改回 true + 放行 SLB 源。
+  enabled: false
 serviceAccount:
   create: true
   name: ""
@@ -40,8 +49,11 @@ safetyLogRetention:
 # at the staging ingress-nginx controller (a cluster prerequisite — see Dev
 # Notes 前置依赖边界). TLS via cert-manager ClusterIssuer (also a prerequisite);
 # the cert is issued out-of-band, this story only declares the secretName/host.
+# 最小化 staging:关闭 nginx Ingress(未装 ingress-nginx 控制器 + cert-manager,
+# 且用 LoadBalancer SLB 直连;HTTPS 后续在 SLB 上挂证书即可)。要上正规
+# ingress+自动证书时把 enabled 改回 true 并装好前置组件。
 ingress:
-  enabled: true
+  enabled: false
   className: ingress-nginx
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-staging
