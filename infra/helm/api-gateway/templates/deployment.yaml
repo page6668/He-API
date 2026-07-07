@@ -76,6 +76,20 @@ spec:
                 {{- toYaml .Values.securityContext.capabilities.drop | nindent 16 }}
             seccompProfile:
               type: {{ .Values.securityContext.seccompProfile.type }}
+          volumeMounts:
+            # JWT public key — the gateway verifies access tokens signed by
+            # auth-svc's private key. Projected read-only from the shared
+            # he-api-auth-jwt-keys Secret (public_key.pem only).
+            - name: jwt-public-key
+              mountPath: /etc/api-gateway/keys
+              readOnly: true
+      volumes:
+        - name: jwt-public-key
+          secret:
+            secretName: he-api-auth-jwt-keys
+            items:
+              - key: public_key.pem
+                path: public_key.pem
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

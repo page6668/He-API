@@ -110,6 +110,11 @@ spec:
                 path: {{ .Values.jwt.privateKeyFile }}
               - key: public_key.pem
                 path: {{ .Values.jwt.publicKeyFile }}
+              # Envelope-encryption master key (KMS). auth-svc reads
+              # {{ .Values.jwt.mountPath }}/kms_master.bin at startup; sourced
+              # from the same he-api-auth-jwt-keys Secret (add the key there).
+              - key: kms_master.bin
+                path: kms_master.bin
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
