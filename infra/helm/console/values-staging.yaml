@@ -3,7 +3,7 @@
 # public SLB IP (heheapi.com → this SLB). slb.s1.small + paybytraffic = 最省档.
 image:
   repository: he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com/he-api/console
-  tag: "latest"
+  tag: "ac3833fad209378b403f7c76a4dcda64ecfaf5f0"
   pullPolicy: IfNotPresent
 service:
   type: LoadBalancer
