@@ -166,8 +166,12 @@ export async function registerUserForm(
  * check-inbox page uses this so the URL doesn't leak the full address into
  * browser history. Local-part length ≤ 1 → keep one character, mask the
  * rest with asterisks of the same length as the original (within reason).
+ *
+ * NOT exported: this module carries `'use server'`, so every EXPORT must be an
+ * async Server Action (Next build error otherwise). maskEmail is a sync helper
+ * used only internally (registerUser, line ~120), so it stays module-private.
  */
-export function maskEmail(email: string): string {
+function maskEmail(email: string): string {
   const at = email.indexOf('@');
   if (at <= 0) return email;
   const local = email.slice(0, at);
