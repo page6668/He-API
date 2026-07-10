@@ -13,6 +13,7 @@
 // P2g lands `registerUser` (+ its form-binding wrapper). Other actions
 // remain `NotYetImplemented` until P3 / P4.
 
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
@@ -54,6 +55,45 @@ export type RegisterUserResult =
 // at build time; at runtime we read the resolved env name.
 function gatewayURL(): string {
   return process.env.HE_API_GATEWAY_URL ?? 'http://api-gateway:8080';
+}
+
+// relaySessionCookies forwards the gateway's Set-Cookie session cookies
+// (he_access / he_refresh / he_mfa) onto the browser. A Server Action does NOT
+// auto-propagate an upstream fetch's Set-Cookie, so without this the browser
+// never receives the session and stays logged out. Dev-mode gateway cookies are
+// host-only + non-Secure, so they work over http on the console's own host.
+async function relaySessionCookies(res: Response): Promise<void> {
+  const setCookies =
+    typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : [];
+  if (setCookies.length === 0) return;
+  const jar = await cookies();
+  for (const raw of setCookies) {
+    const [nv, ...attrs] = raw.split(';');
+    const eq = nv.indexOf('=');
+    if (eq <= 0) continue;
+    const name = nv.slice(0, eq).trim();
+    const value = nv.slice(eq + 1).trim();
+    const opts: {
+      path?: string;
+      maxAge?: number;
+      httpOnly?: boolean;
+      secure?: boolean;
+      sameSite?: 'lax' | 'strict' | 'none';
+    } = {};
+    for (const a of attrs) {
+      const [k, v] = a.split('=');
+      const key = k.trim().toLowerCase();
+      if (key === 'path') opts.path = v?.trim();
+      else if (key === 'max-age') opts.maxAge = Number(v?.trim());
+      else if (key === 'httponly') opts.httpOnly = true;
+      else if (key === 'secure') opts.secure = true;
+      else if (key === 'samesite') {
+        const s = v?.trim().toLowerCase();
+        if (s === 'lax' || s === 'strict' || s === 'none') opts.sameSite = s;
+      }
+    }
+    jar.set(name, value, opts);
+  }
 }
 
 /**
@@ -467,6 +507,9 @@ export async function signinAction(input: SigninInput): Promise<SigninResult> {
   }
 
   if (res.status === 200) {
+    // Relay the gateway's session cookies (he_access/he_refresh, or he_mfa on
+    // the 2FA path) to the browser so subsequent BFF calls carry the session.
+    await relaySessionCookies(res);
     let body: unknown;
     try {
       body = await res.json();

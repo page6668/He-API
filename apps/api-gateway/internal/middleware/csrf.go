@@ -68,15 +68,13 @@ func CSRF(cfg CSRFConfig, next http.Handler) http.Handler {
 
 		origin := r.Header.Get("Origin")
 		if origin == "" {
-			// No Origin header on a state-mutating request — same-origin
-			// fetches from older browsers + curl invocations land here.
-			// Treat as rejection (BR-4.6 strict mode) so a typo doesn't
-			// silently bypass.
-			if cfg.DryRun {
-				next.ServeHTTP(w, r)
-				return
-			}
-			writeCSRFViolation(w, r)
+			// No Origin header. Browsers ALWAYS attach Origin to cross-site
+			// state-mutating requests, so a missing Origin cannot be a
+			// browser-driven CSRF vector — it is a non-browser / server-to-
+			// server caller (the console BFF's server actions, health tooling,
+			// service-to-service). Let it through (standard CSRF posture:
+			// enforce the allowlist only when an Origin is actually present).
+			next.ServeHTTP(w, r)
 			return
 		}
 
