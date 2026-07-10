@@ -6,10 +6,10 @@
 # gold-gate and lives in values.yaml ONLY — NOT overridden here.
 image:
   repository: he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com/he-api/billing-svc
-  tag: "ac3833fad209378b403f7c76a4dcda64ecfaf5f0"
+  tag: "7f63f3c8b4e5bb548fa2685cb8f6615b181b767b"
   pullPolicy: IfNotPresent
 fxRefresh:
   image:
     repository: he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com/he-api/fx-refresh
-    tag: "ac3833fad209378b403f7c76a4dcda64ecfaf5f0"
+    tag: "7f63f3c8b4e5bb548fa2685cb8f6615b181b767b"
     pullPolicy: IfNotPresent
