@@ -1,0 +1,22 @@
+replicaCount: 1
+
+image:
+  repository: he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com/he-api/console
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets:
+  - name: acr-pull
+
+service:
+  type: ClusterIP
+  port: 3000
+  annotations: {}
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 192Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi

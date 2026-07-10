@@ -1,0 +1,7 @@
+# Keep build contexts lean (esp. the repo-root context builds). These are all
+# regenerated inside the image build, never needed from the context.
+**/node_modules
+**/.next
+**/.turbo
+.git
+**/*.log

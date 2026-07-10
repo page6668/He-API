@@ -41,6 +41,8 @@ jobs:
           - { name: auth-svc,         context: ., dockerfile: apps/auth-svc/Dockerfile }
           - { name: notification-svc, context: ., dockerfile: apps/notification-svc/Dockerfile }
           - { name: analytics-svc,    context: ., dockerfile: apps/analytics-svc/Dockerfile }
+          # --- Web frontend (Next.js; context = repo root — pnpm workspace) ---
+          - { name: console,          context: ., dockerfile: apps/console/Dockerfile }
           # --- Long-running services (context = repo root, go.work modules) ---
           - { name: billing-svc,      context: ., dockerfile: apps/billing-svc/cmd/server/Dockerfile }
           - { name: payment-svc,      context: ., dockerfile: apps/payment-svc/cmd/server/Dockerfile }
@@ -157,7 +159,7 @@ jobs:
       - name: Assert matrix covers every deployable Dockerfile (target 17)
         run: |
           set -euo pipefail
-          EXPECTED=17
+          EXPECTED=18
           matrix_count="$(yq '[.jobs.build-image-pr.strategy.matrix.svc[] | select(.sample != true)] | length' .github/workflows/build-images.yml)"
           # Deployable Dockerfiles = all apps/**/Dockerfile minus the 2 samples.
           # db-doctor has NO Dockerfile (reuse base image, T6.3) so it is excluded.

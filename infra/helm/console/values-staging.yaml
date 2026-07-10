@@ -1,0 +1,14 @@
+# Console staging overrides. image.tag is SHA-bumped by deploy-staging (same as
+# the backend charts). Service is a LoadBalancer so the web UI is reachable on a
+# public SLB IP (heheapi.com → this SLB). slb.s1.small + paybytraffic = 最省档.
+image:
+  repository: he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com/he-api/console
+  tag: "latest"
+  pullPolicy: IfNotPresent
+service:
+  type: LoadBalancer
+  port: 80
+  annotations:
+    service.beta.kubernetes.io/alibaba-cloud-loadbalancer-address-type: internet
+    service.beta.kubernetes.io/alibaba-cloud-loadbalancer-spec: slb.s1.small
+    service.beta.kubernetes.io/alibaba-cloud-loadbalancer-charge-type: paybytraffic
