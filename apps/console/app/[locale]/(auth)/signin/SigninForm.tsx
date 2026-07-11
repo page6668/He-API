@@ -30,7 +30,9 @@ function SubmitButton({ label, submittingLabel }: { label: string; submittingLab
 }
 
 export function SigninForm({ locale, prefillEmail = '' }: SigninFormProps) {
-  const t = useTranslations();
+  // messages live under the `auth` namespace (messages/<locale>/auth.json →
+  // auth.signin.*); scope here so t('signin.xxx') resolves auth.signin.xxx.
+  const t = useTranslations('auth');
   const [state, formAction] = useFormState<SigninResult | null, FormData>(
     signinActionForm,
     null,

@@ -22,7 +22,7 @@ export default async function SigninPage({
   const resolvedLocale: Locale = isLocale(locale) ? locale : defaultLocale;
   unstable_setRequestLocale(resolvedLocale);
 
-  const t = await getTranslations('signin');
+  const t = await getTranslations('auth.signin');
   const prefillEmail = typeof email === 'string' ? email : '';
 
   return (
