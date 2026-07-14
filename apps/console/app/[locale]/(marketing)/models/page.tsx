@@ -10,7 +10,7 @@
 import type { Metadata } from "next";
 import { getTranslations, unstable_setRequestLocale } from "next-intl/server";
 
-import { CapabilityMatrix } from "@/components/business/CapabilityMatrix";
+import { ModelsCatalog } from "@/components/business/ModelsCatalog";
 import { fetchPublicModels } from "@/lib/api/public-models";
 
 interface PageProps {
@@ -38,13 +38,18 @@ export async function generateMetadata({ params: { locale } }: PageProps): Promi
 
 export default async function ModelsPage({ params: { locale } }: PageProps) {
   unstable_setRequestLocale(locale);
-  const t = await getTranslations({ locale, namespace: "models" });
   const data = await fetchPublicModels();
 
   return (
     <section>
-      <h1 className="text-2xl font-bold mb-2">{t("page.heading")}</h1>
-      <p className="text-slate-600 mb-6">{t("page.subheading")}</p>
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-slate-900">Models</h1>
+        <p className="mt-1 text-slate-600">
+          {data.data.length > 0
+            ? `Browse the ${data.data.length} models available through one unified API.`
+            : "Browse the models available through one unified API."}
+        </p>
+      </div>
 
       {data.data.length === 0 ? (
         <div
@@ -52,10 +57,10 @@ export default async function ModelsPage({ params: { locale } }: PageProps) {
           data-testid="models-fallback-banner"
           className="border border-amber-300 bg-amber-50 px-4 py-3 rounded text-amber-900"
         >
-          {t("error.unavailable")}
+          Capability data temporarily unavailable; check back shortly.
         </div>
       ) : (
-        <CapabilityMatrix models={data.data} />
+        <ModelsCatalog models={data.data} />
       )}
     </section>
   );

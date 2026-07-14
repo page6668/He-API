@@ -8,6 +8,10 @@ image:
 imagePullSecrets:
   - name: acr-pull
 
+# In-cluster api-gateway Service URL the console BFF calls (public models,
+# auth/BFF server actions). he-api-staging namespace → short Service name.
+gatewayUrl: http://api-gateway:8080
+
 service:
   type: ClusterIP
   port: 3000
