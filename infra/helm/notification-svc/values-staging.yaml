@@ -3,7 +3,7 @@
 # image.tag is SHA-bumped by deploy-staging (BR4.1; NEVER `latest`).
 image:
   repository: he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com/he-api/notification-svc
-  tag: "96006468e5f07da8db72d9fe0fe8073c8791918b"
+  tag: "8ada3c857ab3132cb499a36d63bb211623662f1a"
   pullPolicy: IfNotPresent
 replicaCount: 1
 service:
