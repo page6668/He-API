@@ -3,19 +3,27 @@
 @tailwind utilities;
 
 @layer base {
+  /* 设计系统色值权威在 tailwind.config.ts / knowledge/taste/design-system.md。
+     这里的 hsl 变量仅为兼容既有 shadcn 风格组件,已对齐「宣纸·墨」色板。 */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --border: 214.3 31.8% 91.4%;
+    --background: 40 20% 98%; /* paper #FAF9F7 */
+    --foreground: 60 4% 10%; /* ink #1A1A18 */
+    --border: 39 20% 89%; /* line #E7E3DC */
   }
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
+    --background: 60 4% 10%;
+    --foreground: 40 20% 98%;
+    --border: 45 5% 24%;
   }
-  body {
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
+  /* body 的底色/字色由 layout 的 bg-paper/text-ink 决定,此处不再强制覆盖。 */
+}
+
+@layer utilities {
+  /* 铁律1:所有数值一律等宽 + 制表对齐(上下文/单价/延迟/Token/百分比)。
+     正文永不使用此类。见 design-system.md distinctive_rule。 */
+  .tabular {
+    font-family: theme('fontFamily.mono');
+    font-variant-numeric: tabular-nums;
   }
 }
 

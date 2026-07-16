@@ -251,128 +251,276 @@ export function Playground({ locale }: { locale: string }) {
     setTimeout(() => setCopied(false), 1500);
   }, [exportSnippet]);
 
+  // 设计系统 token(knowledge/taste/design-system.md):暖边框建层级、静态表面无阴影、
+  // 输入 6px 圆角、focus 落朱砂。数字一律 .tabular(等宽制表)。
+  const fieldCls =
+    'mt-1.5 w-full rounded-md border border-line-strong bg-surface px-3 py-2 text-small text-ink outline-none transition-colors duration-state ease-he placeholder:text-ink-muted focus:border-seal focus:ring-2 focus:ring-seal/15';
+  const labelCls = 'block text-label text-ink-secondary';
+  const panelCls = 'rounded-lg border border-line bg-surface p-5';
+
   return (
-    <section dir={rtl ? 'rtl' : 'ltr'} data-testid="playground">
-      <h1 className="text-2xl font-bold mb-1">{t('page.heading')}</h1>
-      <p className="text-slate-600 mb-4">{t('page.subheading')}</p>
+    // 内容恒有最大宽度并居中 —— 治「撑满整屏」(design-system.md layout.container)
+    <section
+      dir={rtl ? 'rtl' : 'ltr'}
+      data-testid="playground"
+      className="mx-auto max-w-playground px-6 py-10 lg:px-8"
+    >
+      <header className="mb-6">
+        <h1 className="text-h1">{t('page.heading')}</h1>
+        <p className="mt-1 text-small text-ink-secondary">{t('page.subheading')}</p>
+      </header>
 
       {notice && (
-        <div role="status" data-testid="playground-notice" className="mb-3 rounded border border-sky-300 bg-sky-50 px-3 py-2 text-sm text-sky-900">
+        <div
+          role="status"
+          data-testid="playground-notice"
+          className="mb-4 rounded-lg border border-line bg-surface px-4 py-2.5 text-small text-ink-secondary"
+        >
           {notice}
         </div>
       )}
       {keys.length === 0 && (
-        <div role="alert" data-testid="playground-no-key" className="mb-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        <div
+          role="alert"
+          data-testid="playground-no-key"
+          className="mb-4 rounded-lg border border-ochre/30 bg-ochre/5 px-4 py-2.5 text-small text-ochre"
+        >
           {t('errors.noKey')}
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-3">
+      {/* 双栏:左 480px 参数/输入 · 右 流式输出 + 代码导出 */}
+      <div className="grid items-start gap-6 lg:grid-cols-[480px_minmax(0,1fr)]">
+        <div className={`${panelCls} space-y-4`}>
           {keys.length > 0 && (
-            <label className="block text-sm">
-              <span className="block font-medium">{t('controls.apiKey')}</span>
-              <select data-testid="playground-apikey" className="mt-1 w-full rounded border px-2 py-1" value={apiKeyId} onChange={(e) => setApiKeyId(e.target.value)}>
+            <label className="block">
+              <span className={labelCls}>{t('controls.apiKey')}</span>
+              <select
+                data-testid="playground-apikey"
+                className={fieldCls}
+                value={apiKeyId}
+                onChange={(e) => setApiKeyId(e.target.value)}
+              >
                 {keys.map((k) => (
-                  <option key={k.api_key_id} value={k.api_key_id}>{k.name || k.api_key_id}</option>
+                  <option key={k.api_key_id} value={k.api_key_id}>
+                    {k.name || k.api_key_id}
+                  </option>
                 ))}
               </select>
             </label>
           )}
 
-          <label className="block text-sm">
-            <span className="block font-medium">{abMode ? t('controls.modelA') : t('controls.model')}</span>
-            <select data-testid="playground-model" className="mt-1 w-full rounded border px-2 py-1" value={model} onChange={(e) => setModel(e.target.value)}>
+          <label className="block">
+            <span className={labelCls}>{abMode ? t('controls.modelA') : t('controls.model')}</span>
+            {/* 模型 id 是技术标识 → 等宽 */}
+            <select
+              data-testid="playground-model"
+              className={`${fieldCls} font-mono`}
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+            >
               {HE_MODELS.map((m) => (
-                <option key={m.id} value={m.id}>{m.id}</option>
+                <option key={m.id} value={m.id}>
+                  {m.id}
+                </option>
               ))}
             </select>
           </label>
 
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" data-testid="playground-ab-toggle" checked={abMode} onChange={(e) => setAbMode(e.target.checked)} />
+          <label className="flex items-center gap-2 text-small text-ink-secondary">
+            <input
+              type="checkbox"
+              data-testid="playground-ab-toggle"
+              checked={abMode}
+              onChange={(e) => setAbMode(e.target.checked)}
+              className="h-4 w-4 rounded-sm border-line-strong text-ink accent-ink"
+            />
             <span>{t('controls.compareAB')}</span>
           </label>
 
           {abMode && (
-            <label className="block text-sm">
-              <span className="block font-medium">{t('controls.modelB')}</span>
-              <select data-testid="playground-modelB" className="mt-1 w-full rounded border px-2 py-1" value={modelB} onChange={(e) => setModelB(e.target.value)}>
+            <label className="block">
+              <span className={labelCls}>{t('controls.modelB')}</span>
+              <select
+                data-testid="playground-modelB"
+                className={`${fieldCls} font-mono`}
+                value={modelB}
+                onChange={(e) => setModelB(e.target.value)}
+              >
                 {HE_MODELS.map((m) => (
-                  <option key={m.id} value={m.id}>{m.id}</option>
+                  <option key={m.id} value={m.id}>
+                    {m.id}
+                  </option>
                 ))}
               </select>
             </label>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block text-sm">
-              <span className="block font-medium">{t('controls.temperature')}</span>
-              <input type="number" data-testid="playground-temperature" min={0} max={2} step={0.1} className="mt-1 w-full rounded border px-2 py-1" value={temperature} onChange={(e) => setTemperature(Number(e.target.value))} />
+          <div className="grid grid-cols-2 gap-4">
+            <label className="block">
+              <span className={labelCls}>{t('controls.temperature')}</span>
+              <input
+                type="number"
+                data-testid="playground-temperature"
+                min={0}
+                max={2}
+                step={0.1}
+                className={`${fieldCls} tabular`}
+                value={temperature}
+                onChange={(e) => setTemperature(Number(e.target.value))}
+              />
             </label>
-            <label className="block text-sm">
-              <span className="block font-medium">{t('controls.maxTokens')}</span>
-              <input type="number" data-testid="playground-maxtokens" min={1} step={1} className="mt-1 w-full rounded border px-2 py-1" value={maxTokens} onChange={(e) => setMaxTokens(Number(e.target.value))} />
+            <label className="block">
+              <span className={labelCls}>{t('controls.maxTokens')}</span>
+              <input
+                type="number"
+                data-testid="playground-maxtokens"
+                min={1}
+                step={1}
+                className={`${fieldCls} tabular`}
+                value={maxTokens}
+                onChange={(e) => setMaxTokens(Number(e.target.value))}
+              />
             </label>
           </div>
 
-          <label className="block text-sm">
-            <span className="block font-medium">{t('controls.system')}</span>
-            <textarea data-testid="playground-system" className="mt-1 w-full rounded border px-2 py-1" rows={2} value={system} onChange={(e) => setSystem(e.target.value)} />
+          <label className="block">
+            <span className={labelCls}>{t('controls.system')}</span>
+            <textarea
+              data-testid="playground-system"
+              className={`${fieldCls} resize-y`}
+              rows={2}
+              value={system}
+              onChange={(e) => setSystem(e.target.value)}
+            />
           </label>
-          <label className="block text-sm">
-            <span className="block font-medium">{t('controls.user')}</span>
-            <textarea data-testid="playground-user" className="mt-1 w-full rounded border px-2 py-1" rows={4} placeholder={t('controls.userPlaceholder')} value={user} onChange={(e) => setUser(e.target.value)} />
+          <label className="block">
+            <span className={labelCls}>{t('controls.user')}</span>
+            <textarea
+              data-testid="playground-user"
+              className={`${fieldCls} resize-y`}
+              rows={5}
+              placeholder={t('controls.userPlaceholder')}
+              value={user}
+              onChange={(e) => setUser(e.target.value)}
+            />
           </label>
 
-          <button type="button" data-testid="playground-send" disabled={sendDisabled} onClick={handleSend} className="rounded bg-slate-900 px-4 py-2 text-white disabled:opacity-50">
+          {/* 本屏唯一的朱砂 —— 主操作(design-system.md distinctive_rule 铁律2) */}
+          <button
+            type="button"
+            data-testid="playground-send"
+            disabled={sendDisabled}
+            onClick={handleSend}
+            className="w-full rounded-md bg-seal px-4 py-2.5 text-small font-medium text-white transition-colors duration-state ease-he hover:bg-seal-hover focus:outline-none focus:ring-2 focus:ring-seal/30 disabled:cursor-not-allowed disabled:opacity-40"
+          >
             {sending ? t('controls.sending') : t('controls.send')}
           </button>
         </div>
 
-        <div className="space-y-3">
-          <h2 className="font-semibold">{t('output.heading')}</h2>
-          {error && (
-            <div role="alert" data-testid="playground-error" className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900">{error}</div>
-          )}
-          <pre data-testid="playground-output" aria-live="polite" className="min-h-[8rem] whitespace-pre-wrap rounded border bg-slate-50 p-3 text-sm">{output || t('output.empty')}</pre>
-
-          {metrics && (
-            <dl className="grid grid-cols-2 gap-2 text-sm" data-testid="playground-metrics">
-              <div><dt className="text-slate-500">{t('output.tokensIn')}</dt><dd><LtrText>{metrics.promptTokens}</LtrText></dd></div>
-              <div><dt className="text-slate-500">{t('output.tokensOut')}</dt><dd><LtrText>{metrics.completionTokens}</LtrText></dd></div>
-              <div><dt className="text-slate-500">{t('output.latency')}</dt><dd><LtrText>{metrics.latencyMs}ms</LtrText></dd></div>
-              <div>
-                <dt className="text-slate-500">{t('output.cost')}</dt>
-                <dd data-testid="playground-cost" title={t('output.estimatedTitle')}>
-                  {costEstimate ? (
-                    <span><LtrText>${costEstimate.amountUsd.toFixed(6)}</LtrText> <span className="text-xs text-slate-500">({t('output.estimated')})</span></span>
-                  ) : (
-                    '—'
-                  )}
-                </dd>
+        <div className="space-y-4">
+          <div className={panelCls}>
+            <h2 className="text-h3">{t('output.heading')}</h2>
+            {error && (
+              <div
+                role="alert"
+                data-testid="playground-error"
+                className="mt-3 rounded-md border border-crimson/30 bg-crimson/5 px-3 py-2 text-small text-crimson"
+              >
+                {error}
               </div>
-            </dl>
-          )}
+            )}
+            {/* 内嵌区 + 等宽:模型输出是"读数",不是正文 */}
+            <pre
+              data-testid="playground-output"
+              aria-live="polite"
+              className="mt-3 min-h-[14rem] whitespace-pre-wrap rounded-md border border-line bg-surface-sunken p-4 font-mono text-small leading-relaxed text-ink"
+            >
+              {output || <span className="text-ink-muted">{t('output.empty')}</span>}
+            </pre>
 
-          <div>
-            <h3 className="text-sm font-semibold">{t('export.heading')}</h3>
-            <div role="tablist" aria-label={t('export.heading')} className="mt-1 flex gap-2">
-              {EXPORT_LANGS.map((lang) => (
-                <button
-                  key={lang}
-                  role="tab"
-                  aria-selected={exportLang === lang}
-                  data-testid={`playground-export-${lang}`}
-                  onClick={() => setExportLang(lang)}
-                  className={`rounded border px-2 py-1 text-xs ${exportLang === lang ? 'bg-slate-900 text-white' : ''}`}
-                >
-                  {t(`export.${lang}` as 'export.curl')}
-                </button>
-              ))}
+            {metrics && (
+              <dl
+                className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-line pt-4 sm:grid-cols-4"
+                data-testid="playground-metrics"
+              >
+                <div>
+                  <dt className="text-label text-ink-muted">{t('output.tokensIn')}</dt>
+                  <dd className="tabular mt-0.5 text-metric text-ink">
+                    <LtrText>{metrics.promptTokens}</LtrText>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-label text-ink-muted">{t('output.tokensOut')}</dt>
+                  <dd className="tabular mt-0.5 text-metric text-ink">
+                    <LtrText>{metrics.completionTokens}</LtrText>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-label text-ink-muted">{t('output.latency')}</dt>
+                  <dd className="tabular mt-0.5 text-metric text-ink">
+                    <LtrText>{metrics.latencyMs}ms</LtrText>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-label text-ink-muted">{t('output.cost')}</dt>
+                  <dd
+                    className="mt-0.5 text-metric text-ink"
+                    data-testid="playground-cost"
+                    title={t('output.estimatedTitle')}
+                  >
+                    {costEstimate ? (
+                      <span>
+                        <span className="tabular">
+                          <LtrText>${costEstimate.amountUsd.toFixed(6)}</LtrText>
+                        </span>{' '}
+                        <span className="text-label text-ink-muted">({t('output.estimated')})</span>
+                      </span>
+                    ) : (
+                      <span className="text-ink-muted">—</span>
+                    )}
+                  </dd>
+                </div>
+              </dl>
+            )}
+          </div>
+
+          <div className={panelCls}>
+            <div className="flex items-center justify-between gap-4">
+              <h3 className="text-h3">{t('export.heading')}</h3>
+              {/* 激活态用墨色而非朱砂 —— 每屏只允许一处朱砂(已给「发送」) */}
+              <div role="tablist" aria-label={t('export.heading')} className="flex gap-1">
+                {EXPORT_LANGS.map((lang) => (
+                  <button
+                    key={lang}
+                    role="tab"
+                    aria-selected={exportLang === lang}
+                    data-testid={`playground-export-${lang}`}
+                    onClick={() => setExportLang(lang)}
+                    className={`rounded-md px-2.5 py-1 text-label transition-colors duration-state ease-he ${
+                      exportLang === lang
+                        ? 'bg-ink text-paper'
+                        : 'text-ink-secondary hover:bg-surface-sunken'
+                    }`}
+                  >
+                    {t(`export.${lang}` as 'export.curl')}
+                  </button>
+                ))}
+              </div>
             </div>
-            <pre data-testid="playground-snippet" dir="ltr" className="mt-2 overflow-x-auto rounded border bg-slate-900 p-3 text-xs text-slate-100">{exportSnippet}</pre>
-            <button type="button" data-testid="playground-copy" onClick={copySnippet} className="mt-1 rounded border px-2 py-1 text-xs">
+            <pre
+              data-testid="playground-snippet"
+              dir="ltr"
+              className="mt-3 overflow-x-auto rounded-md bg-ink p-4 font-mono text-small leading-relaxed text-paper"
+            >
+              {exportSnippet}
+            </pre>
+            <button
+              type="button"
+              data-testid="playground-copy"
+              onClick={copySnippet}
+              className="mt-2 rounded-md border border-line-strong px-3 py-1.5 text-label text-ink-secondary transition-colors duration-state ease-he hover:border-ink-muted hover:text-ink"
+            >
               {copied ? t('export.copied') : t('export.copy')}
             </button>
           </div>
