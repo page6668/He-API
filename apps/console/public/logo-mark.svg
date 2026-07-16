@@ -1,0 +1,11 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="He-API">
+  <!-- 朱砂方印(白文/阴刻):方正印底 + 负形刻出「多路汇一」——三路模型输入汇成一个接口。
+       刀刻直笔(square cap / miter join),圆角 3 保持印章方正感,勿改为大圆角(会变 app 图标)。 -->
+  <rect width="32" height="32" rx="3" fill="#C8422A"/>
+  <g stroke="#FAF9F7" stroke-width="2.6" stroke-linecap="square" stroke-linejoin="miter" fill="none">
+    <path d="M8 8.5 L17.5 16"/>
+    <path d="M8 16 H17.5"/>
+    <path d="M8 23.5 L17.5 16"/>
+    <path d="M17.5 16 H24"/>
+  </g>
+</svg>
