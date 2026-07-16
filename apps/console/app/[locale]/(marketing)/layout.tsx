@@ -3,63 +3,43 @@
  *
  * FIRST sibling of (auth) + (console) under `apps/console/app/[locale]/`.
  * Per `docs/architecture/source-tree.md §6` (pre-flagged), this group
- * holds anonymous-reachable marketing routes. Story 4.7 lands ONLY the
- * /models route + this layout stub. Epic-10 marketing-launch Stories
- * expand the layout (Pricing / Benchmark / etc.) and inherit the
- * anonymous-reachable pattern this Story establishes.
+ * holds anonymous-reachable marketing routes.
  *
  * Auth middleware does NOT run on these paths — `middleware.ts`
  * (existing next-intl locale negotiation) is the only middleware in the
  * chain. BR-2.9 is enforced via the (marketing) group convention; if a
  * future auth middleware is added, it MUST scope to (console) paths.
+ *
+ * 视觉(knowledge/taste/design-system.md):
+ *  - 删掉了本组自带的第二条导航栏 —— 根 [locale]/layout 已有品牌印记 + 全站导航
+ *    (含 Models),两条栏叠在一起是明显的设计冗余。
+ *  - main 不再自带 padding/max-width:限宽由页面各自的 <PageShell> 统一负责,
+ *    否则会双层限宽、左右内边距叠加(约 48px)。
  */
-import type { ReactNode } from "react";
-import { useTranslations } from "next-intl";
+import type { ReactNode } from 'react';
 
 interface MarketingLayoutProps {
   children: ReactNode;
   params: { locale: string };
 }
 
-export default function MarketingLayout({
-  children,
-  params: { locale },
-}: MarketingLayoutProps) {
+export default function MarketingLayout({ children }: MarketingLayoutProps) {
   return (
-    <div className="min-h-screen flex flex-col">
-      <MarketingHeader locale={locale} />
-      <main id="main" className="flex-1 px-6 py-8 max-w-screen-xl mx-auto w-full">
+    <div className="flex min-h-screen flex-col bg-paper">
+      <div id="main" className="flex-1">
         {children}
-      </main>
+      </div>
       <MarketingFooter />
     </div>
   );
 }
 
-function MarketingHeader({ locale }: { locale: string }) {
-  const t = useTranslations("models");
-  return (
-    <header className="border-b px-6 py-3">
-      <nav className="flex items-center justify-between max-w-screen-xl mx-auto">
-        <a href={`/${locale}`} className="font-semibold">
-          {t("nav.home")}
-        </a>
-        <ul className="flex items-center gap-4 text-sm">
-          <li>
-            <a href={`/${locale}/models`} aria-current="page">
-              {t("nav.models")}
-            </a>
-          </li>
-        </ul>
-      </nav>
-    </header>
-  );
-}
-
 function MarketingFooter() {
   return (
-    <footer className="border-t px-6 py-4 text-xs text-slate-500">
-      © He-API
+    <footer className="border-t border-line">
+      <div className="mx-auto max-w-prose-page px-6 py-5 text-label text-ink-muted lg:px-8">
+        © He-API
+      </div>
     </footer>
   );
 }

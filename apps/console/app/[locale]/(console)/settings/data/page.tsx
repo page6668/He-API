@@ -14,6 +14,7 @@ import { ExportDataDialog } from '@/components/business/ExportDataDialog';
 import { DeleteAccountDialog } from '@/components/business/DeleteAccountDialog';
 import { getDeletionState } from '@/lib/account/deletion-actions';
 import { getMyProfile } from '../profile/_actions/get-my-profile';
+import { PageShell, Notice } from '@/components/ui/kit';
 
 interface DataPageProps {
   params: { locale: string };
@@ -33,12 +34,13 @@ export default async function DataPage({ params: { locale } }: DataPageProps) {
 
   if (result.kind === 'error') {
     return (
-      <section className="space-y-4 py-8">
-        <h1 className="text-2xl font-semibold">{t('title')}</h1>
-        <p role="alert" className="text-sm text-red-600">
-          {t('export.errors.generic')}
-        </p>
-      </section>
+      <main aria-labelledby="data-page-heading">
+        <PageShell title={t('title')} titleId="data-page-heading" width="console">
+          <Notice tone="error" role="alert">
+            {t('export.errors.generic')}
+          </Notice>
+        </PageShell>
+      </main>
     );
   }
 
@@ -48,15 +50,15 @@ export default async function DataPage({ params: { locale } }: DataPageProps) {
   const [deletion, profile] = await Promise.all([getDeletionState(), getMyProfile()]);
 
   return (
-    <section className="space-y-6 py-8">
-      <header className="space-y-2">
-        <h1 className="text-2xl font-semibold">{t('title')}</h1>
-        <p className="text-sm text-neutral-700">{t('description')}</p>
-      </header>
-      <ExportDataDialog currentExport={result.data} />
-      {deletion.kind === 'ok' && profile.kind === 'ok' && (
-        <DeleteAccountDialog state={deletion.data} email={profile.data.email} locale={resolvedLocale} />
-      )}
-    </section>
+    <main aria-labelledby="data-page-heading">
+      <PageShell title={t('title')} titleId="data-page-heading" subtitle={t('description')} width="console">
+        <div className="space-y-6">
+          <ExportDataDialog currentExport={result.data} />
+          {deletion.kind === 'ok' && profile.kind === 'ok' && (
+            <DeleteAccountDialog state={deletion.data} email={profile.data.email} locale={resolvedLocale} />
+          )}
+        </div>
+      </PageShell>
+    </main>
   );
 }

@@ -32,10 +32,11 @@ export function OAuthButtonGroup({ locale, returnTo, disabled }: OAuthButtonGrou
           <OAuthButton key={cfg.provider} config={cfg} locale={locale} returnTo={returnTo} disabled={disabled} />
         ))}
       </div>
+      {/* 1px 暖分隔线 + label 12/500。刻意不 uppercase(中文禁用大写与字距)。 */}
       <div className="relative flex items-center" role="separator" aria-label={t('oauth.divider')}>
-        <div className="flex-grow border-t border-neutral-300" />
-        <span className="mx-3 text-xs uppercase text-neutral-500">{t('oauth.divider')}</span>
-        <div className="flex-grow border-t border-neutral-300" />
+        <div className="flex-grow border-t border-line" />
+        <span className="mx-3 text-label text-ink-muted">{t('oauth.divider')}</span>
+        <div className="flex-grow border-t border-line" />
       </div>
     </div>
   );

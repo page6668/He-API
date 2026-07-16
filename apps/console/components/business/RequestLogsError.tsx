@@ -6,6 +6,10 @@
  * filter bar stays intact above it (BR-UI Error Handling / ERROR-002). The Retry
  * link points at the SAME URL (current filters preserved). role="alert" so the
  * error is announced (a11y).
+ *
+ * Visual language mirrors kit's <Notice tone="error"> inline strip (not a
+ * full-width red banner — knowledge/taste/design-system.md); rendered by hand
+ * rather than via the primitive so role/data-testid stay on the same node.
  */
 export interface RequestLogsErrorProps {
   message: string;
@@ -18,12 +22,12 @@ export function RequestLogsError({ message, retryLabel, retryHref }: RequestLogs
     <div
       role="alert"
       data-testid="request-logs-error"
-      className="space-y-2 rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-900"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-crimson/30 bg-crimson/5 px-4 py-2.5 text-small text-crimson"
     >
       <p>{message}</p>
       <a
         href={retryHref}
-        className="inline-block rounded bg-red-600 px-3 py-1.5 text-white hover:bg-red-700"
+        className="shrink-0 rounded-md border border-crimson/40 bg-transparent px-3 py-1.5 text-small font-medium text-crimson transition-colors duration-state ease-he hover:bg-crimson/5 focus:outline-none focus:ring-2 focus:ring-crimson/25"
       >
         {retryLabel}
       </a>

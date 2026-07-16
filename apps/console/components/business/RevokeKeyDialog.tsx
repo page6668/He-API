@@ -16,6 +16,7 @@ import { useTranslations } from 'next-intl';
 
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
+import { Notice, fieldCls, labelCls } from '@/components/ui/kit';
 import type { KeyEntry } from '@/lib/api/me-keys';
 import { revokeMyKey } from '@/app/[locale]/(console)/keys/_actions/revoke-key';
 
@@ -74,22 +75,25 @@ export function RevokeKeyDialog({ keyEntry, onClose, notify, onMutated, triggerR
       onClose={onClose}
       restoreFocusTo={triggerRef}
       initialFocusRef={cancelRef}
+      className="rounded-lg border border-line bg-surface shadow-overlay"
     >
-      <h2 id="revoke-key-title" className="text-lg font-semibold">
+      <h2 id="revoke-key-title" className="text-h3 text-ink">
         {t('revoke.confirm.title')}
       </h2>
 
-      <p role="alert" aria-live="assertive" className="mt-2 text-sm text-neutral-700">
-        {t('revoke.warning')}
-      </p>
+      <div className="mt-2">
+        <Notice tone="warning" role="alert">
+          {t('revoke.warning')}
+        </Notice>
+      </div>
 
-      <p className="mt-3 text-sm">
+      <p className="mt-3 text-small text-ink">
         <span className="font-medium">{keyEntry.name}</span>{' '}
-        <code className="font-mono text-xs text-neutral-500">{keyEntry.key_prefix}…</code>
+        <code className="tabular text-ink-muted">{keyEntry.key_prefix}…</code>
       </p>
 
       <div className="mt-4 space-y-1.5">
-        <label htmlFor="revoke-confirm-input" className="block text-sm">
+        <label htmlFor="revoke-confirm-input" className={labelCls}>
           {t('revoke.confirm_label', { name: keyEntry.name })}
         </label>
         <input
@@ -98,21 +102,30 @@ export function RevokeKeyDialog({ keyEntry, onClose, notify, onMutated, triggerR
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
           aria-label={t('revoke.confirm_aria', { name: keyEntry.name })}
-          className="w-full rounded border px-3 py-2"
+          className={fieldCls}
         />
       </div>
 
       {toast && (
-        <p role="alert" aria-live="assertive" className="mt-3 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900">
-          {toast}
-        </p>
+        <div className="mt-3">
+          <Notice tone="error" role="alert">
+            {toast}
+          </Notice>
+        </div>
       )}
 
       <div className="mt-5 flex justify-end gap-2">
         <Button type="button" ref={cancelRef} variant="ghost" onClick={onClose} disabled={isPending}>
           {t('revoke.cancel')}
         </Button>
-        <Button type="button" variant="destructive" onClick={onRevoke} disabled={revokeDisabled}>
+        {/* 破坏性操作:深绛描边,刻意不与朱砂主操作同形(design-system.md distinctive_rule 铁律2) */}
+        <Button
+          type="button"
+          variant="destructive"
+          onClick={onRevoke}
+          disabled={revokeDisabled}
+          className="border border-crimson/40 bg-transparent text-crimson hover:bg-crimson/5 focus-visible:ring-crimson/25"
+        >
           {isPending && <Loader2 className="me-1.5 h-4 w-4 animate-spin" aria-hidden="true" />}
           {t('revoke.confirm.cta')}
         </Button>

@@ -12,6 +12,7 @@ import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { getTranslations, unstable_setRequestLocale } from 'next-intl/server';
 
+import { PageShell, Notice } from '@/components/ui/kit';
 import { UsageStatCards } from '@/components/business/UsageStatCards';
 import { UsageStatCardsSkeleton } from '@/components/business/UsageStatCardsSkeleton';
 import { UsageChart } from '@/components/business/UsageChart';
@@ -35,14 +36,20 @@ export default async function DashboardPage({ params: { locale } }: PageProps) {
   const t = await getTranslations({ locale, namespace: 'dashboard' });
 
   return (
-    <main aria-labelledby="dashboard-heading" className="space-y-6">
-      <h1 id="dashboard-heading" className="text-2xl font-semibold">
-        {t('page.heading')}
-      </h1>
-      <Suspense fallback={<UsageStatCardsSkeleton label={t('loading.label')} />}>
-        <DashboardContent locale={locale} />
-      </Suspense>
-      <UsageChart locale={locale} />
+    <main aria-labelledby="dashboard-heading">
+      <PageShell
+        title={t('page.heading')}
+        titleId="dashboard-heading"
+        subtitle={t('page.description')}
+        width="console"
+      >
+        <div className="space-y-6">
+          <Suspense fallback={<UsageStatCardsSkeleton label={t('loading.label')} />}>
+            <DashboardContent locale={locale} />
+          </Suspense>
+          <UsageChart locale={locale} />
+        </div>
+      </PageShell>
     </main>
   );
 }
@@ -60,18 +67,17 @@ async function DashboardContent({ locale }: { locale: string }) {
     return <UsageStatCards summary={result.summary} locale={locale} />;
   }
 
+  // 安静的一行说明 + 文字链重试(design-system.md key_page_direction.dashboard:
+  // 「空/错状态用一行安静说明 + 文字链重试,不要满宽红底 banner」)。
   return (
-    <div
-      role="alert"
-      className="space-y-2 rounded border border-red-300 bg-red-50 p-4 text-sm text-red-900"
-    >
-      <p>{tRoot(result.error.code)}</p>
+    <Notice tone="error" role="alert">
+      <span>{tRoot(result.error.code)}</span>{' '}
       <a
         href={`/${locale}/dashboard`}
-        className="inline-block rounded bg-red-600 px-3 py-1.5 text-white hover:bg-red-700"
+        className="font-medium underline underline-offset-2 transition-colors duration-state ease-he hover:text-crimson/80"
       >
         {t('errors.retry')}
       </a>
-    </div>
+    </Notice>
   );
 }

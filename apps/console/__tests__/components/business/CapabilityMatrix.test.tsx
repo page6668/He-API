@@ -76,7 +76,8 @@ describe("CapabilityMatrix (AC2 Vitest)", () => {
     expect(firstYes.textContent).toContain(yesLabel);
 
     // Color class anchors the BR-2.4 visual style (≥ 4.5:1 contrast).
-    expect(firstYes.className).toMatch(/text-green-600/);
+    // 设计系统迁移:竹绿语义 token text-jade(#2F6B4F)取代 text-green-600。
+    expect(firstYes.className).toMatch(/text-jade/);
   });
 
   test("4.7-UNIT-011: renders ✗ badge for capabilities.vision=false on every entry", () => {
@@ -90,7 +91,8 @@ describe("CapabilityMatrix (AC2 Vitest)", () => {
     const firstNo = negativeBadges[0]!;
     expect(firstNo.textContent).toContain(noLabel);
 
-    expect(firstNo.className).toMatch(/text-slate-400/);
+    // 设计系统迁移:弱说明色 token text-ink-muted(#9A968E)取代 text-slate-400。
+    expect(firstNo.className).toMatch(/text-ink-muted/);
   });
 
   test("4.7-UNIT-012: formats numeric capability per locale via Intl.NumberFormat", () => {

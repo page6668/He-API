@@ -48,13 +48,16 @@ export function OAuthButton({ config, returnTo, locale, disabled }: OAuthButtonP
       disabled={disabled || isBusy}
       aria-label={t(config.ariaLabelKey ?? config.labelKey)}
       data-provider={config.provider}
+      // 次级(描边白底 + 品牌图标)—— OAuth 不与朱砂主操作抢
+      // (design-system.md key_page_direction.auth)。样式对齐 kit 的 secondary variant。
       className={[
-        'inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium',
+        'inline-flex w-full items-center justify-center gap-2 rounded-md border border-line-strong px-4 py-2.5 text-small font-medium',
+        'transition-colors duration-state ease-he',
         config.bgClass,
         config.hoverClass,
         config.textClass,
-        'disabled:opacity-60 disabled:cursor-not-allowed',
-        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600',
+        'disabled:opacity-50 disabled:cursor-not-allowed',
+        'focus:outline-none focus:ring-2 focus:ring-ink/15',
       ].join(' ')}
     >
       <span

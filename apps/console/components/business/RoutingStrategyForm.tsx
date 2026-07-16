@@ -23,6 +23,7 @@ import {
   type RoutingStrategyValue,
   type UpdateRoutingStrategyResult,
 } from '@/app/[locale]/(console)/settings/profile/_actions/update-my-routing-strategy';
+import { Button, Notice, Panel } from '@/components/ui/kit';
 
 // The 4 selectable choices. 'passthrough' is the UI token for "no default".
 const CHOICES = ['passthrough', 'quality', 'cost', 'latency'] as const;
@@ -90,85 +91,94 @@ export function RoutingStrategyForm({
 
   return (
     <form aria-labelledby="routing-form-heading" className="space-y-6" onSubmit={onSubmit}>
-      <header className="space-y-1">
-        <h2 id="routing-form-heading" className="text-xl font-semibold">
-          {t('routing.title')}
-        </h2>
-        <p className="text-sm text-neutral-500">{t('routing.description')}</p>
-      </header>
+      <Panel className="space-y-4">
+        <header className="space-y-1">
+          <h2 id="routing-form-heading" className="text-h2 text-ink">
+            {t('routing.title')}
+          </h2>
+          <p className="text-small text-ink-secondary">{t('routing.description')}</p>
+        </header>
 
-      <fieldset
-        role="radiogroup"
-        aria-labelledby="routing-form-heading"
-        disabled={busy}
-        className="space-y-2"
-      >
-        {CHOICES.map((choice) => (
-          <label key={choice} className="flex items-start gap-3 rounded border px-3 py-2">
-            <input
-              type="radio"
-              name="default_routing_strategy"
-              value={choice}
-              checked={selected === choice}
-              onChange={() => setSelected(choice)}
-              className="mt-1"
-            />
-            <span>
-              <span className="block text-sm font-medium">
-                {t(`routing.options.${choice}` as never)}
-              </span>
-              <span className="block text-xs text-neutral-500">
-                {t(`routing.hints.${choice}` as never)}
-              </span>
-            </span>
-          </label>
-        ))}
-      </fieldset>
+        <fieldset
+          role="radiogroup"
+          aria-labelledby="routing-form-heading"
+          disabled={busy}
+          className="space-y-2"
+        >
+          {CHOICES.map((choice) => {
+            const isSelected = selected === choice;
+            return (
+              // 选中态用墨色而非朱砂 —— 本页主操作(ProfileForm 的 Save)已占用唯一朱砂
+              // (design-system.md distinctive_rule 铁律2)。
+              <label
+                key={choice}
+                className={`flex items-start gap-3 rounded-lg border px-4 py-3 transition-colors duration-state ease-he ${
+                  isSelected ? 'border-ink bg-surface-sunken' : 'border-line hover:border-line-strong'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="default_routing_strategy"
+                  value={choice}
+                  checked={isSelected}
+                  onChange={() => setSelected(choice)}
+                  className="mt-1 h-4 w-4 border-line-strong text-ink accent-ink focus:outline-none focus:ring-2 focus:ring-ink/15"
+                />
+                <span>
+                  <span className="block text-small font-medium text-ink">
+                    {t(`routing.options.${choice}` as never)}
+                  </span>
+                  <span className="block text-label text-ink-muted">
+                    {t(`routing.hints.${choice}` as never)}
+                  </span>
+                </span>
+              </label>
+            );
+          })}
+        </fieldset>
+      </Panel>
 
       {/* Concurrent-update banner */}
       {result?.kind === 'concurrent_update' && (
-        <div role="alert" className="rounded border border-yellow-300 bg-yellow-50 p-3 text-sm">
+        <Notice tone="warning" role="alert">
           {t('routing.banners.concurrent_update.message')}{' '}
-          <button type="button" onClick={() => location.reload()} className="font-medium underline">
+          <button type="button" onClick={() => location.reload()} className="font-medium underline underline-offset-2">
             {t('routing.banners.concurrent_update.reload_cta')}
           </button>
-        </div>
+        </Notice>
       )}
 
       {/* Rate limit */}
       {result?.kind === 'rate_limited' && (
-        <div role="alert" className="rounded border border-orange-300 bg-orange-50 p-3 text-sm">
+        <Notice tone="warning" role="alert">
           {t('routing.errors.rate_limited')}
-        </div>
+        </Notice>
       )}
 
       {/* Generic / validation / unauthorized errors */}
       {(result?.kind === 'error' ||
         result?.kind === 'validation' ||
         result?.kind === 'unauthorized') && (
-        <div role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-sm">
+        <Notice tone="error" role="alert">
           {t('routing.errors.generic')}
-        </div>
+        </Notice>
       )}
 
-      {/* Success */}
+      {/* Success — jade text, tone=neutral (design-system.md key_page_direction). */}
       {result?.kind === 'ok' && (
         <div
           role="status"
           aria-live="polite"
-          className="rounded border border-green-300 bg-green-50 p-3 text-sm"
+          className="rounded-lg border border-line bg-surface px-4 py-2.5 text-small text-jade"
         >
           {t('routing.toast.saved')}
         </div>
       )}
 
-      <button
-        type="submit"
-        disabled={!isDirty || busy}
-        className="rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-      >
+      {/* secondary —— 本页唯一朱砂已给 ProfileForm 的 Save(铁律2:每屏只允许一处朱砂）。 */}
+      <Button type="submit" variant="secondary" disabled={!isDirty || busy}>
         {t('routing.actions.save')}
-      </button>
+      </Button>
     </form>
   );
 }

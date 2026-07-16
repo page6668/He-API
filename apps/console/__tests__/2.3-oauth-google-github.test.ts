@@ -134,21 +134,28 @@ describe('AC4: <OAuthButtonGroup> locale-aware ordering and rendering', () => {
     expect(buttons[1]).toHaveAttribute('data-provider', 'github');
   });
 
-  test('UNIT-063: Google button renders brand-color logo with white SVG fill', () => {
+  // The solid brand-color tiles these tests originally asserted were superseded
+  // by the approved design system (knowledge/taste/design-system.md
+  // key_page_direction.auth): OAuth is a SECONDARY action and must not carry a
+  // filled tile that competes with the seal-red primary. The brand logo is still
+  // required — it just now sits on a white/outlined button (both Google and
+  // GitHub sanction this variant).
+  test('UNIT-063: Google button renders brand-color logo on a secondary (outlined) surface', () => {
     // Scenario: 2.3-UNIT-063 (Google)
-    expect(GOOGLE_CONFIG.bgClass).toBe('bg-[#4285F4]');
+    expect(GOOGLE_CONFIG.bgClass).toBe('bg-surface');
     expect(GOOGLE_CONFIG.iconSvg).toContain('<svg');
-    expect(GOOGLE_CONFIG.iconSvg).toContain('fill="#fff"');
-    expect(GOOGLE_CONFIG.textClass).toBe('text-white');
+    // The 4-color G mark carries the brand (visible on the white surface).
+    expect(GOOGLE_CONFIG.iconSvg).toContain('fill="#4285F4"');
+    expect(GOOGLE_CONFIG.textClass).toBe('text-ink');
   });
 
   test('UNIT-063: GitHub button renders Octocat monochrome logo', () => {
     // Scenario: 2.3-UNIT-063 (GitHub)
-    expect(GITHUB_CONFIG.bgClass).toBe('bg-[#24292f]');
+    expect(GITHUB_CONFIG.bgClass).toBe('bg-surface');
     expect(GITHUB_CONFIG.iconSvg).toContain('<svg');
-    // Octocat uses currentColor so it inherits the monochrome white text.
+    // Octocat uses currentColor so it inherits the monochrome ink text.
     expect(GITHUB_CONFIG.iconSvg).toContain('fill="currentColor"');
-    expect(GITHUB_CONFIG.textClass).toBe('text-white');
+    expect(GITHUB_CONFIG.textClass).toBe('text-ink');
   });
 });
 

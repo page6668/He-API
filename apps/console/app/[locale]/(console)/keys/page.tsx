@@ -15,6 +15,7 @@
 import type { Metadata } from 'next';
 import { getTranslations, unstable_setRequestLocale } from 'next-intl/server';
 
+import { PageShell, Notice } from '@/components/ui/kit';
 import { KeysPanel } from '@/components/business/KeysPanel';
 import { fetchPublicModels } from '@/lib/api/public-models';
 import { listMyKeys } from './_actions/list-keys';
@@ -41,24 +42,27 @@ export default async function KeysPage({ params: { locale } }: PageProps) {
   const modelIds = models.data.map((m) => m.id);
 
   return (
-    <main aria-labelledby="keys-page-heading" className="space-y-6">
-      <h1 id="keys-page-heading" className="text-2xl font-semibold">
-        {t('page.title')}
-      </h1>
-
-      {result.ok ? (
-        <KeysPanel keys={result.response.data} locale={locale} availableModels={modelIds} />
-      ) : (
-        <div role="alert" className="space-y-2 rounded border border-red-300 bg-red-50 p-4 text-sm text-red-900">
-          <p>{tRoot(result.error.code)}</p>
-          <a
-            href={`/${locale}/keys`}
-            className="inline-block rounded bg-red-600 px-3 py-1.5 text-white hover:bg-red-700"
-          >
-            {t('banner.retry')}
-          </a>
-        </div>
-      )}
+    <main aria-labelledby="keys-page-heading">
+      <PageShell
+        title={t('page.title')}
+        titleId="keys-page-heading"
+        subtitle={t('page.description')}
+        width="console"
+      >
+        {result.ok ? (
+          <KeysPanel keys={result.response.data} locale={locale} availableModels={modelIds} />
+        ) : (
+          <Notice tone="error" role="alert">
+            <span>{tRoot(result.error.code)}</span>{' '}
+            <a
+              href={`/${locale}/keys`}
+              className="font-medium underline underline-offset-2 transition-colors duration-state ease-he hover:text-crimson/80"
+            >
+              {t('banner.retry')}
+            </a>
+          </Notice>
+        )}
+      </PageShell>
     </main>
   );
 }

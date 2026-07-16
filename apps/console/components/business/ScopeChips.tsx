@@ -18,7 +18,8 @@ export interface ScopeChipsProps {
   onConfigure?: () => void;
 }
 
-const CHIP = 'inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700';
+const CHIP =
+  'inline-flex items-center rounded-full border border-line bg-surface-sunken px-2 py-0.5 text-label text-ink-secondary';
 
 export function ScopeChips({ scope, onConfigure }: ScopeChipsProps) {
   const t = useTranslations('account.keys');
@@ -30,14 +31,19 @@ export function ScopeChips({ scope, onConfigure }: ScopeChipsProps) {
         <span className={CHIP}>{t('scope.all_models')}</span>
       ) : (
         models.map((m) => (
-          <span key={m} className={CHIP} title={m}>
+          // Model id is a technical identifier → monospace (brand.md naming.models).
+          <span key={m} className={`${CHIP} font-mono`} title={m}>
             {m}
           </span>
         ))
       )}
       {ip_whitelist.length > 0 &&
         (onConfigure ? (
-          <button type="button" onClick={onConfigure} className={`${CHIP} hover:bg-neutral-200`}>
+          <button
+            type="button"
+            onClick={onConfigure}
+            className={`${CHIP} transition-colors duration-state ease-he hover:border-line-strong hover:bg-surface`}
+          >
             {t('scope.ip_count', { count: ip_whitelist.length })}
           </button>
         ) : (

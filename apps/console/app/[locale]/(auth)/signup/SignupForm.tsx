@@ -8,6 +8,7 @@ import {
   registerUserForm,
   type RegisterUserResult,
 } from '@/app/[locale]/_actions/auth';
+import { Button, Notice, fieldCls, labelCls } from '@/components/ui/kit';
 
 interface SignupFormProps {
   locale: Locale;
@@ -18,21 +19,21 @@ function fieldErrorKey(result: RegisterUserResult | null, field: 'email' | 'pass
   return result.fieldErrors?.[field];
 }
 
+/** 本屏唯一的朱砂 —— 主操作(design-system.md distinctive_rule 铁律2)。 */
 function SubmitButton({ label, submittingLabel }: { label: string; submittingLabel: string }) {
   const { pending } = useFormStatus();
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="w-full rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-    >
+    <Button type="submit" variant="primary" disabled={pending} className="w-full">
       {pending ? submittingLabel : label}
-    </button>
+    </Button>
   );
 }
 
 export function SignupForm({ locale }: SignupFormProps) {
-  const t = useTranslations();
+  // 命名空间 = 文件名:messages/<locale>/auth.json → `auth`。scope 在 'auth' 上,
+  // t('signup.xxx') 解析 auth.signup.xxx、t('errors.xxx') 解析 auth.errors.xxx。
+  // 无参 useTranslations() 会让每个 key 都 MISSING_MESSAGE 并让本页 500。
+  const t = useTranslations('auth');
   const [state, formAction] = useFormState<RegisterUserResult | null, FormData>(registerUserForm, null);
 
   // The top-level alert announces the primary error code (the form-level
@@ -49,25 +50,21 @@ export function SignupForm({ locale }: SignupFormProps) {
           shape) can extract it without depending on a closure variable. */}
       <input type="hidden" name="locale" value={locale} />
 
+      {/* 行内细条,不是满宽红底 banner。 */}
       {primaryErrorKey ? (
-        <div
-          role="alert"
-          aria-live="polite"
-          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
-        >
+        <Notice tone="error" role="alert">
           {/* The i18n key is fully qualified ("auth.errors.X"); we strip the
-              "auth." prefix because this form is rendered with
-              `useTranslations()` rooted at "auth.signup". The errors live in
-              a sibling namespace so we resolve them via a root-relative key. */}
+              "auth." prefix because this form is scoped to the `auth`
+              namespace, so "errors.X" resolves auth.errors.X. */}
           {t(primaryErrorKey.replace(/^auth\./, ''))}
           {'retryAfterSeconds' in state! && state.retryAfterSeconds ? (
-            <span> ({state.retryAfterSeconds}s)</span>
+            <span className="tabular"> ({state.retryAfterSeconds}s)</span>
           ) : null}
-        </div>
+        </Notice>
       ) : null}
 
-      <div className="space-y-1">
-        <label htmlFor="email" className="block text-sm font-medium">
+      <div>
+        <label htmlFor="email" className={labelCls}>
           {t('signup.emailLabel')}
         </label>
         <input
@@ -79,17 +76,17 @@ export function SignupForm({ locale }: SignupFormProps) {
           aria-invalid={Boolean(emailErrorKey)}
           aria-describedby={emailErrorKey ? 'email-error' : undefined}
           placeholder={t('signup.emailPlaceholder')}
-          className="block w-full rounded-md border border-neutral-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          className={fieldCls}
         />
         {emailErrorKey ? (
-          <p id="email-error" className="text-sm text-red-700">
+          <p id="email-error" className="mt-1.5 text-small text-crimson">
             {t(emailErrorKey.replace(/^auth\./, ''))}
           </p>
         ) : null}
       </div>
 
-      <div className="space-y-1">
-        <label htmlFor="password" className="block text-sm font-medium">
+      <div>
+        <label htmlFor="password" className={labelCls}>
           {t('signup.passwordLabel')}
         </label>
         <input
@@ -101,13 +98,13 @@ export function SignupForm({ locale }: SignupFormProps) {
           autoComplete="new-password"
           aria-invalid={Boolean(passwordErrorKey)}
           aria-describedby={passwordErrorKey ? 'password-error' : 'password-hint'}
-          className="block w-full rounded-md border border-neutral-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          className={fieldCls}
         />
-        <p id="password-hint" className="text-xs text-neutral-600">
+        <p id="password-hint" className="mt-1.5 text-label text-ink-muted">
           {t('signup.passwordHint')}
         </p>
         {passwordErrorKey ? (
-          <p id="password-error" className="text-sm text-red-700">
+          <p id="password-error" className="mt-1.5 text-small text-crimson">
             {t(passwordErrorKey.replace(/^auth\./, ''))}
           </p>
         ) : null}
@@ -115,9 +112,12 @@ export function SignupForm({ locale }: SignupFormProps) {
 
       <SubmitButton label={t('signup.submit')} submittingLabel={t('signup.submitting')} />
 
-      <p className="text-center text-sm text-neutral-600">
+      <p className="text-small text-ink-secondary">
         {t('signup.haveAccount')}{' '}
-        <a className="text-blue-700 underline" href={`/${locale}/signin`}>
+        <a
+          className="text-ink underline decoration-line-strong underline-offset-2 transition-colors duration-state ease-he hover:decoration-ink"
+          href={`/${locale}/signin`}
+        >
           {t('signup.signinLink')}
         </a>
       </p>

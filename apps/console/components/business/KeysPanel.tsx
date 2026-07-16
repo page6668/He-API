@@ -51,6 +51,11 @@ export function KeysPanel({ keys, locale, availableModels }: KeysPanelProps) {
 
   return (
     <div className="space-y-4">
+      {/* This screen's one seal action (design-system.md IRON LAW 2). It stays
+          here rather than in PageShell's `actions` slot because the modal
+          open-state it drives lives in this client component, not in the
+          Server Component page shell. `variant="default"` already resolves
+          to the seal token via the tailwind.config.ts shadcn-alias mapping. */}
       <div className="flex items-center justify-end">
         <Button ref={newKeyRef} onClick={() => setOpen({ kind: 'create' })}>
           <Plus className="me-1.5 h-4 w-4" aria-hidden="true" />
@@ -68,7 +73,7 @@ export function KeysPanel({ keys, locale, availableModels }: KeysPanelProps) {
             onConfigure={(key) => setOpen({ kind: 'configure', key })}
             onRevoke={(key) => setOpen({ kind: 'revoke', key })}
           />
-          <p className="text-xs text-neutral-500">{t('footer.count', { count: keys.length })}</p>
+          <p className="text-label text-ink-muted">{t('footer.count', { count: keys.length })}</p>
         </>
       )}
 

@@ -65,9 +65,14 @@ export default async function ConsoleLayout({
   const intercomAppId = process.env.NEXT_PUBLIC_INTERCOM_APP_ID;
 
   return (
-    <div className="mx-auto flex max-w-5xl gap-6 px-6 py-8">
+    // 固定 240px 导航 + 流式内容区(页面各自用 PageShell 限宽 1080 居中)。
+    // 逻辑属性 border-e —— 支持 ar 等 RTL(design-system.md i18n_rtl)。
+    <div className="flex min-h-screen bg-paper">
       <IntercomMessenger appId={intercomAppId} locale={resolvedLocale} countryCode={countryCode} />
-      <aside className="w-48 shrink-0" aria-label={t('settings.sidebar.label')}>
+      <aside
+        className="w-60 shrink-0 border-e border-line bg-surface px-4 py-8"
+        aria-label={t('settings.sidebar.label')}
+      >
         {/* Story 10.8 AC2 (§9.2) — outward "Beta" marking on the authed console
             shell; env-driven, renders null on the GA face (BR-10.8.9). */}
         <div className="mb-4">
@@ -84,7 +89,7 @@ export default async function ConsoleLayout({
           ]}
         />
       </aside>
-      <section className="flex-1">{children}</section>
+      <section className="min-w-0 flex-1">{children}</section>
     </div>
   );
 }

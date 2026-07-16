@@ -16,7 +16,7 @@ import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
-import { Button } from '@/components/ui/button';
+import { Button, Notice } from '@/components/ui/kit';
 import { Dialog } from '@/components/ui/dialog';
 
 export interface ApiKeyDisplayProps {
@@ -57,22 +57,22 @@ export function ApiKeyDisplay({ plaintext, locale }: ApiKeyDisplayProps) {
 
   return (
     <div className="mx-auto max-w-lg space-y-5">
-      <h1 className="text-2xl font-semibold">{t('created.title')}</h1>
-
-      <div role="alert" aria-live="assertive" className="rounded border-2 border-red-400 bg-red-50 p-3 text-sm text-red-900">
+      {/* 页面标题由外层 PageShell 渲染(created/page.tsx),此处不再重复 <h1>。 */}
+      <Notice tone="warning" role="alert">
         {t('created.warning')}
-      </div>
+      </Notice>
 
       <div className="space-y-2">
-        <span className="block text-sm font-medium">{t('created.label')}</span>
+        <span className="block text-label text-ink-secondary">{t('created.label')}</span>
         <div className="flex items-center gap-2">
-          <code className="flex-1 break-all rounded bg-neutral-100 px-3 py-2 font-mono text-sm select-all">
+          {/* 读出区:内嵌暗底 + 等宽 —— 密钥是"读数",不是正文。 */}
+          <code className="tabular flex-1 select-all break-all rounded-md border border-line bg-surface-sunken px-3 py-2 text-small text-ink">
             {revealed ? plaintext : MASK}
           </code>
-          <Button type="button" variant="outline" onClick={toggleReveal} aria-pressed={revealed}>
+          <Button type="button" variant="secondary" onClick={toggleReveal} aria-pressed={revealed}>
             {revealed ? t('created.hide') : t('created.reveal')}
           </Button>
-          <Button type="button" variant="outline" onClick={copy}>
+          <Button type="button" variant="secondary" onClick={copy}>
             {t('created.copy')}
           </Button>
         </div>
@@ -83,27 +83,24 @@ export function ApiKeyDisplay({ plaintext, locale }: ApiKeyDisplayProps) {
       </div>
 
       <div className="flex items-center justify-between">
-        <Button type="button" onClick={confirmSaved}>
+        {/* 本屏唯一的朱砂 —— 主操作(design-system.md distinctive_rule 铁律2) */}
+        <Button type="button" variant="primary" onClick={confirmSaved}>
           {t('created.saved_cta')}
         </Button>
         <button
           type="button"
           ref={closeBtnRef}
           onClick={() => setConfirmClose(true)}
-          className="text-sm text-neutral-500 underline"
+          className="text-small text-ink-secondary underline decoration-line-strong underline-offset-2 transition-colors duration-state ease-he hover:text-ink hover:decoration-ink"
         >
           {t('created.close_without_saving')}
         </button>
       </div>
 
       {toast && (
-        <p
-          role={toast.kind === 'error' ? 'alert' : 'status'}
-          aria-live={toast.kind === 'error' ? 'assertive' : 'polite'}
-          className="text-sm text-neutral-700"
-        >
+        <Notice tone={toast.kind === 'error' ? 'error' : 'neutral'} role={toast.kind === 'error' ? 'alert' : 'status'}>
           {toast.text}
-        </p>
+        </Notice>
       )}
 
       {confirmClose && (
@@ -113,16 +110,17 @@ export function ApiKeyDisplay({ plaintext, locale }: ApiKeyDisplayProps) {
           closeOnOverlay={false}
           onClose={() => setConfirmClose(false)}
           restoreFocusTo={closeBtnRef}
+          className="rounded-lg border border-line bg-surface shadow-overlay"
         >
-          <h2 id="confirm-close-title" className="text-lg font-semibold">
+          <h2 id="confirm-close-title" className="text-h3 text-ink">
             {t('created.confirm_close.title')}
           </h2>
-          <p className="mt-2 text-sm text-neutral-700">{t('created.confirm_close.body')}</p>
+          <p className="mt-2 text-small text-ink-secondary">{t('created.confirm_close.body')}</p>
           <div className="mt-4 flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setConfirmClose(false)}>
               {t('created.confirm_close.cancel')}
             </Button>
-            <Button type="button" variant="destructive" onClick={confirmSaved}>
+            <Button type="button" variant="danger" onClick={confirmSaved}>
               {t('created.confirm_close.confirm')}
             </Button>
           </div>

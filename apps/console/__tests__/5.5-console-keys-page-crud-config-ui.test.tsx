@@ -130,17 +130,19 @@ describe('AC1: List — CapBudgetBar heuristic (client-side per Q-E5)', () => {
     expect(screen.getByText('No cap set')).toBeInTheDocument();
     expect(container.querySelector('[role="img"]')).toBeNull();
   });
-  test('5.5-UNIT-006: current/cap < 0.80 → green token', () => {
+  // 设计系统迁移(宣纸·墨·朱砂印):计量条填充改用语义 token —— 常态墨色 bg-ink,
+  // 仅在警戒/超限时升级为 bg-ochre / bg-crimson。阈值逻辑未变,只换色板。
+  test('5.5-UNIT-006: current/cap < 0.80 → ink token', () => {
     const { container } = renderIntl(<CapBudgetBar current="40.00" cap="100.00" locale="en" />);
-    expect(container.querySelector('.bg-green-500')).not.toBeNull();
+    expect(container.querySelector('.bg-ink')).not.toBeNull();
   });
-  test('5.5-UNIT-007: 0.80 <= current/cap < 1.0 → amber token', () => {
+  test('5.5-UNIT-007: 0.80 <= current/cap < 1.0 → ochre token', () => {
     const { container } = renderIntl(<CapBudgetBar current="80.00" cap="100.00" locale="en" />);
-    expect(container.querySelector('.bg-amber-500')).not.toBeNull();
+    expect(container.querySelector('.bg-ochre')).not.toBeNull();
   });
-  test('5.5-UNIT-008: current >= cap → red token + "Tripped" badge (heuristic)', () => {
+  test('5.5-UNIT-008: current >= cap → crimson token + "Tripped" badge (heuristic)', () => {
     const { container } = renderIntl(<CapBudgetBar current="100.00" cap="100.00" locale="en" />);
-    expect(container.querySelector('.bg-red-500')).not.toBeNull();
+    expect(container.querySelector('.bg-crimson')).not.toBeNull();
     expect(screen.getByText('Tripped')).toBeInTheDocument();
   });
   test('5.5-UNIT-009: formats current/cap via formatDecimal(locale,"USD") for en/de/ar', () => {
@@ -568,9 +570,9 @@ describe('AC3: Configure — ConfigureKeyDrawer / IpWhitelistEditor (component)'
     expect(onMutated).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });
-  test('[BLIND-SPOT] 5.5-BLIND-DATA-002 (GAP-CAP-001): current=0,cap=50 → heuristic renders GREEN/no-badge', () => {
+  test('[BLIND-SPOT] 5.5-BLIND-DATA-002 (GAP-CAP-001): current=0,cap=50 → heuristic renders INK/no-badge', () => {
     const { container } = renderIntl(<CapBudgetBar current="0.00" cap="50.00" locale="en" />);
-    expect(container.querySelector('.bg-green-500')).not.toBeNull();
+    expect(container.querySelector('.bg-ink')).not.toBeNull();
     expect(screen.queryByText('Tripped')).toBeNull();
   });
 });

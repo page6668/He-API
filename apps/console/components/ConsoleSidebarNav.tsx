@@ -20,7 +20,7 @@ export interface ConsoleNavItem {
 export function ConsoleSidebarNav({ items }: { items: ConsoleNavItem[] }) {
   const pathname = usePathname();
   return (
-    <nav className="flex flex-col gap-1 text-sm">
+    <nav className="flex flex-col gap-1">
       {items.map((item) => {
         const active = pathname === item.href || pathname?.startsWith(`${item.href}/`);
         return (
@@ -28,7 +28,13 @@ export function ConsoleSidebarNav({ items }: { items: ConsoleNavItem[] }) {
             key={item.href}
             href={item.href}
             aria-current={active ? 'page' : undefined}
-            className={cn('rounded px-3 py-2 hover:bg-neutral-100', active && 'bg-neutral-100 font-medium')}
+            // 激活态用墨色(bg-ink text-paper),不用朱砂 —— 朱砂每屏只落在主操作上。
+            className={cn(
+              'rounded-md px-3 py-2 text-small transition-colors duration-state ease-he',
+              active
+                ? 'bg-ink font-medium text-paper'
+                : 'text-ink-secondary hover:bg-surface-sunken hover:text-ink',
+            )}
           >
             {item.label}
           </a>

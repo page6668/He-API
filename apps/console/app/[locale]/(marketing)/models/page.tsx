@@ -11,6 +11,7 @@ import type { Metadata } from "next";
 import { getTranslations, unstable_setRequestLocale } from "next-intl/server";
 
 import { ModelsCatalog } from "@/components/business/ModelsCatalog";
+import { Notice, PageShell } from "@/components/ui/kit";
 import { fetchPublicModels } from "@/lib/api/public-models";
 
 interface PageProps {
@@ -40,28 +41,27 @@ export default async function ModelsPage({ params: { locale } }: PageProps) {
   unstable_setRequestLocale(locale);
   const data = await fetchPublicModels();
 
+  // 公开页恒限宽居中(prose-page = 1120px)—— 禁止内容裸贴视口(design-system layout.container)
   return (
-    <section>
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-slate-900">Models</h1>
-        <p className="mt-1 text-slate-600">
-          {data.data.length > 0
-            ? `Browse the ${data.data.length} models available through one unified API.`
-            : "Browse the models available through one unified API."}
-        </p>
-      </div>
-
+    <PageShell
+      width="prose-page"
+      title="Models"
+      subtitle={
+        data.data.length > 0
+          ? `Browse the ${data.data.length} models available through one unified API.`
+          : "Browse the models available through one unified API."
+      }
+    >
       {data.data.length === 0 ? (
-        <div
-          role="alert"
-          data-testid="models-fallback-banner"
-          className="border border-amber-300 bg-amber-50 px-4 py-3 rounded text-amber-900"
-        >
-          Capability data temporarily unavailable; check back shortly.
-        </div>
+        // 安静的行内提示条,不是满宽色底 banner
+        <Notice tone="warning" role="alert">
+          <span data-testid="models-fallback-banner">
+            Capability data temporarily unavailable; check back shortly.
+          </span>
+        </Notice>
       ) : (
         <ModelsCatalog models={data.data} />
       )}
-    </section>
+    </PageShell>
   );
 }

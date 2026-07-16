@@ -16,6 +16,7 @@ import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
+import { Button } from '@/components/ui/kit';
 import {
   requestLogExport,
   type LogExportFormat,
@@ -91,18 +92,25 @@ export function LogExportDialog({ locale, current }: LogExportDialogProps) {
   }
 
   return (
-    <section aria-labelledby="log-export-heading" className="rounded-lg border p-4">
-      <h2 id="log-export-heading" className="text-lg font-medium">
+    // Compact card sized to live in PageShell's header `actions` slot (kit.tsx) —
+    // the single main action on /logs. Panel-equivalent tokens (1px warm border,
+    // white surface, zero shadow); no literal <Panel> import since this needs a
+    // <section> tag to keep its aria-labelledby wiring.
+    <section
+      aria-labelledby="log-export-heading"
+      className="w-full rounded-lg border border-line bg-surface p-4 sm:w-80"
+    >
+      <h2 id="log-export-heading" className="text-h3">
         {t('export.heading')}
       </h2>
-      <p className="mt-1 text-sm text-muted-foreground">{t('export.description')}</p>
+      <p className="mt-1 text-small text-ink-secondary">{t('export.description')}</p>
 
       <form onSubmit={onSubmit} className="mt-4 space-y-4">
         <fieldset>
-          <legend className="text-sm font-medium">{t('export.format.legend')}</legend>
+          <legend className="text-label text-ink-secondary">{t('export.format.legend')}</legend>
           <div role="radiogroup" aria-label={t('export.format.legend')} className="mt-2 flex gap-4">
             {(['json', 'csv'] as const).map((f) => (
-              <label key={f} className="inline-flex items-center gap-2">
+              <label key={f} className="inline-flex items-center gap-2 text-small text-ink">
                 <input
                   type="radio"
                   name="log-export-format"
@@ -110,56 +118,84 @@ export function LogExportDialog({ locale, current }: LogExportDialogProps) {
                   checked={format === f}
                   onChange={() => setFormat(f)}
                   disabled={disabled}
+                  className="h-4 w-4 border-line-strong text-ink accent-ink"
                 />
                 {/* format codes are universal — literal + LTR even under RTL */}
-                <span dir="ltr">{f.toUpperCase()}</span>
+                <span dir="ltr" className="tabular">{f.toUpperCase()}</span>
               </label>
             ))}
           </div>
         </fieldset>
 
-        <button
+        {/* 本屏唯一的朱砂 —— 主操作(design-system.md distinctive_rule 铁律2) */}
+        <Button
           type="submit"
+          variant="primary"
           disabled={disabled}
           aria-disabled={disabled}
           aria-label={t('export.submit')}
-          className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+          className="w-full"
         >
           {pending ? t('export.submitting') : t('export.submit')}
-        </button>
+        </Button>
       </form>
 
-      {/* Status / banners — text + icon, never color-alone (BR-UI-5). */}
+      {/* Status / banners — text + icon, never color-alone (BR-UI-5). Plain
+          typographic glyphs (same convention as RequestLogsTable's status
+          icons) — deliberately not an SVG icon set here: this control's DOM
+          must never contain a raw URL substring (BR-UI-3 / 9.3-UNIT-040), and
+          bundled icon components carry an xmlns="http://…" attribute that
+          would trip that check. */}
       {inProgress && (
-        <p role="status" className="mt-4 flex items-center gap-2 text-sm" data-testid="log-export-in-progress">
-          <span aria-hidden="true">⏳</span>
+        <p
+          role="status"
+          className="mt-4 flex items-center gap-2 rounded-lg border border-line bg-surface-sunken px-3 py-2 text-small text-ink-secondary"
+          data-testid="log-export-in-progress"
+        >
+          <span aria-hidden="true">…</span>
           {t('export.status.in_progress')}
         </p>
       )}
 
       {!inProgress && isCompletedLive(current) && current && (
-        <p role="status" className="mt-4 flex items-center gap-2 text-sm" data-testid="log-export-emailed">
-          <span aria-hidden="true">✅</span>
+        <p
+          role="status"
+          className="mt-4 flex items-center gap-2 rounded-lg border border-jade/30 bg-jade/5 px-3 py-2 text-small text-jade"
+          data-testid="log-export-emailed"
+        >
+          <span aria-hidden="true">✓</span>
           {t('export.banner.emailed', { expiry: formatExpiry(current.signed_url_expires_at, locale) })}
         </p>
       )}
 
       {!inProgress && current?.status === 'failed' && (
-        <p role="status" className="mt-4 flex items-center gap-2 text-sm" data-testid="log-export-failed">
-          <span aria-hidden="true">⚠️</span>
+        <p
+          role="status"
+          className="mt-4 flex items-center gap-2 rounded-lg border border-crimson/30 bg-crimson/5 px-3 py-2 text-small text-crimson"
+          data-testid="log-export-failed"
+        >
+          <span aria-hidden="true">✕</span>
           {t('export.banner.failed')}
         </p>
       )}
 
       {notice === 'rate_limited' && (
-        <p role="alert" className="mt-4 flex items-center gap-2 text-sm" data-testid="log-export-rate-limited">
-          <span aria-hidden="true">⏳</span>
+        <p
+          role="alert"
+          className="mt-4 flex items-center gap-2 rounded-lg border border-ochre/30 bg-ochre/5 px-3 py-2 text-small text-ochre"
+          data-testid="log-export-rate-limited"
+        >
+          <span aria-hidden="true">⚠</span>
           {t('export.errors.rate_limited')}
         </p>
       )}
       {notice === 'error' && (
-        <p role="alert" className="mt-4 flex items-center gap-2 text-sm" data-testid="log-export-error">
-          <span aria-hidden="true">⚠️</span>
+        <p
+          role="alert"
+          className="mt-4 flex items-center gap-2 rounded-lg border border-crimson/30 bg-crimson/5 px-3 py-2 text-small text-crimson"
+          data-testid="log-export-error"
+        >
+          <span aria-hidden="true">✕</span>
           {t('export.errors.generic')}
         </p>
       )}

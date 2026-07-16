@@ -12,8 +12,8 @@ import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
 
-import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
+import { Panel, fieldCls, labelCls } from '@/components/ui/kit';
 import { LtrText } from '@/components/business/LtrText';
 import { requestAccountDeletion, type DeletionState } from '@/lib/account/deletion-actions';
 
@@ -27,7 +27,15 @@ export interface DeleteAccountDialogProps {
 }
 
 const nfc = (s: string) => s.normalize('NFC');
-const inputClass = 'mt-1 w-full rounded border border-neutral-300 px-3 py-2 text-sm';
+
+// kit.tsx's Button doesn't forwardRef (React 18) and this file needs refs for
+// focus management (restoreFocusTo / initialFocusRef) — hand-rolled native
+// <button>s carrying the same design tokens, mirroring Playground.tsx's idiom.
+// Destructive action → crimson outline, never seal (design-system.md 铁律2).
+const dangerBtnCls =
+  'inline-flex items-center rounded-md border border-crimson/40 bg-transparent px-4 py-2 text-small font-medium text-crimson transition-colors duration-state ease-he hover:bg-crimson/5 focus:outline-none focus:ring-2 focus:ring-crimson/25 disabled:cursor-not-allowed disabled:opacity-50';
+const ghostBtnCls =
+  'rounded-md px-4 py-2 text-small font-medium text-ink-secondary transition-colors duration-state ease-he hover:bg-surface-sunken hover:text-ink focus:outline-none focus:ring-2 focus:ring-ink/15 disabled:cursor-not-allowed disabled:opacity-50';
 
 export function DeleteAccountDialog({ state, email, locale }: DeleteAccountDialogProps) {
   const t = useTranslations('account.delete');
@@ -97,22 +105,27 @@ export function DeleteAccountDialog({ state, email, locale }: DeleteAccountDialo
   }
 
   return (
-    <section aria-labelledby="danger-zone-heading" className="mt-10 rounded-lg border border-red-200 p-6">
-      <h2 id="danger-zone-heading" className="text-lg font-semibold text-red-700">
-        {t('cta.label')}
-      </h2>
-      <p className="mt-1 text-sm text-neutral-600">{t('dialog.consequences')}</p>
-      <div className="mt-4">
-        <Button
+    <section aria-labelledby="danger-zone-heading">
+      {/* Danger Zone = a normal Panel with a quiet crimson-toned heading —
+          no full-width red banner (design-system.md DANGER ZONE rule). */}
+      <Panel className="space-y-4">
+        <div>
+          <h2 id="danger-zone-heading" className="text-h3 text-crimson">
+            {t('cta.label')}
+          </h2>
+          <p className="mt-1 text-small text-ink-secondary">{t('dialog.consequences')}</p>
+        </div>
+        <button
+          type="button"
           ref={ctaRef}
-          variant="destructive"
           disabled={isPendingDeletion}
           title={isPendingDeletion ? t('cta.disabled_pending') : undefined}
           onClick={() => setOpen(true)}
+          className={dangerBtnCls}
         >
           {t('cta.label')}
-        </Button>
-      </div>
+        </button>
+      </Panel>
 
       {open && (
         <Dialog
@@ -122,43 +135,44 @@ export function DeleteAccountDialog({ state, email, locale }: DeleteAccountDialo
           onClose={close}
           restoreFocusTo={ctaRef}
           initialFocusRef={cancelRef}
+          className="rounded-lg border border-line bg-surface p-6 shadow-overlay"
         >
-          <h3 id="delete-account-title" className="text-lg font-semibold">
+          <h3 id="delete-account-title" className="text-h3 text-ink">
             {t('dialog.title')}
           </h3>
-          <p role="alert" aria-live="assertive" className="mt-2 text-sm text-neutral-700">
+          <p role="alert" aria-live="assertive" className="mt-2 text-small text-ink-secondary">
             {t('dialog.consequences')}
           </p>
 
           <div className="mt-4 space-y-3">
             {state.has_password ? (
-              <label className="block text-sm font-medium">
-                {t('dialog.password_label')}
+              <label className="block">
+                <span className={labelCls}>{t('dialog.password_label')}</span>
                 <input
                   type="password"
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className={inputClass}
+                  className={fieldCls}
                 />
               </label>
             ) : (
-              <label className="block text-sm font-medium">
-                {t('dialog.email_confirm_label')}
+              <label className="block">
+                <span className={labelCls}>{t('dialog.email_confirm_label')}</span>
                 <LtrText as="div">
                   <input
                     type="email"
                     autoComplete="off"
                     value={confirmEmail}
                     onChange={(e) => setConfirmEmail(e.target.value)}
-                    className={inputClass}
+                    className={fieldCls}
                   />
                 </LtrText>
               </label>
             )}
             {state.totp_enabled && (
-              <label className="block text-sm font-medium">
-                {t('dialog.totp_label')}
+              <label className="block">
+                <span className={labelCls}>{t('dialog.totp_label')}</span>
                 <LtrText as="div">
                   <input
                     inputMode="numeric"
@@ -167,31 +181,36 @@ export function DeleteAccountDialog({ state, email, locale }: DeleteAccountDialo
                     autoComplete="one-time-code"
                     value={totp}
                     onChange={(e) => setTotp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    className={inputClass}
+                    className={`${fieldCls} tabular`}
                   />
                 </LtrText>
               </label>
             )}
             {fieldError && (
-              <p role="alert" className="text-sm text-red-600">
+              <p role="alert" className="text-small text-crimson">
                 {fieldError}
               </p>
             )}
             {toast && (
-              <p role="status" className="text-sm text-red-600">
+              <p role="status" className="text-small text-crimson">
                 {toast}
               </p>
             )}
           </div>
 
           <div className="mt-6 flex justify-end gap-2">
-            <Button ref={cancelRef} variant="ghost" onClick={close}>
+            <button type="button" ref={cancelRef} onClick={close} className={ghostBtnCls}>
               {t('dialog.cancel')}
-            </Button>
-            <Button variant="destructive" disabled={confirmDisabled} onClick={onConfirm}>
+            </button>
+            <button
+              type="button"
+              disabled={confirmDisabled}
+              onClick={onConfirm}
+              className={dangerBtnCls}
+            >
               {isPending && <Loader2 className="me-1.5 h-4 w-4 animate-spin" aria-hidden="true" />}
               {t('dialog.confirm')}
-            </Button>
+            </button>
           </div>
         </Dialog>
       )}

@@ -11,8 +11,9 @@
  */
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { unstable_setRequestLocale } from 'next-intl/server';
+import { getTranslations, unstable_setRequestLocale } from 'next-intl/server';
 
+import { PageShell } from '@/components/ui/kit';
 import { ApiKeyDisplay } from '@/components/business/ApiKeyDisplay';
 import { PLAINTEXT_RE } from '@/lib/api/me-keys';
 
@@ -29,7 +30,7 @@ interface PageProps {
   searchParams: { plaintext?: string };
 }
 
-export default function CreatedKeyPage({
+export default async function CreatedKeyPage({
   params: { locale, api_key_id },
   searchParams,
 }: PageProps) {
@@ -40,9 +41,16 @@ export default function CreatedKeyPage({
     notFound();
   }
 
+  // 命名空间沿用 ApiKeyDisplay 既有的 'account.keys'(account.json 内的子路径,
+  // 非顶层命名空间提升 —— 与 client 组件的 useTranslations('account.keys') 一致)。
+  const t = await getTranslations({ locale, namespace: 'account.keys' });
+
   return (
-    <section className="px-6 py-8">
-      <ApiKeyDisplay plaintext={plaintext} apiKeyId={api_key_id} locale={locale} />
-    </section>
+    // 内容恒有最大宽度并居中 —— 治「撑满整屏」(design-system.md layout.container)
+    <main aria-labelledby="created-key-heading">
+      <PageShell title={t('created.title')} titleId="created-key-heading" width="console">
+        <ApiKeyDisplay plaintext={plaintext} apiKeyId={api_key_id} locale={locale} />
+      </PageShell>
+    </main>
   );
 }

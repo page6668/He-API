@@ -53,28 +53,28 @@ export function CapabilityMatrix({ models }: CapabilityMatrixProps): JSX.Element
   return (
     <>
       {/* Desktop matrix table — md: breakpoint inclusive. */}
-      <table className="hidden md:table w-full border-collapse text-sm">
-        <caption className="text-start text-slate-600 mb-2">
+      <table className="hidden md:table w-full border-collapse text-small">
+        <caption className="text-start text-ink-secondary mb-2">
           {t("table.caption")}
         </caption>
         <thead>
-          <tr className="border-b">
-            <th scope="col" className="text-start p-2">{t("table.column.model")}</th>
-            <th scope="col" className="text-start p-2">{t("table.column.vendor")}</th>
-            <th scope="col" className="p-2">{t("table.column.chat")}</th>
-            <th scope="col" className="p-2">{t("table.column.streaming")}</th>
-            <th scope="col" className="p-2">{t("table.column.functionCalling")}</th>
-            <th scope="col" className="p-2">{t("table.column.vision")}</th>
-            <th scope="col" className="p-2">{t("table.column.jsonMode")}</th>
-            <th scope="col" className="p-2 text-end">{t("table.column.contextWindow")}</th>
-            <th scope="col" className="p-2 text-end">{t("table.column.maxOutput")}</th>
+          <tr className="border-b border-line text-label text-ink-muted">
+            <th scope="col" className="text-start p-2 font-medium">{t("table.column.model")}</th>
+            <th scope="col" className="text-start p-2 font-medium">{t("table.column.vendor")}</th>
+            <th scope="col" className="p-2 font-medium">{t("table.column.chat")}</th>
+            <th scope="col" className="p-2 font-medium">{t("table.column.streaming")}</th>
+            <th scope="col" className="p-2 font-medium">{t("table.column.functionCalling")}</th>
+            <th scope="col" className="p-2 font-medium">{t("table.column.vision")}</th>
+            <th scope="col" className="p-2 font-medium">{t("table.column.jsonMode")}</th>
+            <th scope="col" className="p-2 text-end font-medium">{t("table.column.contextWindow")}</th>
+            <th scope="col" className="p-2 text-end font-medium">{t("table.column.maxOutput")}</th>
           </tr>
         </thead>
         <tbody>
           {models.map((m) => (
-            <tr key={m.id} className="border-b">
-              <th scope="row" className="text-start p-2 font-mono">{m.id}</th>
-              <td className="p-2">{t(`vendor.${vendorKey(m.owned_by)}` as never)}</td>
+            <tr key={m.id} className="border-b border-line">
+              <th scope="row" className="text-start p-2 font-mono text-ink">{m.id}</th>
+              <td className="p-2 text-ink-secondary">{t(`vendor.${vendorKey(m.owned_by)}` as never)}</td>
               <td className="p-2 text-center">
                 <CapabilityBadge present={m.capabilities.chat} label={m.capabilities.chat ? yesLabel : noLabel} />
               </td>
@@ -90,10 +90,10 @@ export function CapabilityMatrix({ models }: CapabilityMatrixProps): JSX.Element
               <td className="p-2 text-center">
                 <CapabilityBadge present={m.capabilities.json_mode} label={m.capabilities.json_mode ? yesLabel : noLabel} />
               </td>
-              <td className="p-2 text-end tabular-nums">
+              <td className="p-2 text-end tabular text-ink">
                 {numberFormat.format(m.capabilities.context_window_tokens)}
               </td>
-              <td className="p-2 text-end tabular-nums">
+              <td className="p-2 text-end tabular text-ink">
                 {numberFormat.format(m.capabilities.max_output_tokens)}
               </td>
             </tr>
@@ -108,13 +108,13 @@ export function CapabilityMatrix({ models }: CapabilityMatrixProps): JSX.Element
             key={m.id}
             role="region"
             aria-label={m.id}
-            className="border rounded p-4"
+            className="rounded-lg border border-line bg-surface p-4"
           >
-            <h2 className="font-mono text-base mb-1">{m.id}</h2>
-            <p className="text-sm text-slate-600 mb-3">
+            <h2 className="font-mono text-h3 text-ink mb-1">{m.id}</h2>
+            <p className="text-small text-ink-secondary mb-3">
               {t(`vendor.${vendorKey(m.owned_by)}` as never)}
             </p>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-small text-ink-secondary">
               <dt>{t("capability.chat")}</dt>
               <dd>
                 <CapabilityBadge present={m.capabilities.chat} label={m.capabilities.chat ? yesLabel : noLabel} />
@@ -136,9 +136,9 @@ export function CapabilityMatrix({ models }: CapabilityMatrixProps): JSX.Element
                 <CapabilityBadge present={m.capabilities.json_mode} label={m.capabilities.json_mode ? yesLabel : noLabel} />
               </dd>
               <dt>{t("capability.contextWindow")}</dt>
-              <dd className="tabular-nums">{numberFormat.format(m.capabilities.context_window_tokens)}</dd>
+              <dd className="tabular text-ink">{numberFormat.format(m.capabilities.context_window_tokens)}</dd>
               <dt>{t("capability.maxOutput")}</dt>
-              <dd className="tabular-nums">{numberFormat.format(m.capabilities.max_output_tokens)}</dd>
+              <dd className="tabular text-ink">{numberFormat.format(m.capabilities.max_output_tokens)}</dd>
             </dl>
           </article>
         ))}

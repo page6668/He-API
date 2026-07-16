@@ -11,6 +11,7 @@ import { isLocale, defaultLocale, type Locale } from '@/i18n/config';
 import { getMyProfile } from './_actions/get-my-profile';
 import { ProfileForm } from '@/components/business/ProfileForm';
 import { RoutingStrategyForm } from '@/components/business/RoutingStrategyForm';
+import { PageShell, Notice } from '@/components/ui/kit';
 
 interface ProfilePageProps {
   params: { locale: string };
@@ -32,35 +33,45 @@ export default async function ProfilePage({ params: { locale } }: ProfilePagePro
     // redirect as defence-in-depth.)
     redirect(`/${resolvedLocale}/account/recovery`);
   }
+
+  // Hoisted so both the error branch and the success branch can title the
+  // PageShell (the previous version fetched this twice, only in the error
+  // branch — pure visual-refactor plumbing, no translation content changed).
+  const t = await getTranslations('account');
+
   if (result.kind === 'error') {
-    const t = await getTranslations('account');
     return (
-      <section className="space-y-4 py-8">
-        <h1 className="text-2xl font-semibold">{(await getTranslations('account'))('profile.title')}</h1>
-        <p role="alert" className="text-sm text-red-600">
-          {t('profile.errors.load_failed')}
-        </p>
-      </section>
+      <main aria-labelledby="profile-form-heading">
+        <PageShell title={t('profile.title')} titleId="profile-form-heading" width="console">
+          <Notice tone="error" role="alert">
+            {t('profile.errors.load_failed')}
+          </Notice>
+        </PageShell>
+      </main>
     );
   }
 
   return (
-    <div className="space-y-10">
-      <ProfileForm
-        defaults={result.data}
-        etag={result.etag}
-        currentLocale={resolvedLocale}
-      />
-      {/* Story 6.5 — account-level default routing strategy (Q-H: inline card on
-          the existing settings surface). Shares the profile etag for the
-          optimistic-concurrency If-Match contract. */}
-      <section className="border-t pt-10">
-        <RoutingStrategyForm
-          defaultRoutingStrategy={result.data.default_routing_strategy ?? null}
-          etag={result.etag}
-          currentLocale={resolvedLocale}
-        />
-      </section>
-    </div>
+    <main aria-labelledby="profile-form-heading">
+      <PageShell title={t('profile.title')} titleId="profile-form-heading" width="console">
+        <div className="space-y-10">
+          <ProfileForm
+            defaults={result.data}
+            etag={result.etag}
+            currentLocale={resolvedLocale}
+          />
+          {/* Story 6.5 — account-level default routing strategy (Q-H: inline card on
+              the existing settings surface). Shares the profile etag for the
+              optimistic-concurrency If-Match contract. */}
+          <section className="border-t border-line pt-10">
+            <RoutingStrategyForm
+              defaultRoutingStrategy={result.data.default_routing_strategy ?? null}
+              etag={result.etag}
+              currentLocale={resolvedLocale}
+            />
+          </section>
+        </div>
+      </PageShell>
+    </main>
   );
 }

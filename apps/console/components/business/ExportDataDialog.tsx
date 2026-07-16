@@ -113,11 +113,11 @@ export function ExportDataDialog({ currentExport }: ExportDataDialogProps) {
           onClose={closeDialog}
           restoreFocusTo={ctaRef}
         >
-          <h2 id="export-data-dialog-title" className="text-lg font-semibold">
+          <h2 id="export-data-dialog-title" className="text-h3 text-ink">
             {t('export.dialog.title')}
           </h2>
-          <p className="mt-2 text-sm text-neutral-700">{t('export.dialog.body_intro')}</p>
-          <ul className="mt-3 list-disc space-y-1 ps-6 text-sm">
+          <p className="mt-2 text-small text-ink-secondary">{t('export.dialog.body_intro')}</p>
+          <ul className="mt-3 list-disc space-y-1 ps-6 text-small text-ink-secondary">
             <li>{t('export.dialog.categories.users')}</li>
             <li>{t('export.dialog.categories.api_keys')}</li>
             <li>{t('export.dialog.categories.request_logs')}</li>
@@ -125,7 +125,7 @@ export function ExportDataDialog({ currentExport }: ExportDataDialogProps) {
             <li>{t('export.dialog.categories.balances')}</li>
             <li>{t('export.dialog.categories.safety_logs')}</li>
           </ul>
-          <p className="mt-3 text-xs text-neutral-500">{t('export.dialog.slo')}</p>
+          <p className="mt-3 text-label text-ink-muted">{t('export.dialog.slo')}</p>
           <div className="mt-5 flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setOpen(false)} disabled={isPending}>
               {t('export.dialog.cancel')}
@@ -160,10 +160,13 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   { onClick, disabled, variant = 'default', children, title, ...rest },
   ref,
 ) {
-  const base = 'inline-flex items-center rounded px-3 py-1.5 text-sm transition';
+  const base =
+    'inline-flex items-center rounded-md px-4 py-2 text-small font-medium transition-colors duration-state ease-he focus:outline-none focus:ring-2 disabled:cursor-not-allowed';
   const variants = {
-    default: 'bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-300 disabled:text-neutral-500',
-    ghost: 'bg-transparent text-neutral-700 hover:bg-neutral-100 disabled:text-neutral-400',
+    // 本屏唯一朱砂:CTA 与其对话框内的 Confirm 是同一动作的两步(触发/完成),
+    // 不算两处朱砂 —— 打开对话框时 CTA 已被 ink 暗色遮罩挡住(design-system.md 铁律2)。
+    default: 'bg-seal text-white hover:bg-seal-hover focus:ring-seal/30 disabled:opacity-40',
+    ghost: 'text-ink-secondary hover:bg-surface-sunken hover:text-ink focus:ring-ink/15 disabled:opacity-50',
   };
   return (
     <button
@@ -188,12 +191,12 @@ interface BannerProps {
 
 function Banner({ variant, children, role = 'status' }: BannerProps) {
   const styles = {
-    info: 'bg-blue-50 text-blue-900 border-blue-200',
-    success: 'bg-green-50 text-green-900 border-green-200',
-    error: 'bg-red-50 text-red-900 border-red-200',
+    info: 'border-line bg-surface text-ink-secondary',
+    success: 'border-jade/30 bg-jade/5 text-jade',
+    error: 'border-crimson/30 bg-crimson/5 text-crimson',
   } as const;
   return (
-    <div role={role} className={`rounded border px-3 py-2 text-sm ${styles[variant]}`}>
+    <div role={role} className={`rounded-lg border px-4 py-2.5 text-small ${styles[variant]}`}>
       {children}
     </div>
   );
@@ -272,13 +275,17 @@ function Dialog({ titleId, onClose, restoreFocusTo, children }: DialogProps) {
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/20"
       onClick={(e) => {
         // Click-on-overlay closes; clicks inside the content stop here.
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div ref={contentRef} tabIndex={-1} className="w-full max-w-md rounded bg-white p-5 shadow-lg outline-none">
+      <div
+        ref={contentRef}
+        tabIndex={-1}
+        className="w-full max-w-md rounded-lg border border-line bg-surface p-6 shadow-overlay outline-none"
+      >
         {children}
       </div>
     </div>

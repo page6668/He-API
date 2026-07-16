@@ -17,6 +17,7 @@ import { useTranslations } from 'next-intl';
 import { type LogEntry, type LogStatusClass, type UsageLogsPage } from '@/lib/api/me-usage';
 import { LtrText } from '@/components/business/LtrText';
 import { openSupportWithRequestId } from '@/lib/intercom/messenger';
+import { EmptyState, Panel } from '@/components/ui/kit';
 
 export interface RequestLogsTableProps {
   page: UsageLogsPage;
@@ -36,6 +37,14 @@ const STATUS_ICON: Record<LogStatusClass, string> = {
   success: '✓',
   client_error: '⚠',
   server_error: '✕',
+};
+
+// Semantic status colour, always paired with the icon+text above (never
+// colour-alone) — design-system.md STATUS COLORS.
+const STATUS_COLOR: Record<LogStatusClass, string> = {
+  success: 'text-jade',
+  client_error: 'text-ochre',
+  server_error: 'text-crimson',
 };
 
 function formatNumber(n: number, locale: string): string {
@@ -61,35 +70,36 @@ export function RequestLogsTable({ page, locale, resetHref }: RequestLogsTablePr
 
   if (page.total_count === 0 || page.items.length === 0) {
     return (
-      <div
-        data-testid="request-logs-empty"
-        className="rounded-lg border border-neutral-200 p-8 text-center"
-      >
-        <p className="text-sm text-neutral-600">{t('empty.title')}</p>
-        <a
-          href={resetHref}
-          className="mt-3 inline-block rounded bg-neutral-100 px-3 py-1.5 text-sm hover:bg-neutral-200"
-        >
-          {t('empty.reset')}
-        </a>
+      <div data-testid="request-logs-empty">
+        <EmptyState
+          title={t('empty.title')}
+          action={
+            <a
+              href={resetHref}
+              className="rounded-md border border-line-strong bg-surface px-3 py-1.5 text-small font-medium text-ink transition-colors duration-state ease-he hover:border-ink-muted"
+            >
+              {t('empty.reset')}
+            </a>
+          }
+        />
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-neutral-200">
-      <table className="w-full text-sm">
+    <Panel padded={false} className="overflow-x-auto">
+      <table className="w-full text-small">
         <caption className="sr-only">{t('table.caption')}</caption>
-        <thead className="border-b border-neutral-200 bg-neutral-50 text-start">
+        <thead className="border-b border-line bg-surface-sunken text-start">
           <tr>
-            <th scope="col" className="px-3 py-2 font-medium">{t('table.columns.time')}</th>
-            <th scope="col" className="px-3 py-2 font-medium">{t('table.columns.model')}</th>
-            <th scope="col" className="px-3 py-2 font-medium">{t('table.columns.status')}</th>
-            <th scope="col" className="px-3 py-2 font-medium">{t('table.columns.streaming')}</th>
-            <th scope="col" className="px-3 py-2 font-medium">{t('table.columns.tokens')}</th>
-            <th scope="col" className="px-3 py-2 font-medium">{t('table.columns.latency')}</th>
-            <th scope="col" className="px-3 py-2 font-medium">{t('table.columns.apiKey')}</th>
-            <th scope="col" className="px-3 py-2 font-medium">{t('table.columns.requestId')}</th>
+            <th scope="col" className="px-3 py-3 text-label font-medium text-ink-muted">{t('table.columns.time')}</th>
+            <th scope="col" className="px-3 py-3 text-label font-medium text-ink-muted">{t('table.columns.model')}</th>
+            <th scope="col" className="px-3 py-3 text-label font-medium text-ink-muted">{t('table.columns.status')}</th>
+            <th scope="col" className="px-3 py-3 text-label font-medium text-ink-muted">{t('table.columns.streaming')}</th>
+            <th scope="col" className="px-3 py-3 text-label font-medium text-ink-muted">{t('table.columns.tokens')}</th>
+            <th scope="col" className="px-3 py-3 text-label font-medium text-ink-muted">{t('table.columns.latency')}</th>
+            <th scope="col" className="px-3 py-3 text-label font-medium text-ink-muted">{t('table.columns.apiKey')}</th>
+            <th scope="col" className="px-3 py-3 text-label font-medium text-ink-muted">{t('table.columns.requestId')}</th>
           </tr>
         </thead>
         <tbody>
@@ -98,7 +108,7 @@ export function RequestLogsTable({ page, locale, resetHref }: RequestLogsTablePr
           ))}
         </tbody>
       </table>
-    </div>
+    </Panel>
   );
 }
 
@@ -112,39 +122,41 @@ function LogRow({ row, locale, t }: LogRowProps) {
   const cls = logStatusClass(row.status_code);
   const tSupport = useTranslations('support');
   return (
-    <tr className="border-b border-neutral-100 last:border-0">
+    <tr className="border-b border-line last:border-0">
       {/* LTR islands (BR-10.1.8) via the reusable <LtrText> primitive — these
-          bidi-neutral values stay left-to-right even under an ar (RTL) document. */}
-      <LtrText as="td" className="whitespace-nowrap px-3 py-2 tabular-nums">
+          bidi-neutral values stay left-to-right even under an ar (RTL) document.
+          Timestamps/tokens/latency are numeric readouts and model id is a
+          technical value — all `tabular` (Iron Law 1). */}
+      <LtrText as="td" className="tabular whitespace-nowrap px-3 py-3 text-ink">
         {formatTimestamp(row.ts, locale)}
       </LtrText>
-      <LtrText as="td" className="px-3 py-2">{row.model}</LtrText>
-      <td className="px-3 py-2">
+      <LtrText as="td" className="tabular px-3 py-3 text-ink">{row.model}</LtrText>
+      <td className="px-3 py-3">
         {/* text + icon, NOT colour-only (WCAG 1.4.1) */}
-        <span className="inline-flex items-center gap-1" data-status={cls}>
+        <span className={`inline-flex items-center gap-1 ${STATUS_COLOR[cls]}`} data-status={cls}>
           <span aria-hidden="true">{STATUS_ICON[cls]}</span>
           <span>{t(`status.${cls}`)}</span>
           <span className="sr-only">({row.status_code})</span>
         </span>
       </td>
-      <td className="px-3 py-2">
+      <td className="px-3 py-3 text-ink-secondary">
         {row.is_streaming ? t('table.streaming.yes') : t('table.streaming.no')}
       </td>
-      <LtrText as="td" className="px-3 py-2 tabular-nums">{formatNumber(row.total_tokens, locale)}</LtrText>
-      <LtrText as="td" className="whitespace-nowrap px-3 py-2 tabular-nums">
+      <LtrText as="td" className="tabular px-3 py-3 text-ink">{formatNumber(row.total_tokens, locale)}</LtrText>
+      <LtrText as="td" className="tabular whitespace-nowrap px-3 py-3 text-ink">
         {formatNumber(row.latency_ms_total, locale)} {t('table.latencyUnit')}
       </LtrText>
-      <td className="px-3 py-2">
-        <code className="text-xs" dir="ltr" title={row.api_key_id}>{row.api_key_id}</code>
+      <td className="px-3 py-3">
+        <code className="tabular text-small text-ink-secondary" dir="ltr" title={row.api_key_id}>{row.api_key_id}</code>
       </td>
-      <td className="px-3 py-2">
-        <code className="text-xs" dir="ltr">{row.he_request_id}</code>
+      <td className="px-3 py-3">
+        <code className="tabular text-small text-ink-secondary" dir="ltr">{row.he_request_id}</code>
         {/* Story 10.7 AC2 (BR-10.7.9 / front-end-spec:537) — one-click brings
             the non-PII he_request_id handle into the customer-support session.
             Degrades silently if the Messenger isn't booted (region-gated / blocked). */}
         <button
           type="button"
-          className="ms-2 text-xs text-blue-600 underline hover:text-blue-800"
+          className="ms-2 text-label text-ink-secondary underline transition-colors duration-state ease-he hover:text-ink"
           aria-label={tSupport('logEntry.ariaLabel', { requestId: row.he_request_id })}
           onClick={() => openSupportWithRequestId(row.he_request_id)}
         >

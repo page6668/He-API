@@ -15,7 +15,7 @@ import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { Button } from '@/components/ui/button';
+import { Button, Notice, fieldCls, labelCls } from '@/components/ui/kit';
 import { Dialog } from '@/components/ui/dialog';
 import { KeyNameSchema } from '@/lib/api/me-keys';
 import { createMyKey } from '@/app/[locale]/(console)/keys/_actions/create-key';
@@ -78,14 +78,19 @@ export function CreateKeyModal({ locale, onClose, triggerRef }: CreateKeyModalPr
   }
 
   return (
-    <Dialog titleId="create-key-modal-title" onClose={onClose} restoreFocusTo={triggerRef}>
+    <Dialog
+      titleId="create-key-modal-title"
+      onClose={onClose}
+      restoreFocusTo={triggerRef}
+      className="rounded-lg border border-line bg-surface shadow-overlay"
+    >
       <form onSubmit={onSubmit} className="space-y-4">
-        <h2 id="create-key-modal-title" className="text-lg font-semibold">
+        <h2 id="create-key-modal-title" className="text-h3 text-ink">
           {t('create.title')}
         </h2>
 
         <div className="space-y-1.5">
-          <label htmlFor="key-name-input" className="block text-sm font-medium">
+          <label htmlFor="key-name-input" className={labelCls}>
             {t('create.name_label')}
           </label>
           <input
@@ -103,26 +108,27 @@ export function CreateKeyModal({ locale, onClose, triggerRef }: CreateKeyModalPr
             aria-required="true"
             aria-invalid={fieldError ? true : undefined}
             aria-describedby={fieldError ? 'key-name-error' : undefined}
-            className="w-full rounded border px-3 py-2"
+            className={fieldCls}
           />
           {fieldError && (
-            <p id="key-name-error" role="alert" className="text-sm text-red-600">
+            <p id="key-name-error" role="alert" className="text-label text-crimson">
               {tRoot(fieldError)}
             </p>
           )}
         </div>
 
         {toast && (
-          <p role="alert" aria-live="assertive" className="rounded border border-orange-300 bg-orange-50 px-3 py-2 text-sm text-orange-900">
+          <Notice tone="warning" role="alert">
             {toast}
-          </p>
+          </Notice>
         )}
 
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose} disabled={isPending}>
             {t('create.cancel')}
           </Button>
-          <Button type="submit" disabled={disabled}>
+          {/* 本屏唯一的朱砂 —— 主操作(design-system.md distinctive_rule 铁律2) */}
+          <Button type="submit" variant="primary" disabled={disabled}>
             {isPending && <Loader2 className="me-1.5 h-4 w-4 animate-spin" aria-hidden="true" />}
             {t('create.submit')}
           </Button>

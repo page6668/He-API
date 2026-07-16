@@ -17,6 +17,8 @@ import { locales, type Locale } from '@/i18n/config';
 import type { Profile } from '@/app/[locale]/(console)/settings/profile/_actions/get-my-profile';
 import { updateMyProfile, type UpdateMyProfileResult } from '@/app/[locale]/(console)/settings/profile/_actions/update-my-profile';
 import { profileFormSchema, type ProfileFormValues } from './ProfileForm.schema';
+import { Button, Notice, Panel, fieldCls, labelCls } from '@/components/ui/kit';
+import { cn } from '@/lib/utils';
 
 // Native-language labels for the locale Select. Source-of-truth lives in
 // messages/{locale}/common.json under `localeSwitch.options.*`; this list is
@@ -106,152 +108,151 @@ export function ProfileForm({ defaults, etag, currentLocale }: ProfileFormProps)
   }
 
   return (
+    // 标题现由外层 PageShell 渲染(titleId="profile-form-heading"),此处仅保留
+    // aria-labelledby 接线,避免重复标题(design-system.md 页面容器规则)。
     <form aria-labelledby="profile-form-heading" className="space-y-6" onSubmit={onSubmit}>
-      <header className="space-y-1">
-        <h1 id="profile-form-heading" className="text-2xl font-semibold">
-          {t('profile.title')}
-        </h1>
-      </header>
+      <Panel className="space-y-5">
+        {/* Display name */}
+        <div>
+          <label htmlFor="display_name" className={labelCls}>
+            {t('profile.display_name.label')}
+          </label>
+          <input
+            id="display_name"
+            name="display_name"
+            type="text"
+            value={displayName}
+            placeholder={t('profile.display_name.placeholder')}
+            onChange={(e) => setDisplayName(e.target.value)}
+            aria-invalid={result?.kind === 'validation' && result.fieldErrors?.display_name ? true : undefined}
+            className={fieldCls}
+            maxLength={100}
+          />
+          {result?.kind === 'validation' && result.fieldErrors?.display_name && (
+            <p role="alert" aria-live="polite" className="mt-1.5 text-small text-crimson">
+              {t(result.fieldErrors.display_name as never)}
+            </p>
+          )}
+        </div>
 
-      {/* Display name */}
-      <div className="space-y-2">
-        <label htmlFor="display_name" className="block text-sm font-medium">
-          {t('profile.display_name.label')}
-        </label>
-        <input
-          id="display_name"
-          name="display_name"
-          type="text"
-          value={displayName}
-          placeholder={t('profile.display_name.placeholder')}
-          onChange={(e) => setDisplayName(e.target.value)}
-          aria-invalid={result?.kind === 'validation' && result.fieldErrors?.display_name ? true : undefined}
-          className="w-full rounded border px-3 py-2"
-          maxLength={100}
-        />
-        {result?.kind === 'validation' && result.fieldErrors?.display_name && (
-          <p role="alert" aria-live="polite" className="text-sm text-red-600">
-            {t(result.fieldErrors.display_name as never)}
-          </p>
-        )}
-      </div>
+        {/* Email (read-only) */}
+        <div>
+          <label htmlFor="email" className={labelCls}>
+            {t('profile.email.label')}
+          </label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            value={defaults.email}
+            readOnly
+            aria-readonly="true"
+            title={t('profile.email.read_only_tooltip')}
+            className={cn(fieldCls, 'bg-surface-sunken text-ink-secondary')}
+          />
+          <p className="mt-1.5 text-small text-ink-muted">{t('profile.email.read_only_hint')}</p>
+        </div>
 
-      {/* Email (read-only) */}
-      <div className="space-y-2">
-        <label htmlFor="email" className="block text-sm font-medium">
-          {t('profile.email.label')}
-        </label>
-        <input
-          id="email"
-          name="email"
-          type="email"
-          value={defaults.email}
-          readOnly
-          aria-readonly="true"
-          title={t('profile.email.read_only_tooltip')}
-          className="w-full rounded border bg-neutral-50 px-3 py-2 text-neutral-600"
-        />
-        <p className="text-xs text-neutral-500">{t('profile.email.read_only_hint')}</p>
-      </div>
+        {/* Locale */}
+        <div>
+          <label htmlFor="locale" className={labelCls}>
+            {t('profile.locale.label')}
+          </label>
+          <select
+            id="locale"
+            name="locale"
+            value={selectedLocale}
+            onChange={(e) => setSelectedLocale(e.target.value as Locale)}
+            className={fieldCls}
+          >
+            {locales.map((loc) => (
+              <option key={loc} value={loc}>
+                {LOCALE_NATIVE_LABELS[loc]}
+              </option>
+            ))}
+          </select>
+        </div>
 
-      {/* Locale */}
-      <div className="space-y-2">
-        <label htmlFor="locale" className="block text-sm font-medium">
-          {t('profile.locale.label')}
-        </label>
-        <select
-          id="locale"
-          name="locale"
-          value={selectedLocale}
-          onChange={(e) => setSelectedLocale(e.target.value as Locale)}
-          className="w-full rounded border px-3 py-2"
-        >
-          {locales.map((loc) => (
-            <option key={loc} value={loc}>
-              {LOCALE_NATIVE_LABELS[loc]}
-            </option>
-          ))}
-        </select>
-      </div>
+        {/* Timezone */}
+        <div>
+          <label htmlFor="timezone" className={labelCls}>
+            {t('profile.timezone.label')}
+          </label>
+          <select
+            id="timezone"
+            name="timezone"
+            value={selectedTimezone}
+            onChange={(e) => setSelectedTimezone(e.target.value)}
+            className={`${fieldCls} font-mono`}
+          >
+            {getTimezones().map((tz) => (
+              <option key={tz} value={tz}>
+                {tz}
+              </option>
+            ))}
+          </select>
+        </div>
 
-      {/* Timezone */}
-      <div className="space-y-2">
-        <label htmlFor="timezone" className="block text-sm font-medium">
-          {t('profile.timezone.label')}
-        </label>
-        <select
-          id="timezone"
-          name="timezone"
-          value={selectedTimezone}
-          onChange={(e) => setSelectedTimezone(e.target.value)}
-          className="w-full rounded border px-3 py-2"
-        >
-          {getTimezones().map((tz) => (
-            <option key={tz} value={tz}>
-              {tz}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Badges */}
-      <div className="flex flex-wrap gap-2 text-xs">
-        <span className="rounded-full bg-neutral-100 px-3 py-1">
-          {defaults.totp_enabled
-            ? t('profile.security.totp_enabled')
-            : t('profile.security.totp_disabled')}
-        </span>
-        <span className="rounded-full bg-neutral-100 px-3 py-1">
-          {defaults.oauth_provider === 'google'
-            ? t('profile.auth_method.oauth_google')
-            : defaults.oauth_provider === 'github'
-              ? t('profile.auth_method.oauth_github')
-              : t('profile.auth_method.email_password')}
-        </span>
-      </div>
+        {/* Badges */}
+        <div className="flex flex-wrap gap-2">
+          <span className="rounded-full border border-line bg-surface-sunken px-3 py-1 text-label text-ink-secondary">
+            {defaults.totp_enabled
+              ? t('profile.security.totp_enabled')
+              : t('profile.security.totp_disabled')}
+          </span>
+          <span className="rounded-full border border-line bg-surface-sunken px-3 py-1 text-label text-ink-secondary">
+            {defaults.oauth_provider === 'google'
+              ? t('profile.auth_method.oauth_google')
+              : defaults.oauth_provider === 'github'
+                ? t('profile.auth_method.oauth_github')
+                : t('profile.auth_method.email_password')}
+          </span>
+        </div>
+      </Panel>
 
       {/* Concurrent-update banner */}
       {result?.kind === 'concurrent_update' && (
-        <div role="alert" className="rounded border border-yellow-300 bg-yellow-50 p-3 text-sm">
+        <Notice tone="warning" role="alert">
           {t('profile.banners.concurrent_update.message')}{' '}
           <button
             type="button"
             onClick={() => location.reload()}
-            className="font-medium underline"
+            className="font-medium underline underline-offset-2"
           >
             {t('profile.banners.concurrent_update.reload_cta')}
           </button>
-        </div>
+        </Notice>
       )}
 
       {/* Rate limit toast */}
       {result?.kind === 'rate_limited' && (
-        <div role="alert" className="rounded border border-orange-300 bg-orange-50 p-3 text-sm">
+        <Notice tone="warning" role="alert">
           {t('profile.errors.rate_limited')}
-        </div>
+        </Notice>
       )}
 
       {/* Generic / unauthorized errors */}
       {(result?.kind === 'error' || result?.kind === 'unauthorized') && (
-        <div role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-sm">
+        <Notice tone="error" role="alert">
           {t('profile.errors.generic')}
-        </div>
+        </Notice>
       )}
 
-      {/* Success */}
+      {/* Success — jade text, tone=neutral (design-system.md key_page_direction). */}
       {result?.kind === 'ok' && (
-        <div role="status" aria-live="polite" className="rounded border border-green-300 bg-green-50 p-3 text-sm">
+        <div
+          role="status"
+          aria-live="polite"
+          className="rounded-lg border border-line bg-surface px-4 py-2.5 text-small text-jade"
+        >
           {t('profile.toast.saved')}
         </div>
       )}
 
-      <button
-        type="submit"
-        disabled={!isDirty || isPending}
-        className="rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-      >
+      {/* 本屏唯一的朱砂 —— 主操作(design-system.md distinctive_rule 铁律2)。 */}
+      <Button type="submit" variant="primary" disabled={!isDirty || isPending}>
         {t('profile.actions.save')}
-      </button>
+      </Button>
     </form>
   );
 }

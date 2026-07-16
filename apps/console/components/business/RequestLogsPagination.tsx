@@ -11,6 +11,8 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
+import { Button } from '@/components/ui/kit';
+
 export interface RequestLogsPaginationProps {
   offset: number;
   limit: number;
@@ -39,27 +41,26 @@ export function RequestLogsPagination({ offset, limit, hasMore }: RequestLogsPag
 
   return (
     <nav aria-label={t('pagination.label')} className="flex items-center justify-end gap-3">
-      <button
-        type="button"
+      <Button
+        variant="secondary"
         aria-label={t('pagination.prev')}
         disabled={!canPrev}
         onClick={() => goto(Math.max(offset - limit, 0))}
-        className="rounded border border-neutral-300 px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-40 hover:enabled:bg-neutral-100"
       >
         {t('pagination.prev')}
-      </button>
-      <span className="text-sm tabular-nums text-neutral-600" dir="ltr">
+      </Button>
+      {/* Active/current state uses ink, never seal (design-system.md distinctive_rule). */}
+      <span className="tabular text-small text-ink-secondary" dir="ltr">
         {t('pagination.page', { page })}
       </span>
-      <button
-        type="button"
+      <Button
+        variant="secondary"
         aria-label={t('pagination.next')}
         disabled={!hasMore}
         onClick={() => goto(offset + limit)}
-        className="rounded border border-neutral-300 px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-40 hover:enabled:bg-neutral-100"
       >
         {t('pagination.next')}
-      </button>
+      </Button>
     </nav>
   );
 }

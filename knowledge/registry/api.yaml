@@ -1,0 +1,15 @@
+# registry/api — structured record of this project's API surface.
+# Read by draft-story (to wire Interfaces) and implement. Updated by implement
+# (metabolism) as endpoints are built. Seed is empty — this is honest: no
+# endpoints exist yet. Add records in the shape shown below.
+
+endpoints: [] # implement appends here as endpoints are built
+
+# Record shape (copy for each new endpoint):
+#   - path: "POST /auth/login"
+#     request:  { email: string, password: string }
+#     response: { token: string }
+#     errors:   [ "400 Email required", "401 Invalid credentials" ]
+#     story:    user-login        # the story that produced it (origin trace)
+#     added_by: implement
+#     added:    2026-06-27

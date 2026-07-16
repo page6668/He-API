@@ -28,10 +28,10 @@ export default async function SigninPage({
   return (
     <section aria-labelledby="signin-title" className="space-y-6">
       <header className="space-y-1">
-        <h1 id="signin-title" className="text-2xl font-semibold">
+        <h1 id="signin-title" className="text-h2 text-ink">
           {t('title')}
         </h1>
-        <p className="text-sm text-neutral-600">{t('subtitle')}</p>
+        <p className="text-small text-ink-secondary">{t('subtitle')}</p>
       </header>
       {/* Story 2.3 — OAuth signin entry; renders above the password form. */}
       <OAuthButtonGroup locale={resolvedLocale} returnTo={`/${resolvedLocale}/dashboard`} />

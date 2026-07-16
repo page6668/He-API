@@ -36,89 +36,95 @@ export function KeysTable({ keys, locale, onConfigure, onRevoke }: KeysTableProp
   const t = useTranslations('account.keys');
 
   const headers = (
-    <tr className="border-b text-start text-xs font-medium uppercase tracking-wide text-neutral-500">
-      <th className="px-3 py-2">{t('table.header.name')}</th>
-      <th className="px-3 py-2">{t('table.header.prefix')}</th>
-      <th className="px-3 py-2">{t('table.header.scope')}</th>
-      <th className="px-3 py-2">{t('table.header.created')}</th>
-      <th className="px-3 py-2">{t('table.header.last_used')}</th>
-      <th className="px-3 py-2">{t('table.header.cap')}</th>
-      <th className="px-3 py-2">{t('table.header.status')}</th>
-      <th className="px-3 py-2 text-end">{t('table.header.actions')}</th>
+    <tr className="border-b border-line text-start text-label text-ink-muted">
+      <th className="px-3 py-2.5 text-start font-medium">{t('table.header.name')}</th>
+      <th className="px-3 py-2.5 text-start font-medium">{t('table.header.prefix')}</th>
+      <th className="px-3 py-2.5 text-start font-medium">{t('table.header.scope')}</th>
+      <th className="px-3 py-2.5 text-start font-medium">{t('table.header.created')}</th>
+      <th className="px-3 py-2.5 text-start font-medium">{t('table.header.last_used')}</th>
+      <th className="px-3 py-2.5 text-start font-medium">{t('table.header.cap')}</th>
+      <th className="px-3 py-2.5 text-start font-medium">{t('table.header.status')}</th>
+      <th className="px-3 py-2.5 text-end font-medium">{t('table.header.actions')}</th>
     </tr>
   );
 
   return (
     <>
-      {/* Desktop */}
-      <table className="hidden w-full border-collapse text-sm md:table">
-        <thead className="sticky top-0 bg-white">{headers}</thead>
-        <tbody>
-          {keys.map((key) => {
-            const revoked = key.revoked_at !== null;
-            const scope = readScope(key.scope);
-            return (
-              <tr key={key.api_key_id} className={cn('border-b', revoked && 'opacity-50')}>
-                <td className="px-3 py-2">
-                  <span title={key.name}>{key.name}</span>
-                </td>
-                <td className="px-3 py-2">
-                  <code className="font-mono text-xs">{key.key_prefix}…</code>
-                </td>
-                <td className="px-3 py-2">
-                  <ScopeChips scope={scope} onConfigure={revoked ? undefined : () => onConfigure(key)} />
-                </td>
-                <td className="px-3 py-2">
-                  <time dateTime={key.created_at}>{formatDate(key.created_at, locale)}</time>
-                </td>
-                <td className="px-3 py-2">
-                  {key.last_used_at ? (
-                    <time dateTime={key.last_used_at}>{formatDate(key.last_used_at, locale)}</time>
-                  ) : (
-                    t('last_used.never')
-                  )}
-                </td>
-                <td className="px-3 py-2">
-                  <CapBudgetBar current={key.current_month_cost_usd} cap={key.monthly_cost_cap_usd} locale={locale} />
-                </td>
-                <td className="px-3 py-2">
-                  {revoked ? (
-                    <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-xs text-neutral-600">
-                      {t('status.revoked')}
-                    </span>
-                  ) : (
-                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">
-                      {t('status.active')}
-                    </span>
-                  )}
-                </td>
-                <td className="px-3 py-2 text-end">
-                  {!revoked && (
-                    <div className="inline-flex gap-1">
-                      <button
-                        type="button"
-                        onClick={() => onConfigure(key)}
-                        aria-label={t('actions.configure', { name: key.name })}
-                        className="rounded p-1 hover:bg-neutral-100"
-                      >
-                        <Settings className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onRevoke(key)}
-                        aria-label={t('actions.revoke', { name: key.name })}
-                        className="rounded p-1 text-red-600 hover:bg-red-50"
-                      >
-                        <Ban className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                    </div>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      {/* Desktop — dense instrument table: ~44px rows, 1px warm border separators, zero shadow. */}
+      <div className="hidden overflow-hidden rounded-lg border border-line md:block">
+        <table className="w-full border-collapse text-small">
+          <thead className="sticky top-0 bg-surface">{headers}</thead>
+          <tbody>
+            {keys.map((key) => {
+              const revoked = key.revoked_at !== null;
+              const scope = readScope(key.scope);
+              return (
+                <tr key={key.api_key_id} className={cn('border-b border-line last:border-b-0', revoked && 'opacity-50')}>
+                  <td className="px-3 py-3 text-ink">
+                    <span title={key.name}>{key.name}</span>
+                  </td>
+                  <td className="px-3 py-3">
+                    <code className="tabular text-ink-secondary">{key.key_prefix}…</code>
+                  </td>
+                  <td className="px-3 py-3">
+                    <ScopeChips scope={scope} onConfigure={revoked ? undefined : () => onConfigure(key)} />
+                  </td>
+                  <td className="px-3 py-3">
+                    <time dateTime={key.created_at} className="tabular text-ink-secondary">
+                      {formatDate(key.created_at, locale)}
+                    </time>
+                  </td>
+                  <td className="px-3 py-3">
+                    {key.last_used_at ? (
+                      <time dateTime={key.last_used_at} className="tabular text-ink-secondary">
+                        {formatDate(key.last_used_at, locale)}
+                      </time>
+                    ) : (
+                      <span className="text-ink-muted">{t('last_used.never')}</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-3">
+                    <CapBudgetBar current={key.current_month_cost_usd} cap={key.monthly_cost_cap_usd} locale={locale} />
+                  </td>
+                  <td className="px-3 py-3">
+                    {revoked ? (
+                      <span className="rounded-full border border-line bg-surface-sunken px-2 py-0.5 text-label text-ink-muted">
+                        {t('status.revoked')}
+                      </span>
+                    ) : (
+                      <span className="rounded-full border border-jade/30 bg-jade/5 px-2 py-0.5 text-label text-jade">
+                        {t('status.active')}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 text-end">
+                    {!revoked && (
+                      <div className="inline-flex gap-1">
+                        <button
+                          type="button"
+                          onClick={() => onConfigure(key)}
+                          aria-label={t('actions.configure', { name: key.name })}
+                          className="rounded-md p-1 text-ink-secondary transition-colors duration-state ease-he hover:bg-surface-sunken hover:text-ink"
+                        >
+                          <Settings className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onRevoke(key)}
+                          aria-label={t('actions.revoke', { name: key.name })}
+                          className="rounded-md p-1 text-crimson transition-colors duration-state ease-he hover:bg-crimson/5"
+                        >
+                          <Ban className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
       {/* Mobile */}
       <div className="space-y-3 md:hidden">
@@ -130,27 +136,32 @@ export function KeysTable({ keys, locale, onConfigure, onRevoke }: KeysTableProp
               key={key.api_key_id}
               role="region"
               aria-label={t('row.aria', { name: key.name })}
-              className={cn('space-y-2 rounded-lg border p-3 text-sm', revoked && 'opacity-50')}
+              className={cn(
+                'space-y-2 rounded-lg border border-line bg-surface p-3 text-small',
+                revoked && 'opacity-50',
+              )}
             >
               <div className="flex items-center justify-between">
-                <span className="font-medium" title={key.name}>
+                <span className="font-medium text-ink" title={key.name}>
                   {key.name}
                 </span>
-                <code className="font-mono text-xs">{key.key_prefix}…</code>
+                <code className="tabular text-ink-secondary">{key.key_prefix}…</code>
               </div>
               <ScopeChips scope={scope} onConfigure={revoked ? undefined : () => onConfigure(key)} />
-              <div className="flex justify-between text-xs text-neutral-600">
+              <div className="flex justify-between text-label text-ink-muted">
                 <span>
-                  {t('table.header.created')}: {formatDate(key.created_at, locale)}
+                  {t('table.header.created')}: <span className="tabular">{formatDate(key.created_at, locale)}</span>
                 </span>
                 <span>
                   {t('table.header.last_used')}:{' '}
-                  {key.last_used_at ? formatDate(key.last_used_at, locale) : t('last_used.never')}
+                  <span className="tabular">
+                    {key.last_used_at ? formatDate(key.last_used_at, locale) : t('last_used.never')}
+                  </span>
                 </span>
               </div>
               <CapBudgetBar current={key.current_month_cost_usd} cap={key.monthly_cost_cap_usd} locale={locale} />
               {revoked ? (
-                <span className="inline-block rounded-full bg-neutral-200 px-2 py-0.5 text-xs text-neutral-600">
+                <span className="inline-block rounded-full border border-line bg-surface-sunken px-2 py-0.5 text-label text-ink-muted">
                   {t('status.revoked')}
                 </span>
               ) : (
@@ -159,7 +170,7 @@ export function KeysTable({ keys, locale, onConfigure, onRevoke }: KeysTableProp
                     type="button"
                     onClick={() => onConfigure(key)}
                     aria-label={t('actions.configure', { name: key.name })}
-                    className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs hover:bg-neutral-100"
+                    className="inline-flex items-center gap-1 rounded-md border border-line-strong px-2 py-1 text-label text-ink-secondary transition-colors duration-state ease-he hover:border-ink-muted hover:text-ink"
                   >
                     <Settings className="h-4 w-4" aria-hidden="true" />
                     {t('table.header.scope')}
@@ -168,7 +179,7 @@ export function KeysTable({ keys, locale, onConfigure, onRevoke }: KeysTableProp
                     type="button"
                     onClick={() => onRevoke(key)}
                     aria-label={t('actions.revoke', { name: key.name })}
-                    className="inline-flex items-center gap-1 rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                    className="inline-flex items-center gap-1 rounded-md border border-crimson/40 px-2 py-1 text-label text-crimson transition-colors duration-state ease-he hover:bg-crimson/5"
                   >
                     <Ban className="h-4 w-4" aria-hidden="true" />
                     {t('revoke.confirm.cta')}

@@ -50,7 +50,7 @@ export function IpWhitelistEditor({ rows, rowErrors, onChange }: IpWhitelistEdit
   return (
     <div className="space-y-2">
       {rows.length === 0 && (
-        <p className="text-sm text-neutral-500">{t('configure.ip.empty')}</p>
+        <p className="text-small text-ink-muted">{t('configure.ip.empty')}</p>
       )}
       {rows.map((row, index) => {
         const error = rowErrors[index];
@@ -71,19 +71,19 @@ export function IpWhitelistEditor({ rows, rowErrors, onChange }: IpWhitelistEdit
                 onChange={(e) => setRow(index, e.target.value)}
                 aria-invalid={error ? true : undefined}
                 aria-describedby={error ? `ip-${index}-error` : undefined}
-                className="w-full rounded border px-3 py-1.5 font-mono text-sm"
+                className="tabular w-full rounded-md border border-line-strong bg-surface px-3 py-1.5 text-small text-ink outline-none transition-colors duration-state ease-he focus:border-seal focus:ring-2 focus:ring-seal/15"
               />
               <button
                 type="button"
                 onClick={() => removeRow(index)}
                 aria-label={t('configure.ip.remove', { value: row })}
-                className="rounded p-1 text-neutral-500 hover:bg-neutral-100"
+                className="rounded-md p-1 text-ink-muted transition-colors duration-state ease-he hover:bg-surface-sunken hover:text-ink"
               >
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
             {error && (
-              <p id={`ip-${index}-error`} role="alert" className="text-xs text-red-600">
+              <p id={`ip-${index}-error`} role="alert" className="text-label text-crimson">
                 {tRoot(error)}
               </p>
             )}
@@ -93,7 +93,7 @@ export function IpWhitelistEditor({ rows, rowErrors, onChange }: IpWhitelistEdit
       <button
         type="button"
         onClick={addRow}
-        className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
+        className="inline-flex items-center gap-1 text-small text-ink-secondary transition-colors duration-state ease-he hover:text-ink"
       >
         <Plus className="h-4 w-4" aria-hidden="true" />
         {rows.length === 0 ? t('configure.ip.add_first') : t('configure.ip.add')}

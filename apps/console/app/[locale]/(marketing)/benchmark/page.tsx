@@ -12,6 +12,7 @@ import { getTranslations, unstable_setRequestLocale } from 'next-intl/server';
 
 import { BenchmarkChart } from '@/components/business/BenchmarkChart';
 import { LtrText } from '@/components/business/LtrText';
+import { Notice, Panel, PageShell } from '@/components/ui/kit';
 import { loadBenchmarkData } from '@/lib/api/benchmark';
 
 // Public + cacheable (区别网关 no-store) — sourced curated data refreshes slowly.
@@ -40,38 +41,46 @@ export default async function BenchmarkPage({ params: { locale } }: PageProps) {
   const t = await getTranslations({ locale, namespace: 'benchmark' });
   const result = loadBenchmarkData();
 
+  // 公开页恒限宽居中(prose-page = 1120px)—— 禁止内容裸贴视口(design-system layout.container)
   return (
-    <section>
-      <h1 className="mb-1 text-2xl font-bold">{t('page.heading')}</h1>
-      <p className="mb-6 text-slate-600">{t('page.subheading')}</p>
-
+    <PageShell width="prose-page" title={t('page.heading')} subtitle={t('page.subheading')}>
       {!result.ok ? (
-        <div role="alert" data-testid="benchmark-fallback-banner" className="rounded border border-amber-300 bg-amber-50 px-4 py-3 text-amber-900">
-          {t('error.unavailable')}
-        </div>
+        // 安静的行内提示条,不是满宽色底 banner
+        <Notice tone="warning" role="alert">
+          <span data-testid="benchmark-fallback-banner">{t('error.unavailable')}</span>
+        </Notice>
       ) : (
         <>
-          <BenchmarkChart data={result.data} playgroundHref={`/${locale}/playground`} />
+          <Panel>
+            <BenchmarkChart data={result.data} playgroundHref={`/${locale}/playground`} />
+          </Panel>
 
-          <p className="mt-4 text-sm text-slate-500">
-            {t('lastUpdated')}: <LtrText>{result.data.lastUpdated}</LtrText>
+          {/* 出处 = 读数的一部分:日期走 tabular */}
+          <p className="mt-4 text-small text-ink-secondary">
+            {t('lastUpdated')}:{' '}
+            <span className="tabular">
+              <LtrText>{result.data.lastUpdated}</LtrText>
+            </span>
           </p>
 
           <details className="mt-4" data-testid="benchmark-methodology">
-            <summary className="cursor-pointer font-medium">{t('methodology.heading')}</summary>
-            <p className="mt-2 text-sm text-slate-600">{t('methodology.body')}</p>
-            <ul className="mt-2 list-disc ps-6 text-sm text-slate-600">
+            <summary className="cursor-pointer text-small font-medium text-ink transition-colors duration-state ease-he hover:text-ink-secondary">
+              {t('methodology.heading')}
+            </summary>
+            <p className="mt-2 text-small text-ink-secondary">{t('methodology.body')}</p>
+            <ul className="mt-2 list-disc ps-6 text-small text-ink-secondary">
               {result.data.methodologySources.map((s, i) => (
                 <li key={i}>{s}</li>
               ))}
             </ul>
           </details>
 
-          <p className="mt-4 text-xs italic text-slate-500" data-testid="benchmark-disclaimer">
+          {/* 中文禁 italic(design-system line_height)—— 免责声明降为 muted 小字即可 */}
+          <p className="mt-4 text-label text-ink-muted" data-testid="benchmark-disclaimer">
             {t('disclaimer')}
           </p>
         </>
       )}
-    </section>
+    </PageShell>
   );
 }

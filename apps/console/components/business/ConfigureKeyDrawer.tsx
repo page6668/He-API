@@ -15,7 +15,7 @@ import { useMemo, useState, useTransition, type FormEvent, type RefObject } from
 import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { Button } from '@/components/ui/button';
+import { Button, Notice } from '@/components/ui/kit';
 import { Drawer, Dialog } from '@/components/ui/dialog';
 import { parseDecimal, formatDecimal } from '@/lib/api/money';
 import { validateIpRule } from '@/lib/api/ip';
@@ -144,29 +144,39 @@ export function ConfigureKeyDrawer({
   return (
     <Drawer titleId="configure-key-title" onClose={handleCloseAttempt} restoreFocusTo={triggerRef}>
       <form onSubmit={onSubmit} className="space-y-6">
-        <h2 id="configure-key-title" className="text-lg font-semibold">
+        <h2 id="configure-key-title" className="text-h3 text-ink">
           {t('edit.title')}
         </h2>
 
         {/* Models scope */}
         <section className="space-y-2">
-          <h3 className="text-sm font-medium">{t('configure.models.heading')}</h3>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={allModels} onChange={(e) => setAllModels(e.target.checked)} />
+          <h3 className="text-small font-medium text-ink">{t('configure.models.heading')}</h3>
+          <label className="flex items-center gap-2 text-small text-ink">
+            <input
+              type="checkbox"
+              checked={allModels}
+              onChange={(e) => setAllModels(e.target.checked)}
+              className="h-4 w-4 rounded-sm border-line-strong text-ink accent-ink"
+            />
             {t('configure.models.all_toggle')}
           </label>
           {!allModels &&
             (availableModels.length === 0 ? (
-              <p className="text-sm text-neutral-500" title={t('configure.models.unavailable')}>
+              <p className="text-small text-ink-muted" title={t('configure.models.unavailable')}>
                 {t('configure.models.unavailable')}
               </p>
             ) : (
               <fieldset className="space-y-1">
                 <legend className="sr-only">{t('configure.models.select_label')}</legend>
                 {availableModels.map((id) => (
-                  <label key={id} className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" checked={models.includes(id)} onChange={() => toggleModel(id)} />
-                    {id}
+                  <label key={id} className="flex items-center gap-2 text-small text-ink">
+                    <input
+                      type="checkbox"
+                      checked={models.includes(id)}
+                      onChange={() => toggleModel(id)}
+                      className="h-4 w-4 rounded-sm border-line-strong text-ink accent-ink"
+                    />
+                    <span className="tabular">{id}</span>
                   </label>
                 ))}
               </fieldset>
@@ -175,14 +185,14 @@ export function ConfigureKeyDrawer({
 
         {/* IP whitelist */}
         <section className="space-y-2">
-          <h3 className="text-sm font-medium">{t('configure.ip.heading')}</h3>
+          <h3 className="text-small font-medium text-ink">{t('configure.ip.heading')}</h3>
           <IpWhitelistEditor rows={ipRows} rowErrors={rowErrors} onChange={setIpRows} />
         </section>
 
         {/* Monthly cost cap */}
         <section className="space-y-2">
-          <h3 className="text-sm font-medium">{t('configure.cap.heading')}</h3>
-          <label className="flex items-center gap-2 text-sm">
+          <h3 className="text-small font-medium text-ink">{t('configure.cap.heading')}</h3>
+          <label className="flex items-center gap-2 text-small text-ink">
             <input
               type="checkbox"
               checked={noCap}
@@ -190,6 +200,7 @@ export function ConfigureKeyDrawer({
                 setNoCap(e.target.checked);
                 if (e.target.checked) setCapInput('');
               }}
+              className="h-4 w-4 rounded-sm border-line-strong text-ink accent-ink"
             />
             {t('configure.cap.no_cap')}
           </label>
@@ -203,29 +214,30 @@ export function ConfigureKeyDrawer({
             aria-label={t('configure.cap.label')}
             aria-describedby="cap-help"
             aria-invalid={capError ? true : undefined}
-            className="w-40 rounded border px-3 py-1.5 disabled:bg-neutral-100"
+            className="tabular w-40 rounded-md border border-line-strong bg-surface px-3 py-1.5 text-small text-ink outline-none transition-colors duration-state ease-he focus:border-seal focus:ring-2 focus:ring-seal/15 disabled:cursor-not-allowed disabled:opacity-50"
           />
-          <p id="cap-help" className="text-xs text-neutral-500">
+          <p id="cap-help" className="text-label text-ink-muted">
             {t('configure.cap.help')}
           </p>
           {capError && (
-            <p role="alert" className="text-xs text-red-600">
+            <p role="alert" className="text-label text-crimson">
               {tRoot(capError)}
             </p>
           )}
         </section>
 
         {toast && (
-          <p role="alert" aria-live="assertive" className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900">
+          <Notice tone="error" role="alert">
             {toast}
-          </p>
+          </Notice>
         )}
 
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={handleCloseAttempt} disabled={isPending}>
             {t('configure.cancel')}
           </Button>
-          <Button type="submit" disabled={saveDisabled}>
+          {/* 本屏唯一的朱砂 —— 主操作(design-system.md distinctive_rule 铁律2) */}
+          <Button type="submit" variant="primary" disabled={saveDisabled}>
             {isPending && <Loader2 className="me-1.5 h-4 w-4 animate-spin" aria-hidden="true" />}
             {t('edit.confirm.cta')}
           </Button>
@@ -238,16 +250,17 @@ export function ConfigureKeyDrawer({
           role="alertdialog"
           closeOnOverlay={false}
           onClose={() => setShowDiscard(false)}
+          className="rounded-lg border border-line bg-surface shadow-overlay"
         >
-          <h2 id="discard-title" className="text-lg font-semibold">
+          <h2 id="discard-title" className="text-h3 text-ink">
             {t('configure.discard.title')}
           </h2>
-          <p className="mt-2 text-sm text-neutral-700">{t('configure.discard.body')}</p>
+          <p className="mt-2 text-small text-ink-secondary">{t('configure.discard.body')}</p>
           <div className="mt-4 flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setShowDiscard(false)}>
               {t('configure.discard.cancel')}
             </Button>
-            <Button type="button" variant="destructive" onClick={onClose}>
+            <Button type="button" variant="danger" onClick={onClose}>
               {t('configure.discard.confirm')}
             </Button>
           </div>

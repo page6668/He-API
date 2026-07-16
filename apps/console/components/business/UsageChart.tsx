@@ -35,6 +35,7 @@ import {
 
 import { SERIES_GROUP_BY, type SeriesGroupBy, type UsageSeries } from '@/lib/api/me-usage';
 import { getUsageSeries } from '@/app/[locale]/(console)/dashboard/_actions/get-usage-series';
+import { Button, Notice } from '@/components/ui/kit';
 
 export interface UsageChartProps {
   locale: string;
@@ -47,9 +48,15 @@ type LoadState =
   | { status: 'error' }
   | { status: 'ready'; data: UsageSeries };
 
-// A stable palette for the per-model / per-status lines (deterministic by index
-// so the same dimension keeps its colour across re-renders).
-const LINE_COLORS = ['#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed', '#0891b2'];
+// 设计系统 token 的字面量副本 —— Recharts 只接受 SVG 属性值,吃不到 Tailwind class。
+// 权威定义见 knowledge/taste/design-system.md;改色须与 tailwind.config.ts 同步。
+const CHART_GRID = '#E7E3DC'; // 网格线(line)
+const CHART_AXIS = '#9A968E'; // 轴标(ink-muted)
+// By Day 只有一条线 → 本屏唯一一处朱砂(铁律2「朱砂只落一处」),让主趋势像仪表指针。
+const CHART_SEAL = '#C8422A';
+// By Model / By Status 可能有多条线 —— 刻意不用朱砂,避免同屏出现第二处朱砂;
+// 一律墨/竹绿/赭黄/绛红/暖灰的克制色阶,按 index 稳定取色(同一维度色不漂移)。
+const LINE_COLORS = ['#1A1A18', '#2F6B4F', '#9A6B1E', '#8C1D18', '#6B6862', '#9A968E'];
 
 interface ChartShape {
   rows: Array<Record<string, string | number>>;
@@ -136,17 +143,17 @@ export function UsageChart({ locale, fetcher = getUsageSeries }: UsageChartProps
 
   return (
     <section
-      className="space-y-3 rounded-lg border border-neutral-200 p-4"
+      className="space-y-4 rounded-lg border border-line bg-surface p-5"
       aria-labelledby="usage-chart-heading"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="usage-chart-heading" className="text-sm font-medium text-neutral-700">
+        <h2 id="usage-chart-heading" className="text-h3 text-ink">
           {t('chart.title')}
         </h2>
         <div
           role="radiogroup"
           aria-label={t('chart.groupLabel')}
-          className="inline-flex rounded-md border border-neutral-200"
+          className="inline-flex rounded-md border border-line"
           onKeyDown={onToggleKeyDown}
         >
           {SERIES_GROUP_BY.map((gb) => {
@@ -159,8 +166,9 @@ export function UsageChart({ locale, fetcher = getUsageSeries }: UsageChartProps
                 aria-checked={selected}
                 tabIndex={selected ? 0 : -1}
                 onClick={() => selectGroup(gb)}
-                className={`px-3 py-1.5 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                  selected ? 'bg-blue-600 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'
+                // 选中态用墨色而非朱砂 —— 本屏唯一的朱砂留给 By Day 单线(铁律2)。
+                className={`px-3 py-1.5 text-label transition-colors duration-state ease-he focus:outline-none focus-visible:ring-2 focus-visible:ring-ink/15 ${
+                  selected ? 'bg-ink text-paper' : 'bg-surface text-ink-secondary hover:bg-surface-sunken'
                 }`}
               >
                 {toggleLabel[gb]}
@@ -192,36 +200,38 @@ interface ChartBodyProps {
 function ChartBody({ state, groupBy, locale, t, onRetry }: ChartBodyProps) {
   if (state.status === 'loading') {
     return (
+      // 骨架屏刻意不用 animate-pulse 闪烁(design-system.md motion.use_where 明令排除)。
       <div
         role="status"
         aria-busy="true"
         aria-live="polite"
         aria-label={t('chart.loading')}
         data-testid="usage-chart-skeleton"
-        className="h-64 animate-pulse rounded bg-neutral-100"
+        className="h-64 rounded-md bg-surface-sunken"
       />
     );
   }
 
   if (state.status === 'error') {
     return (
-      <div role="alert" className="space-y-2 rounded border border-red-300 bg-red-50 p-4 text-sm text-red-900">
-        <p>{t('chart.error')}</p>
-        <button
-          type="button"
-          onClick={onRetry}
-          className="inline-block rounded bg-red-600 px-3 py-1.5 text-white hover:bg-red-700"
-        >
-          {t('chart.retry')}
-        </button>
-      </div>
+      <Notice tone="error" role="alert">
+        <div className="space-y-2">
+          <p>{t('chart.error')}</p>
+          <Button variant="secondary" onClick={onRetry}>
+            {t('chart.retry')}
+          </Button>
+        </div>
+      </Notice>
     );
   }
 
   const series = state.data;
   if (series.series.length === 0) {
     return (
-      <p data-testid="usage-chart-empty" className="flex h-64 items-center justify-center text-sm text-neutral-500">
+      <p
+        data-testid="usage-chart-empty"
+        className="flex h-64 items-center justify-center text-small text-ink-secondary"
+      >
         {t('chart.empty')}
       </p>
     );
@@ -244,9 +254,10 @@ function ChartBody({ state, groupBy, locale, t, onRetry }: ChartBodyProps) {
       <div aria-hidden="true" dir="ltr" data-testid="usage-chart-figure" className="h-64 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={rows} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey="bucket" fontSize={11} />
-            <YAxis allowDecimals={false} fontSize={11} />
+            <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+            {/* 轴标是日期/计数读数 —— 铁律1:.tabular 等宽制表对齐。 */}
+            <XAxis dataKey="bucket" className="tabular" tick={{ fontSize: 12, fill: CHART_AXIS }} />
+            <YAxis allowDecimals={false} className="tabular" tick={{ fontSize: 12, fill: CHART_AXIS }} />
             <Tooltip />
             {lineKeys.map((key, i) => (
               <Line
@@ -254,7 +265,7 @@ function ChartBody({ state, groupBy, locale, t, onRetry }: ChartBodyProps) {
                 type="monotone"
                 dataKey={key}
                 name={lineLabel(key)}
-                stroke={LINE_COLORS[i % LINE_COLORS.length]}
+                stroke={groupBy === 'day' ? CHART_SEAL : LINE_COLORS[i % LINE_COLORS.length]}
                 dot={false}
                 isAnimationActive={false}
               />

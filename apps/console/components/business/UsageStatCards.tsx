@@ -67,7 +67,10 @@ export function UsageStatCards({ summary, locale }: UsageStatCardsProps) {
         ))}
       </div>
       {isEmpty && (
-        <p className="text-sm text-neutral-600" data-testid="usage-empty-hint">
+        <p
+          className="rounded-lg border border-line bg-surface px-4 py-2.5 text-small text-ink-secondary"
+          data-testid="usage-empty-hint"
+        >
           {t('empty.hint')}
         </p>
       )}
@@ -97,16 +100,19 @@ function PeriodCard({ periodKey, period, periodLabel, locale, t }: PeriodCardPro
   ];
 
   return (
-    <section className="rounded-lg border border-neutral-200 p-4" aria-labelledby={`usage-${periodKey}-heading`}>
-      <h2 id={`usage-${periodKey}-heading`} className="mb-3 text-sm font-medium text-neutral-700">
+    <section className="rounded-lg border border-line bg-surface p-5" aria-labelledby={`usage-${periodKey}-heading`}>
+      <h2 id={`usage-${periodKey}-heading`} className="mb-4 text-h3 text-ink">
         {periodLabel}
       </h2>
-      <dl className="space-y-2">
+      {/* 仪表读数(kit Metric 的等价手写版):label 上小 + tabular 大数下,
+          保留原生 dt/dd + 逐项 aria-label(kit 的 <Metric> 不支持透传 aria-label,
+          按「不改动 a11y 接线」的铁律手写同款排版)。 */}
+      <dl className="grid grid-cols-2 gap-4">
         {rows.map((row) => (
-          <div key={row.key} className="flex items-baseline justify-between gap-2">
-            <dt className="text-xs text-neutral-500">{row.label}</dt>
+          <div key={row.key}>
+            <dt className="text-label text-ink-muted">{row.label}</dt>
             <dd
-              className="text-lg font-semibold tabular-nums"
+              className="tabular mt-1 text-metric-lg text-ink"
               aria-label={`${periodLabel} ${row.label}: ${row.value}`}
             >
               {row.value}

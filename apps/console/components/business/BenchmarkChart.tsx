@@ -19,7 +19,17 @@ type MetricKey = 'quality' | 'cost' | 'latency';
 type VendorFilter = 'all' | 'he' | 'reference';
 
 const METRIC_KEYS: readonly MetricKey[] = ['quality', 'cost', 'latency'];
-const METRIC_COLOR = '#2563eb';
+
+/**
+ * 设计系统 token 的字面量副本 —— Recharts 只接受 SVG 属性值,吃不到 Tailwind class。
+ * 权威定义见 knowledge/taste/design-system.md;改色须与 tailwind.config.ts 同步。
+ * 柱体走墨色系(数据即墨),朱砂刻意不用于大面积填充/装饰(铁律2)。
+ */
+const CHART_INK_SECONDARY = '#6B6862'; // 柱体
+const CHART_LINE = '#E7E3DC'; // 暖褐网格线
+const CHART_INK_MUTED = '#9A968E'; // 轴标
+const CHART_SURFACE = '#FFFFFF';
+const CHART_INK = '#1A1A18';
 
 function metricValue(row: BenchmarkRow, m: MetricKey): number {
   switch (m) {
@@ -77,21 +87,31 @@ export function BenchmarkChart({ data, playgroundHref }: { data: BenchmarkData; 
             data-testid={`benchmark-metric-${m}`}
             onClick={() => setMetric(m)}
             onKeyDown={(e) => onRadioKeyDown(e, i)}
-            className={`rounded border px-3 py-1 text-sm ${metric === m ? 'bg-slate-900 text-white' : ''}`}
+            // 选中态用墨色而非朱砂 —— 本屏唯一的朱砂留给「去 Playground 跑 A/B」(铁律2)
+            className={`rounded-md border px-3 py-1 text-small transition-colors duration-state ease-he focus:outline-none focus:ring-2 focus:ring-ink/15 ${
+              metric === m
+                ? 'border-ink bg-ink text-paper'
+                : 'border-line-strong bg-surface text-ink-secondary hover:border-ink-muted hover:text-ink'
+            }`}
           >
             {metricLabel(m)}
           </button>
         ))}
       </div>
 
-      <p className="mb-2 text-xs text-slate-500">
+      <p className="mb-3 text-label text-ink-muted">
         {metricLabel(metric)} — {metricHint(metric)}
       </p>
 
       {/* vendor filter (P-14:439) */}
-      <label className="mb-3 block text-sm">
-        <span className="me-2">{t('filter.task')}</span>
-        <select data-testid="benchmark-filter" className="rounded border px-2 py-1" value={vendorFilter} onChange={(e) => setVendorFilter(e.target.value as VendorFilter)}>
+      <label className="mb-3 flex items-center gap-2">
+        <span className="text-label text-ink-secondary">{t('filter.task')}</span>
+        <select
+          data-testid="benchmark-filter"
+          className="rounded-md border border-line-strong bg-surface px-2 py-1 text-small text-ink outline-none transition-colors duration-state ease-he focus:border-seal focus:ring-2 focus:ring-seal/15"
+          value={vendorFilter}
+          onChange={(e) => setVendorFilter(e.target.value as VendorFilter)}
+        >
           <option value="all">{t('filter.all')}</option>
           <option value="he">He-API</option>
           <option value="reference">GPT-4 / Claude / Gemini</option>
@@ -102,11 +122,30 @@ export function BenchmarkChart({ data, playgroundHref }: { data: BenchmarkData; 
       <div aria-hidden="true" dir="ltr" data-testid="benchmark-bars" style={{ width: '100%', height: 320 }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="model" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={60} />
-            <YAxis tick={{ fontSize: 11 }} />
-            <Tooltip />
-            <Bar dataKey="value" fill={METRIC_COLOR} name={metricLabel(metric)} />
+            <CartesianGrid strokeDasharray="3 3" stroke={CHART_LINE} vertical={false} />
+            <XAxis
+              dataKey="model"
+              tick={{ fontSize: 11, fill: CHART_INK_MUTED }}
+              stroke={CHART_LINE}
+              interval={0}
+              angle={-20}
+              textAnchor="end"
+              height={60}
+            />
+            <YAxis tick={{ fontSize: 11, fill: CHART_INK_MUTED }} stroke={CHART_LINE} />
+            {/* 唯一允许的阴影 token 给真浮层(design-system shape_elevation.shadow) */}
+            <Tooltip
+              cursor={{ fill: CHART_LINE, fillOpacity: 0.4 }}
+              contentStyle={{
+                background: CHART_SURFACE,
+                border: `1px solid ${CHART_LINE}`,
+                borderRadius: 8,
+                boxShadow: '0 8px 24px rgba(26, 26, 24, 0.10)',
+                fontSize: 13,
+                color: CHART_INK,
+              }}
+            />
+            <Bar dataKey="value" fill={CHART_INK_SECONDARY} name={metricLabel(metric)} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -134,8 +173,13 @@ export function BenchmarkChart({ data, playgroundHref }: { data: BenchmarkData; 
         </tbody>
       </table>
 
+      {/* 本屏唯一的朱砂 —— 主操作(design-system distinctive_rule 铁律2) */}
       <p className="mt-4">
-        <a href={playgroundHref} data-testid="benchmark-open-ab" className="text-sky-700 underline">
+        <a
+          href={playgroundHref}
+          data-testid="benchmark-open-ab"
+          className="inline-block rounded-md bg-seal px-4 py-2 text-small font-medium text-white transition-colors duration-state ease-he hover:bg-seal-hover focus:outline-none focus:ring-2 focus:ring-seal/30"
+        >
           {t('openABInPlayground')}
         </a>
       </p>

@@ -14,6 +14,13 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
 import { LOG_LIMIT_OPTIONS, LOG_STATUS_CLASSES, LOG_DEFAULT_LIMIT } from '@/lib/api/me-usage';
+import { Button, Panel, labelCls } from '@/components/ui/kit';
+
+// Same token language as kit's fieldCls (color/radius/focus ring) but WITHOUT
+// its `w-full` — fieldCls is tuned for a stacked full-width column (Playground);
+// this is an inline filter bar where each control should size to its content.
+const filterFieldCls =
+  'rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-small text-ink outline-none transition-colors duration-state ease-he focus:border-seal focus:ring-2 focus:ring-seal/15';
 
 /** RFC3339 (with offset/Z) → the value a <input type="datetime-local"> expects. */
 function toLocalInput(rfc3339: string): string {
@@ -83,107 +90,115 @@ export function RequestLogsFilters() {
   }
 
   return (
-    <form
-      onSubmit={onSubmit}
-      aria-label={t('filters.legend')}
-      className="flex flex-wrap items-end gap-3 rounded-lg border border-neutral-200 p-4"
-    >
-      <Field label={t('filters.model.label')} htmlFor="logs-model">
-        <input
-          id="logs-model"
-          type="text"
-          value={model}
-          maxLength={128}
-          onChange={(e) => setModel(e.target.value)}
-          placeholder={t('filters.model.placeholder')}
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
-        />
-      </Field>
+    <Panel>
+      <form
+        onSubmit={onSubmit}
+        aria-label={t('filters.legend')}
+        className="flex flex-wrap items-end gap-4"
+      >
+        <Field label={t('filters.model.label')} htmlFor="logs-model">
+          {/* Model id is a technical value — tabular (Plex Mono), per Iron Law 1. */}
+          <input
+            id="logs-model"
+            type="text"
+            value={model}
+            maxLength={128}
+            onChange={(e) => setModel(e.target.value)}
+            placeholder={t('filters.model.placeholder')}
+            className={`${filterFieldCls} tabular`}
+          />
+        </Field>
 
-      <Field label={t('filters.status.label')} htmlFor="logs-status">
-        <select
-          id="logs-status"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
-        >
-          <option value="">{t('filters.status.all')}</option>
-          {LOG_STATUS_CLASSES.map((c) => (
-            <option key={c} value={c}>{t(`status.${c}`)}</option>
-          ))}
-        </select>
-      </Field>
+        <Field label={t('filters.status.label')} htmlFor="logs-status">
+          <select
+            id="logs-status"
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            className={filterFieldCls}
+          >
+            <option value="">{t('filters.status.all')}</option>
+            {LOG_STATUS_CLASSES.map((c) => (
+              <option key={c} value={c}>{t(`status.${c}`)}</option>
+            ))}
+          </select>
+        </Field>
 
-      <Field label={t('filters.streaming.label')} htmlFor="logs-streaming">
-        <select
-          id="logs-streaming"
-          value={streaming}
-          onChange={(e) => setStreaming(e.target.value)}
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
-        >
-          <option value="">{t('filters.streaming.all')}</option>
-          <option value="true">{t('filters.streaming.yes')}</option>
-          <option value="false">{t('filters.streaming.no')}</option>
-        </select>
-      </Field>
+        <Field label={t('filters.streaming.label')} htmlFor="logs-streaming">
+          <select
+            id="logs-streaming"
+            value={streaming}
+            onChange={(e) => setStreaming(e.target.value)}
+            className={filterFieldCls}
+          >
+            <option value="">{t('filters.streaming.all')}</option>
+            <option value="true">{t('filters.streaming.yes')}</option>
+            <option value="false">{t('filters.streaming.no')}</option>
+          </select>
+        </Field>
 
-      <Field label={t('filters.start.label')} htmlFor="logs-start">
-        <input
-          id="logs-start"
-          type="datetime-local"
-          value={start}
-          onChange={(e) => setStart(e.target.value)}
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
-        />
-      </Field>
+        <Field label={t('filters.start.label')} htmlFor="logs-start">
+          <input
+            id="logs-start"
+            type="datetime-local"
+            value={start}
+            onChange={(e) => setStart(e.target.value)}
+            className={`${filterFieldCls} tabular`}
+          />
+        </Field>
 
-      <Field label={t('filters.end.label')} htmlFor="logs-end">
-        <input
-          id="logs-end"
-          type="datetime-local"
-          value={end}
-          aria-invalid={rangeError || undefined}
-          aria-describedby={rangeError ? 'logs-range-error' : undefined}
-          onChange={(e) => setEnd(e.target.value)}
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
-        />
-      </Field>
+        <Field label={t('filters.end.label')} htmlFor="logs-end">
+          <input
+            id="logs-end"
+            type="datetime-local"
+            value={end}
+            aria-invalid={rangeError || undefined}
+            aria-describedby={rangeError ? 'logs-range-error' : undefined}
+            onChange={(e) => setEnd(e.target.value)}
+            className={`${filterFieldCls} tabular`}
+          />
+        </Field>
 
-      <Field label={t('filters.limit.label')} htmlFor="logs-limit">
-        <select
-          id="logs-limit"
-          value={limit}
-          onChange={(e) => setLimit(e.target.value)}
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
-        >
-          {LOG_LIMIT_OPTIONS.map((n) => (
-            <option key={n} value={String(n)}>{n}</option>
-          ))}
-        </select>
-      </Field>
+        <Field label={t('filters.limit.label')} htmlFor="logs-limit">
+          <select
+            id="logs-limit"
+            value={limit}
+            onChange={(e) => setLimit(e.target.value)}
+            className={`${filterFieldCls} tabular`}
+          >
+            {LOG_LIMIT_OPTIONS.map((n) => (
+              <option key={n} value={String(n)}>{n}</option>
+            ))}
+          </select>
+        </Field>
 
-      <div className="flex gap-2">
-        <button type="submit" className="rounded bg-neutral-900 px-3 py-1.5 text-sm text-white hover:bg-neutral-700">
-          {t('filters.apply')}
-        </button>
-        <button type="button" onClick={onReset} className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100">
-          {t('filters.reset')}
-        </button>
-      </div>
+        <div className="flex gap-2">
+          {/* Filter-bar affirmative action uses INK, never seal (that's reserved
+              for the export CTA elsewhere on this screen — Iron Law 2). */}
+          <button
+            type="submit"
+            className="rounded-md bg-ink px-4 py-2 text-small font-medium text-paper transition-colors duration-state ease-he hover:bg-ink/90 focus:outline-none focus:ring-2 focus:ring-ink/20"
+          >
+            {t('filters.apply')}
+          </button>
+          <Button type="button" variant="secondary" onClick={onReset}>
+            {t('filters.reset')}
+          </Button>
+        </div>
 
-      {rangeError && (
-        <p id="logs-range-error" role="alert" className="w-full text-sm text-red-700">
-          {t('filters.errors.range')}
-        </p>
-      )}
-    </form>
+        {rangeError && (
+          <p id="logs-range-error" role="alert" className="w-full text-small text-crimson">
+            {t('filters.errors.range')}
+          </p>
+        )}
+      </form>
+    </Panel>
   );
 }
 
 function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={htmlFor} className="text-xs text-neutral-600">{label}</label>
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={htmlFor} className={labelCls}>{label}</label>
       {children}
     </div>
   );

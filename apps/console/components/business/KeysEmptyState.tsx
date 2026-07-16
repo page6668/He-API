@@ -4,13 +4,17 @@
  * Story 5.5 AC1 — empty state (T1.4).
  *
  * Rendered when the user has zero keys. The CTA opens the same CreateKeyModal
- * as the toolbar [New key] button (the parent wires `onCreate`).
+ * as the toolbar [New key] button (the parent wires `onCreate`). Uses kit's
+ * <EmptyState> (guidance not apology, brand.md tone_rules). The toolbar
+ * [New key] button already owns the screen's one seal — this CTA renders
+ * `outline` (quiet) so IRON LAW 2 (one seal per screen) holds even on the
+ * empty screen where both are visible at once.
  */
 
-import { Key } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/kit';
 
 export interface KeysEmptyStateProps {
   onCreate: () => void;
@@ -19,11 +23,14 @@ export interface KeysEmptyStateProps {
 export function KeysEmptyState({ onCreate }: KeysEmptyStateProps) {
   const t = useTranslations('account.keys');
   return (
-    <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-neutral-300 p-10 text-center">
-      <Key className="h-8 w-8 text-neutral-400" aria-hidden="true" />
-      <h2 className="text-lg font-semibold">{t('empty.title')}</h2>
-      <p className="max-w-sm text-sm text-neutral-600">{t('empty.body')}</p>
-      <Button onClick={onCreate}>{t('empty.cta')}</Button>
-    </div>
+    <EmptyState
+      title={t('empty.title')}
+      description={t('empty.body')}
+      action={
+        <Button variant="outline" onClick={onCreate}>
+          {t('empty.cta')}
+        </Button>
+      }
+    />
   );
 }

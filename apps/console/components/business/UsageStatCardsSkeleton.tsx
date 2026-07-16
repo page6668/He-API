@@ -18,13 +18,15 @@ export function UsageStatCardsSkeleton({ label }: UsageStatCardsSkeletonProps) {
       className="grid grid-cols-1 gap-4 md:grid-cols-3"
     >
       {Array.from({ length: 3 }).map((_, col) => (
-        <div key={col} className="rounded-lg border border-neutral-200 p-4">
-          <div className="mb-3 h-4 w-20 animate-pulse rounded bg-neutral-200" />
-          <div className="space-y-2">
+        <div key={col} className="rounded-lg border border-line bg-surface p-5">
+          {/* 骨架屏刻意不用 animate-pulse 闪烁(design-system.md motion.use_where 明令排除) —
+              静态暖灰块本身即是克制的动效主张。 */}
+          <div className="mb-4 h-4 w-20 rounded bg-surface-sunken" />
+          <div className="grid grid-cols-2 gap-4">
             {Array.from({ length: 4 }).map((__, row) => (
-              <div key={row} className="flex items-center justify-between gap-2">
-                <div className="h-3 w-16 animate-pulse rounded bg-neutral-200" />
-                <div className="h-5 w-12 animate-pulse rounded bg-neutral-200" />
+              <div key={row} className="space-y-1.5">
+                <div className="h-3 w-14 rounded bg-surface-sunken" />
+                <div className="h-6 w-16 rounded bg-surface-sunken" />
               </div>
             ))}
           </div>

@@ -8,6 +8,7 @@ import {
   signinActionForm,
   type SigninResult,
 } from '@/app/[locale]/_actions/auth';
+import { Button, Notice, fieldCls, labelCls } from '@/components/ui/kit';
 
 import { ResendModal } from '../signup/check-inbox/ResendModal';
 
@@ -16,16 +17,13 @@ interface SigninFormProps {
   prefillEmail?: string;
 }
 
+/** 本屏唯一的朱砂 —— 主操作(design-system.md distinctive_rule 铁律2)。 */
 function SubmitButton({ label, submittingLabel }: { label: string; submittingLabel: string }) {
   const { pending } = useFormStatus();
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="w-full rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-    >
+    <Button type="submit" variant="primary" disabled={pending} className="w-full">
       {pending ? submittingLabel : label}
-    </button>
+    </Button>
   );
 }
 
@@ -51,26 +49,25 @@ export function SigninForm({ locale, prefillEmail = '' }: SigninFormProps) {
     <form action={formAction} className="space-y-4" noValidate>
       <input type="hidden" name="locale" value={locale} />
 
+      {/* 行内细条,不是满宽红底 banner(design-system.md dashboard/空错状态同调)。 */}
       {errorCode ? (
-        <div
-          role="alert"
-          aria-live="polite"
-          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
-        >
+        <Notice tone="error" role="alert">
           <p>
             {t(errorCode.replace(/^auth\./, ''))}
-            {retryAfterSeconds ? <span> ({retryAfterSeconds}s)</span> : null}
+            {retryAfterSeconds ? (
+              <span className="tabular"> ({retryAfterSeconds}s)</span>
+            ) : null}
           </p>
           {emailNotVerified ? (
             <div className="mt-2">
               <ResendModal />
             </div>
           ) : null}
-        </div>
+        </Notice>
       ) : null}
 
-      <div className="space-y-1">
-        <label htmlFor="email" className="block text-sm font-medium">
+      <div>
+        <label htmlFor="email" className={labelCls}>
           {t('signin.emailLabel')}
         </label>
         <input
@@ -82,16 +79,19 @@ export function SigninForm({ locale, prefillEmail = '' }: SigninFormProps) {
           autoFocus={!prefillEmail}
           defaultValue={prefillEmail}
           placeholder={t('signin.emailPlaceholder')}
-          className="block w-full rounded-md border border-neutral-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          className={fieldCls}
         />
       </div>
 
-      <div className="space-y-1">
-        <div className="flex items-center justify-between">
-          <label htmlFor="password" className="block text-sm font-medium">
+      <div>
+        <div className="flex items-center justify-between gap-3">
+          <label htmlFor="password" className={labelCls}>
             {t('signin.passwordLabel')}
           </label>
-          <a className="text-xs text-blue-700 hover:underline" href={`/${locale}/forgot-password`}>
+          <a
+            className="text-label text-ink-secondary underline decoration-line-strong underline-offset-2 transition-colors duration-state ease-he hover:text-ink"
+            href={`/${locale}/forgot-password`}
+          >
             {t('signin.forgotPassword')}
           </a>
         </div>
@@ -102,15 +102,18 @@ export function SigninForm({ locale, prefillEmail = '' }: SigninFormProps) {
           required
           autoComplete="current-password"
           autoFocus={Boolean(prefillEmail)}
-          className="block w-full rounded-md border border-neutral-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          className={fieldCls}
         />
       </div>
 
       <SubmitButton label={t('signin.submit')} submittingLabel={t('signin.submitting')} />
 
-      <p className="text-center text-sm text-neutral-600">
+      <p className="text-small text-ink-secondary">
         {t('signin.noAccount')}{' '}
-        <a className="text-blue-700 underline" href={`/${locale}/signup`}>
+        <a
+          className="text-ink underline decoration-line-strong underline-offset-2 transition-colors duration-state ease-he hover:decoration-ink"
+          href={`/${locale}/signup`}
+        >
           {t('signin.signupLink')}
         </a>
       </p>

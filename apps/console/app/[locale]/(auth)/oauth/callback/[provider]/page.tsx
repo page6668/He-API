@@ -31,10 +31,10 @@ export default async function OAuthCallbackPage({ params: { locale, provider } }
       className="flex min-h-[40vh] flex-col items-center justify-center space-y-4"
     >
       <div
-        className="h-10 w-10 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700"
+        className="h-8 w-8 animate-spin rounded-full border-2 border-line-strong border-t-ink"
         aria-hidden="true"
       />
-      <p className="text-sm text-neutral-600">{t('oauth.callbackLoading')}</p>
+      <p className="text-small text-ink-secondary">{t('oauth.callbackLoading')}</p>
     </section>
   );
 }
