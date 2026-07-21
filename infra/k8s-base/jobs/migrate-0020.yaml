@@ -4,6 +4,21 @@
 # 无影响(旧版网关根本不读这两张表),而先发版会让 /v1/models 短暂返回库里那 8
 # 条过时模型。expand-then-deploy。
 #
+# 凭证:必须用**表属主**跑。he_api.models / model_pricing 的属主是 he_admin,
+# 而 he-api-db-creds 里是应用账号 he_api —— 它跑 ALTER TABLE 会得到
+# "must be owner of table models"。这不是配置疏漏,是正确的边界:应用账号不
+# 该有改 schema 的权限。所以迁移读一个**临时** Secret,跑完即删,绝不把高权限
+# 账号常驻给网关。构造方式(复用现有连接串的 host/port/db,只换账号密码):
+#
+#   APP_URI=$(kubectl -n he-api-staging get secret he-api-db-creds \
+#     -o jsonpath='{.data.HE_API_DB_POSTGRES_URI}' | base64 -d)
+#   read -s -p "he_admin password: " ADMPW; echo
+#   kubectl -n he-api-staging create secret generic migrate-admin-creds \
+#     --from-literal=HE_API_DB_POSTGRES_URI="postgresql://he_admin:${ADMPW}@${APP_URI#*@}"
+#   unset ADMPW APP_URI
+#
+# 跑完务必:kubectl -n he-api-staging delete secret migrate-admin-creds
+#
 #   kubectl apply -f infra/k8s-base/jobs/migrate-0020.yaml
 #   kubectl -n he-api-staging wait --for=condition=complete job/migrate-0020 --timeout=120s
 #   kubectl -n he-api-staging logs job/migrate-0020
@@ -120,8 +135,9 @@ spec:
           args:
             - psql "$HE_API_DB_POSTGRES_URI" -v ON_ERROR_STOP=1 --single-transaction -f /sql/0020.sql
           envFrom:
+            # 临时的属主凭证,见文件头。绝非 he-api-db-creds(那是应用账号)。
             - secretRef:
-                name: he-api-db-creds
+                name: migrate-admin-creds
           volumeMounts:
             - name: sql
               mountPath: /sql
