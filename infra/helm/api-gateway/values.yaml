@@ -209,3 +209,16 @@ prometheusRule:
   errorRateThreshold: "0.01"
   upstreamErrorRateThreshold: "0.1"
   overseasEgressBytesThreshold: "0"
+
+# Stories 4.1-4.6 — 厂商适配器 Connect-RPC 端点(internal/adapterclient/registry.go)。
+# 键名大写后即 <VENDOR>_ADAPTER_ENDPOINT。空值 = 不注入该 env = 该厂商模型回落到
+# Story-3.3 的 **mock 假回复**;要真正调通上游,必须同时:
+#   ① 这里配好端点(适配器在 he-api-adapters 命名空间,用全限定 Service DNS)
+#   ② 给对应适配器的 Secret adapter-<vendor>-upstream-api-key 填真实上游 key
+adapters:
+  deepseek: http://adapter-deepseek.he-api-adapters.svc.cluster.local:8080
+  qwen: http://adapter-qwen.he-api-adapters.svc.cluster.local:8080
+  kimi: http://adapter-kimi.he-api-adapters.svc.cluster.local:8080
+  glm: http://adapter-glm.he-api-adapters.svc.cluster.local:8080
+  doubao: http://adapter-doubao.he-api-adapters.svc.cluster.local:8080
+  ernie: http://adapter-ernie.he-api-adapters.svc.cluster.local:8080

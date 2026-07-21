@@ -46,6 +46,16 @@ spec:
             - name: ROUTING_SVC_ENDPOINT
               value: {{ .Values.routing.endpoint | quote }}
             {{- end }}
+            # Stories 4.1-4.6 — vendor adapter Connect-RPC endpoints
+            # (internal/adapterclient/registry.go LoadFromEnv).
+            # ⚠️ 未设置 → 该厂商模型**回落到 Story-3.3 的 mock**(返回假回复)。
+            # 适配器部署在 he-api-adapters 命名空间,故用全限定 Service DNS。
+            {{- range $vendor, $endpoint := .Values.adapters }}
+            {{- if $endpoint }}
+            - name: {{ $vendor | upper }}_ADAPTER_ENDPOINT
+              value: {{ $endpoint | quote }}
+            {{- end }}
+            {{- end }}
           envFrom:
             # Story 5.2 (Q-E) — trusted-proxy CIDRs for the keypolicy XFF
             # walker (CLOUDFLARE_CIDRS + INGRESS_CIDRS). Snapshot read at
