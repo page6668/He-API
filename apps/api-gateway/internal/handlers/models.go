@@ -48,15 +48,35 @@ type ModelCapabilities struct {
 	MaxOutputTokens     int  `json:"max_output_tokens"`
 }
 
+// ModelPricing is the AD-002 marketplace price: what a caller is charged per
+// 1K tokens, markup already applied.
+//
+// Amounts are decimal STRINGS, exactly as postgres rendered them — never JSON
+// numbers. A float would let a price like 0.00088 round-trip as
+// 0.0008800000000000001 through some clients, and this is the number a customer
+// makes a purchasing decision on. This mirrors the M-1 rule the billing cost
+// engine enforces (apps/billing-svc/internal/pricing).
+type ModelPricing struct {
+	InputPer1KTokens  string `json:"input_per_1k_tokens"`
+	OutputPer1KTokens string `json:"output_per_1k_tokens"`
+	Currency          string `json:"currency"`
+}
+
 // ModelEntry is one row in the /v1/models response data array. Field order
 // is the OpenAI canonical shape (id → object → created → owned_by) with the
 // He-API `capabilities` extension appended LAST (Story-4.7 BR-1.4).
+//
+// AD-002 appends `pricing` AFTER capabilities, keeping the BR-1.4 rule that
+// He-API extensions trail the OpenAI canonical fields. It is omitted entirely
+// when unknown — the compiled-in cold-start fallback carries no prices, and an
+// absent field is honest where a zero would read as "free".
 type ModelEntry struct {
 	ID           string            `json:"id"`
 	Object       string            `json:"object"`
 	Created      int64             `json:"created"`
 	OwnedBy      string            `json:"owned_by"`
 	Capabilities ModelCapabilities `json:"capabilities"`
+	Pricing      *ModelPricing     `json:"pricing,omitempty"`
 }
 
 // ModelsResponse wraps the catalogue in the OpenAI ModelList envelope.

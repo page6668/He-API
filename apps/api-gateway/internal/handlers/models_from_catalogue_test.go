@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/he-api/he-api/apps/api-gateway/internal/catalogue"
@@ -118,5 +119,57 @@ func TestCatalogueCapabilities_TracksDatabase(t *testing.T) {
 	// (operator-supplied routes still work while their rows are being priced).
 	if _, ok := lookup("not-in-catalogue"); ok {
 		t.Error("unknown model reported as known")
+	}
+}
+
+// AD-002 —— 价格是加法变更:追加在 capabilities 之后(BR-1.4「He-API 扩展在
+// 末尾」),金额是精确十进制字符串而非 JSON number(M-1:客户据以决策的钱不
+// 走 float),币种显式标注。
+func TestModelEntry_PricingIsAppendedLastAsDecimalStrings(t *testing.T) {
+	cat := &fakeCatalogue{models: []catalogue.Model{{
+		ID: "qwen3.7-plus", Vendor: "alibaba",
+		Capabilities:     catalogue.Capabilities{Chat: true},
+		InputPricePer1K:  "0.000880",
+		OutputPricePer1K: "0.002200",
+	}}}
+	entries := EntriesFromCatalogue(cat.Models(), 1700000000)
+	buf, err := json.Marshal(entries[0])
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	got := string(buf)
+
+	// 追加在末尾,且金额带引号(字符串)。
+	want := `,"pricing":{"input_per_1k_tokens":"0.000880","output_per_1k_tokens":"0.002200","currency":"USD"}}`
+	if !strings.HasSuffix(got, want) {
+		t.Errorf("pricing not appended last as strings\n  got: %s", got)
+	}
+	// capabilities 仍在 pricing 之前 —— OpenAI 规范字段在前的顺序没有被破坏。
+	if strings.Index(got, `"capabilities"`) > strings.Index(got, `"pricing"`) {
+		t.Error("pricing must follow capabilities (BR-1.4)")
+	}
+}
+
+// 冷启动兜底没有价格。此时 pricing 字段必须整个消失 —— 输出 0 会被读成「免费」。
+func TestModelEntry_PricingOmittedWhenUnknown(t *testing.T) {
+	entries := EntriesFromCatalogue(CatalogueFallback(), 1700000000)
+	if len(entries) == 0 {
+		t.Fatal("fallback produced no entries")
+	}
+	buf, err := json.Marshal(entries[0])
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(buf), "pricing") {
+		t.Errorf("unpriced entry must omit pricing entirely\n  got: %s", buf)
+	}
+}
+
+// 半价行(只有一侧有价)同样不展示 —— 宁可不显示,不可显示一半的价格。
+func TestModelEntry_PricingOmittedWhenHalfPriced(t *testing.T) {
+	models := []catalogue.Model{{ID: "half", Vendor: "x", InputPricePer1K: "0.001000"}}
+	buf, _ := json.Marshal(EntriesFromCatalogue(models, 1)[0])
+	if strings.Contains(string(buf), "pricing") {
+		t.Errorf("half-priced entry must omit pricing\n  got: %s", buf)
 	}
 }

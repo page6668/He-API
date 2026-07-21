@@ -25,18 +25,42 @@ export const ModelCapabilitiesSchema = z.object({
   function_calling: z.boolean(),
   vision: z.boolean(),
   json_mode: z.boolean(),
+  // Story 9.6 / 9.7 —— 网关早已输出这两个能力位,但此前 schema 未声明,
+  // z.object 会静默丢弃它们,导致 ASR/TTS 标签永远不显示(与 pricing 同一成因)。
+  // 声明为 optional 以容忍新旧网关版本共存期。
+  transcription: z.boolean().optional(),
+  speech: z.boolean().optional(),
   context_window_tokens: z.number().int().nonnegative(),
   max_output_tokens: z.number().int().nonnegative(),
 });
 export type ModelCapabilities = z.infer<typeof ModelCapabilitiesSchema>;
 
-/** BR-1.4 ModelEntry shape — capability as the last field. */
+/**
+ * AD-002 pricing — customer-facing price per 1K tokens, markup applied.
+ *
+ * Amounts are decimal STRINGS, not numbers: the gateway deliberately keeps them
+ * out of floating point all the way from postgres NUMERIC to this field, and
+ * parsing them here would reintroduce exactly the rounding it avoided. Render
+ * them; do not do arithmetic on them.
+ *
+ * Optional: absent whenever the gateway is serving its compiled-in cold-start
+ * fallback, which carries no prices.
+ */
+export const ModelPricingSchema = z.object({
+  input_per_1k_tokens: z.string(),
+  output_per_1k_tokens: z.string(),
+  currency: z.string(),
+});
+export type ModelPricing = z.infer<typeof ModelPricingSchema>;
+
+/** BR-1.4 ModelEntry shape — He-API extensions (capabilities, pricing) last. */
 export const ModelEntrySchema = z.object({
   id: z.string(),
   object: z.literal("model"),
   created: z.number().int(),
   owned_by: z.string(),
   capabilities: ModelCapabilitiesSchema,
+  pricing: ModelPricingSchema.optional(),
 });
 export type ModelEntry = z.infer<typeof ModelEntrySchema>;
 

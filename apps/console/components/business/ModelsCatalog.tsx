@@ -47,6 +47,21 @@ function capabilityTags(m: ModelEntry): string[] {
   return tags;
 }
 
+const CURRENCY_SYMBOLS: Record<string, string> = { USD: '$', CNY: '¥' };
+
+/**
+ * 展示用价格格式化。**纯字符串操作** —— 网关特意让金额从 postgres NUMERIC 一路
+ * 以精确十进制字符串抵达前端,这里 parseFloat 一次就把那份精确性还回去了。
+ * 只做两件事:去掉尾随 0(0.000880 → 0.00088)、加币种符号。
+ */
+function formatPrice(amount: string, currency: string): string {
+  const symbol = CURRENCY_SYMBOLS[currency] ?? `${currency} `;
+  const trimmed = amount.includes('.')
+    ? amount.replace(/0+$/, '').replace(/\.$/, '')
+    : amount;
+  return `${symbol}${trimmed}`;
+}
+
 function ModelCard({ m }: { m: ModelEntry }) {
   return (
     // 零阴影 —— hover 只加深边框(design-system motion.use_where)
@@ -70,6 +85,25 @@ function ModelCard({ m }: { m: ModelEntry }) {
         Up to <span className="tabular">{formatTokens(m.capabilities.max_output_tokens)}</span> output
         tokens
       </p>
+
+      {/* 价格 —— 网关产品的核心决策信息(AD-002)。铁律1:金额走 .tabular 等宽。
+          无定价时整块不渲染:显示 0 会被读成「免费」。 */}
+      {m.pricing && (
+        <dl className="mt-3 flex gap-5 border-t border-line pt-3">
+          <div>
+            <dt className="text-label text-ink-muted">Input / 1K</dt>
+            <dd className="tabular text-body text-ink">
+              {formatPrice(m.pricing.input_per_1k_tokens, m.pricing.currency)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-label text-ink-muted">Output / 1K</dt>
+            <dd className="tabular text-body text-ink">
+              {formatPrice(m.pricing.output_per_1k_tokens, m.pricing.currency)}
+            </dd>
+          </div>
+        </dl>
+      )}
 
       {/* 能力标签:墨色系描边药丸(不用彩色块分区) */}
       <div className="mt-4 flex flex-wrap gap-1.5">

@@ -45,11 +45,25 @@ type Model struct {
 	// UpstreamModelID is the vendor's own id when it differs from ID (e.g.
 	// deepseek-v3 → deepseek-chat). Empty means "pass ID through unchanged".
 	UpstreamModelID string
-	// Price per 1K tokens, already marked up. Zero means unpriced — such a
-	// model MUST NOT be advertised (AD-002 invariant), so Load filters it out.
-	InputPricePer1K  float64
-	OutputPricePer1K float64
+	// Customer-facing price per 1K tokens in USD, already marked up.
+	//
+	// Carried as the exact decimal TEXT postgres produced — never float64.
+	// This is the M-1 rule the billing cost engine is built on
+	// (apps/billing-svc/internal/pricing): float is allowed where a price is
+	// only RANKED, never where it is shown to or charged to a customer. The
+	// gateway does no arithmetic on these; the markup is applied in SQL where
+	// the type is still NUMERIC.
+	//
+	// Empty means unpriced — such a model MUST NOT be advertised (AD-002
+	// invariant), which is why Load's JOIN filters it out before we get here.
+	InputPricePer1K  string
+	OutputPricePer1K string
 }
+
+// PriceCurrency is the unit of the two price fields. he_api.model_pricing is
+// USD-denominated (migration 0007); display in another currency goes through
+// he_api.fx_rates, never through a second price column.
+const PriceCurrency = "USD"
 
 // listActiveSQL returns active models that also carry an effective price.
 //
@@ -58,6 +72,10 @@ type Model struct {
 // advertised and then billed at zero — we would rather not list it at all.
 // DISTINCT ON picks the newest price row at or before now (model_pricing is
 // append-only for audit, so several rows can exist per model).
+//
+// The markup is applied HERE, while the values are still NUMERIC, then rounded
+// to 6 places (the scale of the source columns) and cast to text. Postgres does
+// the decimal arithmetic exactly; Go only carries the string.
 const listActiveSQL = `
 SELECT DISTINCT ON (m.id)
        m.id,
@@ -65,8 +83,8 @@ SELECT DISTINCT ON (m.id)
        m.vendor,
        m.capabilities,
        COALESCE(m.upstream_model_id, ''),
-       p.upstream_price_per_1k_input_tokens  * (1 + p.markup_percent / 100),
-       p.upstream_price_per_1k_output_tokens * (1 + p.markup_percent / 100)
+       ROUND(p.upstream_price_per_1k_input_tokens  * (1 + p.markup_percent / 100), 6)::text,
+       ROUND(p.upstream_price_per_1k_output_tokens * (1 + p.markup_percent / 100), 6)::text
   FROM he_api.models m
   JOIN he_api.model_pricing p ON p.model_id = m.id AND p.effective_at <= NOW()
  WHERE m.status = 'active'

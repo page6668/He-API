@@ -73,11 +73,23 @@ func CatalogueCapabilities(snap catalogueReader) func(string) (ModelCapabilities
 func EntriesFromCatalogue(models []catalogue.Model, createdAt int64) []ModelEntry {
 	out := make([]ModelEntry, 0, len(models))
 	for _, m := range models {
+		// Both prices come from the same row, so either both are present or the
+		// model would not have survived the store's JOIN. Guard on both anyway:
+		// a half-priced entry must not be advertised as if it were free.
+		var pricing *ModelPricing
+		if m.InputPricePer1K != "" && m.OutputPricePer1K != "" {
+			pricing = &ModelPricing{
+				InputPer1KTokens:  m.InputPricePer1K,
+				OutputPer1KTokens: m.OutputPricePer1K,
+				Currency:          catalogue.PriceCurrency,
+			}
+		}
 		out = append(out, ModelEntry{
 			ID:      m.ID,
 			Object:  "model",
 			Created: createdAt,
 			OwnedBy: m.Vendor,
+			Pricing: pricing,
 			Capabilities: ModelCapabilities{
 				Chat:                m.Capabilities.Chat,
 				Streaming:           m.Capabilities.Streaming,
