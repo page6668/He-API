@@ -53,6 +53,7 @@ export default async function LocaleLayout({ children, params: { locale } }: Loc
     { href: `/${locale}/models`, label: 'Models' },
     { href: `/${locale}/playground`, label: 'Playground' },
     { href: `/${locale}/benchmark`, label: 'Benchmark' },
+    { href: `/${locale}/docs`, label: 'Docs' },
   ];
 
   return (
