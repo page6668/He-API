@@ -222,3 +222,15 @@ adapters:
   glm: http://adapter-glm.he-api-adapters.svc.cluster.local:8080
   doubao: http://adapter-doubao.he-api-adapters.svc.cluster.local:8080
   ernie: http://adapter-ernie.he-api-adapters.svc.cluster.local:8080
+
+# 追加"模型 id → 厂商"路由,免发版即可上架新模型(internal/adapterclient
+# ExtraModelRoutesEnv)。格式 "modelID=vendor,..." ,vendor ∈ deepseek|qwen|kimi|
+# glm|doubao|ernie。
+#
+# 背景:2026-07 实测发现内置模型表已全面过时 —— 上游早已把 qwen-max/deepseek-v3/
+# glm-4 等下线,线上调用一律 403 Model.AccessDenied。下列 id 取自百炼
+# /compatible-mode/v1/models 的真实清单。长期方案是模型目录改数据库驱动 + 自动同步。
+#
+# 注:阿里云百炼一个入口即可直连多厂商模型(DeepSeek V4 / GLM / Kimi / MiniMax),
+# 故这些 id 都路由到 qwen 适配器(它指向 dashscope 兼容端点)。
+extraModelRoutes: "qwen3.7-max=qwen,qwen3.7-plus=qwen,qwen3.6-flash=qwen,deepseek-v4-pro=qwen,deepseek-v4-flash=qwen,glm-5.2=qwen,kimi-k2.6=qwen"

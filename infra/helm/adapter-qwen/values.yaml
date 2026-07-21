@@ -30,7 +30,21 @@ image:
 namespace: he-api-adapters
 
 # BR-1.10 — bound model ids hosted by this single Deployment.
+# 适配器放行的模型 id(→ QWEN_BOUND_MODEL_IDS)。id 原样转发给上游 dashscope
+# 兼容端点,故必须与上游真实模型名一致。
+#
+# 2026-07 实测:qwen-max / qwen-plus 已被上游下线,调用返回 403 Model.AccessDenied。
+# 下列 id 取自百炼 /compatible-mode/v1/models 的真实清单。百炼一个入口即可直连
+# 多厂商(DeepSeek V4 / GLM / Kimi),故一并在此放行。
+# 保留两个旧 id 仅为兼容既有调用方,它们在上游已不可用。
 supportedModels:
+  - qwen3.7-max
+  - qwen3.7-plus
+  - qwen3.6-flash
+  - deepseek-v4-pro
+  - deepseek-v4-flash
+  - glm-5.2
+  - kimi-k2.6
   - qwen-max
   - qwen-plus
 

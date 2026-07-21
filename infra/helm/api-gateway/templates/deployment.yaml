@@ -56,6 +56,14 @@ spec:
               value: {{ $endpoint | quote }}
             {{- end }}
             {{- end }}
+            {{- if .Values.extraModelRoutes }}
+            # 追加编译期表里没有的新模型 → 厂商适配器路由(免发版)。
+            # 厂商会下线旧模型名:2026-07 时 qwen-max/deepseek-v3/glm-4 等内置 id
+            # 已全部被上游淘汰(qwen3.7-max / deepseek-v4-pro / glm-5.2 …),
+            # 导致线上调用一律 403 Model.AccessDenied。
+            - name: HE_API_EXTRA_MODEL_ROUTES
+              value: {{ .Values.extraModelRoutes | quote }}
+            {{- end }}
           envFrom:
             # Story 5.2 (Q-E) — trusted-proxy CIDRs for the keypolicy XFF
             # walker (CLOUDFLARE_CIDRS + INGRESS_CIDRS). Snapshot read at

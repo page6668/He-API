@@ -20,6 +20,7 @@ package adapterclient
 import (
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 
 	"connectrpc.com/connect"
@@ -275,12 +276,26 @@ func NewRegistryFromHandles(handles map[string]ClientHandle) *Registry {
 //
 // Empty values omit the entry, which causes the gateway to fall through
 // to the Story-3.3 mock path for that model id.
+// ExtraModelRoutesEnv appends model-id → vendor routes WITHOUT a code change.
+//
+// Why this exists: the built-in table below hardcodes model ids that vendors
+// retire. In 2026-07 every id here (qwen-max, deepseek-v3, glm-4, …) had already
+// been superseded upstream (qwen3.7-max, deepseek-v4-pro, glm-5.2, …), so every
+// live call returned 403 Model.AccessDenied — the catalogue had silently rotted.
+// A compiled-in list cannot track a vendor's release cadence; this env is the
+// stop-gap until the DB-backed catalogue lands.
+//
+// Format: "modelID=vendor,modelID=vendor" where vendor ∈ deepseek|qwen|kimi|
+// glm|doubao|ernie — the model routes to that vendor's adapter endpoint.
+// Example: "qwen3.7-max=qwen,qwen3.7-plus=qwen,deepseek-v4-pro=deepseek"
+const ExtraModelRoutesEnv = "HE_API_EXTRA_MODEL_ROUTES"
+
 func LoadFromEnv() *Registry {
 	qwenEndpoint := os.Getenv(QwenAdapterEndpointEnv)
 	kimiEndpoint := os.Getenv(KimiAdapterEndpointEnv)
 	doubaoEndpoint := os.Getenv(DoubaoAdapterEndpointEnv)
 	glmEndpoint := os.Getenv(GLMAdapterEndpointEnv)
-	return NewRegistry(map[string]string{
+	routes := map[string]string{
 		DeepSeekModelID:   os.Getenv(DeepSeekEndpointEnv),
 		QwenMaxModelID:    qwenEndpoint,
 		QwenPlusModelID:   qwenEndpoint,
@@ -295,7 +310,34 @@ func LoadFromEnv() *Registry {
 		DoubaoASRModelID:  doubaoEndpoint, // Story 9.6 — ASR rides the doubao service (shared handle, M2 endpoint-dedup)
 		DoubaoTTSModelID:  doubaoEndpoint, // Story 9.7 — TTS rides the doubao service (shared handle, M2 endpoint-dedup)
 		ErnieModelID:      os.Getenv(ErnieAdapterEndpointEnv),
-	})
+	}
+
+	// Append operator-supplied routes for models the compiled table predates.
+	// Unknown vendors and malformed pairs are skipped (a typo must not take the
+	// gateway down); an empty endpoint means that vendor's adapter is unwired,
+	// so the entry is dropped and the model falls through to the mock path.
+	byVendor := map[string]string{
+		"deepseek": os.Getenv(DeepSeekEndpointEnv),
+		"qwen":     qwenEndpoint,
+		"kimi":     kimiEndpoint,
+		"glm":      glmEndpoint,
+		"doubao":   doubaoEndpoint,
+		"ernie":    os.Getenv(ErnieAdapterEndpointEnv),
+	}
+	for _, pair := range strings.Split(os.Getenv(ExtraModelRoutesEnv), ",") {
+		modelID, vendor, ok := strings.Cut(strings.TrimSpace(pair), "=")
+		if !ok {
+			continue
+		}
+		modelID = strings.TrimSpace(modelID)
+		endpoint := byVendor[strings.ToLower(strings.TrimSpace(vendor))]
+		if modelID == "" || endpoint == "" {
+			continue
+		}
+		routes[modelID] = endpoint
+	}
+
+	return NewRegistry(routes)
 }
 
 // Resolve looks up the ClientHandle for a model id. Returns (handle, true)
