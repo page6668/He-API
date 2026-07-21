@@ -45,12 +45,14 @@ export default async function LocaleLayout({ children, params: { locale } }: Loc
   const messages = await getMessages();
   const dir = isRtlLocale(locale) ? 'rtl' : 'ltr';
 
+  // 导航只列**真实存在**的路由。曾有一条 `/docs` 死链(该路由从未实现 → 404),
+  // 以及把「Console」指向 `[locale]/` 这个 demo 占位页(看着像空白);均已修正。
+  // 新增路由时务必同步这里,并确认目标页面存在。
   const nav = [
-    { href: `/${locale}/`, label: 'Console' },
+    { href: `/${locale}/dashboard`, label: 'Console' },
     { href: `/${locale}/models`, label: 'Models' },
     { href: `/${locale}/playground`, label: 'Playground' },
     { href: `/${locale}/benchmark`, label: 'Benchmark' },
-    { href: `/${locale}/docs`, label: 'Docs' },
   ];
 
   return (
