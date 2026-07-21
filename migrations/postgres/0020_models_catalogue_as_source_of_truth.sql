@@ -56,8 +56,15 @@ ON CONFLICT (id) DO UPDATE
         updated_at   = NOW();
 
 -- 6) 定价 —— AD-002 不变量:**只有 active 且有生效定价的模型才对外可见可计费**。
---    上游 /v1/models 不返回价格,故价格只能人工维护。下列为占位单价(元/1K token),
---    上线真实计费前必须由运营按厂商实际价目表核准。
+--    上游 /v1/models 不返回价格,故价格只能人工维护。
+--
+--    单位:**USD / 1K tokens**(与 0007 同列一致;整条计费链以 USD 为基准,
+--    展示时再按 fx_rates 换算)。切勿按人民币填写。
+--
+--    下列全部是**占位值**,取自 0007 中最接近的同代模型的 launch default
+--    (qwen3.7-plus ← qwen-plus,qwen3.7-max ← qwen-max,deepseek-v4-flash
+--    ← deepseek-v3,以此类推)—— 它们只保证量级与既有数据同一尺度,
+--    **不代表厂商 2026-07 的真实价目**。上线真实计费前必须由运营逐条核准。
 INSERT INTO he_api.model_pricing
     (model_id, effective_at, upstream_price_per_1k_input_tokens, upstream_price_per_1k_output_tokens) VALUES
     ('qwen3.7-max',       TIMESTAMPTZ '2026-07-01 00:00:00+00', 0.004000, 0.012000),
