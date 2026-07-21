@@ -1,0 +1,39 @@
+# registry/db — structured record of this project's data model.
+# Read by draft-story / design-architecture / implement. Updated by implement
+# (metabolism) as schema lands. Only tables a skill must reason about belong
+# here — this is not a schema dump.
+
+tables:
+  - name: he_api.models
+    purpose: >
+      模型目录的**唯一权威源**(AD-002)。网关每 5 分钟刷新内存快照对外服务
+      /v1/models + /public/models。Go 的 packages/models-catalogue DefaultRegistry
+      **不是**权威,仅作 DB 不可用时的冷启动兜底。
+    columns:
+      id: "VARCHAR(100) PK — 对外模型 id,如 qwen3.7-max"
+      display_name: "VARCHAR(100) NOT NULL"
+      vendor: "VARCHAR(50) NOT NULL — alibaba/deepseek/moonshot/zhipu/bytedance/baidu;网关据此路由到厂商适配器"
+      capabilities: "JSONB NOT NULL — {chat,streaming,function_calling,vision,json_mode,context_window_tokens,max_output_tokens}"
+      upstream_endpoint: "VARCHAR(500) NULL"
+      upstream_model_id: "VARCHAR(100) NULL — **上游真实模型名**;与 id 不同时必须填(例:deepseek-v3 → deepseek-chat)。列早已存在但 2026-07 前从未填充,是 403 事故的一环"
+      status: "VARCHAR(20) DEFAULT 'active' — active(对外可见可计费) | pending(同步发现,待人工补定价与能力,不对外) | deprecated(上游已下线,隐藏但保留行)"
+      created_at: "TIMESTAMPTZ DEFAULT NOW()"
+    invariants:
+      - "只有 status='active' **且**存在生效 model_pricing 行的模型才对外可见与可计费。定价缺失 = 未上架。"
+      - "永不物理删除:usage_ledger 有外键引用,且历史账单需可追溯。下线只置 deprecated。"
+      - "同步任务是纯加法:只 upsert 与置 deprecated,绝不删除行。"
+    added_by: design-architecture
+    added: 2026-07-21
+
+  - name: he_api.model_pricing
+    purpose: 模型定价(按 effective_at 取当前生效行)。模型广场展示与计费的价格权威源。
+    columns:
+      model_id: "VARCHAR(100) NOT NULL FK → he_api.models(id)"
+      effective_at: "TIMESTAMPTZ NOT NULL — 与 model_id 组成 PK,支持调价留痕"
+      upstream_price_per_1k_input_tokens: "NUMERIC(10,6) NOT NULL"
+      upstream_price_per_1k_output_tokens: "NUMERIC(10,6) NOT NULL"
+      markup_percent: "NUMERIC(5,2) NOT NULL DEFAULT 10.00 — 加价率 5-15%"
+    invariants:
+      - "价格只能人工补全 —— 上游 /v1/models 不返回价格,自动同步无法覆盖(AD-002)。"
+    added_by: design-architecture
+    added: 2026-07-21

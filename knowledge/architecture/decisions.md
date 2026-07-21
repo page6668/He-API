@@ -15,6 +15,17 @@ do not rewrite.
 - approved_by: dorayo
 - ref: cc-plans/Skill编排器与最小契约设计-v0.1.md
 
+## AD-002: 模型目录以数据库为权威,上游同步只做"发现"
+
+- decision: `he_api.models` 是模型目录唯一权威源;网关每 5 分钟从 PG 刷新内存快照供 `/v1/models` + `/public/models`;CronJob 拉上游 `/v1/models` 仅发现新 id 并落 `status='pending'`;只有 `status='active'` 且有生效 `model_pricing` 的模型才对外可见与可计费;Go `DefaultRegistry` 降级为 DB 不可用时的只读兜底。
+- context: 模型清单编译在 Go 里,厂商发版节奏(qwen3.5→3.7 半年三代)远快于本项目发版;2026-07 实测内置 id 已全部被上游下线,线上调用一律 403 且**静默无告警**,同时 DB 里早建好的 models/model_pricing 两表从未被读取,形成双份漂移(Go 11 条 / DB 8 条),价格也因此展示不出来。
+- alternatives: 继续硬编码+人工发版(拒绝——已被证伪,半年腐烂一次且静默失败);上游清单直通对外(拒绝——上游不返回价格与能力,且会把上百个内部/图像/语音模型全量抛出,还让上游抖动打穿公开 API)。
+- status: accepted
+- source: design-architecture
+- added: 2026-07-21
+- approved_by: pending
+- ref: specs/model-catalogue-arch.md
+
 <!--
 Entry shape (copy for new decisions):
 
