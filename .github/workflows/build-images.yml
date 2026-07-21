@@ -59,6 +59,7 @@ jobs:
           - { name: account-deletion-sweeper, context: ., dockerfile: apps/auth-svc/cmd/account-deletion-sweeper/Dockerfile }
           - { name: fx-refresh,               context: ., dockerfile: apps/billing-svc/cmd/fx-refresh/Dockerfile }
           - { name: safety-log-retention,     context: ., dockerfile: apps/api-gateway/cmd/safety-log-retention/Dockerfile }
+          - { name: models-sync,              context: ., dockerfile: apps/api-gateway/cmd/models-sync/Dockerfile }
           # --- Sample images (BR2.2 — retained, NOT counted in the "17") ---
           - { name: sample-otel-app, context: apps/sample-otel-app, dockerfile: apps/sample-otel-app/Dockerfile, sample: true }
           - { name: sample-grpc-app, context: ., dockerfile: apps/sample-grpc-app/Dockerfile, sample: true }
@@ -156,10 +157,10 @@ jobs:
           sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
 
-      - name: Assert matrix covers every deployable Dockerfile (target 17)
+      - name: Assert matrix covers every deployable Dockerfile (target 19)
         run: |
           set -euo pipefail
-          EXPECTED=18
+          EXPECTED=19
           matrix_count="$(yq '[.jobs.build-image-pr.strategy.matrix.svc[] | select(.sample != true)] | length' .github/workflows/build-images.yml)"
           # Deployable Dockerfiles = all apps/**/Dockerfile minus the 2 samples.
           # db-doctor has NO Dockerfile (reuse base image, T6.3) so it is excluded.

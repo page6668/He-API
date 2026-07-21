@@ -184,6 +184,49 @@ safetyLogRetention:
       memory: 128Mi
 
 # -----------------------------------------------------------------------------
+# AD-002 — 模型目录发现任务(specs/model-catalogue-arch.md)。每天拉一次上游可用
+# 模型清单:新 id 落 status='pending'(不可见、不可计费,等人工补定价与能力),
+# 上游消失的 id 标 deprecated。永不删行、永不自动上架。
+#
+# 默认 enabled: false —— 它需要一个上游密钥 Secret,而适配器那份在
+# he-api-adapters 命名空间里,Secret 跨命名空间引用不可行。运营需先在网关所在
+# 命名空间创建同名 Secret 再打开:
+#
+#   kubectl -n he-api-staging create secret generic models-sync-upstream-api-key \
+#     --from-literal=api_key='<百炼密钥>'
+#
+# 打开前可先用 dryRun: true 跑一次,只打印上游清单不写库。
+# -----------------------------------------------------------------------------
+modelsSync:
+  enabled: false
+  schedule: "0 4 * * *"        # 04:00 UTC 每天(错开 03:00 的 retention cron)
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 200
+  backoffLimit: 0              # 会改目录状态,失败由人看日志,不盲目重试
+  activeDeadlineSeconds: 150   # > the binary's 2-min ctx deadline
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  # 百炼兼容端点一个密钥即可覆盖 Qwen / DeepSeek / GLM / Kimi 多厂商。
+  upstreamURL: "https://dashscope.aliyuncs.com/compatible-mode/v1/models"
+  vendor: "alibaba"            # 新发现行的默认 vendor,人工上架时按实际厂商修正
+  dryRun: false
+  apiKeySecret:
+    name: models-sync-upstream-api-key
+    key: api_key
+  image:
+    repository: he-api/models-sync
+    tag: "0.0.1"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+# -----------------------------------------------------------------------------
 # Pod Security — K8s 1.29 Pod Security "Restricted" profile baseline.
 # Every field below MUST be present for ACK PSA enforcement to accept the pod.
 # -----------------------------------------------------------------------------

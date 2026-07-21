@@ -1,0 +1,80 @@
+{{- if .Values.modelsSync.enabled }}
+# AD-002 — 模型目录发现任务(specs/model-catalogue-arch.md)。
+#
+# 只做发现:上游 /v1/models 只返回 id,不含价格与能力,所以新发现的 id 一律落
+# status='pending',对客户不可见、不可计费,等人工补齐定价与能力后才由人上架。
+# 上游已消失的 id 标 deprecated,但永不删行(usage_ledger 引用 models,历史账单
+# 必须可追溯)。
+#
+# 失败姿态与 safety-log-retention 一致:concurrencyPolicy: Forbid + backoffLimit: 0
+# —— 一次调度一个结果,失败由人看日志。这个任务会改目录状态,盲目重试没有意义。
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "api-gateway.fullname" . }}-models-sync
+  labels:
+    {{- include "api-gateway.labels" . | nindent 4 }}
+    app.kubernetes.io/component: models-sync
+spec:
+  schedule: {{ .Values.modelsSync.schedule | quote }}
+  timeZone: {{ .Values.modelsSync.timeZone | quote }}
+  concurrencyPolicy: {{ .Values.modelsSync.concurrencyPolicy }}
+  startingDeadlineSeconds: {{ .Values.modelsSync.startingDeadlineSeconds }}
+  successfulJobsHistoryLimit: {{ .Values.modelsSync.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.modelsSync.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      backoffLimit: {{ .Values.modelsSync.backoffLimit }}
+      activeDeadlineSeconds: {{ .Values.modelsSync.activeDeadlineSeconds }}  # > the binary's 2-min ctx deadline
+      template:
+        metadata:
+          labels:
+            {{- include "api-gateway.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: models-sync
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ include "api-gateway.serviceAccountName" . }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: models-sync
+              image: "{{ .Values.modelsSync.image.repository }}:{{ .Values.modelsSync.image.tag }}"
+              imagePullPolicy: {{ .Values.modelsSync.image.pullPolicy }}
+              envFrom:
+                # HE_API_DB_POSTGRES_URI —— 与网关同一个 Story-1.6 Secret。
+                - secretRef:
+                    name: {{ .Values.db.credsSecretName }}
+              env:
+                - name: MODELS_SYNC_UPSTREAM_URL
+                  value: {{ .Values.modelsSync.upstreamURL | quote }}
+                - name: MODELS_SYNC_VENDOR
+                  value: {{ .Values.modelsSync.vendor | quote }}
+                - name: MODELS_SYNC_DRY_RUN
+                  value: {{ .Values.modelsSync.dryRun | quote }}
+                # 上游密钥复用适配器已有的 Secret,不新建一份凭据。
+                - name: MODELS_SYNC_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.modelsSync.apiKeySecret.name | quote }}
+                      key: {{ .Values.modelsSync.apiKeySecret.key | quote }}
+              securityContext:
+                runAsNonRoot: true
+                runAsUser: 65532
+                readOnlyRootFilesystem: true
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                seccompProfile:
+                  type: RuntimeDefault
+              resources:
+                requests:
+                  cpu: {{ .Values.modelsSync.resources.requests.cpu }}
+                  memory: {{ .Values.modelsSync.resources.requests.memory }}
+                limits:
+                  cpu: {{ .Values.modelsSync.resources.limits.cpu }}
+                  memory: {{ .Values.modelsSync.resources.limits.memory }}
+{{- end }}
