@@ -447,6 +447,19 @@ func main() {
 	// async worker is bound to the root signal ctx and flushes on shutdown.
 	billingPool := buildBillingPool(logger)
 
+	// AD-002 — both /v1/models and /public/models read the live catalogue
+	// snapshot, so pricing an approved model makes it purchasable within one
+	// refresh interval with no deploy. Constructed before the handlers because
+	// both take it as their source.
+	catalogueSnapshot := catalogue.NewSnapshot(
+		catalogue.NewStore(billingPool),
+		handlers.CatalogueFallback(),
+		catalogueRefreshInterval(),
+		logger,
+	)
+	catalogueSnapshot.Start(ctx)
+	catalogueSource := handlers.CatalogueSource(catalogueSnapshot)
+
 	chatCompletions := handlers.NewChatCompletionsHandler(
 		logger,
 		handlers.WithAdapterRegistry(adapterRegistry),
@@ -456,6 +469,7 @@ func main() {
 		handlers.WithSafetyScanner(safetyScanner),
 		handlers.WithOutputSafetyScanner(safetyScanner), // Story 8.3 — reuse the 8.2 instance (OQ-8.3-4)
 		handlers.WithSafetyRecorder(safetylog.NewPersistingRecorder(ctx, billingPool, logger)),
+		handlers.WithModelCapabilities(handlers.CatalogueCapabilities(catalogueSnapshot)),
 	)
 
 	// Story 9.1 AC2 — usage dashboard read endpoint (JWT-cookie, per-user IDOR-
@@ -655,18 +669,6 @@ func main() {
 	// Story 3.3 precedent. GET / POST method prefixes are load-bearing —
 	// they make wrong-method requests fall through to a stdlib 405
 	// without invoking the bearer-auth chain.
-	// AD-002 — both /v1/models and /public/models read the live catalogue
-	// snapshot, so pricing an approved model makes it purchasable within one
-	// refresh interval with no deploy. Constructed before the handlers because
-	// both take it as their source.
-	catalogueSnapshot := catalogue.NewSnapshot(
-		catalogue.NewStore(billingPool),
-		handlers.CatalogueFallback(),
-		catalogueRefreshInterval(),
-		logger,
-	)
-	catalogueSnapshot.Start(ctx)
-	catalogueSource := handlers.CatalogueSource(catalogueSnapshot)
 
 	modelsHandler := handlers.NewModelsHandler(logger, handlers.WithModelsSource(catalogueSource))
 	embeddingsHandler := handlers.NewEmbeddingsHandler(

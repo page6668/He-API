@@ -524,6 +524,17 @@ func WithUsageEmitter(e billingemit.UsageEmitter) ChatHandlerOption {
 // Nil is silently ignored — a handler built without this option does NOT scan
 // (pre-8.2 behaviour, byte-identical). Production wires a non-nil
 // DefaultLexicon-backed scanner at startup; focused unit tests may omit it.
+// WithModelCapabilities makes the chat/vision gates read the live catalogue
+// (AD-002) instead of the compiled-in table. Nil is ignored, so handlers built
+// without it keep the pre-AD-002 behaviour verbatim.
+func WithModelCapabilities(f func(string) (ModelCapabilities, bool)) ChatHandlerOption {
+	return func(h *ChatCompletionsHandler) {
+		if f != nil {
+			h.capsLookup = f
+		}
+	}
+}
+
 func WithSafetyScanner(s *contentsafety.Scanner) ChatHandlerOption {
 	return func(h *ChatCompletionsHandler) {
 		if s != nil {
@@ -650,6 +661,21 @@ type ChatCompletionsHandler struct {
 	// (pre-8.3 behaviour). MAY be the SAME instance as safetyScanner (OQ-8.3-4);
 	// the interception event reuses safetyRecorder with direction:"output".
 	outputScanner *contentsafety.Scanner
+	// AD-002 — capability lookup for the 9.6 chat gate and the 9.5 vision gate.
+	// nil → the compiled-in capabilitiesByModelID (every pre-AD-002 test path).
+	// Production wires the live catalogue so a model whose capabilities an
+	// operator edits in the database is gated on what the database says, not on
+	// what was true when the binary was built.
+	capsLookup func(string) (ModelCapabilities, bool)
+}
+
+// lookupCaps resolves a model's capabilities, preferring the live catalogue.
+func (h *ChatCompletionsHandler) lookupCaps(modelID string) (ModelCapabilities, bool) {
+	if h.capsLookup != nil {
+		return h.capsLookup(modelID)
+	}
+	caps, ok := capabilitiesByModelID[modelID]
+	return caps, ok
 }
 
 // NewChatCompletionsHandler builds the handler. logger may be nil — falls
@@ -791,7 +817,7 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	// (falls through to the existing mock/adapter path, byte-identical pre-9.6),
 	// and every existing Chat:true id passes unchanged (INT-003 positive
 	// regression). The model id (≤100 chars, validated) is not PII.
-	if caps, known := capabilitiesByModelID[req.Model]; known && !caps.Chat {
+	if caps, known := h.lookupCaps(req.Model); known && !caps.Chat {
 		_ = openaierr.Write(w, ctx, http.StatusBadRequest, "400_invalid_request",
 			fmt.Sprintf("Model '%s' does not support chat completions.", req.Model), nil)
 		return
@@ -803,7 +829,7 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	// → 400 BEFORE parts-detail validation / safety / routing / dispatch (zero
 	// upstream call, zero usage/billing — mirrors the 8.2 reject-before-dispatch
 	// ordering). The model id (≤100 chars, validated) is not PII.
-	if hasImage && !capabilitiesByModelID[req.Model].Vision {
+	if caps, _ := h.lookupCaps(req.Model); hasImage && !caps.Vision {
 		_ = openaierr.Write(w, ctx, http.StatusBadRequest, "400_invalid_request",
 			fmt.Sprintf("Model '%s' does not support image input.", req.Model), nil)
 		return

@@ -31,6 +31,34 @@ func CatalogueSource(snap catalogueReader) ModelSource {
 	}
 }
 
+// CatalogueCapabilities returns a capability lookup backed by the live
+// catalogue, for the chat + vision gates in /v1/chat/completions.
+//
+// A model absent from the catalogue reports (zero, false) — "unknown", which
+// the gates already treat as pass-through, so operator-supplied routes
+// (HE_API_EXTRA_MODEL_ROUTES) keep working while their rows are being priced.
+func CatalogueCapabilities(snap catalogueReader) func(string) (ModelCapabilities, bool) {
+	return func(id string) (ModelCapabilities, bool) {
+		for _, m := range snap.Models() {
+			if m.ID != id {
+				continue
+			}
+			return ModelCapabilities{
+				Chat:                m.Capabilities.Chat,
+				Streaming:           m.Capabilities.Streaming,
+				FunctionCalling:     m.Capabilities.FunctionCalling,
+				Vision:              m.Capabilities.Vision,
+				JSONMode:            m.Capabilities.JSONMode,
+				Transcription:       m.Capabilities.Transcription,
+				Speech:              m.Capabilities.Speech,
+				ContextWindowTokens: m.Capabilities.ContextWindowTokens,
+				MaxOutputTokens:     m.Capabilities.MaxOutputTokens,
+			}, true
+		}
+		return ModelCapabilities{}, false
+	}
+}
+
 // EntriesFromCatalogue converts DB-backed catalogue rows into the wire shape
 // /v1/models and /public/models already emit.
 //

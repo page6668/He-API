@@ -95,3 +95,28 @@ func TestCatalogueFallback_IsNotEmpty(t *testing.T) {
 		t.Errorf("fallback has %d models, compiled-in catalogue has %d", len(fb), len(modelsCatalogue))
 	}
 }
+
+// AD-002 — capability gates must follow the database. Before this, an operator
+// marking a model vision-capable in he_api.models still got a 400 from the 9.5
+// gate because it read the compiled-in table: exactly the silent-rot failure
+// AD-002 exists to remove.
+func TestCatalogueCapabilities_TracksDatabase(t *testing.T) {
+	cat := &fakeCatalogue{models: []catalogue.Model{
+		{ID: "qwen3.7-vl", Capabilities: catalogue.Capabilities{Chat: true, Vision: false}},
+	}}
+	lookup := CatalogueCapabilities(cat)
+
+	if caps, ok := lookup("qwen3.7-vl"); !ok || caps.Vision {
+		t.Fatalf("initial lookup = %+v ok=%v, want vision false", caps, ok)
+	}
+	// An operator enables vision in the database; a refresh lands.
+	cat.models[0].Capabilities.Vision = true
+	if caps, _ := lookup("qwen3.7-vl"); !caps.Vision {
+		t.Error("lookup did not follow the database")
+	}
+	// Unknown ids report not-found so the gates keep passing them through
+	// (operator-supplied routes still work while their rows are being priced).
+	if _, ok := lookup("not-in-catalogue"); ok {
+		t.Error("unknown model reported as known")
+	}
+}
