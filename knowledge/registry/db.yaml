@@ -35,5 +35,7 @@ tables:
       markup_percent: "NUMERIC(5,2) NOT NULL DEFAULT 10.00 — 加价率 5-15%"
     invariants:
       - "价格只能人工补全 —— 上游 /v1/models 不返回价格,自动同步无法覆盖(AD-002)。"
+      - "**币种是 USD**(migration 0007 定义)。展示为其他币种须走 he_api.fx_rates 换算,绝不新增第二个价格列。曾在 0020 的注释里误写成「元」,按人民币核价会整体偏约 7 倍。"
+      - "**金额绝不经 float64**(M-1)。加价与舍入在 SQL 内以 NUMERIC 完成,读出用 ::text;Go/TS 只搬运字符串。例外仅限 routing-svc —— 它只用价格排序、从不计费也不展示。"
     added_by: design-architecture
     added: 2026-07-21

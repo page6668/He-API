@@ -3,7 +3,33 @@
 # (metabolism) as endpoints are built. Seed is empty — this is honest: no
 # endpoints exist yet. Add records in the shape shown below.
 
-endpoints: [] # implement appends here as endpoints are built
+# 说明:本文件此前一直是空的(项目早于它存在)。下面只登记 AD-002 实际改动的
+# 两个端点,不回填整个 API 面 —— 未经核实的记录比没有记录更危险。
+endpoints:
+  - path: "GET /v1/models"
+    auth: "Bearer API key"
+    response: >-
+      { object: "list",
+        data: [ { id, object:"model", created, owned_by,
+                  capabilities:{...}, pricing?:{input_per_1k_tokens, output_per_1k_tokens, currency} } ] }
+    notes: >-
+      数据源自 he_api.models(AD-002 权威源),进程内 5 分钟快照。
+      pricing 是加法字段:金额为精确十进制**字符串**(不是 number,M-1 铁律),
+      币种 USD;无定价时字段整体缺席(0 会被读成免费)。
+      created 取进程启动锚点,以维持与 /public/models 的字节一致(4.7-INT-001)。
+    story: model-catalogue-arch
+    added_by: implement
+    added: 2026-07-21
+
+  - path: "GET /public/models"
+    auth: none
+    response: "与 GET /v1/models 逐字节一致(4.7-INT-001)"
+    notes: >-
+      公开镜像,供模型广场与 SEO 使用。与 bearer 端点共用同一个目录快照,
+      两者必须同时上下架同一批模型 —— 契约测试锁定字节一致。
+    story: model-catalogue-arch
+    added_by: implement
+    added: 2026-07-21
 
 # Record shape (copy for each new endpoint):
 #   - path: "POST /auth/login"
