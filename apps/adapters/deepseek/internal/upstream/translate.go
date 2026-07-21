@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 
 	adapterv1 "github.com/he-api/he-api/packages/proto/gen/go/he/adapter/v1"
 )
@@ -60,15 +62,45 @@ func translateRequest(ctx context.Context, baseURL, apiKey string, req *adapterv
 	return httpReq, nil
 }
 
+// upstreamModelID maps the gateway's canonical model id onto the id DeepSeek's
+// own API accepts.
+//
+// BR-1.7 (f) originally assumed identity-mapping, but that assumption does not
+// hold against the live vendor API: the gateway advertises `deepseek-v3` while
+// api.deepseek.com accepts `deepseek-chat` — passing the catalogue id straight
+// through returns "model not found". Unknown ids pass through unchanged so a
+// newly added model keeps working without a code change.
+//
+// DEEPSEEK_MODEL_MAP overrides/extends the table without a redeploy; format is
+// "canonical=upstream,canonical=upstream" (e.g. "deepseek-v3=deepseek-chat").
+func upstreamModelID(canonical string) string {
+	if raw := os.Getenv("DEEPSEEK_MODEL_MAP"); raw != "" {
+		for _, pair := range strings.Split(raw, ",") {
+			k, v, ok := strings.Cut(strings.TrimSpace(pair), "=")
+			if ok && strings.TrimSpace(k) == canonical {
+				return strings.TrimSpace(v)
+			}
+		}
+	}
+	switch canonical {
+	case "deepseek-v3":
+		return "deepseek-chat"
+	case "deepseek-r1":
+		return "deepseek-reasoner"
+	default:
+		return canonical
+	}
+}
+
 // buildRequestBody marshals the proto ChatRequest into the OpenAI/DeepSeek
-// JSON shape. Identity-mapping for DeepSeek per BR-1.7 (f).
+// JSON shape, translating the model id to the vendor's own naming.
 func buildRequestBody(req *adapterv1.ChatRequest) ([]byte, error) {
 	messages := make([]ChatMessage, len(req.Messages))
 	for i, m := range req.Messages {
 		messages[i] = ChatMessage{Role: m.Role, Content: m.Content}
 	}
 	body := ChatRequestJSON{
-		Model:    req.Model,
+		Model:    upstreamModelID(req.Model),
 		Messages: messages,
 		Stream:   req.Stream,
 	}

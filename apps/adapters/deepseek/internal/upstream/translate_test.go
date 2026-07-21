@@ -131,8 +131,12 @@ func TestTranslateRequest_BodyIdentityMapping(t *testing.T) {
 	if err := json.Unmarshal(body, &got); err != nil {
 		t.Fatalf("body unmarshal: %v\nraw: %s", err, body)
 	}
-	if got.Model != "deepseek-v3" {
-		t.Fatalf("body.model = %q, want %q", got.Model, "deepseek-v3")
+	// The outbound body carries the VENDOR's model id, not the gateway's
+	// catalogue id: api.deepseek.com rejects "deepseek-v3" with "model not
+	// found". See upstreamModelID — this supersedes the original BR-1.7 (f)
+	// identity-mapping assumption, which did not hold against the live API.
+	if got.Model != "deepseek-chat" {
+		t.Fatalf("body.model = %q, want %q", got.Model, "deepseek-chat")
 	}
 	if len(got.Messages) != 2 || got.Messages[0].Role != "system" || got.Messages[1].Content != "Hi" {
 		t.Fatalf("body.messages mismatch: %#v", got.Messages)
@@ -156,7 +160,39 @@ func TestTranslateRequest_EmptyMessagesProducesValidBody(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 	body, _ := io.ReadAll(req.Body)
-	if !strings.Contains(string(body), `"model":"deepseek-v3"`) {
+	// deepseek-v3 → deepseek-chat (vendor naming; see upstreamModelID).
+	if !strings.Contains(string(body), `"model":"deepseek-chat"`) {
 		t.Fatalf("body missing model: %s", body)
+	}
+}
+
+// upstreamModelID translates the gateway's catalogue id to the vendor's own id.
+// Regression guard for the live-API mismatch: api.deepseek.com returns
+// "model not found" for "deepseek-v3" (it accepts "deepseek-chat").
+func TestUpstreamModelID(t *testing.T) {
+	t.Setenv("DEEPSEEK_MODEL_MAP", "")
+	for _, tc := range []struct{ in, want string }{
+		{"deepseek-v3", "deepseek-chat"},
+		{"deepseek-r1", "deepseek-reasoner"},
+		{"some-future-model", "some-future-model"}, // unknown ids pass through
+	} {
+		if got := upstreamModelID(tc.in); got != tc.want {
+			t.Errorf("upstreamModelID(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// DEEPSEEK_MODEL_MAP overrides the built-in table without a redeploy.
+func TestUpstreamModelID_EnvOverride(t *testing.T) {
+	t.Setenv("DEEPSEEK_MODEL_MAP", "deepseek-v3=deepseek-chat-v2, foo=bar")
+	if got := upstreamModelID("deepseek-v3"); got != "deepseek-chat-v2" {
+		t.Errorf("env override ignored: got %q", got)
+	}
+	if got := upstreamModelID("foo"); got != "bar" {
+		t.Errorf("second pair ignored: got %q", got)
+	}
+	// Not in the override → falls back to the built-in table.
+	if got := upstreamModelID("deepseek-r1"); got != "deepseek-reasoner" {
+		t.Errorf("fallback broken: got %q", got)
 	}
 }
