@@ -112,8 +112,12 @@ func buildGatewayCatalogue(c modelscatalogue.Catalogue) ([]ModelEntry, map[strin
 // across all bearer-protected requests; the handler is stateless beyond the
 // startedAt timestamp captured at construction.
 type ModelsHandler struct {
-	logger    *slog.Logger
-	now       func() time.Time
+	logger *slog.Logger
+	now    func() time.Time
+	// source, when non-nil, supplies the catalogue per request (AD-002:
+	// he_api.models is the source of truth). Nil keeps the compiled-in
+	// BR-1.4 catalogue, which is what every Story 3.5/4.7 test constructs.
+	source    ModelSource
 	startedAt int64 // Unix seconds, captured ONCE in NewModelsHandler (BR-1.6)
 }
 
@@ -130,6 +134,17 @@ func WithModelsNow(f func() time.Time) ModelsHandlerOption {
 	return func(h *ModelsHandler) {
 		if f != nil {
 			h.now = f
+		}
+	}
+}
+
+// WithModelsSource makes the handler read the live catalogue (AD-002) instead
+// of the compiled-in BR-1.4 table. Nil is silently ignored, so an operator
+// running without a database keeps the compiled-in behaviour.
+func WithModelsSource(s ModelSource) ModelsHandlerOption {
+	return func(h *ModelsHandler) {
+		if s != nil {
+			h.source = s
 		}
 	}
 }
@@ -178,28 +193,43 @@ func (h *ModelsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// bearer-gated and unauthenticated public-mirror surfaces can be
 	// filtered separately in dashboards). PII discipline: /v1/models is
 	// parameterless; the structured fields are size signals only.
-	h.logger.InfoContext(
-		ctx, "models_list_v1",
-		slog.String("event", "models_list_v1"),
-		slog.String("api_key_id", apiKeyID),
-		slog.Int("catalogue_size", len(modelsCatalogue)),
-	)
-
 	// BR-1.6 + BR-1.10 — per-request copy with Created patched in. The
 	// package-level slice stays immutable across concurrent requests; the
 	// per-request copy is the load-bearing concurrency-safety mechanism.
 	// Story-4.7 T1.1 — capabilities populated from the package-level map
 	// inside the same loop (single map lookup per entry; in-memory; no
 	// extra allocation beyond the existing per-request copy).
+	data := h.entries()
+
+	h.logger.InfoContext(
+		ctx, "models_list_v1",
+		slog.String("event", "models_list_v1"),
+		slog.String("api_key_id", apiKeyID),
+		slog.Int("catalogue_size", len(data)),
+	)
+
+	writeChatJSON(w, http.StatusOK, ModelsResponse{
+		Object: "list",
+		Data:   data,
+	})
+}
+
+// entries returns this request's catalogue copy with Created stamped from the
+// handler's construction clock (BR-1.6 — one timestamp for the whole process,
+// shared with the public mirror per 4.7-INT-001).
+func (h *ModelsHandler) entries() []ModelEntry {
+	if h.source != nil {
+		data := h.source()
+		for i := range data {
+			data[i].Created = h.startedAt
+		}
+		return data
+	}
 	data := make([]ModelEntry, len(modelsCatalogue))
 	for i := range modelsCatalogue {
 		data[i] = modelsCatalogue[i]
 		data[i].Created = h.startedAt
 		data[i].Capabilities = capabilitiesByModelID[modelsCatalogue[i].ID]
 	}
-
-	writeChatJSON(w, http.StatusOK, ModelsResponse{
-		Object: "list",
-		Data:   data,
-	})
+	return data
 }

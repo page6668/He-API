@@ -59,6 +59,7 @@ import (
 	"github.com/he-api/he-api/packages/proto/gen/go/he/usagelog/v1/usagelogv1connect"
 	safetylexicon "github.com/he-api/he-api/packages/safety-lexicon"
 
+	"github.com/he-api/he-api/apps/api-gateway/internal/catalogue"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"github.com/segmentio/kafka-go"
@@ -654,7 +655,20 @@ func main() {
 	// Story 3.3 precedent. GET / POST method prefixes are load-bearing —
 	// they make wrong-method requests fall through to a stdlib 405
 	// without invoking the bearer-auth chain.
-	modelsHandler := handlers.NewModelsHandler(logger)
+	// AD-002 — both /v1/models and /public/models read the live catalogue
+	// snapshot, so pricing an approved model makes it purchasable within one
+	// refresh interval with no deploy. Constructed before the handlers because
+	// both take it as their source.
+	catalogueSnapshot := catalogue.NewSnapshot(
+		catalogue.NewStore(billingPool),
+		handlers.CatalogueFallback(),
+		catalogueRefreshInterval(),
+		logger,
+	)
+	catalogueSnapshot.Start(ctx)
+	catalogueSource := handlers.CatalogueSource(catalogueSnapshot)
+
+	modelsHandler := handlers.NewModelsHandler(logger, handlers.WithModelsSource(catalogueSource))
 	embeddingsHandler := handlers.NewEmbeddingsHandler(
 		logger,
 		handlers.WithEmbeddingTokenDeducter(rateLimitMW),
@@ -706,15 +720,7 @@ func main() {
 	mux.Handle("POST /v1/audio/speech",
 		bearerAuth.RequireAPIKey(analyticsMiddleware(keyPolicy(rateLimitMW.Wrap(billingGate(audioSpeech))))))
 
-	// Story 4.7 — unauthenticated mirror of /v1/models. Mounted OUTSIDE
-	// the bearer middleware chain; both handlers share a snapshot built
-	// from the same modelsCatalogue + capabilitiesByModelID so the bodies
-	// are byte-identical (4.7-INT-001 verifies). OQ-4.7-5 ratified the
-	// constructor-injection sharing mechanism. The startedAt anchor is
-	// pulled from the bearer-gated handler so the `created` value on the
-	// public mirror matches the bearer endpoint within the same process.
-	publicSnapshot := handlers.BuildPublicModelsSnapshot(modelsHandler.StartedAt())
-	publicModelsHandler := handlers.NewPublicModelsHandler(logger, publicSnapshot)
+	publicModelsHandler := handlers.NewLivePublicModelsHandler(logger, catalogueSource, modelsHandler.StartedAt())
 	// Bare-path registration — OPTIONS preflight is handled by the
 	// PublicCORS middleware wrapping the mux; method-not-allowed for
 	// non-GET is emitted by the handler itself (canonical
@@ -1013,4 +1019,16 @@ func jwksFromPublicPEM(pemBytes []byte) ([]byte, error) {
 		}},
 	}
 	return json.Marshal(doc)
+}
+
+// catalogueRefreshInterval is the model-catalogue cache TTL (AD-002 sets 5 min).
+// MODELS_CATALOGUE_REFRESH_SECONDS shortens it when a fast rollout of a newly
+// priced model matters more than database chatter.
+func catalogueRefreshInterval() time.Duration {
+	if v := strings.TrimSpace(os.Getenv("MODELS_CATALOGUE_REFRESH_SECONDS")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return time.Duration(n) * time.Second
+		}
+	}
+	return 5 * time.Minute
 }

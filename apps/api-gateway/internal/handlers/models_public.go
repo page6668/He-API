@@ -34,6 +34,11 @@ import (
 type PublicModelsHandler struct {
 	logger   *slog.Logger
 	snapshot []ModelEntry
+	// source, when non-nil, replaces the construction-time snapshot with a
+	// per-request read of the live catalogue (AD-002). createdAt is then
+	// stamped on every entry so this mirror keeps matching /v1/models.
+	source    ModelSource
+	createdAt int64
 }
 
 // NewPublicModelsHandler builds a handler from a pre-built snapshot. The
@@ -52,6 +57,17 @@ func NewPublicModelsHandler(logger *slog.Logger, snapshot []ModelEntry) *PublicM
 	cp := make([]ModelEntry, len(snapshot))
 	copy(cp, snapshot)
 	return &PublicModelsHandler{logger: logger, snapshot: cp}
+}
+
+// NewLivePublicModelsHandler builds the public mirror on top of the live
+// catalogue (AD-002). createdAt MUST be the bearer-gated handler's StartedAt so
+// the two endpoints stay byte-identical (4.7-INT-001) — a model going live has
+// to appear on both surfaces in the same refresh, never on one alone.
+func NewLivePublicModelsHandler(logger *slog.Logger, source ModelSource, createdAt int64) *PublicModelsHandler {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &PublicModelsHandler{logger: logger, source: source, createdAt: createdAt}
 }
 
 // BuildPublicModelsSnapshot constructs the `data []ModelEntry` slice that
@@ -90,15 +106,30 @@ func (h *PublicModelsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	// bearer context exists). m-2 — `remote_addr` is included as a
 	// non-PII abuse-correlation field; this is the originator's IP,
 	// not a stored user attribute.
+	data := h.entries()
+
 	h.logger.InfoContext(
 		r.Context(), "models_list_public",
 		slog.String("event", "models_list_public"),
 		slog.String("remote_addr", r.RemoteAddr),
-		slog.Int("catalogue_size", len(h.snapshot)),
+		slog.Int("catalogue_size", len(data)),
 	)
 
 	writeChatJSON(w, http.StatusOK, ModelsResponse{
 		Object: "list",
-		Data:   h.snapshot,
+		Data:   data,
 	})
+}
+
+// entries returns what this request should emit: the live catalogue when a
+// source is wired, otherwise the immutable construction-time snapshot.
+func (h *PublicModelsHandler) entries() []ModelEntry {
+	if h.source == nil {
+		return h.snapshot
+	}
+	data := h.source()
+	for i := range data {
+		data[i].Created = h.createdAt
+	}
+	return data
 }
