@@ -121,3 +121,21 @@ func TestStore_Load_NilPool(t *testing.T) {
 		t.Error("unexpected error kind")
 	}
 }
+
+// 注册指标必须在任何状态下都安全:网关启动路径上调用,失败也不能让进程起不来。
+// 本用例覆盖 nil 接收者与无数据库两种情形(生产里降级时正是后者)。
+func TestSnapshot_RegisterMetrics_NeverPanics(t *testing.T) {
+	var nilSnap *Snapshot
+	nilSnap.RegisterMetrics() // nil 接收者
+
+	snap := NewSnapshot(NewStore(nil), fallbackModels(), time.Minute, quietLogger())
+	snap.RegisterMetrics()
+
+	// 注册后快照仍可正常读写 —— 回调不应持有锁或改变状态。
+	if len(snap.Models()) != 1 {
+		t.Fatalf("Models() = %+v, want fallback intact", snap.Models())
+	}
+	if !snap.Stale() {
+		t.Error("Stale() = false, want true when no database was ever read")
+	}
+}

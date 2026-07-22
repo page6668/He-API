@@ -457,6 +457,7 @@ func main() {
 		catalogueRefreshInterval(),
 		logger,
 	)
+	catalogueSnapshot.RegisterMetrics()
 	catalogueSnapshot.Start(ctx)
 	catalogueSource := handlers.CatalogueSource(catalogueSnapshot)
 
