@@ -5,6 +5,9 @@
 #   ingress (B5 — lifted from FORBIDDEN; ingress is owned by Story 1.7, NOT 1.4)
 #   safetyLogRetention.image (B4 — the safety-log-retention cron image is a
 #     build-matrix entry, SHA-bumped here for tri-count closure, T8.1).
+#   modelsSync (AD-002 — 模型目录发现 CronJob。image 同为 build-matrix 条目,
+#     必须列在这里才会被 deploy-staging 打上 SHA;否则会用 values.yaml 里的
+#     默认 tag "0.0.1",而那个镜像在 ACR 中并不存在 → 到点 ImagePullBackOff。)
 # Still FORBIDDEN (any depth):
 #   * autoscaling.*       — Story 1.4 brings metrics-server online
 #   * resources.requests / resources.limits — fall back to values.yaml; Story 1.5 retunes
@@ -66,3 +69,17 @@ ingress:
     - secretName: api-gateway-staging-tls
       hosts:
         - api.staging.he-api.com
+
+# AD-002 —— 模型目录发现 CronJob(每天 04:00 UTC)。
+#
+# 前置:命名空间内必须存在 Secret models-sync-upstream-api-key(键 api_key),
+# 否则容器起不来。它只做发现:新模型落 status='pending',不定价就不对外可见,
+# 永不自动上架、永不删除行。
+#
+# image.tag 由 deploy-staging 自动打 SHA(递归匹配 repository+tag 的映射)。
+modelsSync:
+  enabled: true
+  image:
+    repository: he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com/he-api/models-sync
+    tag: "85d89f826b213d6341f63c53d286cb75eca636da"
+    pullPolicy: IfNotPresent
