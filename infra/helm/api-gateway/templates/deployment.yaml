@@ -65,6 +65,18 @@ spec:
               value: {{ .Values.extraModelRoutes | quote }}
             {{- end }}
           envFrom:
+            # Story 1.6 — HE_API_DB_POSTGRES_URI 来自共享 Secret,与 auth-svc 同源。
+            #
+            # 这里以前是漏的:网关因此从未拿到过 PostgreSQL 连接串,buildBillingPool
+            # 恒返回 nil,/v1/balance、/v1/usage、/v1/billing/* 一直处于禁用状态而无人
+            # 察觉;AD-002 把模型目录改为读库后,现象才浮出水面(日志每 5 分钟一条
+            # "catalogue: no database pool",接口静默降级回编译期清单)。
+            #
+            # 同一 Secret 里的 HE_API_DB_REDIS_URI / HE_API_DB_CLICKHOUSE_URI 对网关
+            # 是惰性的:网关读的是 HE_API_CLICKHOUSE_DSN(键名不同),Redis 亦不从此
+            # 处读取。故整份注入只有 PostgreSQL 一项生效,不会误启用 ClickHouse 读路径。
+            - secretRef:
+                name: {{ .Values.db.credsSecretName }}
             # Story 5.2 (Q-E) — trusted-proxy CIDRs for the keypolicy XFF
             # walker (CLOUDFLARE_CIDRS + INGRESS_CIDRS). Snapshot read at
             # process init; ConfigMap edit needs a rollout restart.
