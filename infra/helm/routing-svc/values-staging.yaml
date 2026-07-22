@@ -2,5 +2,5 @@
 # deploy-time token (T0.3); image.tag SHA-bumped by deploy-staging (BR4.1).
 image:
   repository: he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com/he-api/routing-svc
-  tag: "1e64121a72c3dee9c23b7eea46c0555982c8b578"
+  tag: "85d89f826b213d6341f63c53d286cb75eca636da"
   pullPolicy: IfNotPresent
