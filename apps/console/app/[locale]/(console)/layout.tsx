@@ -86,6 +86,10 @@ export default async function ConsoleLayout({
             { href: `/${resolvedLocale}/settings/profile`, label: t('settings.sidebar.profile') },
             { href: `/${resolvedLocale}/settings/security`, label: t('settings.sidebar.security') },
             { href: `/${resolvedLocale}/settings/data`, label: t('settings.sidebar.data') },
+            // AD-003 — 管理员定价入口。对所有登录用户可见,但非管理员点进去是 403
+            // (网关是唯一执法点;前端无法读 role,故不隐藏)。label 内联,不新建
+            // i18n 命名空间(避免 10 语言文件缺一即 500)。
+            { href: `/${resolvedLocale}/admin/pricing`, label: '模型定价' },
           ]}
         />
       </aside>
