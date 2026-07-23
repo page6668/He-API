@@ -26,6 +26,16 @@ do not rewrite.
 - approved_by: pending
 - ref: specs/model-catalogue-arch.md
 
+## AD-003: 管理员定价后台的最小授权边界
+- decision: 给 users 加 role 列(user|admin),网关在 RequireJWT 之后读库校验 role;据此开放受保护的 POST /v1/admin/models/pricing,前端为 Console /admin/pricing 页面。定价输入「元/百万」在网关侧以 NUMERIC 换算成 USD 后追加写入 model_pricing。
+- context: AD-002 使目录数据库驱动后,价格仍只能人工跑 SQL;用户要求自助后台。而平台此前无任何管理员概念(users 无 role、JWT 无 role claim、无 /v1/admin/*),写钱接口必须先立服务端强制的 admin 边界。
+- alternatives: env 白名单(管 UUID+重启才能加人,弃);role 写进 JWT(改 auth-svc 令牌铸造,爆炸半径大,弃)。
+- status: accepted
+- source: design-architecture
+- added: 2026-07-23
+- approved_by: pending
+- ref: specs/admin-pricing-arch.md
+
 <!--
 Entry shape (copy for new decisions):
 
