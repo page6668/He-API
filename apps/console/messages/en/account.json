@@ -357,5 +357,26 @@
         "reload_cta": "Reload"
       }
     }
+  },
+  "pricing": {
+    "title": "Model Pricing",
+    "subtitle": "Enter each model's upstream cost (CNY per million tokens). After saving, it is converted to USD and takes effect in the model marketplace within about 5 minutes. Markup is applied by the system automatically — enter the cost price here.",
+    "forbidden": "Administrator role required. This account is not an administrator; contact the platform owner to grant your account the admin role.",
+    "connectError": "Cannot reach the backend service. Please try again later.",
+    "empty": "There are no listed models to price right now.",
+    "fxLabel": "Conversion rate USD → CNY (defaults to the latest, editable)",
+    "fxHelp": "You enter “CNY per million tokens”; the system converts to USD at this rate for storage. A price change adds a new record — old prices are retained for audit.",
+    "inputLabel": "Input CNY/M",
+    "outputLabel": "Output CNY/M",
+    "inputPlaceholder": "e.g. 5.76",
+    "outputPlaceholder": "e.g. 14.4",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Saved. Effective in the model marketplace within about 5 minutes.",
+    "errInvalid": "Input price, output price and rate must all be numbers greater than 0.",
+    "errForbidden": "Administrator role required.",
+    "errUnauthorized": "Your session has expired, please sign in again.",
+    "errNotFound": "This model does not exist or has been retired.",
+    "errGeneric": "Save failed, please try again."
   }
 }

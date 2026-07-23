@@ -30,6 +30,24 @@ export interface PricingRowModel {
   currentOutputUsd?: string;
 }
 
+/** 表单全部文案,由服务端页面按当前 locale 传入(i18n 单一来源)。 */
+export interface PricingLabels {
+  fxLabel: string;
+  fxHelp: string;
+  inputLabel: string;
+  outputLabel: string;
+  inputPlaceholder: string;
+  outputPlaceholder: string;
+  save: string;
+  saving: string;
+  saved: string;
+  errInvalid: string;
+  errForbidden: string;
+  errUnauthorized: string;
+  errNotFound: string;
+  errGeneric: string;
+}
+
 type RowStatus =
   | { kind: 'idle' }
   | { kind: 'saving' }
@@ -39,9 +57,11 @@ type RowStatus =
 export function AdminPricingForm({
   models,
   defaultFx,
+  labels,
 }: {
   models: PricingRowModel[];
   defaultFx: string;
+  labels: PricingLabels;
 }) {
   const [fx, setFx] = useState(defaultFx);
   const [rows, setRows] = useState<Record<string, { input: string; output: string }>>(
@@ -66,7 +86,7 @@ export function AdminPricingForm({
     if (!fxValid || !isPositiveDecimal(row.input) || !isPositiveDecimal(row.output)) {
       setStatus((prev) => ({
         ...prev,
-        [id]: { kind: 'error', message: '输入价、输出价、汇率都必须是大于 0 的数字' },
+        [id]: { kind: 'error', message: labels.errInvalid },
       }));
       return;
     }
@@ -82,14 +102,14 @@ export function AdminPricingForm({
     } else {
       const message =
         res.kind === 'forbidden'
-          ? '需要管理员权限'
+          ? labels.errForbidden
           : res.kind === 'unauthorized'
-            ? '登录已失效,请重新登录'
+            ? labels.errUnauthorized
             : res.kind === 'not_found'
-              ? '该模型不存在或已下架'
+              ? labels.errNotFound
               : res.kind === 'validation'
                 ? res.message
-                : '保存失败,请重试';
+                : labels.errGeneric;
       setStatus((prev) => ({ ...prev, [id]: { kind: 'error', message } }));
     }
   }
@@ -99,7 +119,7 @@ export function AdminPricingForm({
       {/* 汇率:所有行共用。填错这个所有价格都会偏,单独醒目一栏。 */}
       <Panel>
         <label className={labelCls} htmlFor="fx">
-          换算汇率 USD → CNY(默认取系统最新,可改)
+          {labels.fxLabel}
         </label>
         <input
           id="fx"
@@ -109,9 +129,7 @@ export function AdminPricingForm({
           className={`${fieldCls} tabular mt-1 w-40 ${fxValid ? '' : 'border-crimson'}`}
           placeholder="7.2"
         />
-        <p className="mt-2 text-label text-ink-muted">
-          你填「元 / 百万 tokens」,系统按此汇率换算成美元存储。改价是新增记录,旧价保留可追溯。
-        </p>
+        <p className="mt-2 text-label text-ink-muted">{labels.fxHelp}</p>
       </Panel>
 
       <div className="space-y-3">
@@ -127,7 +145,7 @@ export function AdminPricingForm({
                 </div>
                 <div>
                   <label className={labelCls} htmlFor={`in-${m.id}`}>
-                    输入价 元/百万
+                    {labels.inputLabel}
                   </label>
                   <input
                     id={`in-${m.id}`}
@@ -135,12 +153,12 @@ export function AdminPricingForm({
                     value={row.input}
                     onChange={(e) => setRow(m.id, { input: e.target.value })}
                     className={`${fieldCls} tabular mt-1 w-32`}
-                    placeholder="如 5.76"
+                    placeholder={labels.inputPlaceholder}
                   />
                 </div>
                 <div>
                   <label className={labelCls} htmlFor={`out-${m.id}`}>
-                    输出价 元/百万
+                    {labels.outputLabel}
                   </label>
                   <input
                     id={`out-${m.id}`}
@@ -148,7 +166,7 @@ export function AdminPricingForm({
                     value={row.output}
                     onChange={(e) => setRow(m.id, { output: e.target.value })}
                     className={`${fieldCls} tabular mt-1 w-32`}
-                    placeholder="如 14.4"
+                    placeholder={labels.outputPlaceholder}
                   />
                 </div>
                 <Button
@@ -156,11 +174,11 @@ export function AdminPricingForm({
                   onClick={() => save(m.id)}
                   disabled={st.kind === 'saving'}
                 >
-                  {st.kind === 'saving' ? '保存中…' : '保存'}
+                  {st.kind === 'saving' ? labels.saving : labels.save}
                 </Button>
               </div>
               {st.kind === 'saved' && (
-                <p className="mt-2 text-label text-jade">已保存,约 5 分钟内在模型广场生效。</p>
+                <p className="mt-2 text-label text-jade">{labels.saved}</p>
               )}
               {st.kind === 'error' && (
                 <p className="mt-2 text-label text-crimson">{st.message}</p>

@@ -357,5 +357,26 @@
         "reload_cta": "Recharger"
       }
     }
+  },
+  "pricing": {
+    "title": "Tarifs des modèles",
+    "subtitle": "Saisissez le coût amont de chaque modèle (CNY par million de tokens). Après enregistrement, il est converti en USD et prend effet sur la place de marché des modèles en environ 5 minutes. La marge est appliquée automatiquement par le système ; saisissez ici le prix de revient.",
+    "forbidden": "Rôle d'administrateur requis. Ce compte n'est pas administrateur ; demandez au responsable de la plateforme d'attribuer le rôle admin à votre compte.",
+    "connectError": "Impossible de joindre le service backend. Veuillez réessayer plus tard.",
+    "empty": "Aucun modèle publié à tarifer pour le moment.",
+    "fxLabel": "Taux de conversion USD → CNY (le plus récent par défaut, modifiable)",
+    "fxHelp": "Vous saisissez « CNY par million de tokens » ; le système convertit en USD à ce taux pour le stockage. Un changement de tarif ajoute un nouvel enregistrement ; les anciens tarifs sont conservés pour audit.",
+    "inputLabel": "Entrée CNY/M",
+    "outputLabel": "Sortie CNY/M",
+    "inputPlaceholder": "ex. 5,76",
+    "outputPlaceholder": "ex. 14,4",
+    "save": "Enregistrer",
+    "saving": "Enregistrement…",
+    "saved": "Enregistré. Effectif sur la place de marché des modèles en environ 5 minutes.",
+    "errInvalid": "Le prix d'entrée, le prix de sortie et le taux doivent tous être des nombres supérieurs à 0.",
+    "errForbidden": "Rôle d'administrateur requis.",
+    "errUnauthorized": "Votre session a expiré, veuillez vous reconnecter.",
+    "errNotFound": "Ce modèle n'existe pas ou a été retiré.",
+    "errGeneric": "Échec de l'enregistrement, veuillez réessayer."
   }
 }

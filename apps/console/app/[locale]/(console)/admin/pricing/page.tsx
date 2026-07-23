@@ -11,20 +11,30 @@
  */
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { unstable_setRequestLocale } from 'next-intl/server';
+import { getTranslations, unstable_setRequestLocale } from 'next-intl/server';
 
 import { Notice, PageShell } from '@/components/ui/kit';
-import { AdminPricingForm, type PricingRowModel } from '@/components/business/AdminPricingForm';
+import {
+  AdminPricingForm,
+  type PricingRowModel,
+  type PricingLabels,
+} from '@/components/business/AdminPricingForm';
 import { fetchPublicModels } from '@/lib/api/public-models';
 import {
   getPricingDefaults,
   type DefaultsResult,
 } from './_actions/pricing-actions';
 
-export const metadata: Metadata = {
-  title: '模型定价 · 管理',
-  robots: { index: false, follow: false }, // 后台页不进搜索引擎
-};
+export async function generateMetadata({
+  params: { locale },
+}: PageProps): Promise<Metadata> {
+  unstable_setRequestLocale(locale);
+  const t = await getTranslations({ locale, namespace: 'account' });
+  return {
+    title: t('pricing.title'),
+    robots: { index: false, follow: false }, // 后台页不进搜索引擎
+  };
+}
 
 interface PageProps {
   params: { locale: string };
@@ -32,6 +42,7 @@ interface PageProps {
 
 export default async function AdminPricingPage({ params: { locale } }: PageProps) {
   unstable_setRequestLocale(locale);
+  const t = await getTranslations({ locale, namespace: 'account' });
 
   const defaults: DefaultsResult = await getPricingDefaults();
 
@@ -41,9 +52,9 @@ export default async function AdminPricingPage({ params: { locale } }: PageProps
 
   if (defaults.kind === 'forbidden') {
     return (
-      <PageShell title="模型定价">
+      <PageShell title={t('pricing.title')}>
         <Notice tone="error" role="alert">
-          需要管理员权限。当前账号不是管理员,如需改价请联系平台负责人为你的账号授予 admin 角色。
+          {t('pricing.forbidden')}
         </Notice>
       </PageShell>
     );
@@ -51,9 +62,9 @@ export default async function AdminPricingPage({ params: { locale } }: PageProps
 
   if (defaults.kind === 'error') {
     return (
-      <PageShell title="模型定价">
+      <PageShell title={t('pricing.title')}>
         <Notice tone="error" role="alert">
-          无法连接后台服务,请稍后重试。
+          {t('pricing.connectError')}
         </Notice>
       </PageShell>
     );
@@ -68,17 +79,32 @@ export default async function AdminPricingPage({ params: { locale } }: PageProps
     currentOutputUsd: m.pricing?.output_per_1k_tokens,
   }));
 
+  // 表单是 client 组件,文案经 props 传入(单一来源,避免客户端再取一次命名空间)。
+  const labels: PricingLabels = {
+    fxLabel: t('pricing.fxLabel'),
+    fxHelp: t('pricing.fxHelp'),
+    inputLabel: t('pricing.inputLabel'),
+    outputLabel: t('pricing.outputLabel'),
+    inputPlaceholder: t('pricing.inputPlaceholder'),
+    outputPlaceholder: t('pricing.outputPlaceholder'),
+    save: t('pricing.save'),
+    saving: t('pricing.saving'),
+    saved: t('pricing.saved'),
+    errInvalid: t('pricing.errInvalid'),
+    errForbidden: t('pricing.errForbidden'),
+    errUnauthorized: t('pricing.errUnauthorized'),
+    errNotFound: t('pricing.errNotFound'),
+    errGeneric: t('pricing.errGeneric'),
+  };
+
   return (
-    <PageShell
-      title="模型定价"
-      subtitle="填写各模型的上游成本价(元/百万 tokens)。保存后换算成美元入库,约 5 分钟内在模型广场生效。加价率由系统统一处理,这里填成本价。"
-    >
+    <PageShell title={t('pricing.title')} subtitle={t('pricing.subtitle')}>
       {models.length === 0 ? (
         <Notice tone="warning" role="status">
-          当前没有可定价的上架模型。
+          {t('pricing.empty')}
         </Notice>
       ) : (
-        <AdminPricingForm models={models} defaultFx={defaults.fxUsdCny} />
+        <AdminPricingForm models={models} defaultFx={defaults.fxUsdCny} labels={labels} />
       )}
     </PageShell>
   );

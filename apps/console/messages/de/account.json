@@ -357,5 +357,26 @@
         "reload_cta": "Neu laden"
       }
     }
+  },
+  "pricing": {
+    "title": "Modellpreise",
+    "subtitle": "Geben Sie die Upstream-Kosten jedes Modells ein (CNY pro Million Tokens). Nach dem Speichern wird der Wert in USD umgerechnet und ist innerhalb von etwa 5 Minuten im Modell-Marktplatz wirksam. Der Aufschlag wird vom System automatisch angewendet – geben Sie hier den Kostenpreis ein.",
+    "forbidden": "Administratorrolle erforderlich. Dieses Konto ist kein Administrator; bitten Sie den Plattformbetreiber, Ihrem Konto die Admin-Rolle zuzuweisen.",
+    "connectError": "Backend-Dienst nicht erreichbar. Bitte später erneut versuchen.",
+    "empty": "Derzeit gibt es keine gelisteten Modelle zum Bepreisen.",
+    "fxLabel": "Umrechnungskurs USD → CNY (Standard: aktuellster, änderbar)",
+    "fxHelp": "Sie geben „CNY pro Million Tokens“ ein; das System rechnet zur Speicherung mit diesem Kurs in USD um. Eine Preisänderung fügt einen neuen Datensatz hinzu – alte Preise bleiben zur Prüfung erhalten.",
+    "inputLabel": "Eingabe CNY/Mio.",
+    "outputLabel": "Ausgabe CNY/Mio.",
+    "inputPlaceholder": "z. B. 5,76",
+    "outputPlaceholder": "z. B. 14,4",
+    "save": "Speichern",
+    "saving": "Wird gespeichert…",
+    "saved": "Gespeichert. Innerhalb von etwa 5 Minuten im Modell-Marktplatz wirksam.",
+    "errInvalid": "Eingabepreis, Ausgabepreis und Kurs müssen alle Zahlen größer als 0 sein.",
+    "errForbidden": "Administratorrolle erforderlich.",
+    "errUnauthorized": "Ihre Sitzung ist abgelaufen, bitte erneut anmelden.",
+    "errNotFound": "Dieses Modell existiert nicht oder wurde eingestellt.",
+    "errGeneric": "Speichern fehlgeschlagen, bitte erneut versuchen."
   }
 }

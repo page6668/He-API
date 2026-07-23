@@ -357,5 +357,26 @@
         "reload_cta": "Recarregar"
       }
     }
+  },
+  "pricing": {
+    "title": "Preços dos modelos",
+    "subtitle": "Insira o custo de origem de cada modelo (CNY por milhão de tokens). Após salvar, é convertido para USD e entra em vigor no mercado de modelos em cerca de 5 minutos. A margem é aplicada automaticamente pelo sistema; insira aqui o preço de custo.",
+    "forbidden": "Função de administrador necessária. Esta conta não é administradora; peça ao responsável da plataforma para conceder a função de administrador à sua conta.",
+    "connectError": "Não é possível acessar o serviço de backend. Tente novamente mais tarde.",
+    "empty": "Não há modelos publicados para precificar no momento.",
+    "fxLabel": "Taxa de conversão USD → CNY (padrão: mais recente, editável)",
+    "fxHelp": "Você insere «CNY por milhão de tokens»; o sistema converte para USD com esta taxa para armazenar. Uma alteração de preço adiciona um novo registro; os preços antigos são mantidos para auditoria.",
+    "inputLabel": "Entrada CNY/M",
+    "outputLabel": "Saída CNY/M",
+    "inputPlaceholder": "ex. 5,76",
+    "outputPlaceholder": "ex. 14,4",
+    "save": "Salvar",
+    "saving": "Salvando…",
+    "saved": "Salvo. Entra em vigor no mercado de modelos em cerca de 5 minutos.",
+    "errInvalid": "Preço de entrada, preço de saída e taxa devem ser todos números maiores que 0.",
+    "errForbidden": "Função de administrador necessária.",
+    "errUnauthorized": "Sua sessão expirou, faça login novamente.",
+    "errNotFound": "Este modelo não existe ou foi descontinuado.",
+    "errGeneric": "Falha ao salvar, tente novamente."
   }
 }
