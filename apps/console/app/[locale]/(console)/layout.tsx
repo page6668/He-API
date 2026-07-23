@@ -16,6 +16,7 @@ import { getTranslations } from 'next-intl/server';
 import { defaultLocale, isLocale } from '@/i18n/config';
 import { ACCESS_COOKIE } from '@/lib/auth/cookies';
 import { getDeletionState } from '@/lib/account/deletion-actions';
+import { getMyRole } from '@/lib/account/get-my-role';
 import { ConsoleSidebarNav } from '@/components/ConsoleSidebarNav';
 import { IntercomMessenger } from '@/components/business/IntercomMessenger';
 import { BetaBadge } from '@/components/business/BetaBadge';
@@ -57,6 +58,22 @@ export default async function ConsoleLayout({
   const tDashboard = await getTranslations('dashboard');
   const tLogs = await getTranslations('logs');
 
+  // AD-003 — 只有管理员才在侧边栏看到「模型定价」入口。role 由网关读库返回
+  // (前端无法解 JWT);fail-safe 为 'user',读不到就不显示。写钱拦截仍在网关。
+  const role = await getMyRole();
+
+  const navItems = [
+    { href: `/${resolvedLocale}/dashboard`, label: tDashboard('nav.sidebar') },
+    { href: `/${resolvedLocale}/logs`, label: tLogs('nav.sidebar') },
+    { href: `/${resolvedLocale}/keys`, label: t('keys.nav.sidebar') },
+    { href: `/${resolvedLocale}/settings/profile`, label: t('settings.sidebar.profile') },
+    { href: `/${resolvedLocale}/settings/security`, label: t('settings.sidebar.security') },
+    { href: `/${resolvedLocale}/settings/data`, label: t('settings.sidebar.data') },
+  ];
+  if (role === 'admin') {
+    navItems.push({ href: `/${resolvedLocale}/admin/pricing`, label: '模型定价' });
+  }
+
   // Story 10.7 AC2 — Intercom (customer-support) boots on the authed console
   // face only (OQ-6). Region-gate (OQ-2): PRC-region requests do NOT boot —
   // the country code is resolved from the edge (Cloudflare cf-ipcountry).
@@ -78,20 +95,7 @@ export default async function ConsoleLayout({
         <div className="mb-4">
           <BetaBadge />
         </div>
-        <ConsoleSidebarNav
-          items={[
-            { href: `/${resolvedLocale}/dashboard`, label: tDashboard('nav.sidebar') },
-            { href: `/${resolvedLocale}/logs`, label: tLogs('nav.sidebar') },
-            { href: `/${resolvedLocale}/keys`, label: t('keys.nav.sidebar') },
-            { href: `/${resolvedLocale}/settings/profile`, label: t('settings.sidebar.profile') },
-            { href: `/${resolvedLocale}/settings/security`, label: t('settings.sidebar.security') },
-            { href: `/${resolvedLocale}/settings/data`, label: t('settings.sidebar.data') },
-            // AD-003 — 管理员定价入口。对所有登录用户可见,但非管理员点进去是 403
-            // (网关是唯一执法点;前端无法读 role,故不隐藏)。label 内联,不新建
-            // i18n 命名空间(避免 10 语言文件缺一即 500)。
-            { href: `/${resolvedLocale}/admin/pricing`, label: '模型定价' },
-          ]}
-        />
+        <ConsoleSidebarNav items={navItems} />
       </aside>
       <section className="min-w-0 flex-1">{children}</section>
     </div>

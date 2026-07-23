@@ -477,6 +477,10 @@ func main() {
 		jwtVerifier.RequireJWT(adminGuard.Require(http.HandlerFunc(adminPricing.SetPrice))))
 	mux.Handle("GET /v1/admin/models/pricing/defaults",
 		jwtVerifier.RequireJWT(adminGuard.Require(http.HandlerFunc(adminPricing.Defaults))))
+	// AD-003 — 当前用户查自己的角色(仅登录,不需管理员)。前端据此决定是否显示
+	// 管理入口。fail-safe:读不到 role 返回 "user"。
+	meRole := handlers.NewMeRoleHandler(adminRoleQ, logger)
+	mux.Handle("GET /v1/me/role", jwtVerifier.RequireJWT(meRole))
 
 	chatCompletions := handlers.NewChatCompletionsHandler(
 		logger,
