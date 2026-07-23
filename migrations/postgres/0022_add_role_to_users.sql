@@ -14,10 +14,10 @@ ALTER TABLE he_api.users
 ALTER TABLE he_api.users
     ADD CONSTRAINT users_role_check CHECK (role IN ('user', 'admin'));
 
--- 把运营者本人置为 admin。**执行前把下面的邮箱改成你的登录邮箱。**
+-- 把运营者本人置为 admin。admin@heheapi.com 是当前唯一账号(2026-07-11 播种)。
 -- 定位不到(邮箱不匹配)时这条 UPDATE 影响 0 行、不报错 —— 届时任何人都不是
 -- 管理员,/admin/pricing 对所有人 403(fail-closed),需要再补一条 UPDATE。
 UPDATE he_api.users
    SET role = 'admin', updated_at = NOW()
- WHERE email = 'CHANGE_ME@example.com'
+ WHERE email = 'admin@heheapi.com'
    AND role <> 'admin';
