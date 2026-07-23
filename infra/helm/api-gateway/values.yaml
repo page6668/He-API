@@ -276,4 +276,4 @@ adapters:
 #
 # 注:阿里云百炼一个入口即可直连多厂商模型(DeepSeek V4 / GLM / Kimi / MiniMax),
 # 故这些 id 都路由到 qwen 适配器(它指向 dashscope 兼容端点)。
-extraModelRoutes: "qwen3.7-max=qwen,qwen3.7-plus=qwen,qwen3.6-flash=qwen,deepseek-v4-pro=qwen,deepseek-v4-flash=qwen,glm-5.2=qwen,kimi-k2.6=qwen"
+extraModelRoutes: "qwen3.7-max=qwen,qwen3.7-plus=qwen,qwen3.6-flash=qwen,deepseek-v4-pro=qwen,deepseek-v4-flash=qwen,glm-5.2=qwen,kimi-k2.6=qwen,qwen3.6-plus=qwen,qwen3.6-max-preview=qwen,glm-5.2-fast-preview=qwen,kimi-k2.7-code=qwen"
