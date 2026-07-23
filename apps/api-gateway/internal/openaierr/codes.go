@@ -33,6 +33,8 @@ var CodeMetadata = map[string]struct {
 	"402_quota_exhausted":    {402, "invalid_request_error"},
 	"403_ip_not_whitelisted": {403, "invalid_request_error"},
 	"403_model_not_in_scope": {403, "invalid_request_error"},
+	// AD-003 — 管理员定价后台:非 admin 访问 /v1/admin/* 一律 403。
+	"403_admin_required":     {403, "invalid_request_error"},
 	"413_payload_too_large":  {413, "invalid_request_error"},
 	"429_rate_limit_qps":     {429, "invalid_request_error"},
 	// Story 5.3 Architect Q5 ratified — fills the missing third member of
@@ -162,4 +164,6 @@ var CodeMetadata = map[string]struct {
 	"422_invalid_auto_recharge":  {422, "invalid_request_error"},
 	"422_invalid_payment_method": {422, "invalid_request_error"},
 	"404_not_found":              {404, "invalid_request_error"},
+	// AD-003 — 给不存在或已下架的 model_id 定价 → 404。
+	"404_model_not_found":        {404, "invalid_request_error"},
 }

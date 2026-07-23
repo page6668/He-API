@@ -461,6 +461,23 @@ func main() {
 	catalogueSnapshot.Start(ctx)
 	catalogueSource := handlers.CatalogueSource(catalogueSnapshot)
 
+	// AD-003 — 管理员定价后台。写钱接口:RequireJWT(登录)→ AdminGuard(读库校验
+	// role)。复用 billingPool;pool 为 nil 时 AdminGuard 对所有人 403(fail-closed)。
+	// 显式判空后再传:typed-nil 的 *pgxpool.Pool 装进接口会得到非 nil 接口,
+	// 会绕过 guard/writer 内部的 nil 判断,故 nil 时传 nil 接口。
+	var adminRoleQ middleware.RoleQuerier
+	var adminPriceQ catalogue.Querier
+	if billingPool != nil {
+		adminRoleQ = billingPool
+		adminPriceQ = billingPool
+	}
+	adminGuard := middleware.NewAdminGuard(adminRoleQ, logger)
+	adminPricing := handlers.NewAdminPricingHandler(catalogue.NewPricingWriter(adminPriceQ), logger)
+	mux.Handle("POST /v1/admin/models/pricing",
+		jwtVerifier.RequireJWT(adminGuard.Require(http.HandlerFunc(adminPricing.SetPrice))))
+	mux.Handle("GET /v1/admin/models/pricing/defaults",
+		jwtVerifier.RequireJWT(adminGuard.Require(http.HandlerFunc(adminPricing.Defaults))))
+
 	chatCompletions := handlers.NewChatCompletionsHandler(
 		logger,
 		handlers.WithAdapterRegistry(adapterRegistry),
