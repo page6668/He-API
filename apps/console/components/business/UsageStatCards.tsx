@@ -15,6 +15,7 @@ import { useTranslations } from 'next-intl';
 
 import { formatDecimal } from '@/lib/api/money';
 import { PERIOD_ORDER, type PeriodKey, type UsagePeriod, type UsageSummary } from '@/lib/api/me-usage';
+import { linkCls } from '@/components/ui/kit';
 
 export interface UsageStatCardsProps {
   summary: UsageSummary;
@@ -66,12 +67,14 @@ export function UsageStatCards({ summary, locale }: UsageStatCardsProps) {
           />
         ))}
       </div>
+      {/* 空态 = 一行安静说明 + 靛青文字链(design-system.md key_page_direction.dashboard:
+          不用大块占位框;indigo 管「信息」,文案复用 empty.cta → /keys)。 */}
       {isEmpty && (
-        <p
-          className="rounded-lg border border-line bg-surface px-4 py-2.5 text-small text-ink-secondary"
-          data-testid="usage-empty-hint"
-        >
-          {t('empty.hint')}
+        <p className="text-small text-ink-secondary" data-testid="usage-empty-hint">
+          {t('empty.hint')}{' '}
+          <a href={`/${locale}/keys`} className={linkCls}>
+            {t('empty.cta')}
+          </a>
         </p>
       )}
     </div>
@@ -104,15 +107,16 @@ function PeriodCard({ periodKey, period, periodLabel, locale, t }: PeriodCardPro
       <h2 id={`usage-${periodKey}-heading`} className="mb-4 text-h3 text-ink">
         {periodLabel}
       </h2>
-      {/* 仪表读数(kit Metric 的等价手写版):label 上小 + tabular 大数下,
-          保留原生 dt/dd + 逐项 aria-label(kit 的 <Metric> 不支持透传 aria-label,
-          按「不改动 a11y 接线」的铁律手写同款排版)。 */}
+      {/* 仪表读数:metric-lg tabular 大数在上 + 小 label 在下(M4 仪表化)。
+          DOM 保持 dt→dd 合法顺序,仅用 flex order 做视觉翻转;逐项 aria-label
+          保留(kit 的 <Metric> 不支持透传 aria-label,按「不改动 a11y 接线」
+          的铁律手写同款排版)。 */}
       <dl className="grid grid-cols-2 gap-4">
         {rows.map((row) => (
-          <div key={row.key}>
-            <dt className="text-label text-ink-muted">{row.label}</dt>
+          <div key={row.key} className="flex flex-col">
+            <dt className="order-2 mt-1 text-label text-ink-muted">{row.label}</dt>
             <dd
-              className="tabular mt-1 text-metric-lg text-ink"
+              className="tabular order-1 text-metric-lg text-ink"
               aria-label={`${periodLabel} ${row.label}: ${row.value}`}
             >
               {row.value}

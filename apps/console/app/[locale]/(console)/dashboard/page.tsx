@@ -12,7 +12,7 @@ import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { getTranslations, unstable_setRequestLocale } from 'next-intl/server';
 
-import { PageShell, Notice } from '@/components/ui/kit';
+import { PageShell, linkCls } from '@/components/ui/kit';
 import { UsageStatCards } from '@/components/business/UsageStatCards';
 import { UsageStatCardsSkeleton } from '@/components/business/UsageStatCardsSkeleton';
 import { UsageChart } from '@/components/business/UsageChart';
@@ -67,17 +67,15 @@ async function DashboardContent({ locale }: { locale: string }) {
     return <UsageStatCards summary={result.summary} locale={locale} />;
   }
 
-  // 安静的一行说明 + 文字链重试(design-system.md key_page_direction.dashboard:
-  // 「空/错状态用一行安静说明 + 文字链重试,不要满宽红底 banner」)。
+  // 安静的一行说明 + 靛青文字链重试(design-system.md key_page_direction.dashboard:
+  // 「空/错状态用一行安静说明 + 文字链重试,不要满宽红底 banner」;链接走 kit linkCls,
+  // indigo 管「信息」)。role="alert" 保留原 a11y 语义。
   return (
-    <Notice tone="error" role="alert">
-      <span>{tRoot(result.error.code)}</span>{' '}
-      <a
-        href={`/${locale}/dashboard`}
-        className="font-medium underline underline-offset-2 transition-colors duration-state ease-he hover:text-crimson/80"
-      >
+    <p role="alert" className="text-small text-ink-secondary">
+      {tRoot(result.error.code)}{' '}
+      <a href={`/${locale}/dashboard`} className={linkCls}>
         {t('errors.retry')}
       </a>
-    </Notice>
+    </p>
   );
 }

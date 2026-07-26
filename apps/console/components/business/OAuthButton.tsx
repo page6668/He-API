@@ -57,7 +57,8 @@ export function OAuthButton({ config, returnTo, locale, disabled }: OAuthButtonP
         config.hoverClass,
         config.textClass,
         'disabled:opacity-50 disabled:cursor-not-allowed',
-        'focus:outline-none focus:ring-2 focus:ring-ink/15',
+        // 焦点环与 kit Button 统一(M1:focus-visible 朱砂 ring,永不移除)。
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-seal/30 focus-visible:ring-offset-2',
       ].join(' ')}
     >
       <span

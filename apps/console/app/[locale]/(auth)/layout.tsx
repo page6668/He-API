@@ -15,6 +15,7 @@ import { redirect } from 'next/navigation';
 import { defaultLocale, isLocale } from '@/i18n/config';
 import { ACCESS_COOKIE } from '@/lib/auth/cookies';
 import { Logo } from '@/components/brand/Logo';
+import { Panel } from '@/components/ui/kit';
 
 interface AuthLayoutProps {
   children: ReactNode;
@@ -34,14 +35,16 @@ export default function AuthLayout({ children, params: { locale } }: AuthLayoutP
     redirect(`/${resolvedLocale}/`);
   }
 
-  // 版式(design-system.md key_page_direction.auth):收窄至 400px、左对齐编辑式排版,
-  // 顶部一枚品牌印记。内容恒有最大宽度并居中容器 —— 禁止裸贴视口边缘。
+  // 版式(design-system.md key_page_direction.auth):收窄至 400px 卡片、页面居中;
+  // 品牌印记在卡片内左对齐(不居中)。卡片 = kit Panel(1px 暖边框,零阴影)。
   return (
-    <div className="mx-auto max-w-[400px] px-6 py-16">
-      <header className="mb-8">
-        <Logo size={22} />
-      </header>
-      {children}
+    <div className="mx-auto max-w-[400px] px-4 py-16">
+      <Panel>
+        <header className="mb-8">
+          <Logo size={22} />
+        </header>
+        {children}
+      </Panel>
     </div>
   );
 }

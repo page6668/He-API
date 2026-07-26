@@ -24,9 +24,10 @@ export function UsageStatCardsSkeleton({ label }: UsageStatCardsSkeletonProps) {
           <div className="mb-4 h-4 w-20 rounded bg-surface-sunken" />
           <div className="grid grid-cols-2 gap-4">
             {Array.from({ length: 4 }).map((__, row) => (
+              // 与真卡同构:metric-lg 大数在上、小 label 在下(M4 仪表化)。
               <div key={row} className="space-y-1.5">
+                <div className="h-7 w-20 rounded bg-surface-sunken" />
                 <div className="h-3 w-14 rounded bg-surface-sunken" />
-                <div className="h-6 w-16 rounded bg-surface-sunken" />
               </div>
             ))}
           </div>

@@ -11,8 +11,9 @@
  * action is the BFF; 5.5 BR-L-1).
  *
  * Resilience (BR-CH-4 degradation isolation): loading → a chart skeleton; a
- * /series 5xx → an inline retry INSIDE the card (the stat-cards band stays live);
- * empty history → an EmptyState ("No usage in the last 30 days") with no NaN axis.
+ * /series 5xx → a quiet one-line note + text-link retry INSIDE the card (the
+ * stat-cards band stays live); empty history → a quiet one-line note with no
+ * NaN axis (M4: 空/错态一行安静说明 + 靛青文字链,不用大块占位框).
  *
  * a11y (BR-CH-3, WCAG 2.1 AA): the Recharts SVG is aria-hidden (non-text content)
  * and a visually-hidden <table> mirrors the series for screen readers; the toggle
@@ -35,7 +36,7 @@ import {
 
 import { SERIES_GROUP_BY, type SeriesGroupBy, type UsageSeries } from '@/lib/api/me-usage';
 import { getUsageSeries } from '@/app/[locale]/(console)/dashboard/_actions/get-usage-series';
-import { Button, Notice } from '@/components/ui/kit';
+import { linkCls } from '@/components/ui/kit';
 
 export interface UsageChartProps {
   locale: string;
@@ -213,26 +214,27 @@ function ChartBody({ state, groupBy, locale, t, onRetry }: ChartBodyProps) {
   }
 
   if (state.status === 'error') {
+    // 错态 = 一行安静说明 + 靛青文字链重试(不用大块 Notice/按钮;role=alert 保留,
+    // 重试仍是 <button>(a11y role 不变),仅视觉走 linkCls 文字链)。
     return (
-      <Notice tone="error" role="alert">
-        <div className="space-y-2">
-          <p>{t('chart.error')}</p>
-          <Button variant="secondary" onClick={onRetry}>
-            {t('chart.retry')}
-          </Button>
-        </div>
-      </Notice>
+      <p role="alert" className="text-small text-ink-secondary">
+        {t('chart.error')}{' '}
+        <button type="button" onClick={onRetry} className={linkCls}>
+          {t('chart.retry')}
+        </button>
+      </p>
     );
   }
 
   const series = state.data;
   if (series.series.length === 0) {
+    // 空态 = 一行安静说明 + 靛青文字链(不用 h-64 大块占位;文案复用 empty.cta → /keys)。
     return (
-      <p
-        data-testid="usage-chart-empty"
-        className="flex h-64 items-center justify-center text-small text-ink-secondary"
-      >
-        {t('chart.empty')}
+      <p data-testid="usage-chart-empty" className="text-small text-ink-secondary">
+        {t('chart.empty')}{' '}
+        <a href={`/${locale}/keys`} className={linkCls}>
+          {t('empty.cta')}
+        </a>
       </p>
     );
   }

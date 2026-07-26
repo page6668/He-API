@@ -23,6 +23,7 @@ import { buildAbModels } from '@/lib/playground/ab';
 import { generateExportSnippet, EXPORT_LANGS, type ExportLang } from '@/lib/playground/export-snippets';
 import { parseDeepLinkFragment } from '@/lib/playground/deep-link';
 import { sendPlaygroundChat } from '@/lib/playground/client';
+import { Button, Panel, fieldCls, labelCls } from '@/components/ui/kit';
 
 interface KeyOption {
   api_key_id: string;
@@ -251,13 +252,8 @@ export function Playground({ locale }: { locale: string }) {
     setTimeout(() => setCopied(false), 1500);
   }, [exportSnippet]);
 
-  // 设计系统 token(knowledge/taste/design-system.md):暖边框建层级、静态表面无阴影、
-  // 输入 6px 圆角、focus 落朱砂。数字一律 .tabular(等宽制表)。
-  const fieldCls =
-    'mt-1.5 w-full rounded-md border border-line-strong bg-surface px-3 py-2 text-small text-ink outline-none transition-colors duration-state ease-he placeholder:text-ink-muted focus:border-seal focus:ring-2 focus:ring-seal/15';
-  const labelCls = 'block text-label text-ink-secondary';
-  const panelCls = 'rounded-lg border border-line bg-surface p-5';
-
+  // 样式基元统一取自 components/ui/kit(M1):fieldCls/labelCls、Panel、Button。
+  // 数字一律 .tabular(等宽制表);focus 环全站朱砂 focus-visible。
   return (
     // 内容恒有最大宽度并居中 —— 治「撑满整屏」(design-system.md layout.container)
     <section
@@ -291,7 +287,7 @@ export function Playground({ locale }: { locale: string }) {
 
       {/* 双栏:左 480px 参数/输入 · 右 流式输出 + 代码导出 */}
       <div className="grid items-start gap-6 lg:grid-cols-[480px_minmax(0,1fr)]">
-        <div className={`${panelCls} space-y-4`}>
+        <Panel className="space-y-4">
           {keys.length > 0 && (
             <label className="block">
               <span className={labelCls}>{t('controls.apiKey')}</span>
@@ -333,7 +329,7 @@ export function Playground({ locale }: { locale: string }) {
               data-testid="playground-ab-toggle"
               checked={abMode}
               onChange={(e) => setAbMode(e.target.checked)}
-              className="h-4 w-4 rounded-sm border-line-strong text-ink accent-ink"
+              className="h-4 w-4 rounded-sm border-line-strong text-ink accent-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-seal/30"
             />
             <span>{t('controls.compareAB')}</span>
           </label>
@@ -407,19 +403,19 @@ export function Playground({ locale }: { locale: string }) {
           </label>
 
           {/* 本屏唯一的朱砂 —— 主操作(design-system.md distinctive_rule 铁律2) */}
-          <button
-            type="button"
+          <Button
+            variant="primary"
             data-testid="playground-send"
             disabled={sendDisabled}
             onClick={handleSend}
-            className="w-full rounded-md bg-seal px-4 py-2.5 text-small font-medium text-white transition-colors duration-state ease-he hover:bg-seal-hover focus:outline-none focus:ring-2 focus:ring-seal/30 disabled:cursor-not-allowed disabled:opacity-40"
+            className="w-full"
           >
             {sending ? t('controls.sending') : t('controls.send')}
-          </button>
-        </div>
+          </Button>
+        </Panel>
 
         <div className="space-y-4">
-          <div className={panelCls}>
+          <Panel>
             <h2 className="text-h3">{t('output.heading')}</h2>
             {error && (
               <div
@@ -483,9 +479,9 @@ export function Playground({ locale }: { locale: string }) {
                 </div>
               </dl>
             )}
-          </div>
+          </Panel>
 
-          <div className={panelCls}>
+          <Panel>
             <div className="flex items-center justify-between gap-4">
               <h3 className="text-h3">{t('export.heading')}</h3>
               {/* 激活态用墨色而非朱砂 —— 每屏只允许一处朱砂(已给「发送」) */}
@@ -497,7 +493,7 @@ export function Playground({ locale }: { locale: string }) {
                     aria-selected={exportLang === lang}
                     data-testid={`playground-export-${lang}`}
                     onClick={() => setExportLang(lang)}
-                    className={`rounded-md px-2.5 py-1 text-label transition-colors duration-state ease-he ${
+                    className={`rounded-md px-2.5 py-1 text-label transition-colors duration-state ease-he focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-seal/30 ${
                       exportLang === lang
                         ? 'bg-ink text-paper'
                         : 'text-ink-secondary hover:bg-surface-sunken'
@@ -515,15 +511,10 @@ export function Playground({ locale }: { locale: string }) {
             >
               {exportSnippet}
             </pre>
-            <button
-              type="button"
-              data-testid="playground-copy"
-              onClick={copySnippet}
-              className="mt-2 rounded-md border border-line-strong px-3 py-1.5 text-label text-ink-secondary transition-colors duration-state ease-he hover:border-ink-muted hover:text-ink"
-            >
+            <Button data-testid="playground-copy" onClick={copySnippet} className="mt-2">
               {copied ? t('export.copied') : t('export.copy')}
-            </button>
-          </div>
+            </Button>
+          </Panel>
         </div>
       </div>
     </section>
