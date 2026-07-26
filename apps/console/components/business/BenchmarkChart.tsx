@@ -88,7 +88,7 @@ export function BenchmarkChart({ data, playgroundHref }: { data: BenchmarkData; 
             onClick={() => setMetric(m)}
             onKeyDown={(e) => onRadioKeyDown(e, i)}
             // 选中态用墨色而非朱砂 —— 本屏唯一的朱砂留给「去 Playground 跑 A/B」(铁律2)
-            className={`rounded-md border px-3 py-1 text-small transition-colors duration-state ease-he focus:outline-none focus:ring-2 focus:ring-ink/15 ${
+            className={`rounded-md border px-3 py-1 text-small transition-colors duration-state ease-he focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-seal/30 focus-visible:ring-offset-2 ${
               metric === m
                 ? 'border-ink bg-ink text-paper'
                 : 'border-line-strong bg-surface text-ink-secondary hover:border-ink-muted hover:text-ink'
@@ -105,7 +105,7 @@ export function BenchmarkChart({ data, playgroundHref }: { data: BenchmarkData; 
 
       {/* vendor filter (P-14:439) */}
       <label className="mb-3 flex items-center gap-2">
-        <span className="text-label text-ink-secondary">{t('filter.task')}</span>
+        <span className="text-label text-ink-secondary">{t('table.vendor')}</span>
         <select
           data-testid="benchmark-filter"
           className="rounded-md border border-line-strong bg-surface px-2 py-1 text-small text-ink outline-none transition-colors duration-state ease-he focus:border-seal focus:ring-2 focus:ring-seal/15"

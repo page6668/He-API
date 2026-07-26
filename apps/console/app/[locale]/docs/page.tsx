@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { unstable_setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 
+import { MarketingFooter } from '@/components/marketing/MarketingFooter';
 import { isLocale } from '@/i18n/config';
 import { DocsContent } from './DocsContent';
 
@@ -25,11 +26,17 @@ interface PageProps {
  */
 export function generateMetadata({ params: { locale } }: PageProps): Metadata {
   const zh = locale.startsWith('zh');
+  const title = zh ? 'API 文档 — He-API' : 'API Reference — He-API';
+  const description = zh
+    ? '通过一个 OpenAI 兼容接口调用通义千问、DeepSeek、豆包、文心、GLM 与 Kimi。'
+    : 'Call Qwen, DeepSeek, Doubao, ERNIE, GLM and Kimi through one OpenAI-compatible API.';
+  // canonical + og 照抄 (marketing)/benchmark/page.tsx 的模式
+  const canonical = `https://he-api.com/${locale}/docs`;
   return {
-    title: zh ? 'API 文档 — He-API' : 'API Reference — He-API',
-    description: zh
-      ? '通过一个 OpenAI 兼容接口调用通义千问、DeepSeek、豆包、文心、GLM 与 Kimi。'
-      : 'Call Qwen, DeepSeek, Doubao, ERNIE, GLM and Kimi through one OpenAI-compatible API.',
+    title,
+    description,
+    alternates: { canonical },
+    openGraph: { title, description, url: canonical, type: 'website' },
   };
 }
 
@@ -38,5 +45,13 @@ export default function DocsPage({ params: { locale } }: PageProps) {
     notFound();
   }
   unstable_setRequestLocale(locale);
-  return <DocsContent locale={locale} />;
+  // docs 不在 (marketing) 路由组内,页尾骨架与 (marketing)/layout.tsx 保持一致
+  return (
+    <div className="flex min-h-screen flex-col bg-paper">
+      <div className="flex-1">
+        <DocsContent locale={locale} />
+      </div>
+      <MarketingFooter />
+    </div>
+  );
 }

@@ -2,8 +2,8 @@
 
 /**
  * 文档正文。内容源见 page.tsx 头注(全部取自真实代码,不杜撰)。
- * 视觉:knowledge/taste/design-system.md —— 限宽双栏、暖边框零阴影、
- * 代码块墨底等宽、朱砂只落一处(本页给「去 Playground 试」)。
+ * 视觉:knowledge/taste/design-system.md —— 限宽双栏(公开页 prose-page 1120)、
+ * 暖边框零阴影、代码块 surface_sunken 内嵌底、朱砂只落一处(本页给「去 Playground 试」)。
  */
 import { useState } from 'react';
 
@@ -97,7 +97,7 @@ function Code({ children }: { children: string }) {
   return (
     <pre
       dir="ltr"
-      className="mt-3 overflow-x-auto rounded-md bg-ink p-4 font-mono text-small leading-relaxed text-paper"
+      className="mt-3 overflow-x-auto rounded-md border border-line bg-surface-sunken p-4 font-mono text-small leading-relaxed text-ink"
     >
       {children}
     </pre>
@@ -110,10 +110,10 @@ export function DocsContent({ locale }: { locale: string }) {
   const T = (en: string, cn: string) => (zh ? cn : en);
 
   return (
-    <div className="mx-auto max-w-playground px-6 py-10 lg:px-8">
-      <header className="mb-8 max-w-2xl">
-        <h1 className="text-h1">{T('API Reference', 'API 文档')}</h1>
-        <p className="mt-1.5 text-small text-ink-secondary">
+    <div className="mx-auto max-w-prose-page px-6 py-20 lg:px-8">
+      <header className="mb-12 max-w-2xl">
+        <h1 className="text-display">{T('API Reference', 'API 文档')}</h1>
+        <p className="mt-3 text-body text-ink-secondary">
           {T(
             'One OpenAI-compatible API for Qwen, DeepSeek, Doubao, ERNIE, GLM and Kimi.',
             '一个 OpenAI 兼容接口,调用通义千问、DeepSeek、豆包、文心、GLM 与 Kimi。',
@@ -203,6 +203,19 @@ export function DocsContent({ locale }: { locale: string }) {
             <h2 className="text-h2">{T('Endpoints', '接口')}</h2>
             <Panel padded={false} className="mt-3 overflow-hidden">
               <table className="w-full text-start text-small">
+                <thead className="border-b border-line bg-surface-sunken text-start">
+                  <tr>
+                    <th scope="col" className="px-4 py-2 text-start text-label font-medium text-ink-muted">
+                      {T('Method', '方法')}
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-start text-label font-medium text-ink-muted">
+                      {T('Path', '路径')}
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-start text-label font-medium text-ink-muted">
+                      {T('Description', '说明')}
+                    </th>
+                  </tr>
+                </thead>
                 <tbody>
                   {ENDPOINTS.map((e, i) => (
                     <tr key={e.path} className={i > 0 ? 'border-t border-line' : ''}>
@@ -253,6 +266,16 @@ data: [DONE]`}</Code>
 }`}</Code>
             <Panel padded={false} className="mt-4 overflow-hidden">
               <table className="w-full text-start text-small">
+                <thead className="border-b border-line bg-surface-sunken text-start">
+                  <tr>
+                    <th scope="col" className="px-4 py-2 text-start text-label font-medium text-ink-muted">
+                      {T('Code', '错误码')}
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-start text-label font-medium text-ink-muted">
+                      {T('Description', '说明')}
+                    </th>
+                  </tr>
+                </thead>
                 <tbody>
                   {ERRORS.map((e, i) => (
                     <tr key={e.code} className={i > 0 ? 'border-t border-line' : ''}>

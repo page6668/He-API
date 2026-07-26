@@ -17,6 +17,7 @@
  *    否则会双层限宽、左右内边距叠加(约 48px)。
  */
 import type { ReactNode } from 'react';
+import { MarketingFooter } from '@/components/marketing/MarketingFooter';
 
 interface MarketingLayoutProps {
   children: ReactNode;
@@ -31,15 +32,5 @@ export default function MarketingLayout({ children }: MarketingLayoutProps) {
       </div>
       <MarketingFooter />
     </div>
-  );
-}
-
-function MarketingFooter() {
-  return (
-    <footer className="border-t border-line">
-      <div className="mx-auto max-w-prose-page px-6 py-5 text-label text-ink-muted lg:px-8">
-        © He-API
-      </div>
-    </footer>
   );
 }
