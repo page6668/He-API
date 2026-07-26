@@ -23,10 +23,12 @@ export interface ToastProps {
   children: ReactNode;
 }
 
+// 色板对齐设计系统:success/error 走 jade/crimson,info 走靛青(indigo 管「信息」)。
+// 底色保持不透明(surface / indigo-wash)—— 浮层不透出下层内容。
 const VARIANT_STYLES: Record<ToastVariant, string> = {
-  success: 'border-green-300 bg-green-50 text-green-900',
-  error: 'border-red-300 bg-red-50 text-red-900',
-  info: 'border-blue-300 bg-blue-50 text-blue-900',
+  success: 'border-jade/40 bg-surface text-jade',
+  error: 'border-crimson/40 bg-surface text-crimson',
+  info: 'border-indigo/40 bg-indigo-wash text-indigo',
 };
 
 export function Toast({ variant = 'info', onDismiss, durationMs = 4000, children }: ToastProps) {
@@ -41,7 +43,8 @@ export function Toast({ variant = 'info', onDismiss, durationMs = 4000, children
       role={variant === 'error' ? 'alert' : 'status'}
       aria-live={variant === 'error' ? 'assertive' : 'polite'}
       className={cn(
-        'fixed bottom-4 end-4 z-[60] max-w-sm rounded border px-4 py-3 text-sm shadow-lg',
+        // 真浮层 —— 唯一允许的阴影 token(shadow-overlay);圆角对齐 8px。
+        'fixed bottom-4 end-4 z-[60] max-w-sm rounded-lg border px-4 py-3 text-small shadow-overlay',
         VARIANT_STYLES[variant],
       )}
     >

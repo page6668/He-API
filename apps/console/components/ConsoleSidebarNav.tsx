@@ -30,7 +30,7 @@ export function ConsoleSidebarNav({ items }: { items: ConsoleNavItem[] }) {
             aria-current={active ? 'page' : undefined}
             // 激活态用墨色(bg-ink text-paper),不用朱砂 —— 朱砂每屏只落在主操作上。
             className={cn(
-              'rounded-md px-3 py-2 text-small transition-colors duration-state ease-he',
+              'rounded-md px-3 py-2 text-small transition-colors duration-state ease-he focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-seal/30',
               active
                 ? 'bg-ink font-medium text-paper'
                 : 'text-ink-secondary hover:bg-surface-sunken hover:text-ink',

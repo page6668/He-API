@@ -42,6 +42,15 @@ const config: Config = {
         jade: '#2F6B4F', // success
         ochre: '#9A6B1E', // warning
         crimson: '#8C1D18', // error / destructive(比 seal 更深更冷)
+        // 靛青 —— 第二角色(信息/数据),2026-07-26 批准入板。
+        // 分工:seal 管「操作」(主按钮/激活态,每屏一处),indigo 管「信息」
+        // (链接/信息态/图表主系列/次级选中/徽章)。indigo 不做主操作按钮。
+        // 注意:此定义整体替换 Tailwind 默认 indigo 色阶(50~950 不复存在)。
+        indigo: {
+          DEFAULT: '#2B5D8C', // 靛青(paper 上 ≈6.5:1,AA 正文可用)
+          hover: '#1F4A73',
+          wash: '#EAF1F7', // 信息条底/选中行/图表浅填充
+        },
         // 既有 shadcn 风格别名(旧组件仍在引用,统一指向新色板)
         border: '#E7E3DC',
         background: '#FAF9F7',

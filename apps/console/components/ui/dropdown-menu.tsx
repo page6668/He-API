@@ -19,7 +19,7 @@ const DropdownMenuSubTrigger = React.forwardRef<
   <DropdownMenuPrimitive.SubTrigger
     ref={ref}
     className={cn(
-      'flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-muted data-[state=open]:bg-muted',
+      'flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-small outline-none focus:bg-muted data-[state=open]:bg-muted',
       inset && 'ps-8',
       className
     )}
@@ -39,7 +39,8 @@ const DropdownMenuSubContent = React.forwardRef<
   <DropdownMenuPrimitive.SubContent
     ref={ref}
     className={cn(
-      'z-50 min-w-[8rem] overflow-hidden rounded-md border bg-background p-1 text-foreground shadow-lg',
+      // 真浮层:surface 白面 + 1px 暖边框 + 唯一的 overlay 阴影 token。
+      'z-50 min-w-[8rem] overflow-hidden rounded-md border border-line bg-surface p-1 text-foreground shadow-overlay',
       className
     )}
     {...props}
@@ -56,7 +57,7 @@ const DropdownMenuContent = React.forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        'z-50 min-w-[8rem] overflow-hidden rounded-md border bg-background p-1 text-foreground shadow-md',
+        'z-50 min-w-[8rem] overflow-hidden rounded-md border border-line bg-surface p-1 text-foreground shadow-overlay',
         className
       )}
       {...props}

@@ -113,7 +113,8 @@ export function Dialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+      // 遮罩用墨色(暖)而非纯黑,与宣纸底同族。
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 p-4"
       onClick={(e) => {
         if (closeOnOverlay && e.target === e.currentTarget) onClose();
       }}
@@ -124,8 +125,9 @@ export function Dialog({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
+        // 真浮层:surface 白面 + 8px 圆角 + 唯一的 overlay 阴影 token。
         className={cn(
-          'w-full max-w-md rounded bg-white p-5 shadow-lg outline-none',
+          'w-full max-w-md rounded-lg border border-line bg-surface p-6 shadow-overlay outline-none',
           className,
         )}
       >
@@ -156,7 +158,7 @@ export function Drawer({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex justify-end bg-black/30"
+      className="fixed inset-0 z-50 flex justify-end bg-ink/30"
       onClick={(e) => {
         if (closeOnOverlay && e.target === e.currentTarget) onClose();
       }}
@@ -167,7 +169,8 @@ export function Drawer({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="h-full w-full overflow-y-auto bg-white p-6 shadow-xl outline-none md:w-[min(420px,100vw)]"
+        // border-s(逻辑属性):LTR/RTL 下都落在面向内容的一侧。
+        className="h-full w-full overflow-y-auto border-s border-line bg-surface p-6 shadow-overlay outline-none md:w-[min(420px,100vw)]"
       >
         {children}
       </div>

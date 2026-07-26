@@ -60,6 +60,12 @@ color: # 水墨 + 朱印;明确不用 Tailwind 默认色阶
   accent: "#C8422A — 朱砂(印章)。仅用于:主操作、当前激活态、品牌标记、focus ring"
   accent_hover: "#A8341F"
   accent_wash: "#FBEEEA — 选中行/激活底(极淡朱)"
+  secondary: # 靛青 —— 第二角色(信息/数据层),2026-07-26 项目负责人批准入板
+    info: "#2B5D8C — 靛青(indigo)。仅用于:链接、信息态提示、图表主数据系列、次级选中态、徽章。
+      与朱砂的分工:seal 管『操作』(每屏一枚印),indigo 管『信息』。indigo 永不做主操作按钮、
+      永不与 seal 在同一控件上并用;赤陶红×靛蓝互补对只在「印章 vs 数据」的层面成立。"
+    info_hover: "#1F4A73"
+    info_wash: "#EAF1F7 — 信息条底/选中行/图表浅填充"
   states: # 与 accent 刻意拉开明度/色相,并强制配图标+文案,不靠颜色单独表意
     success: "#2F6B4F — 竹绿(深,非亮绿)"
     warning: "#9A6B1E — 赭黄"

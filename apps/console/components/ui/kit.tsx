@@ -25,6 +25,13 @@ export const labelCls = 'block text-label text-ink-secondary';
 /** 面板/卡片:1px 暖边框 + 白面,零阴影(层级靠边框与明度差)。 */
 export const panelCls = 'rounded-lg border border-line bg-surface';
 
+/**
+ * 正文链接:靛青 + 下划线(indigo 管「信息」—— 链接/信息态/徽章;seal 管「操作」)。
+ * 注意:导航项**不用**此类 —— 下划线策略是「正文内链接有下划线,导航项无」。
+ */
+export const linkCls =
+  'rounded-sm text-indigo underline underline-offset-2 transition-colors duration-state ease-he hover:text-indigo-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-seal/30';
+
 /* ---------- 组件 ---------- */
 
 interface PageShellProps {
@@ -60,7 +67,7 @@ export function PageShell({
         ? 'max-w-prose-page'
         : 'max-w-console';
   return (
-    <section className={`mx-auto ${maxW} px-6 py-10 lg:px-8`}>
+    <section className={`mx-auto ${maxW} px-6 py-12 lg:px-8`}>
       <header className="mb-6 flex items-start justify-between gap-6">
         <div>
           <h1 id={titleId} className="text-h1">
@@ -89,7 +96,7 @@ export function Panel({
 }) {
   const bg = inset ? 'bg-surface-sunken' : 'bg-surface';
   return (
-    <div className={`rounded-lg border border-line ${bg} ${padded ? 'p-5' : ''} ${className}`}>
+    <div className={`rounded-lg border border-line ${bg} ${padded ? 'p-6' : ''} ${className}`}>
       {children}
     </div>
   );
@@ -99,15 +106,13 @@ type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
 const buttonVariants: Record<ButtonVariant, string> = {
   // 唯一的朱砂 —— 每屏只允许一个 primary。
-  primary:
-    'bg-seal text-white hover:bg-seal-hover focus:ring-seal/30 disabled:opacity-40',
+  primary: 'bg-seal text-white hover:bg-seal-hover disabled:opacity-40',
   secondary:
-    'border border-line-strong bg-surface text-ink hover:border-ink-muted focus:ring-ink/15 disabled:opacity-50',
-  ghost:
-    'text-ink-secondary hover:bg-surface-sunken hover:text-ink focus:ring-ink/15 disabled:opacity-50',
+    'border border-line-strong bg-surface text-ink hover:border-ink-muted hover:bg-surface-sunken disabled:opacity-50',
+  ghost: 'text-ink-secondary hover:bg-surface-sunken hover:text-ink disabled:opacity-50',
   // 破坏性操作:深绛 + 描边 + 明确动词(刻意不与 primary 同形,避免与朱砂混淆)。
   danger:
-    'border border-crimson/40 bg-transparent text-crimson hover:bg-crimson/5 focus:ring-crimson/25 disabled:opacity-50',
+    'border border-crimson/40 bg-transparent text-crimson hover:bg-crimson/5 disabled:opacity-50',
 };
 
 export function Button({
@@ -119,7 +124,8 @@ export function Button({
   return (
     <button
       type={type}
-      className={`rounded-md px-4 py-2 text-small font-medium transition-colors duration-state ease-he focus:outline-none focus:ring-2 disabled:cursor-not-allowed ${buttonVariants[variant]} ${className}`}
+      // focus ring 一律朱砂(design-system.md contrast_floor:focus ring 永不移除)。
+      className={`rounded-md px-4 py-2 text-small font-medium transition-colors duration-state ease-he focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-seal/30 focus-visible:ring-offset-2 disabled:cursor-not-allowed ${buttonVariants[variant]} ${className}`}
       {...props}
     />
   );
@@ -163,24 +169,55 @@ export function EmptyState({
   );
 }
 
-/** 行内提示条:安静、不喧宾夺主(禁止满宽红底 banner)。 */
+/** 行内提示条:安静、不喧宾夺主(禁止满宽红底 banner)。info 走靛青(indigo 管「信息」)。 */
 export function Notice({
   tone = 'neutral',
   children,
   role,
 }: {
-  tone?: 'neutral' | 'warning' | 'error';
+  tone?: 'neutral' | 'info' | 'warning' | 'error';
   children: ReactNode;
   role?: 'status' | 'alert';
 }) {
   const tones = {
     neutral: 'border-line bg-surface text-ink-secondary',
+    info: 'border-indigo/30 bg-indigo-wash text-indigo',
     warning: 'border-ochre/30 bg-ochre/5 text-ochre',
     error: 'border-crimson/30 bg-crimson/5 text-crimson',
   } as const;
   return (
-    <div role={role} className={`rounded-lg border px-4 py-2.5 text-small ${tones[tone]}`}>
+    <div role={role} className={`rounded-lg border px-4 py-3 text-small ${tones[tone]}`}>
       {children}
     </div>
+  );
+}
+
+/**
+ * 徽章:小型状态/信息标记(不可点、不承载操作)。
+ * 分工:info/neutral 走靛青/灰阶(信息);success/warning/error 走 jade/ochre/crimson
+ * (语义结果,须配文案表意,不靠颜色单独区分)。徽章永不用 seal —— 朱砂只管操作。
+ */
+export function Badge({
+  tone = 'neutral',
+  className = '',
+  children,
+}: {
+  tone?: 'neutral' | 'info' | 'success' | 'warning' | 'error';
+  className?: string;
+  children: ReactNode;
+}) {
+  const tones = {
+    neutral: 'border-line bg-surface-sunken text-ink-secondary',
+    info: 'border-indigo/25 bg-indigo-wash text-indigo',
+    success: 'border-jade/25 bg-jade/5 text-jade',
+    warning: 'border-ochre/25 bg-ochre/5 text-ochre',
+    error: 'border-crimson/25 bg-crimson/5 text-crimson',
+  } as const;
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-label ${tones[tone]} ${className}`}
+    >
+      {children}
+    </span>
   );
 }

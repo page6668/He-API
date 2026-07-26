@@ -67,15 +67,20 @@ export default async function LocaleLayout({ children, params: { locale } }: Loc
           <header className="border-b border-line bg-surface">
             <div className="mx-auto flex h-14 max-w-playground items-center justify-between gap-6 px-6 lg:px-8">
               <div className="flex items-center gap-7">
-                <a href={`/${locale}/`} className="shrink-0" aria-label="He-API">
+                <a
+                  href={`/${locale}/`}
+                  className="shrink-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-seal/30"
+                  aria-label="He-API"
+                >
                   <Logo size={22} />
                 </a>
+                {/* 导航项无下划线(下划线只给正文内链接);focus ring 一律朱砂,永不移除 */}
                 <nav className="hidden items-center gap-5 text-small text-ink-secondary sm:flex">
                   {nav.map((item) => (
                     <a
                       key={item.href}
                       href={item.href}
-                      className="transition-colors duration-state ease-he hover:text-ink"
+                      className="rounded-sm transition-colors duration-state ease-he hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-seal/30"
                     >
                       {item.label}
                     </a>
