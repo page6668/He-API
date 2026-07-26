@@ -64,16 +64,17 @@ export function ApiKeyDisplay({ plaintext, locale }: ApiKeyDisplayProps) {
 
       <div className="space-y-2">
         <span className="block text-label text-ink-secondary">{t('created.label')}</span>
-        <div className="flex items-center gap-2">
-          {/* 读出区:内嵌暗底 + 等宽 —— 密钥是"读数",不是正文。 */}
-          <code className="tabular flex-1 select-all break-all rounded-md border border-line bg-surface-sunken px-3 py-2 text-small text-ink">
-            {revealed ? plaintext : MASK}
-          </code>
+        {/* 读出区:内嵌暗底 + Plex Mono 大字块 —— 密钥是"读数",不是正文。 */}
+        <code className="tabular block select-all break-all rounded-md border border-line bg-surface-sunken px-4 py-4 text-metric leading-relaxed text-ink">
+          {revealed ? plaintext : MASK}
+        </code>
+        <div className="flex items-center gap-2 pt-1">
+          {/* 本屏唯一的朱砂 —— 「复制」是本页主操作(design-system.md distinctive_rule 铁律2) */}
+          <Button type="button" variant="primary" onClick={copy}>
+            {t('created.copy')}
+          </Button>
           <Button type="button" variant="secondary" onClick={toggleReveal} aria-pressed={revealed}>
             {revealed ? t('created.hide') : t('created.reveal')}
-          </Button>
-          <Button type="button" variant="secondary" onClick={copy}>
-            {t('created.copy')}
           </Button>
         </div>
         {/* One-shot screen-reader announcement on first reveal (BR-A11Y-3). */}
@@ -82,9 +83,9 @@ export function ApiKeyDisplay({ plaintext, locale }: ApiKeyDisplayProps) {
         </span>
       </div>
 
-      <div className="flex items-center justify-between">
-        {/* 本屏唯一的朱砂 —— 主操作(design-system.md distinctive_rule 铁律2) */}
-        <Button type="button" variant="primary" onClick={confirmSaved}>
+      <div className="flex items-center justify-between border-t border-line pt-4">
+        {/* 次级描边 —— 朱砂已被「复制」占用,每屏只落一枚印 */}
+        <Button type="button" variant="secondary" onClick={confirmSaved}>
           {t('created.saved_cta')}
         </Button>
         <button

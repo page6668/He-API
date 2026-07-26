@@ -25,13 +25,14 @@ export function RequestLogsTableSkeleton({ label, rows = 8 }: RequestLogsTableSk
       aria-label={label}
       className="overflow-hidden rounded-lg border border-line bg-surface"
     >
-      <div className="grid grid-cols-8 gap-2 border-b border-line bg-surface-sunken p-3">
+      {/* Density mirrors the real table (th py-2 / td py-2.5 — M6-B tightened rows). */}
+      <div className="grid grid-cols-8 gap-2 border-b border-line bg-surface-sunken px-3 py-2">
         {Array.from({ length: COLUMN_COUNT }).map((_, col) => (
           <div key={col} className="h-3 rounded-sm bg-line-strong" />
         ))}
       </div>
       {Array.from({ length: rows }).map((_, row) => (
-        <div key={row} className="grid grid-cols-8 gap-2 border-b border-line p-3 last:border-0">
+        <div key={row} className="grid grid-cols-8 gap-2 border-b border-line px-3 py-2.5 last:border-0">
           {Array.from({ length: COLUMN_COUNT }).map((__, col) => (
             <div key={col} className="h-3 rounded-sm bg-line" />
           ))}

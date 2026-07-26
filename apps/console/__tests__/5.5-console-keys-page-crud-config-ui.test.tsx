@@ -168,12 +168,20 @@ describe('AC1: List — KeysTable / EmptyState (component)', () => {
     return { ...result, onConfigure, onRevoke };
   }
 
-  test('5.5-INT-001: desktop renders all 8 columns from KeyEntry[]', () => {
+  // M6-A 美化:桌面端 8 列 <table> → 密集列表行(Panel + ul.divide-y,对齐 ModelsCatalog)。
+  // 断言改为:每行渲染 名称/等宽前缀/scope/读数标签(创建·最近使用·月上限)/状态徽章/操作。
+  test('5.5-INT-001: desktop dense row renders name/prefix/scope/metrics/status/actions', () => {
     const { container } = renderTable([makeRow()]);
-    const table = container.querySelector('table')!;
-    for (const h of ['Name', 'Prefix', 'Scope', 'Created', 'Last used', 'Monthly cap', 'Status', 'Actions']) {
-      expect(within(table).getByText(h)).toBeInTheDocument();
+    const list = container.querySelector('ul')!;
+    expect(within(list).getByText('Prod key')).toBeInTheDocument();
+    expect(within(list).getByText('he-ABCDEF123…')).toBeInTheDocument();
+    expect(within(list).getByText('All models')).toBeInTheDocument();
+    for (const h of ['Created', 'Last used', 'Monthly cap']) {
+      expect(within(list).getByText(h)).toBeInTheDocument();
     }
+    expect(within(list).getByText('Active')).toBeInTheDocument();
+    expect(within(list).getByRole('button', { name: /Configure Prod key/ })).toBeInTheDocument();
+    expect(within(list).getByRole('button', { name: /Revoke Prod key/ })).toBeInTheDocument();
   });
   test('5.5-INT-002: mobile (<md) renders <article role="region"> card stack', () => {
     renderTable([makeRow(), makeRow({ api_key_id: '22222222-2222-4222-8222-222222222222' })]);
@@ -181,7 +189,7 @@ describe('AC1: List — KeysTable / EmptyState (component)', () => {
   });
   test('5.5-INT-003: revoked row → opacity-50 + "Revoked" badge + NO action buttons', () => {
     const { container } = renderTable([makeRow({ revoked_at: '2026-06-02T00:00:00Z' })]);
-    expect(container.querySelector('tr.opacity-50')).not.toBeNull();
+    expect(container.querySelector('li.opacity-50')).not.toBeNull(); // M6-A: tr → li dense row
     expect(screen.getAllByText('Revoked').length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: /Configure/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Revoke Prod key/ })).toBeNull();

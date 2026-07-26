@@ -14,13 +14,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
 import { LOG_LIMIT_OPTIONS, LOG_STATUS_CLASSES, LOG_DEFAULT_LIMIT } from '@/lib/api/me-usage';
-import { Button, Panel, labelCls } from '@/components/ui/kit';
-
-// Same token language as kit's fieldCls (color/radius/focus ring) but WITHOUT
-// its `w-full` — fieldCls is tuned for a stacked full-width column (Playground);
-// this is an inline filter bar where each control should size to its content.
-const filterFieldCls =
-  'rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-small text-ink outline-none transition-colors duration-state ease-he focus:border-seal focus:ring-2 focus:ring-seal/15';
+import { Button, Panel, fieldCls, labelCls } from '@/components/ui/kit';
 
 /** RFC3339 (with offset/Z) → the value a <input type="datetime-local"> expects. */
 function toLocalInput(rfc3339: string): string {
@@ -105,7 +99,7 @@ export function RequestLogsFilters() {
             maxLength={128}
             onChange={(e) => setModel(e.target.value)}
             placeholder={t('filters.model.placeholder')}
-            className={`${filterFieldCls} tabular`}
+            className={`${fieldCls} tabular`}
           />
         </Field>
 
@@ -114,7 +108,7 @@ export function RequestLogsFilters() {
             id="logs-status"
             value={status}
             onChange={(e) => setStatus(e.target.value)}
-            className={filterFieldCls}
+            className={fieldCls}
           >
             <option value="">{t('filters.status.all')}</option>
             {LOG_STATUS_CLASSES.map((c) => (
@@ -128,7 +122,7 @@ export function RequestLogsFilters() {
             id="logs-streaming"
             value={streaming}
             onChange={(e) => setStreaming(e.target.value)}
-            className={filterFieldCls}
+            className={fieldCls}
           >
             <option value="">{t('filters.streaming.all')}</option>
             <option value="true">{t('filters.streaming.yes')}</option>
@@ -142,7 +136,7 @@ export function RequestLogsFilters() {
             type="datetime-local"
             value={start}
             onChange={(e) => setStart(e.target.value)}
-            className={`${filterFieldCls} tabular`}
+            className={`${fieldCls} tabular`}
           />
         </Field>
 
@@ -154,7 +148,7 @@ export function RequestLogsFilters() {
             aria-invalid={rangeError || undefined}
             aria-describedby={rangeError ? 'logs-range-error' : undefined}
             onChange={(e) => setEnd(e.target.value)}
-            className={`${filterFieldCls} tabular`}
+            className={`${fieldCls} tabular`}
           />
         </Field>
 
@@ -163,7 +157,7 @@ export function RequestLogsFilters() {
             id="logs-limit"
             value={limit}
             onChange={(e) => setLimit(e.target.value)}
-            className={`${filterFieldCls} tabular`}
+            className={`${fieldCls} tabular`}
           >
             {LOG_LIMIT_OPTIONS.map((n) => (
               <option key={n} value={String(n)}>{n}</option>
@@ -172,15 +166,13 @@ export function RequestLogsFilters() {
         </Field>
 
         <div className="flex gap-2">
-          {/* Filter-bar affirmative action uses INK, never seal (that's reserved
-              for the export CTA elsewhere on this screen — Iron Law 2). */}
-          <button
-            type="submit"
-            className="rounded-md bg-ink px-4 py-2 text-small font-medium text-paper transition-colors duration-state ease-he hover:bg-ink/90 focus:outline-none focus:ring-2 focus:ring-ink/20"
-          >
+          {/* Filter-bar actions are all secondary outlines — the screen's single
+              seal lives on the export CTA in the page header (Iron Law 2:
+              主操作至多一枚朱砂,其余次级描边). */}
+          <Button type="submit" variant="secondary">
             {t('filters.apply')}
-          </button>
-          <Button type="button" variant="secondary" onClick={onReset}>
+          </Button>
+          <Button type="button" variant="ghost" onClick={onReset}>
             {t('filters.reset')}
           </Button>
         </div>
@@ -196,8 +188,9 @@ export function RequestLogsFilters() {
 }
 
 function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: React.ReactNode }) {
+  // No extra gap — kit fieldCls already carries the mt-1.5 label→control rhythm.
   return (
-    <div className="flex flex-col gap-1.5">
+    <div>
       <label htmlFor={htmlFor} className={labelCls}>{label}</label>
       {children}
     </div>

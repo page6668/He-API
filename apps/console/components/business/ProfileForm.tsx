@@ -217,7 +217,7 @@ export function ProfileForm({ defaults, etag, currentLocale }: ProfileFormProps)
           <button
             type="button"
             onClick={() => location.reload()}
-            className="font-medium underline underline-offset-2"
+            className="rounded-sm font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-seal/30"
           >
             {t('profile.banners.concurrent_update.reload_cta')}
           </button>

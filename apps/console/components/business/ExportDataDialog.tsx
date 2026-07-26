@@ -16,11 +16,18 @@
 // closes, focus restored to CTA on close, aria-labelledby points at the
 // dialog title. RTL handled by next-intl's RTLProvider (Story 2.1).
 
-import { forwardRef, useEffect, useRef, useState, useTransition, type ReactNode } from 'react';
+import { useEffect, useRef, useState, useTransition, type ReactNode } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 
 import { requestDataExport } from '@/app/[locale]/(console)/settings/data/_actions/request-export';
 import type { CurrentExport } from '@/app/[locale]/(console)/settings/data/_actions/get-current-export';
+import { Button, Notice, Panel } from '@/components/ui/kit';
+
+// kit Button 不 forwardRef(React 18),CTA 需要 ref 做焦点恢复(BR-1.9)——
+// 与 DeleteAccountDialog 相同的手写 native button 习语,类名与 kit secondary 完全一致。
+// 导出=次级操作(描边,design-ui M6-D);朱砂只落在确认对话框内的 Confirm(每屏一枚印)。
+const secondaryBtnCls =
+  'inline-flex items-center rounded-md border border-line-strong bg-surface px-4 py-2 text-small font-medium text-ink transition-colors duration-state ease-he hover:border-ink-muted hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-seal/30 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
 
 interface ExportDataDialogProps {
   currentExport: CurrentExport;
@@ -80,31 +87,44 @@ export function ExportDataDialog({ currentExport }: ExportDataDialogProps) {
   };
 
   return (
-    <div className="space-y-4">
-      <Button
+    // 导出区卡片化 —— 与下方 Danger Zone 的 Panel 节奏对齐(1px 暖边框、p-6、零阴影)。
+    <Panel className="space-y-4">
+      <button
+        type="button"
         ref={ctaRef}
         onClick={() => setOpen(true)}
         disabled={ctaDisabled}
         title={isInProgress(currentExport) ? t('export.cta.disabled_in_progress') : undefined}
         aria-disabled={ctaDisabled}
+        className={secondaryBtnCls}
       >
         {t('export.cta.label')}
-      </Button>
+      </button>
 
       {banner === 'processing' && (
-        <Banner variant="info">{t('export.banner.processing')}</Banner>
+        <Notice tone="neutral" role="status">
+          {t('export.banner.processing')}
+        </Notice>
       )}
       {banner === 'ready' && (
-        <Banner variant="success">{t('export.banner.ready')}</Banner>
+        // 成功读数:安静的一行竹绿文字(与 ProfileForm 保存成功同款,不做满宽绿底)。
+        <div
+          role="status"
+          className="rounded-lg border border-line bg-surface px-4 py-2.5 text-small text-jade"
+        >
+          {t('export.banner.ready')}
+        </div>
       )}
       {banner === 'failed' && (
-        <Banner variant="error">{t('export.banner.failed')}</Banner>
+        <Notice tone="error" role="status">
+          {t('export.banner.failed')}
+        </Notice>
       )}
 
       {toast && (
-        <Banner variant="error" role="alert">
+        <Notice tone="error" role="alert">
           {toast}
-        </Banner>
+        </Notice>
       )}
 
       {open && (
@@ -130,77 +150,22 @@ export function ExportDataDialog({ currentExport }: ExportDataDialogProps) {
             <Button variant="ghost" onClick={() => setOpen(false)} disabled={isPending}>
               {t('export.dialog.cancel')}
             </Button>
-            <Button onClick={onConfirm} disabled={isPending}>
+            {/* 对话框内唯一的朱砂 —— 确认导出是这一屏(浮层)的主操作(铁律2)。 */}
+            <Button variant="primary" onClick={onConfirm} disabled={isPending}>
               {t('export.dialog.confirm')}
             </Button>
           </div>
         </Dialog>
       )}
-    </div>
+    </Panel>
   );
 }
 
-// ---- Inline UI primitives ----
-// Local primitives so the file is self-contained; the actual shadcn-ui
-// <Button>/<Banner> can be swapped in by a follow-up commit. The Dialog
-// below implements WCAG 2.1 AA focus management (BR-1.9) directly rather
-// than waiting for the shadcn-ui chrome to land — focus trap, restoration
-// to a caller-supplied trigger, and a document-level ESC handler.
-
-interface ButtonProps {
-  onClick?: () => void;
-  disabled?: boolean;
-  variant?: 'default' | 'ghost';
-  children: ReactNode;
-  title?: string;
-  'aria-disabled'?: boolean;
-}
-
-const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { onClick, disabled, variant = 'default', children, title, ...rest },
-  ref,
-) {
-  const base =
-    'inline-flex items-center rounded-md px-4 py-2 text-small font-medium transition-colors duration-state ease-he focus:outline-none focus:ring-2 disabled:cursor-not-allowed';
-  const variants = {
-    // 本屏唯一朱砂:CTA 与其对话框内的 Confirm 是同一动作的两步(触发/完成),
-    // 不算两处朱砂 —— 打开对话框时 CTA 已被 ink 暗色遮罩挡住(design-system.md 铁律2)。
-    default: 'bg-seal text-white hover:bg-seal-hover focus:ring-seal/30 disabled:opacity-40',
-    ghost: 'text-ink-secondary hover:bg-surface-sunken hover:text-ink focus:ring-ink/15 disabled:opacity-50',
-  };
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className={`${base} ${variants[variant]}`}
-      ref={ref}
-      {...rest}
-    >
-      {children}
-    </button>
-  );
-});
-
-interface BannerProps {
-  variant: 'info' | 'success' | 'error';
-  children: ReactNode;
-  role?: 'alert' | 'status';
-}
-
-function Banner({ variant, children, role = 'status' }: BannerProps) {
-  const styles = {
-    info: 'border-line bg-surface text-ink-secondary',
-    success: 'border-jade/30 bg-jade/5 text-jade',
-    error: 'border-crimson/30 bg-crimson/5 text-crimson',
-  } as const;
-  return (
-    <div role={role} className={`rounded-lg border px-4 py-2.5 text-small ${styles[variant]}`}>
-      {children}
-    </div>
-  );
-}
+// ---- Inline Dialog primitive ----
+// Button/Notice/Panel 已换用 kit 共享基元;Dialog 保留本地实现 —— 它直接实现了
+// WCAG 2.1 AA 焦点管理(BR-1.9):focus trap、恢复到调用方提供的触发器、
+// document 级 ESC 处理。面板样式与 kit Panel 对齐(1px 暖边框、零阴影,
+// 仅浮层允许 shadow-overlay)。
 
 interface DialogProps {
   titleId: string;

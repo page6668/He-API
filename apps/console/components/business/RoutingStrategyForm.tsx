@@ -122,7 +122,7 @@ export function RoutingStrategyForm({
                   value={choice}
                   checked={isSelected}
                   onChange={() => setSelected(choice)}
-                  className="mt-1 h-4 w-4 border-line-strong text-ink accent-ink focus:outline-none focus:ring-2 focus:ring-ink/15"
+                  className="mt-1 h-4 w-4 border-line-strong text-ink accent-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-seal/30"
                 />
                 <span>
                   <span className="block text-small font-medium text-ink">
@@ -142,7 +142,11 @@ export function RoutingStrategyForm({
       {result?.kind === 'concurrent_update' && (
         <Notice tone="warning" role="alert">
           {t('routing.banners.concurrent_update.message')}{' '}
-          <button type="button" onClick={() => location.reload()} className="font-medium underline underline-offset-2">
+          <button
+            type="button"
+            onClick={() => location.reload()}
+            className="rounded-sm font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-seal/30"
+          >
             {t('routing.banners.concurrent_update.reload_cta')}
           </button>
         </Notice>

@@ -17,7 +17,7 @@ import { useTranslations } from 'next-intl';
 import { type LogEntry, type LogStatusClass, type UsageLogsPage } from '@/lib/api/me-usage';
 import { LtrText } from '@/components/business/LtrText';
 import { openSupportWithRequestId } from '@/lib/intercom/messenger';
-import { EmptyState, Panel } from '@/components/ui/kit';
+import { Badge, EmptyState, Panel } from '@/components/ui/kit';
 
 export interface RequestLogsTableProps {
   page: UsageLogsPage;
@@ -39,12 +39,12 @@ const STATUS_ICON: Record<LogStatusClass, string> = {
   server_error: '✕',
 };
 
-// Semantic status colour, always paired with the icon+text above (never
-// colour-alone) — design-system.md STATUS COLORS.
-const STATUS_COLOR: Record<LogStatusClass, string> = {
-  success: 'text-jade',
-  client_error: 'text-ochre',
-  server_error: 'text-crimson',
+// Status class → kit Badge tone (2xx→jade / 4xx→ochre / 5xx→crimson), always
+// paired with the icon+text above (never colour-alone) — design-system.md.
+const STATUS_TONE: Record<LogStatusClass, 'success' | 'warning' | 'error'> = {
+  success: 'success',
+  client_error: 'warning',
+  server_error: 'error',
 };
 
 function formatNumber(n: number, locale: string): string {
@@ -91,15 +91,17 @@ export function RequestLogsTable({ page, locale, resetHref }: RequestLogsTablePr
       <table className="w-full text-small">
         <caption className="sr-only">{t('table.caption')}</caption>
         <thead className="border-b border-line bg-surface-sunken text-start">
+          {/* Numeric readout columns (time/tokens/latency) right-align via the
+              logical `text-end` (RTL-safe) — 数字右对齐可比 (Iron Law 1). */}
           <tr>
-            <th scope="col" className="px-3 py-3 text-label font-medium text-ink-muted">{t('table.columns.time')}</th>
-            <th scope="col" className="px-3 py-3 text-label font-medium text-ink-muted">{t('table.columns.model')}</th>
-            <th scope="col" className="px-3 py-3 text-label font-medium text-ink-muted">{t('table.columns.status')}</th>
-            <th scope="col" className="px-3 py-3 text-label font-medium text-ink-muted">{t('table.columns.streaming')}</th>
-            <th scope="col" className="px-3 py-3 text-label font-medium text-ink-muted">{t('table.columns.tokens')}</th>
-            <th scope="col" className="px-3 py-3 text-label font-medium text-ink-muted">{t('table.columns.latency')}</th>
-            <th scope="col" className="px-3 py-3 text-label font-medium text-ink-muted">{t('table.columns.apiKey')}</th>
-            <th scope="col" className="px-3 py-3 text-label font-medium text-ink-muted">{t('table.columns.requestId')}</th>
+            <th scope="col" className="px-3 py-2 text-end text-label font-medium text-ink-muted">{t('table.columns.time')}</th>
+            <th scope="col" className="px-3 py-2 text-start text-label font-medium text-ink-muted">{t('table.columns.model')}</th>
+            <th scope="col" className="px-3 py-2 text-start text-label font-medium text-ink-muted">{t('table.columns.status')}</th>
+            <th scope="col" className="px-3 py-2 text-start text-label font-medium text-ink-muted">{t('table.columns.streaming')}</th>
+            <th scope="col" className="px-3 py-2 text-end text-label font-medium text-ink-muted">{t('table.columns.tokens')}</th>
+            <th scope="col" className="px-3 py-2 text-end text-label font-medium text-ink-muted">{t('table.columns.latency')}</th>
+            <th scope="col" className="px-3 py-2 text-start text-label font-medium text-ink-muted">{t('table.columns.apiKey')}</th>
+            <th scope="col" className="px-3 py-2 text-start text-label font-medium text-ink-muted">{t('table.columns.requestId')}</th>
           </tr>
         </thead>
         <tbody>
@@ -127,29 +129,32 @@ function LogRow({ row, locale, t }: LogRowProps) {
           bidi-neutral values stay left-to-right even under an ar (RTL) document.
           Timestamps/tokens/latency are numeric readouts and model id is a
           technical value — all `tabular` (Iron Law 1). */}
-      <LtrText as="td" className="tabular whitespace-nowrap px-3 py-3 text-ink">
+      <LtrText as="td" className="tabular whitespace-nowrap px-3 py-2.5 text-end text-ink">
         {formatTimestamp(row.ts, locale)}
       </LtrText>
-      <LtrText as="td" className="tabular px-3 py-3 text-ink">{row.model}</LtrText>
-      <td className="px-3 py-3">
-        {/* text + icon, NOT colour-only (WCAG 1.4.1) */}
-        <span className={`inline-flex items-center gap-1 ${STATUS_COLOR[cls]}`} data-status={cls}>
-          <span aria-hidden="true">{STATUS_ICON[cls]}</span>
-          <span>{t(`status.${cls}`)}</span>
-          <span className="sr-only">({row.status_code})</span>
-        </span>
+      <LtrText as="td" className="tabular px-3 py-2.5 text-ink">{row.model}</LtrText>
+      <td className="px-3 py-2.5">
+        {/* Status class → kit Badge (2xx 绿/4xx 黄/5xx 红); text + icon inside,
+            NOT colour-only (WCAG 1.4.1); the numeric code is a readout → tabular. */}
+        <Badge tone={STATUS_TONE[cls]} className="gap-1 whitespace-nowrap">
+          <span className="inline-flex items-center gap-1" data-status={cls}>
+            <span aria-hidden="true">{STATUS_ICON[cls]}</span>
+            <span>{t(`status.${cls}`)}</span>
+            <span className="tabular" dir="ltr">{row.status_code}</span>
+          </span>
+        </Badge>
       </td>
-      <td className="px-3 py-3 text-ink-secondary">
+      <td className="px-3 py-2.5 text-ink-secondary">
         {row.is_streaming ? t('table.streaming.yes') : t('table.streaming.no')}
       </td>
-      <LtrText as="td" className="tabular px-3 py-3 text-ink">{formatNumber(row.total_tokens, locale)}</LtrText>
-      <LtrText as="td" className="tabular whitespace-nowrap px-3 py-3 text-ink">
+      <LtrText as="td" className="tabular px-3 py-2.5 text-end text-ink">{formatNumber(row.total_tokens, locale)}</LtrText>
+      <LtrText as="td" className="tabular whitespace-nowrap px-3 py-2.5 text-end text-ink">
         {formatNumber(row.latency_ms_total, locale)} {t('table.latencyUnit')}
       </LtrText>
-      <td className="px-3 py-3">
+      <td className="px-3 py-2.5">
         <code className="tabular text-small text-ink-secondary" dir="ltr" title={row.api_key_id}>{row.api_key_id}</code>
       </td>
-      <td className="px-3 py-3">
+      <td className="px-3 py-2.5">
         <code className="tabular text-small text-ink-secondary" dir="ltr">{row.he_request_id}</code>
         {/* Story 10.7 AC2 (BR-10.7.9 / front-end-spec:537) — one-click brings
             the non-PII he_request_id handle into the customer-support session.

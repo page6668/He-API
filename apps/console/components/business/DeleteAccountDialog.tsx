@@ -31,11 +31,13 @@ const nfc = (s: string) => s.normalize('NFC');
 // kit.tsx's Button doesn't forwardRef (React 18) and this file needs refs for
 // focus management (restoreFocusTo / initialFocusRef) — hand-rolled native
 // <button>s carrying the same design tokens, mirroring Playground.tsx's idiom.
-// Destructive action → crimson outline, never seal (design-system.md 铁律2).
+// Destructive action → crimson outline, never seal (design-system.md 铁律2);
+// 红色只出现在描边/文字,不整块红底(危险区降噪)。focus-visible 环统一走朱砂
+// (与 kit Button 一致:focus ring 一律 seal,contrast_floor 永不移除)。
 const dangerBtnCls =
-  'inline-flex items-center rounded-md border border-crimson/40 bg-transparent px-4 py-2 text-small font-medium text-crimson transition-colors duration-state ease-he hover:bg-crimson/5 focus:outline-none focus:ring-2 focus:ring-crimson/25 disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex items-center rounded-md border border-crimson/40 bg-transparent px-4 py-2 text-small font-medium text-crimson transition-colors duration-state ease-he hover:bg-crimson/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-seal/30 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
 const ghostBtnCls =
-  'rounded-md px-4 py-2 text-small font-medium text-ink-secondary transition-colors duration-state ease-he hover:bg-surface-sunken hover:text-ink focus:outline-none focus:ring-2 focus:ring-ink/15 disabled:cursor-not-allowed disabled:opacity-50';
+  'rounded-md px-4 py-2 text-small font-medium text-ink-secondary transition-colors duration-state ease-he hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-seal/30 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
 
 export function DeleteAccountDialog({ state, email, locale }: DeleteAccountDialogProps) {
   const t = useTranslations('account.delete');
