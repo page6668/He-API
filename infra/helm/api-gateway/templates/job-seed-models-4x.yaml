@@ -1,0 +1,76 @@
+# 一次性种子(b5e9e31 路由的 DB 侧收尾)—— 4 个新模型的 models 行 + 占位定价。
+#
+# 为什么走 ArgoCD Sync hook 而不是跳板机 kubectl:2026-07-24 apiserver 短暂宕机
+# 打断了手工执行,且本地/CI 均无集群凭据;api-gateway 应用是 automated 同步,
+# hook 让 GitOps 通道代跑,与 migrate-0021 同一执行模式(psql + he-api-db-creds,
+# 纯 DML 用应用账号即可)。
+#
+# 幂等:models 为 upsert;定价用 WHERE NOT EXISTS 防重复 effective_at 行 ——
+# 每次同步重跑均安全。BeforeHookCreation 保留上次 Job 供查日志:
+#   kubectl -n he-api-staging logs job/seed-models-4x
+# 验证通过后删除本文件(prune: true 会自动清掉集群内残留)。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: seed-models-4x-sql
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  seed.sql: |
+    INSERT INTO he_api.models (id, display_name, vendor, capabilities, status, last_seen_upstream_at) VALUES
+      ('qwen3.6-plus','Qwen3.6 Plus','alibaba','{"chat":true,"streaming":true,"function_calling":true,"vision":false,"json_mode":true,"context_window_tokens":131072,"max_output_tokens":8192}'::jsonb,'active',NOW()),
+      ('qwen3.6-max-preview','Qwen3.6 Max Preview','alibaba','{"chat":true,"streaming":true,"function_calling":true,"vision":false,"json_mode":true,"context_window_tokens":131072,"max_output_tokens":8192}'::jsonb,'active',NOW()),
+      ('glm-5.2-fast-preview','GLM-5.2 Fast','zhipu','{"chat":true,"streaming":true,"function_calling":true,"vision":false,"json_mode":true,"context_window_tokens":131072,"max_output_tokens":8192}'::jsonb,'active',NOW()),
+      ('kimi-k2.7-code','Kimi K2.7 Code','moonshot','{"chat":true,"streaming":true,"function_calling":true,"vision":false,"json_mode":true,"context_window_tokens":131072,"max_output_tokens":8192}'::jsonb,'active',NOW())
+    ON CONFLICT (id) DO UPDATE SET display_name=EXCLUDED.display_name, vendor=EXCLUDED.vendor, capabilities=EXCLUDED.capabilities, status='active', updated_at=NOW();
+    INSERT INTO he_api.model_pricing (model_id, effective_at, upstream_price_per_1k_input_tokens, upstream_price_per_1k_output_tokens)
+    SELECT v.mid, NOW(), v.pin, v.pout FROM (VALUES
+      ('qwen3.6-plus',         0.000800, 0.002000),
+      ('qwen3.6-max-preview',  0.004000, 0.012000),
+      ('glm-5.2-fast-preview', 0.001000, 0.003000),
+      ('kimi-k2.7-code',       0.004000, 0.004000)
+    ) AS v(mid, pin, pout)
+    WHERE NOT EXISTS (SELECT 1 FROM he_api.model_pricing p WHERE p.model_id = v.mid);
+    SELECT m.id, m.status, p.upstream_price_per_1k_input_tokens AS in_1k, p.upstream_price_per_1k_output_tokens AS out_1k
+    FROM he_api.models m LEFT JOIN he_api.model_pricing p ON p.model_id = m.id
+    WHERE m.id IN ('qwen3.6-plus','qwen3.6-max-preview','glm-5.2-fast-preview','kimi-k2.7-code');
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed-models-4x
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: psql
+          image: postgres:16-alpine
+          command: ["/bin/sh", "-c"]
+          args:
+            - psql "$HE_API_DB_POSTGRES_URI" -v ON_ERROR_STOP=1 --single-transaction -f /sql/seed.sql
+          envFrom:
+            # 纯 DML(INSERT/UPDATE),应用账号即可 —— 同 migrate-0021。
+            - secretRef:
+                name: he-api-db-creds
+          volumeMounts:
+            - name: sql
+              mountPath: /sql
+              readOnly: true
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: sql
+          configMap:
+            name: seed-models-4x-sql
