@@ -35,11 +35,6 @@ service:
     service.beta.kubernetes.io/alibaba-cloud-loadbalancer-address-type: internet
     service.beta.kubernetes.io/alibaba-cloud-loadbalancer-spec: slb.s1.small
     service.beta.kubernetes.io/alibaba-cloud-loadbalancer-charge-type: paybytraffic
-    # sync-nudge:hook 资源不参与 ArgoCD diff,仅含 hook 的提交(e552b3c)不会让应用
-    # OutOfSync,automated 同步不触发,seed-models-4x 一直没跑。此注解改动 Service
-    # 元数据(CCM 忽略非 alibaba 前缀注解,不碰 SLB、不重启 pod),强制一次同步以
-    # 执行 hook。hook 文件删除时本注解一并移除。
-    he-api/sync-nudge: seed-models-4x-r1
 networkPolicy:
   # 最小化 staging:LoadBalancer 直连,关闭 default-deny(它只放行 ingress-nginx
   # 命名空间,会挡住 SLB→pod 流量)。需要收紧时改回 true + 放行 SLB 源。
