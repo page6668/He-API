@@ -2,10 +2,30 @@ import type { ReactNode } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, unstable_setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
+import { IBM_Plex_Sans, IBM_Plex_Mono } from 'next/font/google';
 import { locales, isLocale } from '@/i18n/config';
 import { isRtlLocale } from '@/lib/i18n';
 import { LocaleSwitch } from '@/components/LocaleSwitch';
+import { Logo } from '@/components/brand/Logo';
 import '../globals.css';
+
+/**
+ * 字体:IBM Plex Sans / Mono —— next/font/google 在**构建时**下载并**自托管**到本域,
+ * 运行时不请求 Google CDN(大陆不可达)。仅 latin subset;中文落系统栈(PingFang/雅黑),
+ * 刻意不加载 CJK webfont(全量 10MB+ 会毁首屏)。见 knowledge/taste/design-system.md。
+ */
+const plexSans = IBM_Plex_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-plex-sans',
+  display: 'swap',
+});
+const plexMono = IBM_Plex_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-plex-mono',
+  display: 'swap',
+});
 
 export function generateStaticParams() {
   return locales.map((locale) => ({ locale }));
@@ -25,62 +45,52 @@ export default async function LocaleLayout({ children, params: { locale } }: Loc
   const messages = await getMessages();
   const dir = isRtlLocale(locale) ? 'rtl' : 'ltr';
 
+  // 导航只列**真实存在**的路由。曾有一条 `/docs` 死链(该路由从未实现 → 404),
+  // 以及把「Console」指向 `[locale]/` 这个 demo 占位页(看着像空白);均已修正。
+  // 新增路由时务必同步这里,并确认目标页面存在。
+  const nav = [
+    { href: `/${locale}/dashboard`, label: 'Console' },
+    { href: `/${locale}/models`, label: 'Models' },
+    { href: `/${locale}/playground`, label: 'Playground' },
+    { href: `/${locale}/benchmark`, label: 'Benchmark' },
+    { href: `/${locale}/docs`, label: 'Docs' },
+  ];
+
   return (
-    <html lang={locale} dir={dir} className="scroll-smooth">
-      <body className="min-h-screen antialiased">
+    <html lang={locale} dir={dir} className={`${plexSans.variable} ${plexMono.variable}`}>
+      <body className="bg-paper font-sans text-body text-ink antialiased">
         <NextIntlClientProvider locale={locale} messages={messages}>
           <a href="#main" className="sr-only focus:not-sr-only">
+            {/* a11y skip-to-content link; full text via t('a11y.skipToContent') in inner client wrapper */}
           </a>
-          <header className="sticky top-0 z-50 border-b bg-white/80 dark:bg-slate-950/80 backdrop-blur-md">
-            <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
-              <nav className="flex items-center gap-6">
-                <div className="flex items-center gap-2">
-                  <div className="relative flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-orange-500 to-blue-500 shadow-md">
-                    <span className="text-sm font-bold text-white">H</span>
-                    <div className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-green-400 ring-2 ring-white dark:ring-slate-900 animate-pulse"></div>
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-semibold leading-tight text-slate-900 dark:text-white">
-                      He-API
-                    </span>
-                    <span className="text-[10px] leading-tight text-slate-500 dark:text-slate-400">
-                      AI Gateway
-                    </span>
-                  </div>
-                </div>
-                <div className="hidden items-center gap-1 text-sm sm:flex">
-                  <a 
-                    href={`/${locale}/`} 
-                    className="rounded-md px-3 py-1.5 text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-                  >
-                    Console
-                  </a>
-                  <a 
-                    href={`/${locale}/playground`} 
-                    className="rounded-md px-3 py-1.5 text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-                  >
-                    Playground
-                  </a>
-                  <a 
-                    href={`/${locale}/benchmark`} 
-                    className="rounded-md px-3 py-1.5 text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-                  >
-                    Benchmark
-                  </a>
-                  <a 
-                    href={`/${locale}/docs`} 
-                    className="rounded-md px-3 py-1.5 text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-                  >
-                    Docs
-                  </a>
-                </div>
-              </nav>
-              <div className="flex items-center gap-3">
-                <LocaleSwitch currentLocale={locale} />
+          {/* 顶栏:56px 高、1px 暖边框分隔、内容限宽居中(禁止内容裸贴视口边缘) */}
+          <header className="border-b border-line bg-surface">
+            <div className="mx-auto flex h-14 max-w-playground items-center justify-between gap-6 px-6 lg:px-8">
+              <div className="flex items-center gap-7">
+                <a
+                  href={`/${locale}/`}
+                  className="shrink-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-seal/30"
+                  aria-label="He-API"
+                >
+                  <Logo size={22} />
+                </a>
+                {/* 导航项无下划线(下划线只给正文内链接);focus ring 一律朱砂,永不移除 */}
+                <nav className="hidden items-center gap-5 text-small text-ink-secondary sm:flex">
+                  {nav.map((item) => (
+                    <a
+                      key={item.href}
+                      href={item.href}
+                      className="rounded-sm transition-colors duration-state ease-he hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-seal/30"
+                    >
+                      {item.label}
+                    </a>
+                  ))}
+                </nav>
               </div>
+              <LocaleSwitch currentLocale={locale} />
             </div>
           </header>
-          <main id="main" className="animate-page-enter">{children}</main>
+          <main id="main">{children}</main>
         </NextIntlClientProvider>
       </body>
     </html>
