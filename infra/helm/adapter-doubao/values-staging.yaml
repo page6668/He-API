@@ -4,7 +4,7 @@
 # replicaCount, supportedModels, externalSecret).
 image:
   repository: he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com/he-api/adapter-doubao
-  tag: "64fbf4456eaf7065783d5fb1adc9bba2be54a8a4"
+  tag: "87fe45f9f7a99fc992a8bd7b16b9f124ac8362f9"
   pullPolicy: IfNotPresent
 # staging: ESO/Vault 延后(Epic 9)→ 手建 K8s Secret adapter-doubao-upstream-api-key
 # (docs/runbooks/staging-secrets-hongkong-minimal.md)。关掉 ExternalSecret,避免 ESO
