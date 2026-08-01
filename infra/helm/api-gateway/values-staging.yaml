@@ -23,7 +23,7 @@
 # deploy-time token (T0.3); image.tag is SHA-bumped by deploy-staging (BR4.1).
 image:
   repository: he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com/he-api/api-gateway
-  tag: "87fe45f9f7a99fc992a8bd7b16b9f124ac8362f9"
+  tag: "1d33076e251696a994debdd2c7e8b6f42001637d"
   pullPolicy: IfNotPresent
 service:
   # 香港最省档公网入口:LoadBalancer → ACK 自动开一个 SLB + 公网 IP。
@@ -46,7 +46,7 @@ serviceAccount:
 safetyLogRetention:
   image:
     repository: he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com/he-api/safety-log-retention
-    tag: "87fe45f9f7a99fc992a8bd7b16b9f124ac8362f9"
+    tag: "1d33076e251696a994debdd2c7e8b6f42001637d"
     pullPolicy: IfNotPresent
 # B5 — staging Ingress for the public traffic entrypoint. ingressClassName points
 # at the staging ingress-nginx controller (a cluster prerequisite — see Dev
@@ -80,5 +80,5 @@ modelsSync:
   enabled: true
   image:
     repository: he-api-registry-vpc.cn-hongkong.cr.aliyuncs.com/he-api/models-sync
-    tag: "87fe45f9f7a99fc992a8bd7b16b9f124ac8362f9"
+    tag: "1d33076e251696a994debdd2c7e8b6f42001637d"
     pullPolicy: IfNotPresent
