@@ -20,7 +20,6 @@ ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0
 COPY --from=build /app/apps/console/.next/standalone ./
 COPY --from=build /app/apps/console/.next/static ./apps/console/.next/static
 COPY --from=build /app/apps/console/public ./apps/console/public
-RUN chown -R node:node /app
 USER node
 EXPOSE 3000
 CMD ["node", "apps/console/server.js"]
