@@ -417,6 +417,60 @@ jobs:
           echo "=== Release assets ==="
           ls -lh release-assets/
 
+      # ── 方案 A：把 15 个 Go 服务分包合并为一个 he-api-<tag>-linux-amd64.tar.gz ──
+      # 这样 install.sh --release 能直接下载这个合并包，无需改 install.sh。
+      # Console 单独打包（he-api-console-<tag>-linux-amd64.tar.gz），不解压进 Go 合并包。
+      - name: Create combined Go binaries tarball
+        run: |
+          set -e
+          tag="${{ github.ref_name }}"
+          combined="combined-bin"
+          mkdir -p "$combined"
+
+          # 15 个 Go 服务的 artifact 目录名（与 upload-artifact name: 对应）
+          declare -a services=(
+            he-api-api-gateway
+            he-api-auth-svc
+            he-api-billing-svc
+            he-api-payment-svc
+            he-api-notification-svc
+            he-api-routing-svc
+            he-api-analytics-svc
+            he-api-adapter-deepseek
+            he-api-adapter-qwen
+            he-api-adapter-doubao
+            he-api-adapter-glm
+            he-api-adapter-ernie
+            he-api-adapter-kimi
+            he-api-sample-grpc-app
+            he-api-sample-otel-app
+          )
+
+          for svc in "${services[@]}"; do
+            artifact_dir="artifacts/${svc}"
+            if [[ ! -d "$artifact_dir" ]]; then
+              echo "::warning::Artifact directory not found: $artifact_dir"
+              continue
+            fi
+            tarball=$(ls "$artifact_dir"/he-api-*-${tag}.tar.gz 2>/dev/null | head -1)
+            if [[ -z "$tarball" ]]; then
+              echo "::warning::No tarball found for $svc with tag $tag"
+              continue
+            fi
+            echo "Extracting $tarball"
+            tar -xzf "$tarball" -C "$combined"
+          done
+
+          echo "Combined binary dir contents:"
+          ls -lh "$combined"
+
+          # 打包为 install.sh --release 期望的命名
+          combined_tar="he-api-${tag}-linux-amd64.tar.gz"
+          tar -czf "release-assets/${combined_tar}" -C "$combined" .
+          (cd release-assets && sha256sum "${combined_tar}" | awk '{print $1}' > "${combined_tar}.sha256")
+          echo "Created: $combined_tar"
+          ls -lh release-assets/
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -431,10 +485,16 @@ jobs:
 
             ### 部署方式
             ```bash
-            # 在目标服务器上
+            # 在目标服务器上（install.sh 自动下载 Go 合并包 + Console 包）
             curl -fsSL https://raw.githubusercontent.com/page6668/He-API/main/deploy/bare-metal/install.sh \
               | bash -s -- --release ${{ github.ref_name }}
             ```
+
+            ### Release 产物说明
+            - **`he-api-${{ github.ref_name }}-linux-amd64.tar.gz`**（Go 合并包）：包含全部 15 个 Go 服务二进制，
+              解压到 `/opt/he-api/bin/`，install.sh --release 使用此包。
+            - **`he-api-console-${{ github.ref_name }}-linux-amd64.tar.gz`**（Console 包）：Next.js standalone 产物，
+              解压到 `/opt/he-api/console/`。
 
             ### 包含的服务（15 个）
             | 服务 | 端口 |
