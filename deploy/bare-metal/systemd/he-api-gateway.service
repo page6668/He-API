@@ -1,8 +1,11 @@
 [Unit]
 Description=He-API Gateway
 Documentation=https://github.com/he-api/he-api
-After=network-online.target
-Wants=network-online.target
+# 基础设施（PG/Redis/Kafka）为外部服务，此处仅编排 He-API 内部服务启动顺序：
+# 网关必须在下游服务就绪后再启动，避免冷启动期间请求打到未就绪服务。
+# 使用 Wants（非 Requires）以便单个下游失败时不阻塞网关启动，仅保证顺序。
+After=network-online.target he-auth-svc.service he-billing-svc.service he-payment-svc.service he-notification-svc.service he-routing-svc.service he-analytics-svc.service he-adapter-deepseek.service he-adapter-qwen.service he-adapter-doubao.service he-adapter-glm.service he-adapter-ernie.service he-adapter-kimi.service
+Wants=network-online.target he-auth-svc.service he-billing-svc.service he-payment-svc.service he-notification-svc.service he-routing-svc.service he-analytics-svc.service
 
 [Service]
 Type=simple

@@ -134,6 +134,9 @@ scp -r _output/bin/ ubuntu@your-server:/tmp/he-api-bin/
 sudo /path/to/install.sh --local /tmp/he-api-bin/
 ```
 
+> 安装脚本会自动生成 JWT RSA 密钥对（`/opt/he-api/keys/jwt_private.pem` +
+> `jwt_public.pem`），auth-svc 用私钥签名、网关用公钥验签，两者自动配对，无需手动配置。
+
 ### 方式三：手动部署
 
 ```bash
@@ -169,14 +172,17 @@ sudo systemctl enable he-api-gateway he-auth-svc ...
 
 | 变量 | 示例值 | 说明 |
 |------|--------|------|
-| `HE_API_DB_POSTGRES_URI` | `postgresql://user:pass@127.0.0.1:5432/heapi` | PostgreSQL 连接串 |
-| `HE_API_REDIS_URL` | `redis://127.0.0.1:6379/0` | Redis 连接串 |
-| `HE_API_JWT_SECRET` | `openssl rand -hex 32` 的输出 | JWT 签名密钥，**必须 32+ 字符** |
+| `HE_API_DB_POSTGRES_URI` | `postgres://he_api:pass@127.0.0.1:5432/he_api?sslmode=disable` | PostgreSQL 连接串 |
+| `HE_API_REDIS_URL` | `redis://127.0.0.1:6379/0` | Redis 连接串（gateway/billing 用） |
+| `HE_API_JWT_PUBLIC_KEY_PATH` | `/opt/he-api/keys/jwt_public.pem` | JWT 验签公钥（install.sh 自动生成） |
+| `HE_API_KAFKA_BROKERS` | `localhost:9092` | Kafka Broker 地址 |
 | `HE_API_OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4317` | OTEL Collector 地址 |
 
 #### `auth.env` — 认证服务
 
-> 注意：`HE_API_JWT_SECRET` 必须与 `gateway.env` **完全一致**。
+> JWT 采用 **RSA 公私钥对**：auth-svc 用 `HE_API_JWT_PRIVATE_KEY_PATH`（私钥）签名，
+> 网关用 `HE_API_JWT_PUBLIC_KEY_PATH`（公钥）验签。两者由 install.sh 自动生成并配对，
+> 无需手动填写密钥字符串。auth-svc 同时读取 `HE_API_DB_POSTGRES_URI` 与 `HE_API_DATABASE_URL`。
 
 #### `payment.env` — 支付服务
 
@@ -186,16 +192,16 @@ sudo systemctl enable he-api-gateway he-auth-svc ...
 |------|------|
 | `STRIPE_SECRET_KEY` | Stripe |
 | `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` | PayPal |
-| `ALIPAY_APP_ID` / `ALIPAY_PRIVATE_KEY` / `ALIPAY_PUBLIC_KEY` | 支付宝 |
-| `WECHAT_MCHID` / `WECHAT_API_KEY` | 微信支付 |
+| `ALIPAY_PLUS_CLIENT_ID` / `ALIPAY_PLUS_MERCHANT_PRIVATE_KEY` / `ALIPAY_PLUS_ALIPAY_PUBLIC_KEY` | 支付宝 Alipay+ |
+| `WECHAT_PAY_MCH_ID` / `WECHAT_PAY_APIV3_KEY` / `WECHAT_PAY_MERCHANT_PRIVATE_KEY` | 微信支付 ApiV3 |
 | `COINBASE_COMMERCE_API_KEY` | Coinbase Commerce |
 
 #### `analytics.env` — 分析服务
 
 | 变量 | 说明 |
 |------|------|
-| `HE_API_CLICKHOUSE_URI` | ClickHouse 连接串 |
-| `HE_API_OSS_*` | 阿里云/腾讯云 OSS（报表导出） |
+| `HE_API_CLICKHOUSE_DSN` | ClickHouse 连接串（注意变量名是 `_DSN` 而非 `_URI`） |
+| `HE_API_OSS_GDPR_EXPORTS_BUCKET` | OSS bucket（GDPR 数据导出存放） |
 
 #### `adapter-*.env` — 各 LLM 适配器
 
@@ -418,7 +424,7 @@ sudo systemctl list-unit-files 'he-api-*'
 
 ### Q: JWT 验证失败（401 Unauthorized）
 
-检查 `auth.env` 和 `gateway.env` 的 `HE_API_JWT_SECRET` 是否完全一致。
+检查 `auth.env` 的 `HE_API_JWT_PRIVATE_KEY_PATH` 与 `gateway.env` 的 `HE_API_JWT_PUBLIC_KEY_PATH` 是否指向 install.sh 生成的同一对密钥（`/opt/he-api/keys/jwt_private.pem` + `jwt_public.pem`）。两者必须配对，否则网关验签会 401。
 
 ### Q: 适配器连接超时
 

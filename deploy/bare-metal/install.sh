@@ -59,9 +59,32 @@ create_user() {
 
 create_dirs() {
     log_info "创建目录结构 ..."
-    mkdir -p /opt/he-api/{bin,env,logs,data}
+    mkdir -p /opt/he-api/{bin,env,logs,data,keys}
     chown -R he-api:he-api /opt/he-api
     log_info "目录 /opt/he-api/* 已创建并授权"
+}
+
+# ---------- JWT 密钥对生成 ----------
+# gateway 用公钥验签，auth-svc 用私钥签名，两者必须配对。
+# 若密钥已存在则跳过（不覆盖，避免重置已签发的 JWT）。
+gen_jwt_keys() {
+    local priv="/opt/he-api/keys/jwt_private.pem"
+    local pub="/opt/he-api/keys/jwt_public.pem"
+    if [[ -f "$priv" && -f "$pub" ]]; then
+        log_info "JWT 密钥对已存在，跳过生成"
+        return 0
+    fi
+    if ! command -v openssl &>/dev/null; then
+        log_error "缺少 openssl，无法生成 JWT 密钥对。请先安装后重新运行。"
+        exit 1
+    fi
+    log_info "生成 JWT RSA 密钥对 ..."
+    openssl genrsa -out "$priv" 2048 2>/dev/null
+    openssl rsa -in "$priv" -pubout -out "$pub" 2>/dev/null
+    chown he-api:he-api "$priv" "$pub"
+    chmod 600 "$priv"
+    chmod 644 "$pub"
+    log_info "JWT 密钥对已生成: $priv / $pub"
 }
 
 # ---------- 二进制下载 ----------
@@ -236,6 +259,7 @@ main() {
     check_deps
     create_user
     create_dirs
+    gen_jwt_keys
 
     if [[ "$SOURCE_TYPE" == "release" ]]; then
         download_release "$RELEASE_VERSION"

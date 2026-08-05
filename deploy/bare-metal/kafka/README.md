@@ -87,13 +87,17 @@ sudo ./create-topics.sh
 
 | Topic 名称 | 用途 | 分区数 | 保留期 | 说明 |
 |-----------|------|--------|--------|------|
-| `billing.usage` | 计费用量事件 | 6 | 7 天 | 高频写入，ClickHouse 消费后作缓冲 |
-| `audit.event` | 审计日志事件 | 3 | 30 天 | 合规要求长期保留，ClickHouse 归档 |
-| `gdpr.export.requested` | GDPR 导出请求 | 1 | 7 天 | 低频，触发数据导出流程 |
-| `notification.events` | 系统通知事件 | 3 | 7 天 | 邮件/推送通知的触发源 |
+| `usage.recorded` | 计费用量事件（网关 → billing-svc 消费） | 6 | 7 天 | 高频写入 |
+| `usage.recorded.dlq` | 用量消费死信队列 | 1 | 30 天 | 消费失败重试耗尽后入死信 |
+| `payment.completed` | 支付完成事件（payment-svc → billing-svc 消费） | 3 | 7 天 | 充值到账触发计费更新 |
+| `request.logged` | 请求日志事件（网关 → analytics-svc 消费） | 6 | 7 天 | 高频写入 |
+| `request.logged.dlq` | 请求日志死信队列 | 1 | 30 天 | |
+| `audit.event` | 审计日志事件（auth-svc → notification-svc 消费） | 3 | 30 天 | 合规长期保留 |
+| `gdpr.export.requested` | GDPR 导出请求（notification-svc → analytics-svc 消费） | 1 | 7 天 | 低频 |
+| `usage.log.export.requested` | 用量日志导出请求（notification-svc → analytics-svc 消费） | 1 | 7 天 | 低频 |
 
-> **数据流**：Kafka → Flink/Consumer → ClickHouse
-> 审计日志由 ClickHouse 存储，Kafka 仅作缓冲和分发。
+> Topic 名与代码严格对应，详见 `create-topics.sh` 顶部注释。
+> Kafka 仅作事件缓冲与分发，持久化由 PostgreSQL / ClickHouse 完成。
 
 ---
 
@@ -111,7 +115,7 @@ ss -tlnp | grep -E '9092|9093'
 
 # 查看某个 Topic 详情
 /opt/kafka/bin/kafka-topics.sh \
-  --describe --topic billing.usage \
+  --describe --topic usage.recorded \
   --bootstrap-server localhost:9092
 
 # 实时查看 Kafka 日志
