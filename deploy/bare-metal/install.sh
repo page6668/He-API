@@ -59,7 +59,7 @@ create_user() {
 
 create_dirs() {
     log_info "创建目录结构 ..."
-    mkdir -p /opt/he-api/{bin,env,logs,data,keys}
+    mkdir -p /opt/he-api/{bin,env,logs,data,keys,console}
     chown -R he-api:he-api /opt/he-api
     log_info "目录 /opt/he-api/* 已创建并授权"
 }
@@ -119,6 +119,20 @@ download_release() {
     log_info "解压到 /opt/he-api/bin/ ..."
     tar -xzf "${tarball}" -C /opt/he-api/bin/ --strip-components=1
     rm -f "${tarball}"
+
+    # Console standalone 产物（与 Go 二进制同源分发）
+    local console_tar="he-api-console-${version}-${os}-${arch}.tar.gz"
+    local console_url="${base_url}/${console_tar}"
+    log_info "下载 Console v${version} (${os}/${arch}) ..."
+    log_info "URL: $console_url"
+    cd /tmp
+    if curl -L --fail --progress-bar -o "${console_tar}" "$console_url"; then
+        log_info "解压到 /opt/he-api/console/ ..."
+        tar -xzf "${console_tar}" -C /opt/he-api/
+        rm -f "${console_tar}"
+    else
+        log_warn "未找到 Console 产物 ${console_tar}，跳过（可稍后单独部署）"
+    fi
 }
 
 use_local_build() {
@@ -129,6 +143,11 @@ use_local_build() {
     fi
     log_info "从本地构建目录复制二进制: $src_dir"
     cp -r "${src_dir}"/* /opt/he-api/bin/
+    # 本地构建产物若含 console/ 子目录，一并复制
+    if [[ -d "${src_dir}/console" ]]; then
+        log_info "复制本地 Console 产物: ${src_dir}/console"
+        cp -r "${src_dir}/console" /opt/he-api/
+    fi
 }
 
 # ---------- Env 模板 ----------
@@ -163,6 +182,18 @@ install_systemd_units() {
         log_error "未找到 systemd 目录: $unit_src"
         exit 1
     fi
+    # console unit 的 ExecStart 用真实 node 路径替换占位符 /usr/bin/node
+    if [[ -f /etc/systemd/system/he-api-console.service ]]; then
+        if command -v node >/dev/null 2>&1; then
+            local node_bin
+            node_bin="$(command -v node)"
+            sed -i "s#^ExecStart=/usr/bin/node #ExecStart=${node_bin} #" \
+                /etc/systemd/system/he-api-console.service
+            log_info "console unit ExecStart 已指向 ${node_bin}"
+        else
+            log_warn "未找到 node，he-api-console.service 仍用占位 /usr/bin/node（请安装 node 20+）"
+        fi
+    fi
 }
 
 reload_systemd() {
@@ -188,6 +219,7 @@ enable_services() {
         he-analytics-svc
         he-sample-grpc-app
         he-sample-otel-app
+        he-api-console
     )
     for svc in "${services[@]}"; do
         systemctl enable "${svc}" &>/dev/null || true
@@ -222,15 +254,22 @@ print_summary() {
     echo "        he-payment-svc he-notification-svc he-routing-svc he-analytics-svc \\"
     echo "        he-adapter-deepseek he-adapter-qwen he-adapter-doubao \\"
     echo "        he-adapter-glm he-adapter-ernie he-adapter-kimi \\"
-    echo "        he-sample-grpc-app he-sample-otel-app"
+    echo "        he-sample-grpc-app he-sample-otel-app he-api-console"
     echo ""
     echo "  查看日志："
     echo "    sudo journalctl -u he-api-gateway -f"
     echo ""
     echo "  健康检查："
     echo "    curl http://localhost:8080/healthz"
+    echo "    curl -I http://localhost:3000/   # console"
     echo ""
-    echo "  nginx 配置（复制到 /etc/nginx/conf.d/）："
+    echo "  console 前端："
+    echo "    - 已部署到 /opt/he-api/console（pnpm deploy --prod + next start，systemd: he-api-console）"
+    echo "    - 构建期变量 NEXT_PUBLIC_* 已烘焙；如需改域名，重新构建："
+    echo "        bash ${SCRIPT_DIR}/build-console.sh <repo-root> /tmp/console-out"
+    echo "      tar -czf console.tgz -C /tmp/console-out console && 解压到 /opt/he-api/"
+    echo ""
+    echo "  nginx 配置（同源单域：/ → console，/v1 → gateway）："
     echo "    sudo cp ${SCRIPT_DIR}/nginx/he-api.conf /etc/nginx/conf.d/"
     echo "    sudo nginx -t && sudo systemctl reload nginx"
     echo ""

@@ -10,6 +10,7 @@
 deploy/bare-metal/
 ├── README.md                        # 本文档
 ├── install.sh                       # 一键部署脚本（需 sudo 运行）
+├── build-console.sh                 # Console 构建脚本（node20+pnpm，CI/本地共用）
 ├── nginx/
 │   └── he-api.conf                  # Nginx 反向代理配置
 ├── systemd/                         # systemd unit 文件（15个服务）
@@ -27,8 +28,9 @@ deploy/bare-metal/
 │   ├── he-routing-svc.service
 │   ├── he-analytics-svc.service
 │   ├── he-sample-grpc-app.service
-│   └── he-sample-otel-app.service
-└── env/                             # 环境变量模板（14个服务）
+│   ├── he-sample-otel-app.service
+│   └── he-api-console.service       # Console 前端（Next.js next start）
+└── env/                             # 环境变量模板（15个服务）
     ├── gateway.env
     ├── auth.env
     ├── billing.env
@@ -43,7 +45,8 @@ deploy/bare-metal/
     ├── adapter-ernie.env
     ├── adapter-kimi.env
     ├── sample-grpc.env
-    └── sample-otel.env
+    ├── sample-otel.env
+    └── console.env                  # Console 前端（含构建期/运行期变量说明）
 ```
 
 ---
@@ -64,10 +67,12 @@ deploy/bare-metal/
 #### 1. 域名与 DNS
 
 - 注册域名 `he-api.example.com`（替换为自己的域名）
-- 在 DNS 控制台添加 A 记录：
-  - `api.he-api.example.com` → 服务器公网 IP
-  - `console.he-api.example.com` → 服务器公网 IP
+- 在 DNS 控制台添加**一条** A 记录（Console 与网关同源部署）：
+  - `he-api.example.com` → 服务器公网 IP
 - 建议提前 24 小时生效
+
+> 注：裸机采用**同源单域**部署（nginx `/`→console:3000，`/v1`→gateway:8080），
+> 因此 auth cookie（`Path=/v1/auth/refresh`，`SameSite=Strict`）为第一方，无需双子域与跨域配置。
 
 #### 2. 安全组 / 防火墙
 
@@ -218,6 +223,71 @@ sudo systemctl enable he-api-gateway he-auth-svc ...
 
 ---
 
+## 🖥️ Console 前端部署
+
+Console 是 Next.js 14（App Router）单页应用。裸机以 **Node 直接 `next start`** 运行，
+**不使用** Docker 的 standalone 产物——pnpm 符号链接布局下，Next 的 standalone 文件追踪器
+会漏打 `styled-jsx` 等传递依赖的顶层符号链接，导致 `next start`/`server.js` 启动即报
+`Cannot find module 'styled-jsx'`。改用 `pnpm deploy --prod` 生成扁平 `node_modules` + `next start` 规避。
+
+### 架构
+
+```
+用户 ──HTTPS 443──> nginx (he-api.example.com)
+                        ├── /v1/*  ──> gateway:8080   （API + SSE 流式）
+                        └── /*     ──> console:3000  （Next.js）
+console server action ──HTTP──> gateway:8080 (HE_API_GATEWAY_URL=http://127.0.0.1:8080)
+```
+
+同源部署使 auth cookie（`Path=/v1/auth/refresh`，`SameSite=Strict`）为第一方，零跨域问题。
+
+### 从 GitHub Release 安装（--release 自动包含）
+
+`install.sh --release <tag>` 会下载 `he-api-console-<tag>-linux-amd64.tar.gz` 解压到
+`/opt/he-api/console`，并将 `node` 真实路径写入 `he-api-console.service` 的 `ExecStart`，
+最后 `systemctl enable he-api-console`。**前置：服务器已装 Node 20+**（`command -v node`）。
+
+### 本地 / 手动构建
+
+```bash
+# 在 monorepo 根执行（需 node20 + pnpm9）
+bash deploy/bare-metal/build-console.sh <repo-root> /tmp/console-out
+
+# 打包并部署到服务器
+tar -czf console.tgz -C /tmp/console-out console
+scp console.tgz server:/tmp/
+ssh server 'sudo tar -xzf /tmp/console.tgz -C /opt/he-api/ && sudo systemctl daemon-reload'
+```
+
+CI 中由 `.github/workflows/release-binaries.yml` 的 `build-console` job 调用同一个脚本。
+
+### ⚠️ 构建期变量（NEXT_PUBLIC_*）
+
+`env/console.env` 中 `NEXT_PUBLIC_*` 在 `next build` 时**烘焙进前端 JS bundle**。
+修改这些变量后**必须重新构建**（`build-console.sh`），仅改 env 并 `restart` 不生效。
+非 `NEXT_PUBLIC_*` 为运行期变量，改完 `restart` 即生效。
+
+### 关键变量（env/console.env）
+
+| 变量 | 说明 |
+|------|------|
+| `HE_API_GATEWAY_URL` | 控制台服务端调用网关的内部地址，裸机必设 `http://127.0.0.1:8080` |
+| `PORT` | `next start` 监听端口（默认 3000，nginx 反代目标） |
+| `BARE_METAL_BUILD` | 必须 `=1`，使运行期配置与裸机构建产物一致（关闭 standalone），否则 `next start` 报警告 |
+| `NEXT_PUBLIC_HE_API_BASE` | 同源部署留空（playground 用相对 `/v1/me/playground/chat`） |
+| `NEXT_PUBLIC_API_GATEWAY_URL` / `NEXT_PUBLIC_CONSOLE_ORIGIN` | 对外域名（OAuth 回跳 / CORS Origin），改域名需重新构建 |
+
+### 服务管理
+
+```bash
+sudo systemctl start he-api-console      # 依赖网关，建议网关启动后再起
+sudo systemctl restart he-api-console
+sudo journalctl -u he-api-console -f
+curl -I http://localhost:3000/          # 健康检查（应 200/307 重定向到 /<locale>）
+```
+
+---
+
 ## 🌐 Nginx 配置
 
 ### 步骤 1：复制配置
@@ -270,6 +340,9 @@ sudo systemctl start he-auth-svc \
 
 # 启动示例应用
 sudo systemctl start he-sample-grpc-app he-sample-otel-app
+
+# 启动 Console 前端（需网关先起）
+sudo systemctl start he-api-console
 ```
 
 ### 建议启动顺序
@@ -279,6 +352,7 @@ sudo systemctl start he-sample-grpc-app he-sample-otel-app
 2. routing-svc, analytics-svc                            （事件消费者）
 3. he-adapter-*（6个）                                   （LLM 适配器）
 4. he-api-gateway                                        （API 网关，最后启动）
+5. he-api-console                                        （前端，依赖网关）
 ```
 
 ### 常用命令
@@ -468,3 +542,4 @@ sudo ss -tlnp | grep -E ':(8080|3000|9001)'
 | analytics-svc | 9006 |
 | sample-grpc-app | 9081 |
 | sample-otel-app | 9082 |
+| **console (Next.js)** | **3000**（仅内网，经 nginx 443 反代） |

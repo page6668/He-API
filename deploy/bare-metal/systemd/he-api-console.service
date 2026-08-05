@@ -1,0 +1,34 @@
+[Unit]
+Description=He-API Console (Next.js standalone)
+Documentation=https://github.com/he-api/he-api
+# console 的 server action 在内部调用网关（HE_API_GATEWAY_URL=127.0.0.1:8080），
+# 因此网关应先于 console 就绪；用 Wants 仅保证顺序，不阻塞 console 启动。
+After=network-online.target he-api-gateway.service
+Wants=network-online.target he-api-gateway.service
+
+[Service]
+Type=simple
+User=he-api
+Group=he-api
+WorkingDirectory=/opt/he-api/console
+# node 路径：install.sh 会用真实 `command -v node` 替换下方占位符。
+# 若手动部署，请确认 node 在默认 PATH（/usr/bin 或 /usr/local/bin）。
+# 部署产物由 build-console.sh 生成（pnpm deploy --prod + .next），用 next start 拉起。
+ExecStart=/usr/bin/node /opt/he-api/console/node_modules/.bin/next start -p 3000
+EnvironmentFile=/opt/he-api/env/console.env
+Restart=always
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+LimitNOFILE=65536
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+# standalone server 运行期只读自身目录；允许 .next/cache 写入
+ReadWritePaths=/opt/he-api/console/apps/console/.next/cache
+
+[Install]
+WantedBy=multi-user.target

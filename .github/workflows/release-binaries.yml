@@ -354,6 +354,34 @@ jobs:
           path: dist/sample-otel-app/
           retention-days: 90
 
+  # ── Console（Next.js standalone）──────────────────────────────────────────
+  build-console:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Build console standalone
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          # build-console.sh 会读取 deploy/bare-metal/env/console.env 的构建期变量。
+          # 如需自定义生产域名，先修改该文件（或 secrets.CONSOLE_ENV_FILE）再构建。
+          bash deploy/bare-metal/build-console.sh "$PWD" dist/console-out
+          mkdir -p dist/console
+          tar -czf "dist/console/he-api-console-${tag}-linux-amd64.tar.gz" -C dist/console-out console
+          (cd dist/console && sha256sum "he-api-console-${tag}-linux-amd64.tar.gz" | awk '{print $1}' > "he-api-console-${tag}-linux-amd64.tar.gz.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: he-api-console
+          path: dist/console/
+          retention-days: 90
+
   # ── 汇总：下载所有 artifact 并挂到 Release ─────────────────────────────────
   release:
     needs:
@@ -372,6 +400,7 @@ jobs:
       - build-adapter-kimi
       - build-sample-grpc-app
       - build-sample-otel-app
+      - build-console
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
@@ -425,5 +454,11 @@ jobs:
             | analytics-svc | 9006 |
             | sample-grpc-app | 9081 |
             | sample-otel-app | 9082 |
+            | console (Next.js) | 3000 |
+
+            Console 为 Next.js standalone 产物 `he-api-console-<tag>-linux-amd64.tar.gz`，
+            解压到 `/opt/he-api/console` 后由 `he-api-console.service` 拉起。
+            **注意**：Console 的 `NEXT_PUBLIC_*` 是构建期变量（含对外域名），
+            改域名需重新构建（见 deploy/bare-metal/build-console.sh）。
 
             每个 tar.gz 附带 .sha256 校验文件。
