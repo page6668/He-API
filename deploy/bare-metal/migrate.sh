@@ -99,13 +99,20 @@ apply_pg_file() {
   local target="$f"
 
   if [[ "$base" == "0001_baseline.sql" ]]; then
-    local app_pw; app_pw="$(uri_password "$PG_URI")"
-    # 将 CREATE ROLE he_api ... :'app_password' 改为 IF NOT EXISTS + 真实密码，
-    # 使脚本可重复运行且角色密码与连接 URI 一致。
-    target="$(mktemp /tmp/he_api_mig.XXXXXX.sql)"
-    sed -E \
-      "s/CREATE ROLE he_api LOGIN PASSWORD :'app_password';/CREATE ROLE IF NOT EXISTS he_api LOGIN PASSWORD '${app_pw}';/" \
-      "$f" > "$target"
+    # baseline 的 CREATE ROLE 行改为幂等的 DO 块。
+    #   * 角色已存在则跳过（可重复运行）
+    #   * 不依赖 CREATE ROLE IF NOT EXISTS 语法（部分 PG 构建/旧版本不支持）
+    #   * 密码直接注入（单引号转义），不依赖 psql :'var' 替换，避免替换失败
+    target="$(mktemp "${TMPDIR:-/tmp}/he_api_mig.XXXXXX")"
+    app_pw="$(uri_password "$PG_URI")"
+    app_pw_esc="${app_pw//\'/\'\'}"
+    while IFS= read -r line; do
+      if [[ "$line" == *"CREATE ROLE he_api LOGIN PASSWORD :'app_password';"* ]]; then
+        printf "DO \$do\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='he_api') THEN CREATE ROLE he_api LOGIN PASSWORD '%s'; END IF; END \$do\$;\n" "$app_pw_esc" >> "$target"
+      else
+        printf '%s\n' "$line" >> "$target"
+      fi
+    done < "$f"
   fi
 
   echo "==> 应用 PG migration: $base"
@@ -115,7 +122,9 @@ apply_pg_file() {
   psql "$PG_URI" -X -q -c \
     "INSERT INTO he_api._he_api_schema_migrations(version) VALUES ('$ver') ON CONFLICT DO NOTHING;"
 
-  [[ "$target" != "$f" ]] && rm -f "$target"
+  # 注意：用 if 而非 `[[ ]] &&`，否则非 baseline 文件 target==f 时整句返回 1，
+  # 触发 set -e 让脚本每个 migration 后退出（只应用一个就停）。
+  if [[ "$target" != "$f" ]]; then rm -f "$target"; fi
 }
 
 # ---------------------------------------------------------------------------
