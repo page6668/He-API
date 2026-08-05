@@ -21,8 +21,10 @@ info()  { echo -e "\033[0;32m[INFO]\033[0m $*"; }
 error() { echo -e "\033[0;31m[ERROR]\033[0m $*" >&2; }
 
 # 前置检查：Kafka 是否在线
+# 注意：bash /dev/tcp 必须是 /dev/tcp/<host>/<port>（斜杠分隔），
+# 不能用空格；且 macOS 无 timeout 命令，故用 exec 3<> 直接探测，跨平台。
 info "检查 Kafka Broker 连接 (${BROKER}) ..."
-if ! timeout 5 bash -c "echo > /dev/tcp/${BROKER%:*} ${BROKER##*:}" 2>/dev/null; then
+if ! (exec 3<>/dev/tcp/${BROKER%:*}/${BROKER##*:}) 2>/dev/null; then
   error "Kafka Broker 未在线，请先运行: sudo systemctl start kafka"
   exit 1
 fi
