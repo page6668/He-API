@@ -47,7 +47,7 @@ const (
 	serviceVersion = "0.1.0"
 )
 
-var listenAddr = envOr("PORT", ":8080")
+var listenAddr = ":" + envOr("PORT", "8080")
 
 // newTracerProvider configures an OTLP/gRPC TracerProvider rooted at the
 // otel-collector specified by OTEL_EXPORTER_OTLP_ENDPOINT. When the env var is

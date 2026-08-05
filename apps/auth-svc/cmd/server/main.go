@@ -115,7 +115,7 @@ const (
 	auditKafkaWriteTimeout = 5 * time.Second
 )
 
-var listenAddr = envOr("PORT", ":8080")
+var listenAddr = ":" + envOr("PORT", "8080")
 
 func main() {
 	logger := obs.NewLogger(slog.LevelInfo)

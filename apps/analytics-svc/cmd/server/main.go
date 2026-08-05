@@ -56,7 +56,7 @@ const (
 	serviceVersion = "0.0.1"
 )
 
-var listenAddr = envOr("PORT", ":8080")
+var listenAddr = ":" + envOr("PORT", "8080")
 
 func main() {
 	logger := obs.NewLogger(slog.LevelInfo)

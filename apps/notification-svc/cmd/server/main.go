@@ -44,7 +44,7 @@ const (
 	serviceVersion = "0.0.1"
 )
 
-var listenAddr = envOr("PORT", ":8080")
+var listenAddr = ":" + envOr("PORT", "8080")
 
 func envOr(name, fallback string) string {
 	if v := os.Getenv(name); v != "" {
