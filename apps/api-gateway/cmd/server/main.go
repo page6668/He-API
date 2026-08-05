@@ -72,6 +72,7 @@ const (
 	defaultRedisURL           = "redis://redis:6379/0"
 )
 
+
 // envOr returns the value of name or fallback when unset / empty.
 func envOr(name, fallback string) string {
 	if v := os.Getenv(name); v != "" {
@@ -84,8 +85,9 @@ const (
 	serviceName    = "api-gateway"
 	serviceNS      = "he-api-staging"
 	serviceVersion = "0.0.1"
-	listenAddr     = ":8080"
 )
+
+var listenAddr = envOr("PORT", ":8080")
 
 func main() {
 	// Story 3.6: wire the requestid extractor so every slog record under a
@@ -892,6 +894,7 @@ const (
 	maxRateLimitRPMMax = 100_000
 	maxRateLimitTPMMax = 100_000_000
 )
+
 
 // loadRateLimitCeilings reads RATELIMIT_FREE_TIER_{QPS,RPM,TPM}_MAX env
 // vars, applies defaults for unset values, and HALT-validates the [1, max]

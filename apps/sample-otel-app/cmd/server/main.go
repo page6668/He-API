@@ -45,8 +45,9 @@ const (
 	serviceName    = "sample-otel-app"
 	serviceNS      = "he-api-staging"
 	serviceVersion = "0.1.0"
-	listenAddr     = ":8080"
 )
+
+var listenAddr = envOr("PORT", ":8080")
 
 // newTracerProvider configures an OTLP/gRPC TracerProvider rooted at the
 // otel-collector specified by OTEL_EXPORTER_OTLP_ENDPOINT. When the env var is
@@ -155,6 +156,13 @@ func buildHandler(logger *slog.Logger) http.Handler {
 	// (semconv `http_server_request_duration_seconds_*` histogram is emitted
 	// by the OTel SDK + the prometheus exporter inside the otel-collector).
 	return otelhttp.NewHandler(mux, "sample-otel-app")
+}
+
+func envOr(name, fallback string) string {
+	if v := os.Getenv(name); v != "" {
+		return v
+	}
+	return fallback
 }
 
 func main() {

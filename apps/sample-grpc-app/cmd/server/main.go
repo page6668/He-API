@@ -28,13 +28,21 @@ const (
 	serviceName    = "sample-grpc-app"
 	serviceNS      = "he-api-staging"
 	serviceVersion = "0.0.1"
-	listenAddr     = ":8080"
 )
+
+var listenAddr = envOr("PORT", ":8080")
 
 type SampleServer struct{}
 
 func (s *SampleServer) Ping(_ context.Context, req *connect.Request[samplev1.PingRequest]) (*connect.Response[samplev1.PingResponse], error) {
 	return connect.NewResponse(&samplev1.PingResponse{Pong: req.Msg.GetPing()}), nil
+}
+
+func envOr(name, fallback string) string {
+	if v := os.Getenv(name); v != "" {
+		return v
+	}
+	return fallback
 }
 
 func main() {

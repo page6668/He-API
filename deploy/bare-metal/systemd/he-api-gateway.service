@@ -1,0 +1,28 @@
+[Unit]
+Description=He-API Gateway
+Documentation=https://github.com/he-api/he-api
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=he-api
+Group=he-api
+WorkingDirectory=/opt/he-api/bin
+ExecStart=/opt/he-api/bin/he-api-gateway
+EnvironmentFile=/opt/he-api/env/gateway.env
+Restart=always
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+LimitNOFILE=65536
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/he-api/logs /opt/he-api/data
+
+[Install]
+WantedBy=multi-user.target

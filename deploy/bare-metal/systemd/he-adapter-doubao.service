@@ -1,0 +1,27 @@
+[Unit]
+Description=He-API Adapter - Doubao
+Documentation=https://github.com/he-api/he-api
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=he-api
+Group=he-api
+WorkingDirectory=/opt/he-api/bin
+ExecStart=/opt/he-api/bin/he-adapter-doubao
+EnvironmentFile=/opt/he-api/env/adapter-doubao.env
+Restart=always
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+LimitNOFILE=65536
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/he-api/logs /opt/he-api/data
+
+[Install]
+WantedBy=multi-user.target

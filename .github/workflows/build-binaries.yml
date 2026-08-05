@@ -1,0 +1,410 @@
+name: Build Linux amd64 Binaries
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  GOOS: linux
+  GOARCH: amd64
+  CGO_ENABLED: 0
+  GOPROXY: https://goproxy.cn,direct
+
+jobs:
+  # ── Individual service build jobs ────────────────────────────────────────────
+  build-api-gateway:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          sha=$(git rev-parse --short=8 HEAD)
+          out="dist/api-gateway"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-api-gateway-${sha}" ./apps/api-gateway/cmd/server
+          tar -czf "$out/he-api-api-gateway-${sha}.tar.gz" -C "$out" "he-api-api-gateway-${sha}"
+          (cd "$out" && sha256sum "he-api-api-gateway-${sha}.tar.gz" | awk '{print $1}' > "he-api-api-gateway-${sha}.tar.gz.sha256")
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: he-api-api-gateway
+          path: dist/api-gateway/
+          retention-days: 30
+
+  build-auth-svc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          sha=$(git rev-parse --short=8 HEAD)
+          out="dist/auth-svc"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-auth-svc-${sha}" ./apps/auth-svc/cmd/server
+          tar -czf "$out/he-api-auth-svc-${sha}.tar.gz" -C "$out" "he-api-auth-svc-${sha}"
+          (cd "$out" && sha256sum "he-api-auth-svc-${sha}.tar.gz" | awk '{print $1}' > "he-api-auth-svc-${sha}.tar.gz.sha256")
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: he-api-auth-svc
+          path: dist/auth-svc/
+          retention-days: 30
+
+  build-billing-svc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          sha=$(git rev-parse --short=8 HEAD)
+          out="dist/billing-svc"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-billing-svc-${sha}" ./apps/billing-svc/cmd/server
+          tar -czf "$out/he-api-billing-svc-${sha}.tar.gz" -C "$out" "he-api-billing-svc-${sha}"
+          (cd "$out" && sha256sum "he-api-billing-svc-${sha}.tar.gz" | awk '{print $1}' > "he-api-billing-svc-${sha}.tar.gz.sha256")
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: he-api-billing-svc
+          path: dist/billing-svc/
+          retention-days: 30
+
+  build-payment-svc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          sha=$(git rev-parse --short=8 HEAD)
+          out="dist/payment-svc"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-payment-svc-${sha}" ./apps/payment-svc/cmd/server
+          tar -czf "$out/he-api-payment-svc-${sha}.tar.gz" -C "$out" "he-api-payment-svc-${sha}"
+          (cd "$out" && sha256sum "he-api-payment-svc-${sha}.tar.gz" | awk '{print $1}' > "he-api-payment-svc-${sha}.tar.gz.sha256")
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: he-api-payment-svc
+          path: dist/payment-svc/
+          retention-days: 30
+
+  build-notification-svc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          sha=$(git rev-parse --short=8 HEAD)
+          out="dist/notification-svc"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-notification-svc-${sha}" ./apps/notification-svc/cmd/server
+          tar -czf "$out/he-api-notification-svc-${sha}.tar.gz" -C "$out" "he-api-notification-svc-${sha}"
+          (cd "$out" && sha256sum "he-api-notification-svc-${sha}.tar.gz" | awk '{print $1}' > "he-api-notification-svc-${sha}.tar.gz.sha256")
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: he-api-notification-svc
+          path: dist/notification-svc/
+          retention-days: 30
+
+  build-routing-svc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          sha=$(git rev-parse --short=8 HEAD)
+          out="dist/routing-svc"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-routing-svc-${sha}" ./apps/routing-svc/cmd/server
+          tar -czf "$out/he-api-routing-svc-${sha}.tar.gz" -C "$out" "he-api-routing-svc-${sha}"
+          (cd "$out" && sha256sum "he-api-routing-svc-${sha}.tar.gz" | awk '{print $1}' > "he-api-routing-svc-${sha}.tar.gz.sha256")
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: he-api-routing-svc
+          path: dist/routing-svc/
+          retention-days: 30
+
+  build-analytics-svc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          sha=$(git rev-parse --short=8 HEAD)
+          out="dist/analytics-svc"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-analytics-svc-${sha}" ./apps/analytics-svc/cmd/server
+          tar -czf "$out/he-api-analytics-svc-${sha}.tar.gz" -C "$out" "he-api-analytics-svc-${sha}"
+          (cd "$out" && sha256sum "he-api-analytics-svc-${sha}.tar.gz" | awk '{print $1}' > "he-api-analytics-svc-${sha}.tar.gz.sha256")
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: he-api-analytics-svc
+          path: dist/analytics-svc/
+          retention-days: 30
+
+  build-adapter-deepseek:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          sha=$(git rev-parse --short=8 HEAD)
+          out="dist/adapter-deepseek"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-adapter-deepseek-${sha}" ./apps/adapters/deepseek/cmd/server
+          tar -czf "$out/he-api-adapter-deepseek-${sha}.tar.gz" -C "$out" "he-api-adapter-deepseek-${sha}"
+          (cd "$out" && sha256sum "he-api-adapter-deepseek-${sha}.tar.gz" | awk '{print $1}' > "he-api-adapter-deepseek-${sha}.tar.gz.sha256")
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: he-api-adapter-deepseek
+          path: dist/adapter-deepseek/
+          retention-days: 30
+
+  build-adapter-qwen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          sha=$(git rev-parse --short=8 HEAD)
+          out="dist/adapter-qwen"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-adapter-qwen-${sha}" ./apps/adapters/qwen/cmd/server
+          tar -czf "$out/he-api-adapter-qwen-${sha}.tar.gz" -C "$out" "he-api-adapter-qwen-${sha}"
+          (cd "$out" && sha256sum "he-api-adapter-qwen-${sha}.tar.gz" | awk '{print $1}' > "he-api-adapter-qwen-${sha}.tar.gz.sha256")
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: he-api-adapter-qwen
+          path: dist/adapter-qwen/
+          retention-days: 30
+
+  build-adapter-doubao:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          sha=$(git rev-parse --short=8 HEAD)
+          out="dist/adapter-doubao"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-adapter-doubao-${sha}" ./apps/adapters/doubao/cmd/server
+          tar -czf "$out/he-api-adapter-doubao-${sha}.tar.gz" -C "$out" "he-api-adapter-doubao-${sha}"
+          (cd "$out" && sha256sum "he-api-adapter-doubao-${sha}.tar.gz" | awk '{print $1}' > "he-api-adapter-doubao-${sha}.tar.gz.sha256")
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: he-api-adapter-doubao
+          path: dist/adapter-doubao/
+          retention-days: 30
+
+  build-adapter-glm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          sha=$(git rev-parse --short=8 HEAD)
+          out="dist/adapter-glm"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-adapter-glm-${sha}" ./apps/adapters/glm/cmd/server
+          tar -czf "$out/he-api-adapter-glm-${sha}.tar.gz" -C "$out" "he-api-adapter-glm-${sha}"
+          (cd "$out" && sha256sum "he-api-adapter-glm-${sha}.tar.gz" | awk '{print $1}' > "he-api-adapter-glm-${sha}.tar.gz.sha256")
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: he-api-adapter-glm
+          path: dist/adapter-glm/
+          retention-days: 30
+
+  build-adapter-ernie:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          sha=$(git rev-parse --short=8 HEAD)
+          out="dist/adapter-ernie"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-adapter-ernie-${sha}" ./apps/adapters/ernie/cmd/server
+          tar -czf "$out/he-api-adapter-ernie-${sha}.tar.gz" -C "$out" "he-api-adapter-ernie-${sha}"
+          (cd "$out" && sha256sum "he-api-adapter-ernie-${sha}.tar.gz" | awk '{print $1}' > "he-api-adapter-ernie-${sha}.tar.gz.sha256")
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: he-api-adapter-ernie
+          path: dist/adapter-ernie/
+          retention-days: 30
+
+  build-adapter-kimi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          sha=$(git rev-parse --short=8 HEAD)
+          out="dist/adapter-kimi"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-adapter-kimi-${sha}" ./apps/adapters/kimi/cmd/server
+          tar -czf "$out/he-api-adapter-kimi-${sha}.tar.gz" -C "$out" "he-api-adapter-kimi-${sha}"
+          (cd "$out" && sha256sum "he-api-adapter-kimi-${sha}.tar.gz" | awk '{print $1}' > "he-api-adapter-kimi-${sha}.tar.gz.sha256")
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: he-api-adapter-kimi
+          path: dist/adapter-kimi/
+          retention-days: 30
+
+  build-sample-grpc-app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          sha=$(git rev-parse --short=8 HEAD)
+          out="dist/sample-grpc-app"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-sample-grpc-app-${sha}" ./apps/sample-grpc-app/cmd/server
+          tar -czf "$out/he-api-sample-grpc-app-${sha}.tar.gz" -C "$out" "he-api-sample-grpc-app-${sha}"
+          (cd "$out" && sha256sum "he-api-sample-grpc-app-${sha}.tar.gz" | awk '{print $1}' > "he-api-sample-grpc-app-${sha}.tar.gz.sha256")
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: he-api-sample-grpc-app
+          path: dist/sample-grpc-app/
+          retention-days: 30
+
+  build-sample-otel-app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          sha=$(git rev-parse --short=8 HEAD)
+          out="dist/sample-otel-app"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-sample-otel-app-${sha}" ./apps/sample-otel-app/cmd/server
+          tar -czf "$out/he-api-sample-otel-app-${sha}.tar.gz" -C "$out" "he-api-sample-otel-app-${sha}"
+          (cd "$out" && sha256sum "he-api-sample-otel-app-${sha}.tar.gz" | awk '{print $1}' > "he-api-sample-otel-app-${sha}.tar.gz.sha256")
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: he-api-sample-otel-app
+          path: dist/sample-otel-app/
+          retention-days: 30
+
+  # ── Summary job ──────────────────────────────────────────────────────────────
+  summary:
+    needs:
+      - build-api-gateway
+      - build-auth-svc
+      - build-billing-svc
+      - build-payment-svc
+      - build-notification-svc
+      - build-routing-svc
+      - build-analytics-svc
+      - build-adapter-deepseek
+      - build-adapter-qwen
+      - build-adapter-doubao
+      - build-adapter-glm
+      - build-adapter-ernie
+      - build-adapter-kimi
+      - build-sample-grpc-app
+      - build-sample-otel-app
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build Summary
+        run: |
+          echo "## ✅ He-API Binary Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Artifact | Default Port |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| api-gateway         | he-api-api-gateway         | 8080  |" >> $GITHUB_STEP_SUMMARY
+          echo "| adapter-deepseek   | he-api-adapter-deepseek   | 8091  |" >> $GITHUB_STEP_SUMMARY
+          echo "| adapter-qwen       | he-api-adapter-qwen       | 8092  |" >> $GITHUB_STEP_SUMMARY
+          echo "| adapter-doubao     | he-api-adapter-doubao     | 8093  |" >> $GITHUB_STEP_SUMMARY
+          echo "| adapter-glm        | he-api-adapter-glm        | 8094  |" >> $GITHUB_STEP_SUMMARY
+          echo "| adapter-ernie      | he-api-adapter-ernie      | 8095  |" >> $GITHUB_STEP_SUMMARY
+          echo "| adapter-kimi       | he-api-adapter-kimi       | 8096  |" >> $GITHUB_STEP_SUMMARY
+          echo "| auth-svc           | he-api-auth-svc           | 9001  |" >> $GITHUB_STEP_SUMMARY
+          echo "| billing-svc        | he-api-billing-svc        | 9002  |" >> $GITHUB_STEP_SUMMARY
+          echo "| payment-svc        | he-api-payment-svc        | 9003  |" >> $GITHUB_STEP_SUMMARY
+          echo "| notification-svc  | he-api-notification-svc   | 9004  |" >> $GITHUB_STEP_SUMMARY
+          echo "| routing-svc        | he-api-routing-svc        | 9005  |" >> $GITHUB_STEP_SUMMARY
+          echo "| analytics-svc      | he-api-analytics-svc      | 9006  |" >> $GITHUB_STEP_SUMMARY
+          echo "| sample-grpc-app    | he-api-sample-grpc-app    | 9081  |" >> $GITHUB_STEP_SUMMARY
+          echo "| sample-otel-app    | he-api-sample-otel-app    | 9082  |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**15 services built** — all compiled for `linux/amd64` with `CGO_ENABLED=0` (static binary)." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Each artifact contains:" >> $GITHUB_STEP_SUMMARY
+          echo "- `he-api-\<svc\>-\<sha8\>.tar.gz` — compressed binary tarball" >> $GITHUB_STEP_SUMMARY
+          echo "- `he-api-\<svc\>-\<sha8\>.tar.gz.sha256` — SHA-256 checksum file" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Artifact retention: 30 days.**" >> $GITHUB_STEP_SUMMARY

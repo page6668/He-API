@@ -100,7 +100,6 @@ const (
 	serviceName    = "auth-svc"
 	serviceNS      = "he-api-staging"
 	serviceVersion = "0.0.1"
-	listenAddr     = ":8080"
 
 	defaultNotificationSvcURL = "http://notification-svc:8080"
 	defaultConsoleBaseURL     = "http://localhost:3000"
@@ -115,6 +114,8 @@ const (
 	// the writer's BatchTimeout / WriteTimeout below.
 	auditKafkaWriteTimeout = 5 * time.Second
 )
+
+var listenAddr = envOr("PORT", ":8080")
 
 func main() {
 	logger := obs.NewLogger(slog.LevelInfo)

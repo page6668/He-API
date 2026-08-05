@@ -1,0 +1,24 @@
+[Unit]
+Description=Kafka KRaft Broker (he-api)
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kafka
+Group=kafka
+WorkingDirectory=/opt/kafka
+ExecStart=/opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/kraft/server.properties
+ExecStop=/opt/kafka/bin/kafka-server-stop.sh
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=10s
+StandardOutput=journal
+StandardError=journal
+LimitNOFILE=65536
+
+# Allow Kafka to allocate large JVM heaps (disable overcommit)
+LimitRSS=infinity
+
+[Install]
+WantedBy=multi-user.target

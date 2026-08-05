@@ -42,8 +42,16 @@ const (
 	serviceName    = "notification-svc"
 	serviceNS      = "he-api-staging"
 	serviceVersion = "0.0.1"
-	listenAddr     = ":8080"
 )
+
+var listenAddr = envOr("PORT", ":8080")
+
+func envOr(name, fallback string) string {
+	if v := os.Getenv(name); v != "" {
+		return v
+	}
+	return fallback
+}
 
 func main() {
 	logger := obs.NewLogger(slog.LevelInfo)

@@ -54,8 +54,9 @@ const (
 	serviceName    = "analytics-svc"
 	serviceNS      = "he-api-staging"
 	serviceVersion = "0.0.1"
-	listenAddr     = ":8080" // for /healthz + /metrics scrape; main work is the Kafka loop
 )
+
+var listenAddr = envOr("PORT", ":8080")
 
 func main() {
 	logger := obs.NewLogger(slog.LevelInfo)
