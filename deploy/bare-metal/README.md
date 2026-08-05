@@ -317,15 +317,50 @@ done
 
 ---
 
-## 📋 Kafka + ClickHouse 部署
+## 🗄️ 数据库迁移（启动服务前必做）
 
-如需独立部署 Kafka 和 ClickHouse，参见 `deploy/bare-metal/kafka/` 目录。
+He-API 的 PostgreSQL schema 由 22 个版本化 migration 定义（`migrations/postgres/0001..0022`）。
+裸机环境不依赖 K8s 的 Atlas，改用随附的 `migrate.sh`（psql 驱动，幂等）。
 
-快速启动 Docker Compose 版：
+### 前置条件
+
+- 已安装 `postgresql-client`（提供 `psql`）
+- 已创建数据库 `he_api`（建议阿里云 RDS PG 或同机自建）
+- 首次运行用**超级用户**（如 `postgres`）连接，脚本会自动创建 `he_api` 角色与 schema
+
+### 执行迁移
 
 ```bash
-cd deploy/bare-metal/kafka
-docker-compose up -d
+# 设置连接串（密码会用于创建 he_api 角色，使其与连接密码一致）
+export HE_API_DB_POSTGRES_URI='postgres://postgres:你的密码@localhost:5432/he_api?sslmode=disable'
+
+# 预览将要执行的 migration（不实际执行）
+sudo -E bash deploy/bare-metal/migrate.sh dry-run
+
+# 应用所有未执行的 migration
+sudo -E bash deploy/bare-metal/migrate.sh up
+
+# 校验状态
+sudo -E bash deploy/bare-metal/migrate.sh status
+```
+
+### ClickHouse（可选）
+
+仅当部署 `analytics-svc` 时才需要。设置 `HE_API_DB_CLICKHOUSE_URI` 并安装
+`clickhouse-client` 后，重新运行 `migrate.sh up` 即会一并应用 ClickHouse migration：
+
+```bash
+export HE_API_DB_CLICKHOUSE_URI='clickhouse://default:@localhost:9000/he_api'
+sudo -E bash deploy/bare-metal/migrate.sh up
+```
+
+> 未设置该变量时，脚本会跳过 ClickHouse 部分并提示，不影响 PostgreSQL 迁移。
+
+### 回滚
+
+```bash
+# 从追踪表移除最近 N 条记录（best-effort，多数 migration 为 ADDITIVE 无反向 SQL）
+sudo -E bash deploy/bare-metal/migrate.sh down 1
 ```
 
 ---

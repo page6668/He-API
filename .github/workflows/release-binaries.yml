@@ -1,0 +1,429 @@
+name: Release Linux amd64 Binaries
+
+# 打 tag（v*）时触发：交叉编译 15 个服务的 Linux amd64 静态二进制，
+# 打包为 tar.gz + sha256，并作为附件上传到对应的 GitHub Release。
+#
+# 配合 deploy/bare-metal/install.sh --release <tag> 使用：
+#   install.sh 从 GitHub Release 下载 he-api-<svc>-<tag>.tar.gz 并解压部署。
+#
+# 前置：仓库需有对应的 GitHub Release（本 workflow 会自动创建 draft release）。
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  GOOS: linux
+  GOARCH: amd64
+  CGO_ENABLED: 0
+  GOPROXY: https://goproxy.cn,direct
+
+jobs:
+  # ── 构建矩阵：每个服务独立 job，并行编译 ──────────────────────────────────
+  build-api-gateway:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          out="dist/api-gateway"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-api-gateway-${tag}" ./apps/api-gateway/cmd/server
+          tar -czf "$out/he-api-api-gateway-${tag}.tar.gz" -C "$out" "he-api-api-gateway-${tag}"
+          (cd "$out" && sha256sum "he-api-api-gateway-${tag}.tar.gz" | awk '{print $1}' > "he-api-api-gateway-${tag}.tar.gz.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: he-api-api-gateway
+          path: dist/api-gateway/
+          retention-days: 90
+
+  build-auth-svc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          out="dist/auth-svc"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-auth-svc-${tag}" ./apps/auth-svc/cmd/server
+          tar -czf "$out/he-api-auth-svc-${tag}.tar.gz" -C "$out" "he-api-auth-svc-${tag}"
+          (cd "$out" && sha256sum "he-api-auth-svc-${tag}.tar.gz" | awk '{print $1}' > "he-api-auth-svc-${tag}.tar.gz.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: he-api-auth-svc
+          path: dist/auth-svc/
+          retention-days: 90
+
+  build-billing-svc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          out="dist/billing-svc"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-billing-svc-${tag}" ./apps/billing-svc/cmd/server
+          tar -czf "$out/he-api-billing-svc-${tag}.tar.gz" -C "$out" "he-api-billing-svc-${tag}"
+          (cd "$out" && sha256sum "he-api-billing-svc-${tag}.tar.gz" | awk '{print $1}' > "he-api-billing-svc-${tag}.tar.gz.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: he-api-billing-svc
+          path: dist/billing-svc/
+          retention-days: 90
+
+  build-payment-svc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          out="dist/payment-svc"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-payment-svc-${tag}" ./apps/payment-svc/cmd/server
+          tar -czf "$out/he-api-payment-svc-${tag}.tar.gz" -C "$out" "he-api-payment-svc-${tag}"
+          (cd "$out" && sha256sum "he-api-payment-svc-${tag}.tar.gz" | awk '{print $1}' > "he-api-payment-svc-${tag}.tar.gz.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: he-api-payment-svc
+          path: dist/payment-svc/
+          retention-days: 90
+
+  build-notification-svc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          out="dist/notification-svc"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-notification-svc-${tag}" ./apps/notification-svc/cmd/server
+          tar -czf "$out/he-api-notification-svc-${tag}.tar.gz" -C "$out" "he-api-notification-svc-${tag}"
+          (cd "$out" && sha256sum "he-api-notification-svc-${tag}.tar.gz" | awk '{print $1}' > "he-api-notification-svc-${tag}.tar.gz.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: he-api-notification-svc
+          path: dist/notification-svc/
+          retention-days: 90
+
+  build-routing-svc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          out="dist/routing-svc"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-routing-svc-${tag}" ./apps/routing-svc/cmd/server
+          tar -czf "$out/he-api-routing-svc-${tag}.tar.gz" -C "$out" "he-api-routing-svc-${tag}"
+          (cd "$out" && sha256sum "he-api-routing-svc-${tag}.tar.gz" | awk '{print $1}' > "he-api-routing-svc-${tag}.tar.gz.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: he-api-routing-svc
+          path: dist/routing-svc/
+          retention-days: 90
+
+  build-analytics-svc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          out="dist/analytics-svc"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-analytics-svc-${tag}" ./apps/analytics-svc/cmd/server
+          tar -czf "$out/he-api-analytics-svc-${tag}.tar.gz" -C "$out" "he-api-analytics-svc-${tag}"
+          (cd "$out" && sha256sum "he-api-analytics-svc-${tag}.tar.gz" | awk '{print $1}' > "he-api-analytics-svc-${tag}.tar.gz.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: he-api-analytics-svc
+          path: dist/analytics-svc/
+          retention-days: 90
+
+  build-adapter-deepseek:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          out="dist/adapter-deepseek"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-adapter-deepseek-${tag}" ./apps/adapters/deepseek/cmd/server
+          tar -czf "$out/he-api-adapter-deepseek-${tag}.tar.gz" -C "$out" "he-api-adapter-deepseek-${tag}"
+          (cd "$out" && sha256sum "he-api-adapter-deepseek-${tag}.tar.gz" | awk '{print $1}' > "he-api-adapter-deepseek-${tag}.tar.gz.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: he-api-adapter-deepseek
+          path: dist/adapter-deepseek/
+          retention-days: 90
+
+  build-adapter-qwen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          out="dist/adapter-qwen"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-adapter-qwen-${tag}" ./apps/adapters/qwen/cmd/server
+          tar -czf "$out/he-api-adapter-qwen-${tag}.tar.gz" -C "$out" "he-api-adapter-qwen-${tag}"
+          (cd "$out" && sha256sum "he-api-adapter-qwen-${tag}.tar.gz" | awk '{print $1}' > "he-api-adapter-qwen-${tag}.tar.gz.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: he-api-adapter-qwen
+          path: dist/adapter-qwen/
+          retention-days: 90
+
+  build-adapter-doubao:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          out="dist/adapter-doubao"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-adapter-doubao-${tag}" ./apps/adapters/doubao/cmd/server
+          tar -czf "$out/he-api-adapter-doubao-${tag}.tar.gz" -C "$out" "he-api-adapter-doubao-${tag}"
+          (cd "$out" && sha256sum "he-api-adapter-doubao-${tag}.tar.gz" | awk '{print $1}' > "he-api-adapter-doubao-${tag}.tar.gz.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: he-api-adapter-doubao
+          path: dist/adapter-doubao/
+          retention-days: 90
+
+  build-adapter-glm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          out="dist/adapter-glm"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-adapter-glm-${tag}" ./apps/adapters/glm/cmd/server
+          tar -czf "$out/he-api-adapter-glm-${tag}.tar.gz" -C "$out" "he-api-adapter-glm-${tag}"
+          (cd "$out" && sha256sum "he-api-adapter-glm-${tag}.tar.gz" | awk '{print $1}' > "he-api-adapter-glm-${tag}.tar.gz.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: he-api-adapter-glm
+          path: dist/adapter-glm/
+          retention-days: 90
+
+  build-adapter-ernie:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          out="dist/adapter-ernie"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-adapter-ernie-${tag}" ./apps/adapters/ernie/cmd/server
+          tar -czf "$out/he-api-adapter-ernie-${tag}.tar.gz" -C "$out" "he-api-adapter-ernie-${tag}"
+          (cd "$out" && sha256sum "he-api-adapter-ernie-${tag}.tar.gz" | awk '{print $1}' > "he-api-adapter-ernie-${tag}.tar.gz.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: he-api-adapter-ernie
+          path: dist/adapter-ernie/
+          retention-days: 90
+
+  build-adapter-kimi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          out="dist/adapter-kimi"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-adapter-kimi-${tag}" ./apps/adapters/kimi/cmd/server
+          tar -czf "$out/he-api-adapter-kimi-${tag}.tar.gz" -C "$out" "he-api-adapter-kimi-${tag}"
+          (cd "$out" && sha256sum "he-api-adapter-kimi-${tag}.tar.gz" | awk '{print $1}' > "he-api-adapter-kimi-${tag}.tar.gz.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: he-api-adapter-kimi
+          path: dist/adapter-kimi/
+          retention-days: 90
+
+  build-sample-grpc-app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          out="dist/sample-grpc-app"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-sample-grpc-app-${tag}" ./apps/sample-grpc-app/cmd/server
+          tar -czf "$out/he-api-sample-grpc-app-${tag}.tar.gz" -C "$out" "he-api-sample-grpc-app-${tag}"
+          (cd "$out" && sha256sum "he-api-sample-grpc-app-${tag}.tar.gz" | awk '{print $1}' > "he-api-sample-grpc-app-${tag}.tar.gz.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: he-api-sample-grpc-app
+          path: dist/sample-grpc-app/
+          retention-days: 90
+
+  build-sample-otel-app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          out="dist/sample-otel-app"
+          mkdir -p "$out"
+          go build -ldflags="-s -w" -o "$out/he-api-sample-otel-app-${tag}" ./apps/sample-otel-app/cmd/server
+          tar -czf "$out/he-api-sample-otel-app-${tag}.tar.gz" -C "$out" "he-api-sample-otel-app-${tag}"
+          (cd "$out" && sha256sum "he-api-sample-otel-app-${tag}.tar.gz" | awk '{print $1}' > "he-api-sample-otel-app-${tag}.tar.gz.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: he-api-sample-otel-app
+          path: dist/sample-otel-app/
+          retention-days: 90
+
+  # ── 汇总：下载所有 artifact 并挂到 Release ─────────────────────────────────
+  release:
+    needs:
+      - build-api-gateway
+      - build-auth-svc
+      - build-billing-svc
+      - build-payment-svc
+      - build-notification-svc
+      - build-routing-svc
+      - build-analytics-svc
+      - build-adapter-deepseek
+      - build-adapter-qwen
+      - build-adapter-doubao
+      - build-adapter-glm
+      - build-adapter-ernie
+      - build-adapter-kimi
+      - build-sample-grpc-app
+      - build-sample-otel-app
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: false
+
+      - name: Stage release assets
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.sha256' \) -print0 | \
+            xargs -0 -I{} cp {} release-assets/
+          echo "=== Release assets ==="
+          ls -lh release-assets/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## He-API ${{ github.ref_name }} — Linux amd64 二进制发布
+
+            静态编译（CGO_ENABLED=0），适用于裸机 / systemd 部署。
+
+            ### 部署方式
+            ```bash
+            # 在目标服务器上
+            curl -fsSL https://raw.githubusercontent.com/page6668/He-API/main/deploy/bare-metal/install.sh \
+              | bash -s -- --release ${{ github.ref_name }}
+            ```
+
+            ### 包含的服务（15 个）
+            | 服务 | 端口 |
+            |---|---|
+            | api-gateway | 8080 |
+            | adapter-deepseek | 8091 |
+            | adapter-qwen | 8092 |
+            | adapter-doubao | 8093 |
+            | adapter-glm | 8094 |
+            | adapter-ernie | 8095 |
+            | adapter-kimi | 8096 |
+            | auth-svc | 9001 |
+            | billing-svc | 9002 |
+            | payment-svc | 9003 |
+            | notification-svc | 9004 |
+            | routing-svc | 9005 |
+            | analytics-svc | 9006 |
+            | sample-grpc-app | 9081 |
+            | sample-otel-app | 9082 |
+
+            每个 tar.gz 附带 .sha256 校验文件。

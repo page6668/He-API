@@ -211,6 +211,17 @@ print_summary() {
     echo "    sudo cp ${SCRIPT_DIR}/nginx/he-api.conf /etc/nginx/conf.d/"
     echo "    sudo nginx -t && sudo systemctl reload nginx"
     echo ""
+    echo " 【数据库迁移（启动服务前必做）】"
+    echo ""
+    echo "  1. 准备 PostgreSQL（建议阿里云 RDS 或同机自建），创建库 he_api"
+    echo "  2. 执行迁移脚本（首次用超级用户连接以创建 he_api 角色与 schema）："
+    echo "    export HE_API_DB_POSTGRES_URI='postgres://postgres:密码@localhost:5432/he_api?sslmode=disable'"
+    echo "    sudo -E bash ${SCRIPT_DIR}/migrate.sh up"
+    echo "  3. 校验："
+    echo "    sudo -E bash ${SCRIPT_DIR}/migrate.sh status"
+    echo ""
+    echo "  （ClickHouse 为可选项：设置 HE_API_DB_CLICKHOUSE_URI 后同上执行）"
+    echo ""
     echo "============================================================"
 }
 
