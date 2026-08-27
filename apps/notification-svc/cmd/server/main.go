@@ -30,6 +30,7 @@ import (
 	"github.com/he-api/he-api/apps/notification-svc/internal/events"
 	"github.com/he-api/he-api/apps/notification-svc/internal/handlers"
 	gdprratelimit "github.com/he-api/he-api/apps/notification-svc/internal/ratelimit"
+	"github.com/he-api/he-api/apps/notification-svc/internal/aliyunmail"
 	"github.com/he-api/he-api/apps/notification-svc/internal/sendgrid"
 	obs "github.com/he-api/he-api/packages/go-observability"
 	"github.com/he-api/he-api/packages/proto/gen/go/he/notification/v1/notificationv1connect"
@@ -80,10 +81,7 @@ func main() {
 	if apiKey == "" {
 		logger.Warn("SENDGRID_API_KEY unset — SendEmail will fail with 401 until the Secret is mounted")
 	}
-	sender := sendgrid.NewClient(apiKey, sendgrid.Address{
-		Email: envOr("HE_API_SENDGRID_FROM_EMAIL", "noreply@he-api.com"),
-		Name:  envOr("HE_API_SENDGRID_FROM_NAME", "He-API"),
-	})
+	sender := buildEmailSender(logger)
 
 	// Story 2.6 — optional wiring for the data-export RPCs. When the
 	// required env vars are missing we keep the legacy SendEmail-only
@@ -235,4 +233,36 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("http shutdown failed", slog.String("error", err.Error()))
 	}
+}
+
+// buildEmailSender selects the email backend based on env. SendGrid takes
+// precedence when SENDGRID_API_KEY is set; otherwise we fall back to
+// Alibaba Cloud DirectMail (HE_API_ALIYUNMAIL_ACCESS_KEY_ID +
+// HE_API_ALIYUNMAIL_ACCESS_KEY_SECRET). Either way, From address is
+// env-overridable per backend (HE_API_SENDGRID_FROM_EMAIL /
+// HE_API_ALIYUNMAIL_FROM_EMAIL) so a single binary can serve multiple
+// domains. Returns nil only when neither backend has credentials — caller
+// treats that as fatal.
+func buildEmailSender(logger *slog.Logger) handlers.EmailSender {
+	if apiKey := os.Getenv("SENDGRID_API_KEY"); apiKey != "" {
+		logger.Info("email backend: sendgrid")
+		return sendgrid.NewClient(apiKey, sendgrid.Address{
+			Email: envOr("HE_API_SENDGRID_FROM_EMAIL", "noreply@he-api.com"),
+			Name:  envOr("HE_API_SENDGRID_FROM_NAME", "He-API"),
+		})
+	}
+	if akID := os.Getenv("HE_API_ALIYUNMAIL_ACCESS_KEY_ID"); akID != "" {
+		akSecret := os.Getenv("HE_API_ALIYUNMAIL_ACCESS_KEY_SECRET")
+		if akSecret == "" {
+			logger.Error("HE_API_ALIYUNMAIL_ACCESS_KEY_ID set but HE_API_ALIYUNMAIL_ACCESS_KEY_SECRET missing")
+			return nil
+		}
+		logger.Info("email backend: aliyunmail", slog.String("from", envOr("HE_API_ALIYUNMAIL_FROM_EMAIL", "noreply@he-api.com")))
+		return aliyunmail.NewClient(akID, akSecret, aliyunmail.Address{
+			Email: envOr("HE_API_ALIYUNMAIL_FROM_EMAIL", "noreply@he-api.com"),
+			Name:  envOr("HE_API_ALIYUNMAIL_FROM_NAME", "He-API"),
+		})
+	}
+	logger.Error("no email backend configured — set SENDGRID_API_KEY or HE_API_ALIYUNMAIL_ACCESS_KEY_ID + SECRET")
+	return nil
 }
