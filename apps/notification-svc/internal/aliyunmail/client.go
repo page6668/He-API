@@ -30,6 +30,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/he-api/he-api/apps/notification-svc/internal/sendgrid"
 )
 
 const (
@@ -76,19 +78,14 @@ func NewClient(accessKeyID, accessKeySecret string, from Address) *Client {
 	}
 }
 
-// SendRequest mirrors sendgrid.SendRequest exactly so the handler can
-// branch-free between backends.
-type SendRequest struct {
-	To       string
-	Subject  string
-	TextBody string
-	HTMLBody string
-}
-
 // Send posts SingleSendMail and returns the Aliyun DM request id (or "").
 // Aliyun DM is form-encoded, NOT JSON — every parameter goes into the
 // query string of the POST, signature v3 over the canonicalized query.
-func (c *Client) Send(ctx context.Context, req SendRequest) (string, error) {
+//
+// Signature uses sendgrid.SendRequest intentionally: handlers.EmailSender
+// is defined in terms of sendgrid.SendRequest, and re-using the struct
+// keeps both backends interchangeable without changing the handler.
+func (c *Client) Send(ctx context.Context, req sendgrid.SendRequest) (string, error) {
 	if c.AccessKeyID == "" || c.AccessKeySecret == "" {
 		return "", fmt.Errorf("%w: access key id / secret required", ErrPermanent)
 	}
