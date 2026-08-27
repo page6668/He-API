@@ -16,17 +16,14 @@
 package aliyunmail
 
 import (
-	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"hash"
 	"io"
 	"net/http"
 	"net/url"
@@ -234,10 +231,3 @@ func truncate(s string, max int) string {
 	}
 	return s[:max] + "…"
 }
-
-// keep imports used (sha256, sha1, rand imported for hash.Hash interface
-// compatibility if callers swap in alternative signatures).
-var (
-	_ hash.Hash = sha1.New
-	_           = bytes.NewReader
-)
