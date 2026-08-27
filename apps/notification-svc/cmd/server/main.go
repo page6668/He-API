@@ -81,8 +81,8 @@ func main() {
 		logger.Warn("SENDGRID_API_KEY unset — SendEmail will fail with 401 until the Secret is mounted")
 	}
 	sender := sendgrid.NewClient(apiKey, sendgrid.Address{
-		Email: "noreply@he-api.com",
-		Name:  "He-API",
+		Email: envOr("HE_API_SENDGRID_FROM_EMAIL", "noreply@he-api.com"),
+		Name:  envOr("HE_API_SENDGRID_FROM_NAME", "He-API"),
 	})
 
 	// Story 2.6 — optional wiring for the data-export RPCs. When the
