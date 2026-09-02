@@ -72,6 +72,7 @@ export default async function ConsoleLayout({
   ];
   if (role === 'admin') {
     navItems.push({ href: `/${resolvedLocale}/admin/pricing`, label: t('pricing.title') });
+    navItems.push({ href: `/${resolvedLocale}/admin/providers`, label: 'LLM Provider' });
   }
 
   // Story 10.7 AC2 — Intercom (customer-support) boots on the authed console
