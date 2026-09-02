@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -43,6 +44,7 @@ const (
 // HTTP/2 and the wire-protocol decision is in-code + test-coverage rather
 // than incidental ALPN behaviour.
 type Client struct {
+	mu         sync.RWMutex
 	BaseURL    string
 	APIKey     string
 	HTTPClient *http.Client
@@ -78,6 +80,34 @@ func NewClient(baseURL, apiKey string, timeout time.Duration) *Client {
 			Timeout:   timeout,
 		},
 	}
+}
+
+// SetKey 热更新 upstream API key(AD-004 运行时配置)。线程安全。
+func (c *Client) SetKey(key string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.APIKey = key
+}
+
+// SetBaseURL 热更新 upstream base URL(AD-004 运行时配置)。线程安全。
+func (c *Client) SetBaseURL(url string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.BaseURL = url
+}
+
+// Key 读取当前 upstream API key(受 RLock 保护)。
+func (c *Client) Key() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.APIKey
+}
+
+// BaseURLSafe 读取当前 upstream base URL(受 RLock 保护)。
+func (c *Client) BaseURLSafe() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.BaseURL
 }
 
 // ClassifyError turns a transport-level or HTTP-level error into an

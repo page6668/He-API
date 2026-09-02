@@ -45,6 +45,8 @@ import (
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/keypolicy"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/ratelimit"
 	"github.com/he-api/he-api/apps/api-gateway/internal/middleware/requestid"
+	"github.com/he-api/he-api/apps/api-gateway/internal/providers"
+	"github.com/he-api/he-api/apps/api-gateway/internal/secrets"
 	"github.com/he-api/he-api/apps/api-gateway/internal/notifyclient"
 	"github.com/he-api/he-api/apps/api-gateway/internal/routingclient"
 	"github.com/he-api/he-api/apps/api-gateway/internal/safetylog"
@@ -479,6 +481,19 @@ func main() {
 		jwtVerifier.RequireJWT(adminGuard.Require(http.HandlerFunc(adminPricing.SetPrice))))
 	mux.Handle("GET /v1/admin/models/pricing/defaults",
 		jwtVerifier.RequireJWT(adminGuard.Require(http.HandlerFunc(adminPricing.Defaults))))
+	// AD-004 — LLM Provider 密钥运行时配置(Console 后台 → 本接口 → DB →
+	// adapter 内部端点 → 30s 热加载)。复用 billingPool;加密密钥缺失时 admin 接口
+	// 写会 500(fail-closed),但读仍可走(无 key 时不出明文,只给占位)。
+	providerKey := loadProviderKey(logger)
+	providerStore := providers.NewStore(billingPool, providerKey, logger)
+	adminProviders := handlers.NewAdminProvidersHandler(providerStore, logger)
+	internalProviders := handlers.NewInternalProvidersHandler(providerStore, logger)
+	mux.Handle("GET /v1/admin/providers",
+		jwtVerifier.RequireJWT(adminGuard.Require(http.HandlerFunc(adminProviders.List))))
+	mux.Handle("PUT /v1/admin/providers/{name}",
+		jwtVerifier.RequireJWT(adminGuard.Require(http.HandlerFunc(adminProviders.Update))))
+	// 内部端点:仅 loopback,无鉴权(adapter 拉配置用)。
+	mux.Handle("GET /internal/providers/active", http.HandlerFunc(internalProviders.Active))
 	// AD-003 — 当前用户查自己的角色(仅登录,不需管理员)。前端据此决定是否显示
 	// 管理入口。fail-safe:读不到 role 返回 "user"。
 	meRole := handlers.NewMeRoleHandler(adminRoleQ, logger)
@@ -949,7 +964,7 @@ func splitCSV(v string) []string {
 	return out
 }
 
-// buildBillingPool builds the read pool for GET /v1/balance + /v1/usage from
+// buildBillingPool constructs the shared PostgreSQL pool from
 // HE_API_DB_POSTGRES_URI. Returns nil (endpoints disabled) when unset / on a
 // parse/connect error — a missing billing pool never blocks gateway boot.
 func buildBillingPool(logger *slog.Logger) *pgxpool.Pool {
@@ -968,6 +983,24 @@ func buildBillingPool(logger *slog.Logger) *pgxpool.Pool {
 		return nil
 	}
 	return pool
+}
+
+// loadProviderKey 加载 AD-004 的 provider 加密密钥。缺失/损坏时返回 (nil, warn),
+// 不阻断启动:此时 admin 写接口会 500(fail-closed),但读路径仍可用(无明文输出)。
+// 密钥文件默认 /opt/he-api/secrets/provider-encryption.key,可用 HE_API_PROVIDER_KEY_FILE 覆盖。
+func loadProviderKey(logger *slog.Logger) *secrets.Key {
+	path := os.Getenv("HE_API_PROVIDER_KEY_FILE")
+	if path == "" {
+		path = "/opt/he-api/secrets/provider-encryption.key"
+	}
+	key, err := secrets.LoadKey(path)
+	if err != nil {
+		logger.Warn("provider encryption key unavailable — admin provider writes disabled (fail-closed)",
+			slog.String("path", path), slog.String("error", err.Error()))
+		return nil
+	}
+	logger.Info("provider encryption key loaded", slog.String("path", path))
+	return key
 }
 
 // buildBillingClient constructs the billing-svc Connect client (Story 7.3 —

@@ -59,7 +59,7 @@ create_user() {
 
 create_dirs() {
     log_info "创建目录结构 ..."
-    mkdir -p /opt/he-api/{bin,env,logs,data,keys,console}
+    mkdir -p /opt/he-api/{bin,env,logs,data,keys,console,secrets}
     chown -R he-api:he-api /opt/he-api
     log_info "目录 /opt/he-api/* 已创建并授权"
 }
@@ -85,6 +85,27 @@ gen_jwt_keys() {
     chmod 600 "$priv"
     chmod 644 "$pub"
     log_info "JWT 密钥对已生成: $priv / $pub"
+}
+
+# ---------- AD-004: Provider API Key 加密密钥 ----------
+# AES-256-GCM 主密钥，gateway admin 接口写入 provider_configs 表时加密存储。
+# 若文件已存在则跳过（幂等）。
+gen_provider_key() {
+    local key_file="/opt/he-api/secrets/provider-encryption.key"
+    if [[ -f "$key_file" ]]; then
+        log_info "Provider 加密密钥已存在，跳过生成"
+        return 0
+    fi
+    if ! command -v openssl &>/dev/null; then
+        log_error "缺少 openssl，无法生成 Provider 加密密钥。"
+        exit 1
+    fi
+    log_info "生成 Provider 加密密钥 (AES-256) ..."
+    # 生成 32 字节随机密钥（base64 编码，无换行）
+    openssl rand -base64 32 | tr -d '\n' > "$key_file"
+    chown he-api:he-api "$key_file"
+    chmod 600 "$key_file"
+    log_info "Provider 加密密钥已生成: $key_file"
 }
 
 # ---------- 二进制下载 ----------
@@ -299,6 +320,7 @@ main() {
     create_user
     create_dirs
     gen_jwt_keys
+    gen_provider_key
 
     if [[ "$SOURCE_TYPE" == "release" ]]; then
         download_release "$RELEASE_VERSION"

@@ -104,7 +104,7 @@ func (s *Service) ChatInto(ctx context.Context, req *adapterv1.ChatRequest, sink
 // chatNonStreaming performs ONE upstream POST and emits ONE terminal
 // ChatChunk to the sink per BR-1.3.
 func (s *Service) chatNonStreaming(ctx context.Context, req *adapterv1.ChatRequest, sink chunkSink) error {
-	httpReq, err := translateRequestExternal(ctx, s.client.BaseURL, s.client.APIKey, req)
+	httpReq, err := translateRequestExternal(ctx, s.client.BaseURLSafe(), s.client.Key(), req)
 	if err != nil {
 		s.logUpstreamError(ctx, req, upstream.ErrorKindUpstream5xx, 0, err)
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("translate: %w", err))
@@ -192,7 +192,7 @@ func (s *Service) chatNonStreaming(ctx context.Context, req *adapterv1.ChatReque
 // when the client disconnects, the outbound HTTPS connection is cancelled
 // within the next chunk-read iteration (BR-1.8 ≤ 200ms in practice).
 func (s *Service) chatStreaming(ctx context.Context, req *adapterv1.ChatRequest, sink chunkSink) error {
-	httpReq, err := translateRequestExternal(ctx, s.client.BaseURL, s.client.APIKey, req)
+	httpReq, err := translateRequestExternal(ctx, s.client.BaseURLSafe(), s.client.Key(), req)
 	if err != nil {
 		s.logUpstreamError(ctx, req, upstream.ErrorKindUpstream5xx, 0, err)
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("translate: %w", err))

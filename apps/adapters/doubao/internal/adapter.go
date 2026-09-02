@@ -179,7 +179,7 @@ func (s *Service) ChatInto(ctx context.Context, req *adapterv1.ChatRequest, sink
 // per-request closure) per BR-1.11.
 func (s *Service) chatNonStreaming(ctx context.Context, req *adapterv1.ChatRequest, sink chunkSink) error {
 	friendlyModelID := req.GetModel() // BR-1.11 per-request closure capture
-	httpReq, err := upstream.TranslateForTest(ctx, s.client.BaseURL, s.client.APIKey, s.endpointMap, req)
+	httpReq, err := upstream.TranslateForTest(ctx, s.client.BaseURLSafe(), s.client.Key(), s.endpointMap, req)
 	if err != nil {
 		kind := upstream.ClassifyError(err)
 		s.logUpstreamError(ctx, req, kind, 0, "", err)
@@ -263,7 +263,7 @@ func (s *Service) chatNonStreaming(ctx context.Context, req *adapterv1.ChatReque
 // forced include_usage + BR-1.11 per-chunk back-translate).
 func (s *Service) chatStreaming(ctx context.Context, req *adapterv1.ChatRequest, sink chunkSink) error {
 	friendlyModelID := req.GetModel() // BR-1.11 per-request closure capture
-	httpReq, err := upstream.TranslateForTest(ctx, s.client.BaseURL, s.client.APIKey, s.endpointMap, req)
+	httpReq, err := upstream.TranslateForTest(ctx, s.client.BaseURLSafe(), s.client.Key(), s.endpointMap, req)
 	if err != nil {
 		kind := upstream.ClassifyError(err)
 		s.logUpstreamError(ctx, req, kind, 0, "", err)

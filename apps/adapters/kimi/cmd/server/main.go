@@ -35,6 +35,7 @@ import (
 	kimiinternal "github.com/he-api/he-api/apps/adapters/kimi/internal"
 	"github.com/he-api/he-api/apps/adapters/kimi/internal/upstream"
 	obs "github.com/he-api/he-api/packages/go-observability"
+	providerrefresher "github.com/he-api/he-api/packages/provider-refresher"
 	adapterv1connect "github.com/he-api/he-api/packages/proto/gen/go/he/adapter/v1/adapterv1connect"
 	"go.opentelemetry.io/otel"
 )
@@ -64,8 +65,10 @@ func main() {
 	baseURL := envOr("KIMI_UPSTREAM_BASE_URL", "https://api.moonshot.cn")
 	apiKey := os.Getenv("KIMI_UPSTREAM_API_KEY")
 	if apiKey == "" {
-		logger.Error("KIMI_UPSTREAM_API_KEY is not set — adapter cannot reach upstream")
-		os.Exit(1)
+		// AD-004: credentials may arrive at runtime from the gateway's
+		// /internal/providers/active loopback endpoint. Don't hard-fail at
+		// startup; the refresher goroutine below will populate them.
+		logger.Warn("KIMI_UPSTREAM_API_KEY is not set — waiting for runtime config from gateway")
 	}
 	timeout := DefaultUpstreamTimeout
 	if v := os.Getenv("KIMI_UPSTREAM_TIMEOUT_SECONDS"); v != "" {
@@ -88,6 +91,12 @@ func main() {
 	}
 
 	client := upstream.NewClient(baseURL, apiKey, timeout)
+
+	// AD-004: hot-reload upstream credentials from the gateway's loopback-only
+	// /internal/providers/active endpoint. Runs for the process lifetime.
+	gwURL := envOr("HE_API_PROVIDER_REFRESH_URL", "http://127.0.0.1:8080")
+	refresher := providerrefresher.New(gwURL, "kimi", client, logger)
+	go refresher.Start(context.Background())
 	svc := kimiinternal.NewService(client, logger, boundModelIDs)
 
 	// Story 9.4 (T6.1, BR-TR-6): TracerProvider + global W3C propagator BEFORE the

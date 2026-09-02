@@ -3,6 +3,7 @@ package upstream
 import (
 	"crypto/tls"
 	"net/http"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -24,6 +25,7 @@ const DefaultUpstreamTimeout = 60 * time.Second
 // long-streams). Stories 4.3-4.6 default to this policy for unverified
 // vendors per OQ-4.2-5 cascade.
 type Client struct {
+	mu         sync.RWMutex
 	BaseURL    string
 	APIKey     string
 	HTTPClient *http.Client
@@ -55,3 +57,32 @@ func NewClient(baseURL, apiKey string, timeout time.Duration) *Client {
 		},
 	}
 }
+
+// SetKey 热更新 upstream API key (AD-004 运行时配置)。线程安全。
+func (c *Client) SetKey(key string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.APIKey = key
+}
+
+// SetBaseURL 热更新 upstream base URL (AD-004 运行时配置)。线程安全。
+func (c *Client) SetBaseURL(url string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.BaseURL = url
+}
+
+// Key 读取当前 upstream API key (受 RLock 保护)。
+func (c *Client) Key() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.APIKey
+}
+
+// BaseURLSafe 读取当前 upstream base URL (受 RLock 保护)。
+func (c *Client) BaseURLSafe() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.BaseURL
+}
+

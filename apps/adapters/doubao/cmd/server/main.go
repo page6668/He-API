@@ -44,6 +44,7 @@ import (
 	doubaointernal "github.com/he-api/he-api/apps/adapters/doubao/internal"
 	"github.com/he-api/he-api/apps/adapters/doubao/internal/upstream"
 	obs "github.com/he-api/he-api/packages/go-observability"
+	providerrefresher "github.com/he-api/he-api/packages/provider-refresher"
 	adapterv1connect "github.com/he-api/he-api/packages/proto/gen/go/he/adapter/v1/adapterv1connect"
 	"go.opentelemetry.io/otel"
 )
@@ -125,8 +126,10 @@ func main() {
 	baseURL := envOr("DOUBAO_UPSTREAM_BASE_URL", "https://ark.cn-beijing.volces.com")
 	apiKey := os.Getenv("DOUBAO_UPSTREAM_API_KEY")
 	if apiKey == "" {
-		logger.Error("DOUBAO_UPSTREAM_API_KEY is not set — adapter cannot reach upstream")
-		os.Exit(1)
+		// AD-004: credentials may arrive at runtime from the gateway's
+		// /internal/providers/active loopback endpoint. Don't hard-fail at
+		// startup; the refresher goroutine below will populate them.
+		logger.Warn("DOUBAO_UPSTREAM_API_KEY is not set — waiting for runtime config from gateway")
 	}
 	timeout := DefaultUpstreamTimeout
 	if v := os.Getenv("DOUBAO_UPSTREAM_TIMEOUT_SECONDS"); v != "" {
@@ -164,6 +167,12 @@ func main() {
 	}
 
 	client := upstream.NewClient(baseURL, apiKey, timeout)
+
+	// AD-004: hot-reload upstream credentials from the gateway's loopback-only
+	// /internal/providers/active endpoint. Runs for the process lifetime.
+	gwURL := envOr("HE_API_PROVIDER_REFRESH_URL", "http://127.0.0.1:8080")
+	refresher := providerrefresher.New(gwURL, "doubao", client, logger)
+	go refresher.Start(context.Background())
 	svc := doubaointernal.NewService(client, endpointMap, logger, boundModelIDs)
 
 	// Story 9.6 — Volcano (豆包语音) ASR upstream. DISTINCT config from the Ark

@@ -119,7 +119,7 @@ func (s *Service) ChatInto(ctx context.Context, req *adapterv1.ChatRequest, sink
 // chatNonStreaming performs ONE upstream POST and emits ONE terminal
 // ChatChunk to the sink (BR-1.3 non-streaming branch).
 func (s *Service) chatNonStreaming(ctx context.Context, req *adapterv1.ChatRequest, sink chunkSink) error {
-	httpReq, err := upstream.TranslateForTest(ctx, s.client.BaseURL, s.client.APIKey, req)
+	httpReq, err := upstream.TranslateForTest(ctx, s.client.BaseURLSafe(), s.client.Key(), req)
 	if err != nil {
 		s.logUpstreamError(ctx, req, upstream.ErrorKindUpstream5xx, 0, "", err)
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("translate: %w", err))
@@ -196,7 +196,7 @@ func (s *Service) chatNonStreaming(ctx context.Context, req *adapterv1.ChatReque
 // strict-RFC decoder + BR-2.4 terminal-chunk-carries-usage + BR-2.9
 // forced include_usage).
 func (s *Service) chatStreaming(ctx context.Context, req *adapterv1.ChatRequest, sink chunkSink) error {
-	httpReq, err := upstream.TranslateForTest(ctx, s.client.BaseURL, s.client.APIKey, req)
+	httpReq, err := upstream.TranslateForTest(ctx, s.client.BaseURLSafe(), s.client.Key(), req)
 	if err != nil {
 		s.logUpstreamError(ctx, req, upstream.ErrorKindUpstream5xx, 0, "", err)
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("translate: %w", err))
