@@ -101,8 +101,8 @@ gen_provider_key() {
         exit 1
     fi
     log_info "生成 Provider 加密密钥 (AES-256) ..."
-    # 生成 32 字节随机密钥（base64 编码，无换行）
-    openssl rand -base64 32 | tr -d '\n' > "$key_file"
+    # 生成原始 32 字节随机密钥（LoadKey 要求原始字节，非 base64 文本）
+    openssl rand 32 > "$key_file"
     chown he-api:he-api "$key_file"
     chmod 600 "$key_file"
     log_info "Provider 加密密钥已生成: $key_file"

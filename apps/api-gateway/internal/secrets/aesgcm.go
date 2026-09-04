@@ -8,7 +8,7 @@
 // 密钥 32 字节,启动时从 /opt/he-api/secrets/provider-encryption.key 读入(env 不放密钥,
 // 避免泄漏到 /proc/<pid>/environ)。生成:
 //
-//	openssl rand -base64 32 | tr -d '\n' > /opt/he-api/secrets/provider-encryption.key
+//	openssl rand 32 > /opt/he-api/secrets/provider-encryption.key
 //	chmod 0600 /opt/he-api/secrets/provider-encryption.key
 //	chown he-api:he-api /opt/he-api/secrets/provider-encryption.key
 //
