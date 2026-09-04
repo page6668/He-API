@@ -146,7 +146,7 @@ function ProviderCard({
       {/* ── masked key 展示 ── */}
       {provider.hasKey && provider.maskedKey && (
         <p className="mb-3 font-mono text-label text-ink-muted">
-          当前 Key: {provider.maskedKey}
+          当前密钥：{provider.maskedKey}
         </p>
       )}
 

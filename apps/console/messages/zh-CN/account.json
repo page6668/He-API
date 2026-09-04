@@ -20,9 +20,9 @@
         "too_long": "密钥名称最多 100 个字符。",
         "invalid_chars": "密钥名称包含不允许的字符。"
       },
-      "generic": "出错了,请稍后再试。",
-      "plaintext_one_time": "明文密钥仅显示一次,请立即保存——之后将无法再次获取。",
-      "rate_limited": "创建过于频繁,请稍后再试。",
+      "generic": "出错了，请稍后再试。",
+      "plaintext_one_time": "明文密钥仅显示一次，请立即保存——之后将无法再次获取。",
+      "rate_limited": "创建过于频繁，请稍后再试。",
       "ip": {
         "invalid_format": "请输入有效的 IP 地址或 CIDR 范围。",
         "degenerate_cidr": "不允许使用 0.0.0.0/0 和 ::/0。",
@@ -35,7 +35,7 @@
     },
     "revoke": {
       "confirm": {
-        "title": "确定吊销此 API 密钥?",
+        "title": "确定吊销此 API 密钥？",
         "cta": "吊销"
       },
       "success": "API 密钥已吊销。",
@@ -57,7 +57,7 @@
         "unknown_model": "一个或多个所选模型不可用。",
         "cap_out_of_range": "每月费用上限必须介于 $0.01 与 $999,999.99 之间。",
         "not_found": "未找到 API 密钥，或已被删除。",
-        "account_pending_deletion": "您的账户正在等待删除，配置更改已禁用。",
+        "account_pending_deletion": "你的账户正在等待删除，配置更改已禁用。",
         "invalid_request": "部分配置值无效。",
         "generic": "出现错误，请重试。"
       }
@@ -65,11 +65,11 @@
     "cap": {
       "email": {
         "warning": {
-          "subject": "您的 API 密钥即将达到月度消费上限",
+          "subject": "你的 API 密钥即将达到月度消费上限",
           "description": "用量达到上限的 80% 时通知"
         },
         "tripped": {
-          "subject": "您的 API 密钥已暂停 — 已达到月度消费上限",
+          "subject": "你的 API 密钥已暂停 — 已达到月度消费上限",
           "description": "达到上限并暂停密钥时通知"
         }
       },
@@ -185,11 +185,11 @@
     "title": "个人资料设置",
     "display_name": {
       "label": "显示名称",
-      "placeholder": "设置您的显示名称"
+      "placeholder": "设置你的显示名称"
     },
     "email": {
       "label": "邮箱",
-      "read_only_hint": "邮箱在注册时设置,无法在此修改",
+      "read_only_hint": "邮箱在注册时设置，无法在此修改",
       "read_only_tooltip": "邮箱无法在此修改"
     },
     "locale": {
@@ -217,15 +217,15 @@
     },
     "banners": {
       "concurrent_update": {
-        "message": "您的资料已在另一个标签页中被修改。",
+        "message": "你的资料已在另一个标签页中被修改。",
         "reload_cta": "重新加载"
       }
     },
     "errors": {
-      "load_failed": "无法加载个人资料,请重试。",
-      "generic": "无法保存更改,请重试。",
-      "rate_limited": "更新过于频繁,请稍后再试。",
-      "concurrent_update": "您的资料已在另一个标签页中被修改,请重新加载。",
+      "load_failed": "无法加载个人资料，请重试。",
+      "generic": "无法保存更改，请重试。",
+      "rate_limited": "更新过于频繁，请稍后再试。",
+      "concurrent_update": "你的资料已在另一个标签页中被修改，请重新加载。",
       "unknown_field": "请求包含意外字段",
       "display_name": {
         "invalid_chars": "显示名称包含无效字符",
@@ -241,16 +241,16 @@
     }
   },
   "data": {
-    "title": "您的数据",
-    "description": "导出包含您的账户信息、API Keys 元数据、调用日志（90 天）、账单、余额和内容安全治理日志的 JSON 归档。",
+    "title": "你的数据",
+    "description": "导出包含你的账户信息、API Keys 元数据、调用日志（90 天）、账单、余额和内容安全治理日志的 JSON 归档。",
     "export": {
       "cta": {
         "label": "导出我的数据",
-        "disabled_in_progress": "正在生成数据包，准备好后会通过邮件通知您。"
+        "disabled_in_progress": "正在生成数据包，准备好后会通过邮件通知你。"
       },
       "dialog": {
         "title": "确认数据导出",
-        "body_intro": "我们将为您准备一个 ZIP 包，包含以下与您账户相关的数据类别：",
+        "body_intro": "我们将为你准备一个 ZIP 包，包含以下与你账户相关的数据类别：",
         "categories": {
           "users": "账户信息",
           "api_keys": "API Keys 元数据",
@@ -264,8 +264,8 @@
         "cancel": "取消"
       },
       "banner": {
-        "processing": "正在准备您的数据导出。我们会在 5-30 分钟内将下载链接发送到您的邮箱。",
-        "ready": "您最近的数据导出仍可下载——请查看邮箱，如未收到请联系客服。",
+        "processing": "正在准备你的数据导出。我们会在 5-30 分钟内将下载链接发送到你的邮箱。",
+        "ready": "你最近的数据导出仍可下载——请查看邮箱，如未收到请联系客服。",
         "failed": "上一次数据导出失败。请重试或联系客服。"
       },
       "errors": {
@@ -273,56 +273,56 @@
         "generic": "无法启动数据导出，请重试。"
       },
       "email": {
-        "subject": "您的 He-API 数据导出已就绪",
-        "greeting": "您好 {display_name}，",
-        "body_intro": "您的数据导出已生成。请点击下方链接下载（链接将在 {expires_at} 过期）。",
+        "subject": "你的 He-API 数据导出已就绪",
+        "greeting": "你好 {display_name}，",
+        "body_intro": "你的数据导出已生成。请点击下方链接下载（链接将在 {expires_at} 过期）。",
         "cta": "下载我的数据",
         "expires_at": "链接将在 {expires_at} 过期",
-        "security_disclaimer": "如果您未请求此导出，请立即联系客服。"
+        "security_disclaimer": "如果你未请求此导出，请立即联系客服。"
       }
     }
   },
   "delete": {
     "cta": {
       "label": "删除我的账户",
-      "disabled_pending": "您的账户已安排删除。"
+      "disabled_pending": "你的账户已安排删除。"
     },
     "dialog": {
-      "title": "永久删除您的账户?",
-      "consequences": "您的账户将被安排删除,并有 30 天的宽限期。您可以在 30 天内随时重新登录以取消删除。宽限期结束后,您的个人资料、API 密钥和个人数据将被永久清除。法律要求保留的账单记录将予以保留。",
+      "title": "永久删除你的账户？",
+      "consequences": "你的账户将被安排删除，并有 30 天的宽限期。你可以在 30 天内随时重新登录以取消删除。宽限期结束后，你的个人资料、API 密钥和个人数据将被永久清除。法律要求保留的账单记录将予以保留。",
       "password_label": "请输入密码以确认",
-      "email_confirm_label": "请输入您的账户邮箱以确认",
-      "totp_label": "请输入您的 6 位验证码",
+      "email_confirm_label": "请输入你的账户邮箱以确认",
+      "totp_label": "请输入你的 6 位验证码",
       "confirm": "删除我的账户",
       "cancel": "取消",
       "errors": {
-        "bad_password": "密码不正确,请重试。",
-        "bad_totp": "验证码不正确,请重试。"
+        "bad_password": "密码不正确，请重试。",
+        "bad_totp": "验证码不正确，请重试。"
       }
     },
     "errors": {
-      "rate_limited": "删除请求过于频繁,请稍后再试。",
-      "generic": "出错了,请重试。"
+      "rate_limited": "删除请求过于频繁，请稍后再试。",
+      "generic": "出错了，请重试。"
     },
     "recovery": {
-      "title": "您的账户已安排删除",
-      "countdown": "{days, plural, =0 {您的账户将于今天被永久删除。} =1 {您的账户将在 1 天后被永久删除。} other {您的账户将在 # 天后被永久删除。}}",
+      "title": "你的账户已安排删除",
+      "countdown": "{days， plural， =0 {你的账户将于今天被永久删除。} =1 {你的账户将在 1 天后被永久删除。} other {你的账户将在 # 天后被永久删除。}}",
       "reactivate_cta": "重新激活我的账户",
-      "explainer": "如果您不做任何操作,您的账户和数据将在预定日期被永久删除。请在此之前随时重新激活,以保留您的账户。",
+      "explainer": "如果你不做任何操作，你的账户和数据将在预定日期被永久删除。请在此之前随时重新激活，以保留你的账户。",
       "expired": "该账户已被永久删除。"
     },
     "email": {
       "requested": {
-        "subject": "您的 He-API 账户已安排删除",
-        "body": "您的账户已安排于 {pending_deletion_at} 永久删除。如果这不是您本人的操作,请在此之前登录以取消。"
+        "subject": "你的 He-API 账户已安排删除",
+        "body": "你的账户已安排于 {pending_deletion_at} 永久删除。如果这不是你本人的操作，请在此之前登录以取消。"
       },
       "cancelled": {
-        "subject": "您的 He-API 账户删除已取消",
-        "body": "好消息——您的账户删除已取消,您的账户已重新激活。"
+        "subject": "你的 He-API 账户删除已取消",
+        "body": "好消息——你的账户删除已取消，你的账户已重新激活。"
       },
       "completed": {
-        "subject": "您的 He-API 账户已被删除",
-        "body": "您的 He-API 账户和个人数据已于 {executed_at} 永久删除。法律要求保留的账单记录已予以保留。"
+        "subject": "你的 He-API 账户已被删除",
+        "body": "你的 He-API 账户和个人数据已于 {executed_at} 永久删除。法律要求保留的账单记录已予以保留。"
       }
     }
   },
@@ -360,23 +360,23 @@
   },
   "pricing": {
     "title": "模型定价",
-    "subtitle": "填写各模型的上游成本价(元 / 百万 tokens)。保存后换算成美元入库,约 5 分钟内在模型广场生效。加价率由系统统一处理,这里填成本价。",
-    "forbidden": "需要管理员权限。当前账号不是管理员,如需改价请联系平台负责人为你的账号授予 admin 角色。",
-    "connectError": "无法连接后台服务,请稍后重试。",
+    "subtitle": "填写各模型的上游成本价（元 / 百万 tokens）。保存后换算成美元入库，约 5 分钟内在模型广场生效。加价率由系统统一处理，这里填成本价。",
+    "forbidden": "需要管理员权限。当前账号不是管理员，如需改价请联系平台负责人为你的账号授予 admin 角色。",
+    "connectError": "无法连接后台服务，请稍后重试。",
     "empty": "当前没有可定价的上架模型。",
-    "fxLabel": "换算汇率 USD → CNY(默认取系统最新,可改)",
-    "fxHelp": "你填「元 / 百万 tokens」,系统按此汇率换算成美元存储。改价是新增记录,旧价保留可追溯。",
+    "fxLabel": "换算汇率 USD → CNY（默认取系统最新，可改）",
+    "fxHelp": "你填「元 / 百万 tokens」，系统按此汇率换算成美元存储。改价是新增记录，旧价保留可追溯。",
     "inputLabel": "输入价 元/百万",
     "outputLabel": "输出价 元/百万",
     "inputPlaceholder": "如 5.76",
     "outputPlaceholder": "如 14.4",
     "save": "保存",
     "saving": "保存中…",
-    "saved": "已保存,约 5 分钟内在模型广场生效。",
+    "saved": "已保存，约 5 分钟内在模型广场生效。",
     "errInvalid": "输入价、输出价、汇率都必须是大于 0 的数字。",
     "errForbidden": "需要管理员权限。",
-    "errUnauthorized": "登录已失效,请重新登录。",
+    "errUnauthorized": "登录已失效，请重新登录。",
     "errNotFound": "该模型不存在或已下架。",
-    "errGeneric": "保存失败,请重试。"
+    "errGeneric": "保存失败，请重试。"
   }
 }
