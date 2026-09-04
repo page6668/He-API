@@ -29,7 +29,10 @@
   },
   "nav": {
     "console": "وحدة التحكم",
-    "docs": "الوثائق"
+    "docs": "الوثائق",
+    "models": "النماذج",
+    "playground": "Playground",
+    "benchmark": "Benchmark"
   },
   "localeSwitch": {
     "label": "تغيير اللغة",

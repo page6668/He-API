@@ -29,7 +29,10 @@
   },
   "nav": {
     "console": "콘솔",
-    "docs": "문서"
+    "docs": "문서",
+    "models": "모델",
+    "playground": "모델 광장",
+    "benchmark": "벤치마크"
   },
   "localeSwitch": {
     "label": "언어 변경",

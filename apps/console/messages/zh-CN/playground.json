@@ -1,12 +1,12 @@
 {
   "nav": {
-    "sidebar": "Playground",
+    "sidebar": "模型广场",
     "home": "He-API"
   },
   "page": {
-    "title": "Playground — He-API",
+    "title": "模型广场 — He-API",
     "description": "在浏览器中试用 He-API 聊天模型：选择模型、调整参数、流式查看响应、A/B 对比两个模型，并导出可直接运行的 cURL、Python、TypeScript 和 Go 代码片段。",
-    "heading": "Playground",
+    "heading": "模型广场",
     "subheading": "发起一次实时聊天调用、A/B 对比模型，并导出代码。"
   },
   "controls": {
@@ -49,7 +49,7 @@
     "ignored": "分享链接无法应用，已忽略。"
   },
   "errors": {
-    "noKey": "请先创建 API 密钥，才能在 Playground 中发起请求。",
+    "noKey": "请先创建 API 密钥，才能在模型广场中发起请求。",
     "selectKey": "请选择一个你的 API 密钥以归属用量。",
     "unauthorized": "登录已过期，请重新登录。",
     "keyForbidden": "该 API 密钥不属于你的账户。",

@@ -8,7 +8,7 @@
     "heroSubtitle": "一个 API 统一接入 Qwen、DeepSeek、豆包、文心一言、GLM 与 Kimi——用量、密钥与日志一站式管理。",
     "proofLine": "{count} 个模型 · 6 家供应商 · 1 个 OpenAI 兼容 API",
     "proofLineNoModels": "6 家供应商 · 1 个 OpenAI 兼容 API",
-    "ctaPlayground": "打开 Playground",
+    "ctaPlayground": "打开模型广场",
     "ctaDocs": "阅读文档",
     "codeLabel": "一次请求，任意模型",
     "startHere": "从这里开始",
@@ -18,7 +18,7 @@
         "desc": "浏览通过一个统一 API 提供的每一个模型。"
       },
       "playground": {
-        "label": "Playground",
+        "label": "模型广场",
         "desc": "发起实时调用、A/B 对比模型、导出代码。"
       },
       "console": {
@@ -29,7 +29,10 @@
   },
   "nav": {
     "console": "控制台",
-    "docs": "文档"
+    "docs": "文档",
+    "models": "模型",
+    "playground": "模型广场",
+    "benchmark": "评测"
   },
   "localeSwitch": {
     "label": "切换语言",

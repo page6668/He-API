@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
-import { getMessages, unstable_setRequestLocale } from 'next-intl/server';
+import { getMessages, getTranslations, unstable_setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { IBM_Plex_Sans, IBM_Plex_Mono } from 'next/font/google';
 import { locales, isLocale } from '@/i18n/config';
@@ -43,17 +43,18 @@ export default async function LocaleLayout({ children, params: { locale } }: Loc
   unstable_setRequestLocale(locale);
 
   const messages = await getMessages();
+  const t = await getTranslations('common');
   const dir = isRtlLocale(locale) ? 'rtl' : 'ltr';
 
   // 导航只列**真实存在**的路由。曾有一条 `/docs` 死链(该路由从未实现 → 404),
   // 以及把「Console」指向 `[locale]/` 这个 demo 占位页(看着像空白);均已修正。
   // 新增路由时务必同步这里,并确认目标页面存在。
   const nav = [
-    { href: `/${locale}/dashboard`, label: 'Console' },
-    { href: `/${locale}/models`, label: 'Models' },
-    { href: `/${locale}/playground`, label: 'Playground' },
-    { href: `/${locale}/benchmark`, label: 'Benchmark' },
-    { href: `/${locale}/docs`, label: 'Docs' },
+    { href: `/${locale}/dashboard`, label: t('nav.console') },
+    { href: `/${locale}/models`, label: t('nav.models') },
+    { href: `/${locale}/playground`, label: t('nav.playground') },
+    { href: `/${locale}/benchmark`, label: t('nav.benchmark') },
+    { href: `/${locale}/docs`, label: t('nav.docs') },
   ];
 
   return (

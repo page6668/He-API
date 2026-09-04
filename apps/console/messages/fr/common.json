@@ -29,7 +29,10 @@
   },
   "nav": {
     "console": "Console",
-    "docs": "Docs"
+    "docs": "Docs",
+    "models": "Modèles",
+    "playground": "Playground",
+    "benchmark": "Benchmark"
   },
   "localeSwitch": {
     "label": "Changer de langue",

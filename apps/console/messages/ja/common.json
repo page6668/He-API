@@ -29,7 +29,10 @@
   },
   "nav": {
     "console": "コンソール",
-    "docs": "ドキュメント"
+    "docs": "ドキュメント",
+    "models": "モデル",
+    "playground": "モデル広場",
+    "benchmark": "ベンチマーク"
   },
   "localeSwitch": {
     "label": "言語を切り替え",

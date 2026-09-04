@@ -31,7 +31,7 @@
   },
   "lastUpdated": "最后更新",
   "disclaimer": "数据来自策展/第三方公开来源，非实时自动跑分。",
-  "openABInPlayground": "在 Playground 中开启 A/B",
+  "openABInPlayground": "在模型广场中开启 A/B",
   "table": {
     "caption": "跨模型与指标的跑分对比。",
     "model": "模型",

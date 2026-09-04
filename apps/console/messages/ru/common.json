@@ -29,7 +29,10 @@
   },
   "nav": {
     "console": "Консоль",
-    "docs": "Документы"
+    "docs": "Документы",
+    "models": "Модели",
+    "playground": "Playground",
+    "benchmark": "Benchmark"
   },
   "localeSwitch": {
     "label": "Сменить язык",

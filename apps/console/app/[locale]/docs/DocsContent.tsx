@@ -3,7 +3,7 @@
 /**
  * 文档正文。内容源见 page.tsx 头注(全部取自真实代码,不杜撰)。
  * 视觉:knowledge/taste/design-system.md —— 限宽双栏(公开页 prose-page 1120)、
- * 暖边框零阴影、代码块 surface_sunken 内嵌底、朱砂只落一处(本页给「去 Playground 试」)。
+ * 暖边框零阴影、代码块 surface_sunken 内嵌底、朱砂只落一处(本页给「去模型广场试」)。
  */
 import { useState } from 'react';
 
@@ -175,7 +175,7 @@ export function DocsContent({ locale }: { locale: string }) {
             <div className="mt-4">
               {/* 本页唯一的朱砂 */}
               <a href={`/${locale}/playground`}>
-                <Button variant="primary">{T('Try it in the Playground', '去 Playground 试一下')}</Button>
+                <Button variant="primary">{T('Try it in the Playground', '去模型广场试一下')}</Button>
               </a>
             </div>
           </section>
