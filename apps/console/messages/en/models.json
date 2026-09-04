@@ -3,7 +3,9 @@
     "title": "Model Capability Matrix — He-API",
     "description": "Compare context window, function calling, and JSON mode support across 11 He-API models. Public capability data for OpenAI-compatible chat models from Alibaba, DeepSeek, Moonshot, Zhipu, ByteDance, Baidu, and He-API routers.",
     "heading": "Model Capability Matrix",
-    "subheading": "Compare 11 models across 7 capability dimensions"
+    "subheading": "Compare 11 models across 7 capability dimensions",
+    "subtitle": "Browse the models available through one unified API.",
+    "subtitleWithCount": "Browse the {count} models available through one unified API."
   },
   "table": {
     "caption": "Capabilities of the 11 chat models advertised by the He-API gateway.",

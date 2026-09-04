@@ -4,6 +4,29 @@
     "currentLocale": "Locale actuelle : {locale}",
     "keysCount": "{count, plural, =0 {# clés} one {1 clé} other {# clés}}"
   },
+  "landing": {
+    "heroSubtitle": "One API for Qwen, DeepSeek, Doubao, ERNIE, GLM and Kimi — with usage, keys and logs in one place.",
+    "proofLine": "{count} models · 6 providers · 1 OpenAI-compatible API",
+    "proofLineNoModels": "6 providers · 1 OpenAI-compatible API",
+    "ctaPlayground": "Open the playground",
+    "ctaDocs": "Read the docs",
+    "codeLabel": "One request, any model",
+    "startHere": "Start here",
+    "entries": {
+      "models": {
+        "label": "Models",
+        "desc": "Browse every model available through one unified API."
+      },
+      "playground": {
+        "label": "Playground",
+        "desc": "Run a live completion, compare models A/B, export code."
+      },
+      "console": {
+        "label": "Console",
+        "desc": "Usage, API keys, request logs and account settings."
+      }
+    }
+  },
   "nav": {
     "console": "Console",
     "docs": "Docs"

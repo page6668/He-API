@@ -3,7 +3,9 @@
     "title": "Матрица возможностей моделей — He-API",
     "description": "Сравните размер контекстного окна, вызов функций и поддержку режима JSON для 11 моделей He-API.",
     "heading": "Матрица возможностей моделей",
-    "subheading": "Сравните 11 моделей по 7 параметрам возможностей"
+    "subheading": "Сравните 11 моделей по 7 параметрам возможностей",
+    "subtitle": "Browse the models available through one unified API.",
+    "subtitleWithCount": "Browse the {count} models available through one unified API."
   },
   "table": {
     "caption": "Возможности 11 чат-моделей, предоставляемых шлюзом He-API.",

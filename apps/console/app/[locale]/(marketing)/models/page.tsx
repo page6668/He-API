@@ -39,24 +39,25 @@ export async function generateMetadata({ params: { locale } }: PageProps): Promi
 
 export default async function ModelsPage({ params: { locale } }: PageProps) {
   unstable_setRequestLocale(locale);
+  const t = await getTranslations({ locale, namespace: "models" });
   const data = await fetchPublicModels();
 
   // 公开页恒限宽居中(prose-page = 1120px)—— 禁止内容裸贴视口(design-system layout.container)
   return (
     <PageShell
       width="prose-page"
-      title="Models"
+      title={t("page.heading")}
       subtitle={
         data.data.length > 0
-          ? `Browse the ${data.data.length} models available through one unified API.`
-          : "Browse the models available through one unified API."
+          ? t("page.subtitleWithCount", { count: data.data.length })
+          : t("page.subtitle")
       }
     >
       {data.data.length === 0 ? (
         // 安静的行内提示条,不是满宽色底 banner
         <Notice tone="warning" role="alert">
           <span data-testid="models-fallback-banner">
-            Capability data temporarily unavailable; check back shortly.
+            {t("error.unavailable")}
           </span>
         </Notice>
       ) : (

@@ -3,7 +3,9 @@
     "title": "模型能力矩阵 — He-API",
     "description": "对比 11 个 He-API 模型的上下文窗口、函数调用与 JSON 模式支持。来自阿里巴巴、DeepSeek、月之暗面、智谱、字节跳动、百度以及 He-API 路由的 OpenAI 兼容聊天模型公开能力数据。",
     "heading": "模型能力矩阵",
-    "subheading": "对比 11 个模型在 7 个能力维度上的差异"
+    "subheading": "对比 11 个模型在 7 个能力维度上的差异",
+    "subtitle": "浏览通过一个统一 API 提供的所有模型。",
+    "subtitleWithCount": "浏览通过一个统一 API 提供的 {count} 个模型。"
   },
   "table": {
     "caption": "He-API 网关公开的 11 个聊天模型的能力一览。",

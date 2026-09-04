@@ -3,7 +3,9 @@
     "title": "모델 기능 매트릭스 — He-API",
     "description": "11개 He-API 모델의 컨텍스트 윈도우, 함수 호출, JSON 모드 지원을 비교합니다.",
     "heading": "모델 기능 매트릭스",
-    "subheading": "7가지 기능 차원에서 11개 모델 비교"
+    "subheading": "7가지 기능 차원에서 11개 모델 비교",
+    "subtitle": "하나의 통합 API로 제공되는 모든 모델을 둘러보세요.",
+    "subtitleWithCount": "하나의 통합 API로 제공되는 {count}개의 모델을 둘러보세요."
   },
   "table": {
     "caption": "He-API 게이트웨이에서 제공하는 11개 채팅 모델의 기능 정보.",

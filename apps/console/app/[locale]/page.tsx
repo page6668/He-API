@@ -59,24 +59,24 @@ export default async function Page({ params: { locale } }: PageProps) {
   const { data: models } = await fetchPublicModels();
   const proofLine =
     models.length > 0
-      ? `${models.length} models · 6 providers · 1 OpenAI-compatible API`
-      : '6 providers · 1 OpenAI-compatible API';
+      ? t('landing.proofLine', { count: models.length })
+      : t('landing.proofLineNoModels');
 
   const entries = [
     {
       href: `/${locale}/models`,
-      label: 'Models',
-      desc: 'Browse every model available through one unified API.',
+      label: t('landing.entries.models.label'),
+      desc: t('landing.entries.models.desc'),
     },
     {
       href: `/${locale}/playground`,
-      label: 'Playground',
-      desc: 'Run a live completion, compare models A/B, export code.',
+      label: t('landing.entries.playground.label'),
+      desc: t('landing.entries.playground.desc'),
     },
     {
       href: `/${locale}/dashboard`,
-      label: 'Console',
-      desc: 'Usage, API keys, request logs and account settings.',
+      label: t('landing.entries.console.label'),
+      desc: t('landing.entries.console.desc'),
     },
   ];
 
@@ -87,25 +87,24 @@ export default async function Page({ params: { locale } }: PageProps) {
         <header className="max-w-2xl">
           <h1 className="text-display">{t('demo.title')}</h1>
           <p className="mt-4 text-body text-ink-secondary">
-            One API for Qwen, DeepSeek, Doubao, ERNIE, GLM and Kimi — with usage,
-            keys and logs in one place.
+            {t('landing.heroSubtitle')}
           </p>
           {/* 数字代替形容词(brand.md tone_rules):Mono 证言条 */}
           <p className="tabular mt-6 text-small text-ink-muted">{proofLine}</p>
           <div className="mt-8 flex flex-wrap items-center gap-6">
             {/* 全页唯一的朱砂印 */}
             <a href={`/${locale}/playground`} className={primaryLinkCls}>
-              Open the playground
+              {t('landing.ctaPlayground')}
             </a>
             <a href={`/${locale}/docs`} className={linkCls}>
-              Read the docs
+              {t('landing.ctaDocs')}
             </a>
           </div>
         </header>
 
         {/* 代码即插画:hero 与入口区之间,surface_sunken 底 + 1px 暖边框 */}
         <div className="mt-16">
-          <p className="text-label text-ink-muted">One request, any model</p>
+          <p className="text-label text-ink-muted">{t('landing.codeLabel')}</p>
           <pre
             dir="ltr"
             className="mt-3 overflow-x-auto rounded-lg border border-line bg-surface-sunken p-5 font-mono text-small leading-relaxed text-ink"
@@ -116,7 +115,7 @@ export default async function Page({ params: { locale } }: PageProps) {
 
         {/* 入口区:去卡片墙 → 单 Panel 密集列表行(对齐 ModelsCatalog 行语法) */}
         <div className="mt-16">
-          <p className="text-label text-ink-muted">Start here</p>
+          <p className="text-label text-ink-muted">{t('landing.startHere')}</p>
           <Panel padded={false} className="mt-3">
             <ul className="divide-y divide-line">
               {entries.map((e) => (

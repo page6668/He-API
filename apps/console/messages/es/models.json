@@ -3,7 +3,9 @@
     "title": "Matriz de capacidades de modelos — He-API",
     "description": "Compara la ventana de contexto, la llamada a funciones y el soporte de modo JSON en 11 modelos de He-API.",
     "heading": "Matriz de capacidades de modelos",
-    "subheading": "Compara 11 modelos en 7 dimensiones de capacidad"
+    "subheading": "Compara 11 modelos en 7 dimensiones de capacidad",
+    "subtitle": "Browse the models available through one unified API.",
+    "subtitleWithCount": "Browse the {count} models available through one unified API."
   },
   "table": {
     "caption": "Capacidades de los 11 modelos de chat anunciados por la puerta de enlace He-API.",

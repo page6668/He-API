@@ -3,7 +3,9 @@
     "title": "モデル機能マトリックス — He-API",
     "description": "He-APIの11モデルにおけるコンテキストウィンドウ、ファンクションコーリング、JSONモード対応状況を比較します。",
     "heading": "モデル機能マトリックス",
-    "subheading": "11モデルを7つの機能軸で比較"
+    "subheading": "11モデルを7つの機能軸で比較",
+    "subtitle": "統一 API で提供されるすべてのモデルを閲覧。",
+    "subtitleWithCount": "統一 API で提供される {count} 個のモデルを閲覧。"
   },
   "table": {
     "caption": "He-APIゲートウェイが提供する11のチャットモデルの機能一覧。",

@@ -3,7 +3,9 @@
     "title": "مصفوفة قدرات النماذج — He-API",
     "description": "قارن نافذة السياق ودعم استدعاء الوظائف ووضع JSON عبر 11 نموذجًا من نماذج He-API.",
     "heading": "مصفوفة قدرات النماذج",
-    "subheading": "قارن 11 نموذجًا عبر 7 أبعاد للقدرات"
+    "subheading": "قارن 11 نموذجًا عبر 7 أبعاد للقدرات",
+    "subtitle": "Browse the models available through one unified API.",
+    "subtitleWithCount": "Browse the {count} models available through one unified API."
   },
   "table": {
     "caption": "قدرات 11 نموذج دردشة يوفرها بوابة He-API.",

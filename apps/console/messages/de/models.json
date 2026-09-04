@@ -3,7 +3,9 @@
     "title": "Modell-Fähigkeitsmatrix — He-API",
     "description": "Vergleichen Sie Kontextfenster, Function Calling und JSON-Mode-Unterstützung für 11 He-API-Modelle.",
     "heading": "Modell-Fähigkeitsmatrix",
-    "subheading": "11 Modelle in 7 Fähigkeitsdimensionen vergleichen"
+    "subheading": "11 Modelle in 7 Fähigkeitsdimensionen vergleichen",
+    "subtitle": "Browse the models available through one unified API.",
+    "subtitleWithCount": "Browse the {count} models available through one unified API."
   },
   "table": {
     "caption": "Fähigkeiten der 11 Chat-Modelle des He-API-Gateways.",

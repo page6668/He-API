@@ -4,6 +4,29 @@
     "currentLocale": "현재 로캘: {locale}",
     "keysCount": "{count, plural, other {# 키}}"
   },
+  "landing": {
+    "heroSubtitle": "Qwen, DeepSeek, Doubao, ERNIE, GLM, Kimi를 하나의 API로 통합 — 사용량, 키, 로그를 한곳에서 관리.",
+    "proofLine": "{count}개 모델 · 6개 제공업체 · 1개 OpenAI 호환 API",
+    "proofLineNoModels": "6개 제공업체 · 1개 OpenAI 호환 API",
+    "ctaPlayground": "Playground 열기",
+    "ctaDocs": "문서 읽기",
+    "codeLabel": "한 번의 요청, 어떤 모델이든",
+    "startHere": "여기서 시작",
+    "entries": {
+      "models": {
+        "label": "모델",
+        "desc": "하나의 통합 API로 제공되는 모든 모델을 둘러보세요."
+      },
+      "playground": {
+        "label": "Playground",
+        "desc": "실시간 완성을 실행하고, 모델을 A/B 비교하고, 코드를 내보내세요."
+      },
+      "console": {
+        "label": "콘솔",
+        "desc": "사용량, API 키, 요청 로그, 계정 설정."
+      }
+    }
+  },
   "nav": {
     "console": "콘솔",
     "docs": "문서"
