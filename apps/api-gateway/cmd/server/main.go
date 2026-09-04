@@ -867,11 +867,21 @@ func csrfAllowlistFor(env handlers.DeployEnv) []string {
 	case handlers.EnvStaging:
 		return []string{".staging.he-api.com"}
 	default:
-		return []string{
+		allowed := []string{
 			"http://localhost:3000",
 			"http://127.0.0.1:3000",
 			"http://localhost:8080",
 		}
+		// AD-005 — 裸机公网部署阶段,允许运维通过 env 追加 CSRF Origin(逗号分隔)。
+		// 未来上 HTTPS 后可改为生产域名 *.heheapi.com。
+		if extra := os.Getenv("HE_API_CSRF_ALLOWED_ORIGINS"); extra != "" {
+			for _, o := range strings.Split(extra, ",") {
+				if o = strings.TrimSpace(o); o != "" {
+					allowed = append(allowed, o)
+				}
+			}
+		}
+		return allowed
 	}
 }
 
