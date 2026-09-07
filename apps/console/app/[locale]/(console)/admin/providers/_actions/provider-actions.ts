@@ -64,8 +64,8 @@ export async function listProviders(): Promise<ListProvidersResult> {
   if (!res.ok) return { kind: 'error' };
 
   try {
-    const body = (await res.json()) as { providers?: ProviderItem[] };
-    return { kind: 'ok', providers: body.providers ?? [] };
+    const body = (await res.json()) as { data?: ProviderItem[] };
+    return { kind: 'ok', providers: body.data ?? [] };
   } catch {
     return { kind: 'error' };
   }
