@@ -13,7 +13,13 @@ import { cookies } from 'next/headers';
 import { ACCESS_COOKIE } from '@/lib/auth/cookies';
 
 function gatewayURL(): string {
-  return process.env.HE_API_GATEWAY_URL ?? 'http://api-gateway:8080';
+  // Try HE_API_GATEWAY_URL first (set via systemd EnvironmentFile on ECS).
+  // Fall back to NEXT_PUBLIC_API_GATEWAY_URL (build-time .env.local, always https).
+  return (
+    process.env.HE_API_GATEWAY_URL ??
+    process.env.NEXT_PUBLIC_API_GATEWAY_URL ??
+    'http://api-gateway:8080'
+  );
 }
 
 // ── Types ──
