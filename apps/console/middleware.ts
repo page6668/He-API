@@ -32,6 +32,9 @@ export default function middleware(request: NextRequest) {
   // Result: defaultLocale wins unless user has set he_locale cookie.
   const headers = new Headers(request.headers);
   headers.set('accept-language', 'en');
+  // Preserve cookies so getLocaleFromCookie() can read he_locale.
+  const cookieHeader = request.headers.get('cookie') ?? '';
+  if (cookieHeader) headers.set('cookie', cookieHeader);
 
   // Strip existing locale prefix so createMiddleware re-resolves cleanly
   const pathname = request.nextUrl.pathname;
