@@ -9,7 +9,7 @@ const intlMiddleware = createMiddleware({
   locales: [...locales],
   defaultLocale,
   localePrefix: 'always',
-  localeDetection: true,
+  localeDetection: false,
   localeCookie: {
     name: 'he_locale',
   },
