@@ -1,65 +1,62 @@
-import createMiddleware from 'next-intl/middleware';
+import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { locales, defaultLocale } from '@/i18n/config';
 
-const COOKIE_NAME = 'he_locale';
-const LOCALE_RE = new RegExp(`^/(${locales.join('|')})(?:/|$)`);
-
-// Custom locale resolution: ONLY read he_locale cookie (NOT Accept-Language).
-// next-intl's localeDetection reads both; we suppress Accept-Language by
-// always overwriting it, so only the cookie (set by user手动切换) is honoured.
-function getLocaleFromCookie(request: NextRequest): string | undefined {
-  const val = request.cookies.get(COOKIE_NAME)?.value;
-  if (val && locales.includes(val)) return val;
-  return undefined;
-}
-
-const intlMiddleware = createMiddleware({
-  locales: [...locales],
-  defaultLocale,
-  localePrefix: 'always',
-  localeDetection: true,   // needed so it writes cookie when visiting /zh-CN
-  localeCookie: { name: COOKIE_NAME },
-});
-
 // Story 5.5 BR-PD-7 — the one-time API-key display sub-page carries the
-// plaintext in its URL; harden it against intermediate-proxy caching. App
-// Router exposes no per-segment header config, so it is applied here.
+// plaintext in its URL; harden it against intermediate-proxy caching.
 const CREATED_KEY_PATH = /^\/[A-Za-z-]+\/keys\/[^/]+\/created\/?$/;
+const LOCALE_RE = new RegExp(`^/(${locales.join('|')})(?:/|$)`);
+const COOKIE_NAME = 'he_locale';
 
 export default function middleware(request: NextRequest) {
-  // Always suppress Accept-Language so next-intl cannot auto-detect from browser.
-  // Result: defaultLocale wins unless user has set he_locale cookie.
-  const headers = new Headers(request.headers);
-  headers.set('accept-language', 'en');
-  // Preserve cookies so getLocaleFromCookie() can read he_locale.
-  const cookieHeader = request.headers.get('cookie') ?? '';
-  if (cookieHeader) headers.set('cookie', cookieHeader);
-
-  // Strip existing locale prefix so createMiddleware re-resolves cleanly
   const pathname = request.nextUrl.pathname;
-  const stripped = pathname.replace(LOCALE_RE, '/');
-  const modifiedUrl = request.nextUrl.clone();
-  modifiedUrl.pathname = stripped === pathname ? '/' : stripped;
 
-  const adaptedRequest = new NextRequest(modifiedUrl, {
-    headers,
-    method: request.method,
-    body: request.body,
-    bodyUsed: request.bodyUsed,
-    cache: request.cache,
-    credentials: request.credentials,
-    integrity: request.integrity,
-    mode: request.mode,
-    redirect: request.redirect,
-    referrer: request.referrer,
-    referrerPolicy: request.referrerPolicy,
-  });
+  // ── 1. Determine locale ──────────────────────────────────────────────────
+  // ONLY honour the he_locale cookie. Never read Accept-Language.
+  const cookieLocale =
+    request.cookies.get(COOKIE_NAME)?.value?.trim().toLowerCase();
+  const locale =
+    cookieLocale && locales.includes(cookieLocale)
+      ? cookieLocale
+      : defaultLocale; // always 'en'
 
-  const response = intlMiddleware(adaptedRequest);
+  // ── 2. Redirect if pathname has no locale prefix ────────────────────────
+  let redirectUrl: string | null = null;
 
-  if (CREATED_KEY_PATH.test(request.nextUrl.pathname)) {
-    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  if (!LOCALE_RE.test(pathname)) {
+    // Root "/" or any path without locale prefix → add locale
+    redirectUrl = `/${locale}${pathname === '/' ? '' : pathname}`;
+  } else {
+    // Pathname already has locale prefix — validate it matches the cookie
+    const prefix = pathname.match(LOCALE_RE)?.[1] ?? defaultLocale;
+    if (prefix !== locale) {
+      // Cookie says zh-CN but URL says /en → fix the URL
+      redirectUrl = pathname.replace(LOCALE_RE, `/${locale}/`);
+    }
+  }
+
+  if (redirectUrl) {
+    const url = request.nextUrl.clone();
+    url.pathname = redirectUrl;
+    const response = NextResponse.redirect(url);
+    if (locale !== defaultLocale) {
+      // Set/refresh cookie so subsequent requests carry it
+      response.cookies.set(COOKIE_NAME, locale, {
+        path: '/',
+        maxAge: 60 * 60 * 24 * 365,
+        sameSite: 'lax',
+      });
+    }
+    return response;
+  }
+
+  // ── 3. Normal request — add cache headers where needed ──────────────────
+  const response = NextResponse.next();
+  if (CREATED_KEY_PATH.test(pathname)) {
+    response.headers.set(
+      'Cache-Control',
+      'no-store, no-cache, must-revalidate, max-age=0'
+    );
   }
   return response;
 }
