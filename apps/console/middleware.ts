@@ -20,27 +20,14 @@ export default function middleware(request: NextRequest) {
       ? cookieLocale
       : defaultLocale; // always 'en'
 
-  // ── 2. Redirect if pathname has no locale prefix ────────────────────────
-  let redirectUrl: string | null = null;
-
+  // ── 2. Redirect: pathname has no locale prefix → add locale ─────────────
+  // Visiting a locale URL directly (e.g. /zh-CN) is treated as an explicit
+  // user choice → set cookie but do NOT further redirect.
   if (!LOCALE_RE.test(pathname)) {
-    // Root "/" or any path without locale prefix → add locale
-    redirectUrl = `/${locale}${pathname === '/' ? '' : pathname}`;
-  } else {
-    // Pathname already has locale prefix — validate it matches the cookie
-    const prefix = pathname.match(LOCALE_RE)?.[1] ?? defaultLocale;
-    if (prefix !== locale) {
-      // Cookie says zh-CN but URL says /en → fix the URL
-      redirectUrl = pathname.replace(LOCALE_RE, `/${locale}/`);
-    }
-  }
-
-  if (redirectUrl) {
     const url = request.nextUrl.clone();
-    url.pathname = redirectUrl;
+    url.pathname = `/${locale}${pathname === '/' ? '' : pathname}`;
     const response = NextResponse.redirect(url);
     if (locale !== defaultLocale) {
-      // Set/refresh cookie so subsequent requests carry it
       response.cookies.set(COOKIE_NAME, locale, {
         path: '/',
         maxAge: 60 * 60 * 24 * 365,
