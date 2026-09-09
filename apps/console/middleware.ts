@@ -11,13 +11,10 @@ export default function middleware(request: NextRequest) {
 
   // ── 1. Determine locale ──────────────────────────────────────────────────
   // ONLY honour the he_locale cookie. Never read Accept-Language.
-  // Cast via String() to satisfy Next.js edge runtime nominal typing.
-  const rawCookie = request.cookies.get(COOKIE_NAME);
-  const cookieValue: string | undefined =
-    rawCookie != null ? String(rawCookie).trim().toLowerCase() : undefined;
+  const cookieVal = request.cookies.get(COOKIE_NAME)?.value;
   const locale =
-    cookieValue && (locales as string[]).includes(cookieValue)
-      ? cookieValue
+    cookieVal && locales.includes(cookieVal)
+      ? cookieVal
       : defaultLocale; // always 'en'
 
   // ── 2. Redirect: pathname has no locale prefix → add locale ────────────────
