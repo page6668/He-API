@@ -5,38 +5,22 @@ import { locales, defaultLocale } from '@/i18n/config';
 const CREATED_KEY_PATH = /^\/[A-Za-z-]+\/keys\/[^/]+\/created\/?$/;
 const LOCALE_RE = new RegExp(`^/(${locales.join('|')})(?:/|$)`);
 const COOKIE_NAME = 'he_locale';
-const DEBUG_PATH = '/__locale-debug__';
 
 export default function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  // ── Debug endpoint: return cookie state as JSON ──────────────────────────
-  if (pathname === DEBUG_PATH) {
-    const rawCookie = request.cookies.get(COOKIE_NAME)?.value;
-    return new NextResponse(
-      JSON.stringify({
-        rawCookie,
-        typeof: typeof rawCookie,
-        cookieLocale: rawCookie?.trim?.().toLowerCase?.(),
-        locales,
-        defaultLocale,
-        LOCALE_RE: LOCALE_RE.source,
-        cookiesKeys: [...request.cookies.keys()],
-      }, null, 2),
-      { headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
   // ── 1. Determine locale ──────────────────────────────────────────────────
   // ONLY honour the he_locale cookie. Never read Accept-Language.
-  const cookieLocale =
-    request.cookies.get(COOKIE_NAME)?.value?.trim().toLowerCase();
+  // Cast via String() to satisfy Next.js edge runtime nominal typing.
+  const rawCookie = request.cookies.get(COOKIE_NAME);
+  const cookieValue: string | undefined =
+    rawCookie != null ? String(rawCookie).trim().toLowerCase() : undefined;
   const locale =
-    cookieLocale && locales.includes(cookieLocale)
-      ? cookieLocale
+    cookieValue && (locales as string[]).includes(cookieValue)
+      ? cookieValue
       : defaultLocale; // always 'en'
 
-  // ── 2. Redirect: pathname has no locale prefix → add locale ─────────────
+  // ── 2. Redirect: pathname has no locale prefix → add locale ────────────────
   // Visiting a locale URL directly (e.g. /zh-CN) is treated as an explicit
   // user choice → set cookie but do NOT further redirect.
   if (!LOCALE_RE.test(pathname)) {
@@ -53,7 +37,7 @@ export default function middleware(request: NextRequest) {
     return response;
   }
 
-  // ── 3. Normal request — add cache headers where needed ──────────────────
+  // ── 3. Normal request — add cache headers where needed ────────────────────
   const response = NextResponse.next();
   if (CREATED_KEY_PATH.test(pathname)) {
     response.headers.set(
