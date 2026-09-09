@@ -2,14 +2,30 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { locales, defaultLocale } from '@/i18n/config';
 
-// Story 5.5 BR-PD-7 — the one-time API-key display sub-page carries the
-// plaintext in its URL; harden it against intermediate-proxy caching.
 const CREATED_KEY_PATH = /^\/[A-Za-z-]+\/keys\/[^/]+\/created\/?$/;
 const LOCALE_RE = new RegExp(`^/(${locales.join('|')})(?:/|$)`);
 const COOKIE_NAME = 'he_locale';
+const DEBUG_PATH = '/__locale-debug__';
 
 export default function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+
+  // ── Debug endpoint: return cookie state as JSON ──────────────────────────
+  if (pathname === DEBUG_PATH) {
+    const rawCookie = request.cookies.get(COOKIE_NAME)?.value;
+    return new NextResponse(
+      JSON.stringify({
+        rawCookie,
+        typeof: typeof rawCookie,
+        cookieLocale: rawCookie?.trim?.().toLowerCase?.(),
+        locales,
+        defaultLocale,
+        LOCALE_RE: LOCALE_RE.source,
+        cookiesKeys: [...request.cookies.keys()],
+      }, null, 2),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
+  }
 
   // ── 1. Determine locale ──────────────────────────────────────────────────
   // ONLY honour the he_locale cookie. Never read Accept-Language.
