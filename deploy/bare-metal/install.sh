@@ -151,6 +151,9 @@ download_release() {
         log_info "解压到 /opt/he-api/console/ ..."
         tar -xzf "${console_tar}" -C /opt/he-api/
         rm -f "${console_tar}"
+        # he-api-console.service 以 User=he-api 运行；.next 下必须可写
+        # （Next.js 要写 prerender/fetch cache，root 属主会导致 EACCES）
+        chown -R he-api:he-api /opt/he-api/console
     else
         log_warn "未找到 Console 产物 ${console_tar}，跳过（可稍后单独部署）"
     fi
@@ -168,6 +171,7 @@ use_local_build() {
     if [[ -d "${src_dir}/console" ]]; then
         log_info "复制本地 Console 产物: ${src_dir}/console"
         cp -r "${src_dir}/console" /opt/he-api/
+        chown -R he-api:he-api /opt/he-api/console
     fi
 }
 
