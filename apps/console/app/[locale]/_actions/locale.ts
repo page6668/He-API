@@ -2,7 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { locales, isLocale, COOKIE_NAME, type Locale } from '@/i18n/config';
+import { isLocale, COOKIE_NAME, type Locale } from '@/i18n/config';
 import { buildLocaleCookieOptions, type Env } from '@/lib/i18n';
 
 function currentEnv(): Env {
@@ -40,4 +40,7 @@ export async function setLocale(newLocale: Locale, currentLocale: string, curren
   redirect(target);
 }
 
-export { locales };
+// NOTE: a 'use server' module may ONLY export async functions. Re-exporting a
+// plain value (e.g. `export { locales }`) makes Next.js throw at module load:
+//   A "use server" file can only export async functions, found object.
+// That crashed every Server Action POST with HTTP 500. Do not re-add.
