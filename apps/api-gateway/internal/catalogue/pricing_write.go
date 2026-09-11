@@ -20,10 +20,11 @@ import (
 )
 
 // Querier 是本包写侧需要的最小 pgx 面 —— *pgxpool.Pool 与 pgxmock 都满足
-// (与 safetylog.Querier 同范式)。
+// (与 safetylog.Querier 同范式)。Query 供 AD-006 的 ListAllModels 逐行读取。
 type Querier interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 }
 
 // PriceInput 是一次调价的原始输入,均为十进制字符串(不经 float64)。

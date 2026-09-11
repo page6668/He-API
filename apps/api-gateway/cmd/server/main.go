@@ -492,6 +492,15 @@ func main() {
 		jwtVerifier.RequireJWT(adminGuard.Require(http.HandlerFunc(adminProviders.List))))
 	mux.Handle("PUT /v1/admin/providers/{name}",
 		jwtVerifier.RequireJWT(adminGuard.Require(http.HandlerFunc(adminProviders.Update))))
+	// AD-006 — 管理员模型管理后台（新增 / 列表 / 下架）。写侧复用 adminPriceQ
+	// （nil pool → fail-closed，writer 内部会拒绝）。
+	adminModels := handlers.NewAdminModelsHandler(catalogue.NewWriter(adminPriceQ), logger)
+	mux.Handle("GET /v1/admin/models",
+		jwtVerifier.RequireJWT(adminGuard.Require(http.HandlerFunc(adminModels.List))))
+	mux.Handle("POST /v1/admin/models",
+		jwtVerifier.RequireJWT(adminGuard.Require(http.HandlerFunc(adminModels.Create))))
+	mux.Handle("POST /v1/admin/models/{id}/deprecate",
+		jwtVerifier.RequireJWT(adminGuard.Require(http.HandlerFunc(adminModels.Deprecate))))
 	// 内部端点:仅 loopback,无鉴权(adapter 拉配置用)。
 	mux.Handle("GET /internal/providers/active", http.HandlerFunc(internalProviders.Active))
 	// AD-003 — 当前用户查自己的角色(仅登录,不需管理员)。前端据此决定是否显示
