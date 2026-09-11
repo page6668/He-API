@@ -152,7 +152,13 @@ func (h *AdminModelsHandler) Create(w http.ResponseWriter, r *http.Request) {
 // Deprecate 实现 POST /v1/admin/models/{id}/deprecate。
 func (h *AdminModelsHandler) Deprecate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	modelID := lastPathSegment(r.URL.Path)
+	// lastPathSegment 返回末段（如 /v1/admin/models/{id}/deprecate → "deprecate"），
+	// 我们需要倒数第二段 {id}。
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	modelID := ""
+	if len(parts) >= 2 {
+		modelID = parts[len(parts)-2]
+	}
 	if modelID == "" {
 		_ = openaierr.Write(w, ctx, http.StatusBadRequest, "400_invalid_request", "model id required", nil)
 		return
